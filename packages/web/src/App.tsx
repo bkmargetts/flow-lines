@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions, type Point, type Attractor } from '@flow-lines/core';
 import { Controls } from './components/Controls';
 import { Preview } from './components/Preview';
+import { ControlPanel } from './components/ControlPanel';
 
 export type BrushType = 'attractor' | 'repeller';
 
@@ -61,6 +62,7 @@ const defaultState: AppState = {
 
 export function App() {
   const [state, setState] = useState<AppState>(defaultState);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -73,7 +75,7 @@ export function App() {
   const togglePaintMode = useCallback(() => {
     updateState({
       paintMode: !state.paintMode,
-      attractorMode: false, // Disable attractor mode when enabling paint mode
+      attractorMode: false,
     });
   }, [state.paintMode, updateState]);
 
@@ -91,7 +93,7 @@ export function App() {
   const toggleAttractorMode = useCallback(() => {
     updateState({
       attractorMode: !state.attractorMode,
-      paintMode: false, // Disable paint mode when enabling attractor mode
+      paintMode: false,
     });
   }, [state.attractorMode, updateState]);
 
@@ -158,12 +160,13 @@ export function App() {
     URL.revokeObjectURL(url);
   }, [svgContent, state.seed]);
 
-  return (
-    <div className="app">
-      <aside className="sidebar">
-        <h1>Flow Lines</h1>
-        <p className="subtitle">Generative Art for Pen Plotters</p>
+  const togglePanel = useCallback(() => {
+    setPanelOpen((prev) => !prev);
+  }, []);
 
+  return (
+    <div className={`app ${panelOpen ? 'panel-open' : ''}`}>
+      <ControlPanel isOpen={panelOpen} onToggle={togglePanel}>
         <Controls
           state={state}
           updateState={updateState}
@@ -174,7 +177,7 @@ export function App() {
           toggleAttractorMode={toggleAttractorMode}
           clearAttractors={clearAttractors}
         />
-      </aside>
+      </ControlPanel>
 
       <main className="canvas-container">
         <Preview
