@@ -517,14 +517,21 @@ function calculateSeparation(
   densityNoiseScale: number,
   densityVariation: number
 ): number {
-  // Start with base separation - we'll interpolate between min and max
-  const maxSeparation = baseSeparation * 3; // Sparse areas can be 3x base separation
+  // With high variation and no density points, use noise to create organic density patterns
   let targetSeparation = baseSeparation;
 
+  // Apply noise variation first - this creates organic density patterns
+  if (densityNoise && densityVariation > 0) {
+    const noiseVal = densityNoise.fbm(x * densityNoiseScale, y * densityNoiseScale, 3, 0.5, 2);
+    // Map noise to a dramatic range: at max variation, goes from 0.2x to 2.5x base
+    // This creates clear areas of high and low density
+    const noiseMultiplier = 0.2 + (noiseVal + 1) * 0.5 * (1 + densityVariation * 1.5);
+    targetSeparation = baseSeparation * noiseMultiplier;
+  }
+
+  // Apply manual density points on top of noise
   if (densityPoints.length > 0) {
-    // Calculate density influence from all points
-    let totalInfluence = 0;
-    let weightedDensity = 0;
+    let maxInfluence = 0;
 
     for (const dp of densityPoints) {
       const dx = x - dp.x;
@@ -532,53 +539,21 @@ function calculateSeparation(
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist < dp.radius) {
-        // Smooth falloff from center (1 at center, 0 at edge)
         const falloff = 1 - (dist / dp.radius);
-        // Cubic falloff for smoother transition
         const smoothFalloff = falloff * falloff * (3 - 2 * falloff);
         const influence = smoothFalloff * dp.strength;
-
-        totalInfluence += influence;
-        weightedDensity += influence;
+        maxInfluence = Math.max(maxInfluence, influence);
       }
     }
 
-    if (totalInfluence > 0) {
-      // In dense areas: interpolate from baseSeparation down to minSeparation
-      // Higher density = closer to minSeparation
-      const densityFactor = Math.min(1, weightedDensity); // Cap at 1
-      targetSeparation = baseSeparation - (baseSeparation - minSeparation) * densityFactor;
-    } else {
-      // Outside all density point radii - make it sparse
-      // Find distance to nearest density point edge
-      let minDistToEdge = Infinity;
-      for (const dp of densityPoints) {
-        const dx = x - dp.x;
-        const dy = y - dp.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const distToEdge = dist - dp.radius;
-        minDistToEdge = Math.min(minDistToEdge, distToEdge);
-      }
-
-      // Gradually increase separation as we move away from density zones
-      // Max sparsity reached at 2x the average radius distance
-      const avgRadius = densityPoints.reduce((sum, dp) => sum + dp.radius, 0) / densityPoints.length;
-      const sparseFactor = Math.min(1, minDistToEdge / (avgRadius * 2));
-      targetSeparation = baseSeparation + (maxSeparation - baseSeparation) * sparseFactor;
+    if (maxInfluence > 0) {
+      // Dense areas go down toward minSeparation
+      targetSeparation = targetSeparation * (1 - maxInfluence * 0.9);
     }
-  }
-
-  // Apply noise variation for organic feel
-  if (densityNoise && densityVariation > 0) {
-    const noiseVal = densityNoise.fbm(x * densityNoiseScale, y * densityNoiseScale, 2, 0.5, 2);
-    // Map noise from [-1,1] to wider range based on variation
-    // At max variation: range is [0.3, 2.0]
-    const noiseMultiplier = 1 + (noiseVal * densityVariation);
-    targetSeparation *= noiseMultiplier;
   }
 
   // Clamp to valid range
-  return Math.max(minSeparation, Math.min(maxSeparation, targetSeparation));
+  return Math.max(minSeparation, targetSeparation);
 }
 
 /**
@@ -604,14 +579,14 @@ function generateStreamlines(
   minSeparation: number = 1
 ): FlowLinesResult {
   const lines: FlowLine[] = [];
-  // Use minimum separation for spatial grid to ensure we catch all potential collisions
-  const spatialGrid = new SpatialGrid(Math.max(minSeparation, baseSeparation * 0.5));
+  // Use small cell size for spatial grid to allow dense packing
+  const spatialGrid = new SpatialGrid(Math.max(minSeparation * 0.5, 1));
 
   // Create density noise if variation is enabled
   const densityNoise = densityVariation > 0 ? createNoise(seed + 12345) : null;
 
-  // Queue of candidate seed points with their source direction
-  const seedQueue: Array<{ point: Point; normalX: number; normalY: number }> = [];
+  // Queue of candidate seed points
+  const seedQueue: Array<{ point: Point; priority: number }> = [];
 
   // Seeded random
   let s = seed;
@@ -620,21 +595,25 @@ function generateStreamlines(
     return s / 0x7fffffff;
   };
 
-  // Start with seed points - prefer density point centers if available
-  if (densityPoints.length > 0) {
-    // Seed from density point centers for better coverage of dense areas
-    for (const dp of densityPoints) {
-      seedQueue.push({ point: { x: dp.x, y: dp.y }, normalX: 0, normalY: 0 });
-    }
-  }
-
-  // Add some random seeds too
-  const initialSeeds = Math.min(5, Math.ceil(maxLines / 100));
+  // Start with many more initial seeds spread across the canvas
+  const initialSeeds = Math.max(20, Math.ceil(maxLines / 20));
   for (let i = 0; i < initialSeeds; i++) {
     const x = margin + random() * (width - 2 * margin);
     const y = margin + random() * (height - 2 * margin);
-    seedQueue.push({ point: { x, y }, normalX: 0, normalY: 0 });
+    // Higher priority for seeds in potentially dense areas
+    const sep = calculateSeparation(x, y, baseSeparation, minSeparation,
+      densityPoints, densityNoise, densityNoiseScale, densityVariation);
+    const priority = baseSeparation / sep; // Dense areas get higher priority
+    seedQueue.push({ point: { x, y }, priority });
   }
+
+  // Add density point centers with high priority
+  for (const dp of densityPoints) {
+    seedQueue.push({ point: { x: dp.x, y: dp.y }, priority: 10 });
+  }
+
+  // Sort by priority (process dense areas first)
+  seedQueue.sort((a, b) => b.priority - a.priority);
 
   // Process seed queue
   while (seedQueue.length > 0 && lines.length < maxLines) {
@@ -646,8 +625,10 @@ function generateStreamlines(
       densityPoints, densityNoise, densityNoiseScale, densityVariation
     );
 
-    // Skip if too close to existing lines
-    if (spatialGrid.hasNearby(seedPoint.x, seedPoint.y, effectiveSep * 0.9)) {
+    // Use a smaller collision check threshold to allow tighter packing
+    // In dense areas (small effectiveSep), use even smaller threshold
+    const collisionThreshold = effectiveSep * 0.7;
+    if (spatialGrid.hasNearby(seedPoint.x, seedPoint.y, collisionThreshold)) {
       continue;
     }
 
@@ -670,14 +651,20 @@ function generateStreamlines(
 
     lines.push(finalLine);
 
-    // Add all points to spatial grid
-    spatialGrid.addLine(finalLine.points);
+    // Add points to spatial grid - but only every few points to allow tighter packing
+    const gridSampleRate = Math.max(1, Math.floor(effectiveSep / 2));
+    for (let i = 0; i < finalLine.points.length; i += gridSampleRate) {
+      spatialGrid.add(finalLine.points[i]);
+    }
+    // Always add endpoints
+    if (finalLine.points.length > 1) {
+      spatialGrid.add(finalLine.points[finalLine.points.length - 1]);
+    }
 
     // Generate new seed candidates from this line
-    // Sample more frequently in dense areas
-    const baseSampleInterval = Math.max(1, Math.floor(finalLine.points.length / 20));
-
-    for (let i = 0; i < finalLine.points.length - 1; i += baseSampleInterval) {
+    // Sample more frequently for denser lines
+    const sampleInterval = Math.max(1, Math.floor(finalLine.points.length / 30));
+    for (let i = 0; i < finalLine.points.length - 1; i += sampleInterval) {
       const p0 = finalLine.points[i];
       const p1 = finalLine.points[Math.min(i + 1, finalLine.points.length - 1)];
 
@@ -699,7 +686,7 @@ function generateStreamlines(
       const ny = dx / len;
 
       // Create seeds on both sides at the local separation distance
-      const offset = localSep * (1 + random() * 0.2); // Slight randomness
+      const offset = localSep * (0.8 + random() * 0.4); // Some randomness
 
       const seed1: Point = {
         x: p0.x + nx * offset,
@@ -710,19 +697,23 @@ function generateStreamlines(
         y: p0.y - ny * offset,
       };
 
+      // Priority based on density (smaller sep = higher priority)
+      const priority = baseSeparation / localSep;
+
       // Add to queue if in bounds
       if (field.isInBounds(seed1.x, seed1.y, margin)) {
-        seedQueue.push({ point: seed1, normalX: nx, normalY: ny });
+        seedQueue.push({ point: seed1, priority });
       }
       if (field.isInBounds(seed2.x, seed2.y, margin)) {
-        seedQueue.push({ point: seed2, normalX: -nx, normalY: -ny });
+        seedQueue.push({ point: seed2, priority });
       }
     }
 
-    // Shuffle the queue occasionally to prevent bias
-    if (lines.length % 10 === 0 && seedQueue.length > 10) {
-      for (let i = seedQueue.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
+    // Occasionally re-sort by priority and add some randomness
+    if (lines.length % 15 === 0 && seedQueue.length > 20) {
+      // Partial shuffle to maintain some priority ordering but add variety
+      for (let i = 0; i < Math.min(20, seedQueue.length); i++) {
+        const j = Math.floor(random() * seedQueue.length);
         [seedQueue[i], seedQueue[j]] = [seedQueue[j], seedQueue[i]];
       }
     }
@@ -768,7 +759,8 @@ function traceStreamlineVariable(
       densityPoints, densityNoise, densityNoiseScale, densityVariation
     );
 
-    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.8)) break;
+    // Use smaller collision threshold to allow tighter packing
+    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
 
     forwardPoints.push(next);
     current = next;
@@ -793,7 +785,8 @@ function traceStreamlineVariable(
       densityPoints, densityNoise, densityNoiseScale, densityVariation
     );
 
-    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.8)) break;
+    // Use smaller collision threshold to allow tighter packing
+    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
 
     backwardPoints.push(next);
     current = next;

@@ -165,18 +165,18 @@ const initialSize = getInitialCanvasSize();
 const defaultState: AppState = {
   width: initialSize.width,
   height: initialSize.height,
-  lineCount: 100,
+  lineCount: 800,
   seed: Math.floor(Math.random() * 1000000),
   stepLength: 2,
   maxSteps: 500,
   margin: 20,
-  minLineLength: 10,
+  minLineLength: 15,
   noiseScale: 0.005,
   octaves: 4,
   persistence: 0.5,
   lacunarity: 2,
   strokeColor: '#000000',
-  strokeWidth: 1,
+  strokeWidth: 0.5,
   paintMode: false,
   paintedPoints: [],
   showDots: true,
@@ -191,14 +191,14 @@ const defaultState: AppState = {
   smoothing: 0.3,
   spiralStrength: 0.3,
   warpStrength: 0.5,
-  // Advanced line defaults
-  separationDistance: 0,
+  // Advanced line defaults - fill mode on by default for nice flowing patterns
+  separationDistance: 6,
   bidirectional: false,
   evenDistribution: false,
-  fillMode: false,
+  fillMode: true,
   // Variable density defaults
   densityPoints: [],
-  densityVariation: 0.3,
+  densityVariation: 0.5,
   minSeparation: 1,
   densityMode: false,
   densityRadius: 150,
@@ -218,13 +218,13 @@ export function App() {
     const random = () => Math.random();
     const modes: FieldMode[] = ['normal', 'curl', 'spiral', 'turbulent', 'ridged', 'warped'];
     const randomMode = modes[Math.floor(random() * modes.length)];
-    const useFillMode = random() > 0.5;
+    const useFillMode = random() > 0.3; // 70% chance of fill mode
 
     updateState({
       seed: Math.floor(random() * 1000000),
-      lineCount: Math.floor(random() * 300) + 50,
+      lineCount: useFillMode ? Math.floor(random() * 1500) + 500 : Math.floor(random() * 300) + 50,
       maxSteps: Math.floor(random() * 400) + 100,
-      stepLength: Math.floor(random() * 4) + 1,
+      stepLength: 1 + random() * 3,
       noiseScale: 0.002 + random() * 0.015,
       octaves: Math.floor(random() * 6) + 1,
       persistence: 0.2 + random() * 0.6,
@@ -233,14 +233,15 @@ export function App() {
       smoothing: random() * 0.8,
       spiralStrength: random() * 0.6,
       warpStrength: 0.3 + random() * 0.5,
+      strokeWidth: 0.3 + random() * 1.2,
       // Line mode settings
       fillMode: useFillMode,
-      separationDistance: useFillMode ? Math.floor(random() * 15) + 3 : Math.floor(random() * 10),
+      separationDistance: useFillMode ? Math.floor(random() * 12) + 3 : Math.floor(random() * 10),
       bidirectional: random() > 0.5,
       evenDistribution: random() > 0.5,
       // Density settings (only matter when fillMode is on)
-      densityVariation: random() * 0.8,
-      minSeparation: 0.5 + random() * 3,
+      densityVariation: 0.3 + random() * 0.7,
+      minSeparation: 0.5 + random() * 2,
     });
   }, [updateState]);
 
