@@ -19,28 +19,32 @@ export function Controls({
 }: ControlsProps) {
   return (
     <div className="controls">
-      <h3 className="section-title">Paint Mode</h3>
+      <div className="paint-section">
+        <h3 className="section-title">Paint Mode</h3>
 
-      <div className="control-group">
-        <div className="paint-controls">
-          <button
-            type="button"
-            className={state.paintMode ? 'primary active' : 'secondary'}
-            onClick={togglePaintMode}
-          >
-            {state.paintMode ? 'Painting ON' : 'Painting OFF'}
-          </button>
-          {state.paintedPoints.length > 0 && (
-            <button type="button" className="secondary" onClick={clearPaintedPoints}>
-              Clear ({state.paintedPoints.length})
+        <div className="control-group">
+          <div className="paint-controls">
+            <button
+              type="button"
+              className={state.paintMode ? 'primary active' : 'primary'}
+              onClick={togglePaintMode}
+            >
+              {state.paintMode ? 'Stop Painting' : 'Start Painting'}
             </button>
-          )}
-        </div>
-        {state.paintMode && (
+            {state.paintedPoints.length > 0 && (
+              <button type="button" className="secondary" onClick={clearPaintedPoints}>
+                Clear ({state.paintedPoints.length})
+              </button>
+            )}
+          </div>
           <p className="paint-hint">
-            Click or drag on canvas to place flow line starting points
+            {state.paintMode
+              ? 'Click or drag on canvas to place flow line seeds'
+              : state.paintedPoints.length > 0
+                ? `${state.paintedPoints.length} points placed. Lines flow from your painted points.`
+                : 'Paint your own starting points for flow lines instead of random placement'}
           </p>
-        )}
+        </div>
       </div>
 
       <h3 className="section-title">Canvas</h3>
