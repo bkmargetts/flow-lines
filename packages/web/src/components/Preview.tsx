@@ -47,7 +47,7 @@ export function Preview({
   }, []);
 
   // Calculate scale to fit
-  const padding = 32;
+  const padding = 8;
   const availableWidth = containerSize.width - padding * 2;
   const availableHeight = containerSize.height - padding * 2;
   const scale = Math.min(availableWidth / width, availableHeight / height, 1);
