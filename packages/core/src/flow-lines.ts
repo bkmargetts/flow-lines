@@ -517,35 +517,68 @@ function calculateSeparation(
   densityNoiseScale: number,
   densityVariation: number
 ): number {
-  let densityMultiplier = 1;
+  // Start with base separation - we'll interpolate between min and max
+  const maxSeparation = baseSeparation * 3; // Sparse areas can be 3x base separation
+  let targetSeparation = baseSeparation;
 
-  // Apply density points - areas with high density have lower separation
-  for (const dp of densityPoints) {
-    const dx = x - dp.x;
-    const dy = y - dp.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+  if (densityPoints.length > 0) {
+    // Calculate density influence from all points
+    let totalInfluence = 0;
+    let weightedDensity = 0;
 
-    if (dist < dp.radius) {
-      // Smooth falloff from center (1 at center, 0 at edge)
-      const falloff = 1 - (dist / dp.radius);
-      // Cubic falloff for smoother transition
-      const smoothFalloff = falloff * falloff * (3 - 2 * falloff);
-      // Reduce separation based on strength (strength 1 = minSeparation at center)
-      const reduction = smoothFalloff * dp.strength;
-      densityMultiplier = Math.min(densityMultiplier, 1 - reduction * 0.8);
+    for (const dp of densityPoints) {
+      const dx = x - dp.x;
+      const dy = y - dp.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < dp.radius) {
+        // Smooth falloff from center (1 at center, 0 at edge)
+        const falloff = 1 - (dist / dp.radius);
+        // Cubic falloff for smoother transition
+        const smoothFalloff = falloff * falloff * (3 - 2 * falloff);
+        const influence = smoothFalloff * dp.strength;
+
+        totalInfluence += influence;
+        weightedDensity += influence;
+      }
+    }
+
+    if (totalInfluence > 0) {
+      // In dense areas: interpolate from baseSeparation down to minSeparation
+      // Higher density = closer to minSeparation
+      const densityFactor = Math.min(1, weightedDensity); // Cap at 1
+      targetSeparation = baseSeparation - (baseSeparation - minSeparation) * densityFactor;
+    } else {
+      // Outside all density point radii - make it sparse
+      // Find distance to nearest density point edge
+      let minDistToEdge = Infinity;
+      for (const dp of densityPoints) {
+        const dx = x - dp.x;
+        const dy = y - dp.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const distToEdge = dist - dp.radius;
+        minDistToEdge = Math.min(minDistToEdge, distToEdge);
+      }
+
+      // Gradually increase separation as we move away from density zones
+      // Max sparsity reached at 2x the average radius distance
+      const avgRadius = densityPoints.reduce((sum, dp) => sum + dp.radius, 0) / densityPoints.length;
+      const sparseFactor = Math.min(1, minDistToEdge / (avgRadius * 2));
+      targetSeparation = baseSeparation + (maxSeparation - baseSeparation) * sparseFactor;
     }
   }
 
-  // Apply noise variation
+  // Apply noise variation for organic feel
   if (densityNoise && densityVariation > 0) {
     const noiseVal = densityNoise.fbm(x * densityNoiseScale, y * densityNoiseScale, 2, 0.5, 2);
-    // Map noise from [-1,1] to [0.5, 1.5] range, then apply variation amount
-    const noiseMultiplier = 1 + (noiseVal * 0.5 * densityVariation);
-    densityMultiplier *= noiseMultiplier;
+    // Map noise from [-1,1] to wider range based on variation
+    // At max variation: range is [0.3, 2.0]
+    const noiseMultiplier = 1 + (noiseVal * densityVariation);
+    targetSeparation *= noiseMultiplier;
   }
 
-  // Calculate final separation, clamped to minimum
-  return Math.max(minSeparation, baseSeparation * densityMultiplier);
+  // Clamp to valid range
+  return Math.max(minSeparation, Math.min(maxSeparation, targetSeparation));
 }
 
 /**

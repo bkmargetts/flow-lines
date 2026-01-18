@@ -198,11 +198,11 @@ const defaultState: AppState = {
   fillMode: false,
   // Variable density defaults
   densityPoints: [],
-  densityVariation: 0,
+  densityVariation: 0.3,
   minSeparation: 1,
   densityMode: false,
-  densityRadius: 100,
-  densityStrength: 0.8,
+  densityRadius: 150,
+  densityStrength: 1.0,
   showDensityPoints: true,
 };
 
@@ -218,6 +218,7 @@ export function App() {
     const random = () => Math.random();
     const modes: FieldMode[] = ['normal', 'curl', 'spiral', 'turbulent', 'ridged', 'warped'];
     const randomMode = modes[Math.floor(random() * modes.length)];
+    const useFillMode = random() > 0.5;
 
     updateState({
       seed: Math.floor(random() * 1000000),
@@ -232,6 +233,14 @@ export function App() {
       smoothing: random() * 0.8,
       spiralStrength: random() * 0.6,
       warpStrength: 0.3 + random() * 0.5,
+      // Line mode settings
+      fillMode: useFillMode,
+      separationDistance: useFillMode ? Math.floor(random() * 15) + 3 : Math.floor(random() * 10),
+      bidirectional: random() > 0.5,
+      evenDistribution: random() > 0.5,
+      // Density settings (only matter when fillMode is on)
+      densityVariation: random() * 0.8,
+      minSeparation: 0.5 + random() * 3,
     });
   }, [updateState]);
 
