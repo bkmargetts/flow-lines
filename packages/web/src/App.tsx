@@ -146,6 +146,10 @@ export interface AppState {
   densityRadius: number;
   densityStrength: number;
   showDensityPoints: boolean;
+  // Organic aesthetics (for pen plotter)
+  organicWobble: number;
+  velocityFadeout: boolean;
+  edgeAttraction: number;
 }
 
 // Calculate initial canvas size based on viewport
@@ -208,6 +212,10 @@ const defaultState: AppState = {
   densityRadius: 150,
   densityStrength: 1.0,
   showDensityPoints: true,
+  // Organic aesthetics - subtle defaults for natural look
+  organicWobble: 0.3,
+  velocityFadeout: true,
+  edgeAttraction: 0.4,
 };
 
 export function App() {
@@ -246,6 +254,10 @@ export function App() {
       variableDensity: useFillMode && random() > 0.3, // 70% chance when fill mode
       densityVariation: 0.4 + random() * 0.6,
       minSeparation: 0.5 + random() * 2,
+      // Organic aesthetics
+      organicWobble: random() * 0.6,
+      velocityFadeout: random() > 0.3, // 70% chance
+      edgeAttraction: random() * 0.6,
     });
   }, [updateState]);
 
@@ -347,6 +359,9 @@ export function App() {
       densityPoints: state.densityPoints,
       densityVariation: state.variableDensity ? state.densityVariation : 0,
       minSeparation: state.minSeparation,
+      organicWobble: state.organicWobble,
+      velocityFadeout: state.velocityFadeout,
+      edgeAttraction: state.edgeAttraction,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };

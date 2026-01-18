@@ -350,6 +350,50 @@ export function Controls({ state, updateState }: ControlsProps) {
               />
               <span className="value">{state.margin}</span>
             </div>
+
+            {/* Organic aesthetics section - only shown in fill mode */}
+            {state.fillMode && (
+              <>
+                <div className="presets-label" style={{ marginTop: 16 }}>Organic Feel</div>
+
+                <div className="control-row">
+                  <label>Wobble</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.organicWobble}
+                    onChange={(e) => updateState({ organicWobble: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.organicWobble.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Edge Pull</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.edgeAttraction}
+                    onChange={(e) => updateState({ edgeAttraction: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.edgeAttraction.toFixed(2)}</span>
+                </div>
+
+                <div className="toggles-row" style={{ marginTop: 8 }}>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={state.velocityFadeout}
+                      onChange={(e) => updateState({ velocityFadeout: e.target.checked })}
+                    />
+                    <span>Natural endings</span>
+                  </label>
+                </div>
+              </>
+            )}
           </>
         )}
 
