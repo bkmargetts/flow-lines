@@ -73,12 +73,12 @@ export function Controls({ state, updateState }: ControlsProps) {
             </div>
 
             <div className="control-row">
-              <label>Length</label>
+              <label>Max Steps</label>
               <input
                 type="range"
-                min="50"
-                max="1000"
-                step="50"
+                min="20"
+                max="2000"
+                step="20"
                 value={state.maxSteps}
                 onChange={(e) => updateState({ maxSteps: parseInt(e.target.value, 10) })}
               />
