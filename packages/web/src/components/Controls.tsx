@@ -6,10 +6,27 @@ interface ControlsProps {
   updateState: (updates: Partial<AppState>) => void;
 }
 
-type Tab = 'lines' | 'noise' | 'style';
+type Tab = 'lines' | 'noise' | 'canvas';
+
+// Paper size presets (in pixels at 96 DPI for screen, scalable for print)
+const PAPER_PRESETS = [
+  { name: 'A4', width: 794, height: 1123 },
+  { name: 'A4 Landscape', width: 1123, height: 794 },
+  { name: 'A3', width: 1123, height: 1587 },
+  { name: 'A5', width: 559, height: 794 },
+  { name: 'Letter', width: 816, height: 1056 },
+  { name: 'Square', width: 800, height: 800 },
+  { name: 'Instagram', width: 1080, height: 1080 },
+  { name: '4:5 Portrait', width: 800, height: 1000 },
+  { name: '16:9 Wide', width: 1200, height: 675 },
+] as const;
 
 export function Controls({ state, updateState }: ControlsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('lines');
+
+  const applyPreset = (width: number, height: number) => {
+    updateState({ width, height });
+  };
 
   return (
     <div className="controls">
@@ -31,10 +48,10 @@ export function Controls({ state, updateState }: ControlsProps) {
         </button>
         <button
           type="button"
-          className={activeTab === 'style' ? 'active' : ''}
-          onClick={() => setActiveTab('style')}
+          className={activeTab === 'canvas' ? 'active' : ''}
+          onClick={() => setActiveTab('canvas')}
         >
-          Style
+          Canvas
         </button>
       </div>
 
@@ -93,6 +110,19 @@ export function Controls({ state, updateState }: ControlsProps) {
               />
               <span className="value">{state.margin}</span>
             </div>
+
+            <div className="control-row">
+              <label>Stroke</label>
+              <input
+                type="range"
+                min="0.5"
+                max="5"
+                step="0.5"
+                value={state.strokeWidth}
+                onChange={(e) => updateState({ strokeWidth: parseFloat(e.target.value) })}
+              />
+              <span className="value">{state.strokeWidth}</span>
+            </div>
           </>
         )}
 
@@ -149,17 +179,43 @@ export function Controls({ state, updateState }: ControlsProps) {
               />
               <span className="value">{state.lacunarity.toFixed(1)}</span>
             </div>
+
+            <div className="control-row">
+              <label>Seed</label>
+              <input
+                type="number"
+                value={state.seed}
+                onChange={(e) => updateState({ seed: parseInt(e.target.value, 10) || 0 })}
+                className="seed-input"
+              />
+            </div>
           </>
         )}
 
-        {activeTab === 'style' && (
+        {activeTab === 'canvas' && (
           <>
+            <div className="presets-label">Paper Sizes</div>
+            <div className="presets-grid">
+              {PAPER_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  className={`preset-btn ${state.width === preset.width && state.height === preset.height ? 'active' : ''}`}
+                  onClick={() => applyPreset(preset.width, preset.height)}
+                >
+                  {preset.name}
+                </button>
+              ))}
+            </div>
+
+            <div className="presets-label" style={{ marginTop: 16 }}>Custom Size</div>
+
             <div className="control-row">
               <label>Width</label>
               <input
                 type="range"
                 min="200"
-                max="1200"
+                max="1600"
                 step="50"
                 value={state.width}
                 onChange={(e) => updateState({ width: parseInt(e.target.value, 10) })}
@@ -172,7 +228,7 @@ export function Controls({ state, updateState }: ControlsProps) {
               <input
                 type="range"
                 min="200"
-                max="1200"
+                max="1600"
                 step="50"
                 value={state.height}
                 onChange={(e) => updateState({ height: parseInt(e.target.value, 10) })}
@@ -180,27 +236,8 @@ export function Controls({ state, updateState }: ControlsProps) {
               <span className="value">{state.height}</span>
             </div>
 
-            <div className="control-row">
-              <label>Stroke</label>
-              <input
-                type="range"
-                min="0.5"
-                max="5"
-                step="0.5"
-                value={state.strokeWidth}
-                onChange={(e) => updateState({ strokeWidth: parseFloat(e.target.value) })}
-              />
-              <span className="value">{state.strokeWidth}</span>
-            </div>
-
-            <div className="control-row">
-              <label>Seed</label>
-              <input
-                type="number"
-                value={state.seed}
-                onChange={(e) => updateState({ seed: parseInt(e.target.value, 10) || 0 })}
-                className="seed-input"
-              />
+            <div className="size-display">
+              {state.width} × {state.height} px
             </div>
           </>
         )}

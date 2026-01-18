@@ -34,9 +34,24 @@ export interface AppState {
   showAttractors: boolean;
 }
 
+// Calculate initial canvas size based on viewport
+function getInitialCanvasSize(): { width: number; height: number } {
+  const padding = 120; // Space for toolbar and margins
+  const maxWidth = Math.min(window.innerWidth - 32, 1200);
+  const maxHeight = Math.min(window.innerHeight - padding, 1200);
+
+  // Round to nearest 50 for cleaner values
+  const width = Math.round(maxWidth / 50) * 50;
+  const height = Math.round(maxHeight / 50) * 50;
+
+  return { width: Math.max(width, 300), height: Math.max(height, 300) };
+}
+
+const initialSize = getInitialCanvasSize();
+
 const defaultState: AppState = {
-  width: 600,
-  height: 600,
+  width: initialSize.width,
+  height: initialSize.height,
   lineCount: 100,
   seed: Math.floor(Math.random() * 1000000),
   stepLength: 2,
