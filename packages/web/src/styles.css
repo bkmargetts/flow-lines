@@ -439,6 +439,49 @@ body {
   border-color: var(--accent);
 }
 
+/* Toggles row */
+.toggles-row {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-solid);
+  appearance: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.toggle-label input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle-label input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  color: white;
+  font-weight: 600;
+}
+
 /* Presets */
 .presets-label {
   font-size: 12px;

@@ -10,6 +10,34 @@ export type BrushType = 'attractor' | 'repeller';
 
 // Flow field presets for different organic styles
 export const FIELD_PRESETS = {
+  wispy: {
+    name: 'Wispy',
+    fieldMode: 'curl' as FieldMode,
+    noiseScale: 0.0015,
+    octaves: 2,
+    persistence: 0.3,
+    lacunarity: 2,
+    smoothing: 0.6,
+    lineCount: 800,
+    separationDistance: 3,
+    bidirectional: true,
+    evenDistribution: true,
+    strokeWidth: 0.5,
+  },
+  flowing: {
+    name: 'Flowing',
+    fieldMode: 'curl' as FieldMode,
+    noiseScale: 0.002,
+    octaves: 3,
+    persistence: 0.4,
+    lacunarity: 2.5,
+    smoothing: 0.5,
+    lineCount: 500,
+    separationDistance: 4,
+    bidirectional: true,
+    evenDistribution: true,
+    strokeWidth: 0.8,
+  },
   smooth: {
     name: 'Smooth',
     fieldMode: 'curl' as FieldMode,
@@ -18,15 +46,6 @@ export const FIELD_PRESETS = {
     persistence: 0.3,
     lacunarity: 2,
     smoothing: 0.5,
-  },
-  wispy: {
-    name: 'Wispy',
-    fieldMode: 'curl' as FieldMode,
-    noiseScale: 0.002,
-    octaves: 3,
-    persistence: 0.4,
-    lacunarity: 2.5,
-    smoothing: 0.7,
   },
   turbulent: {
     name: 'Turbulent',
@@ -108,6 +127,10 @@ export interface AppState {
   smoothing: number;
   spiralStrength: number;
   warpStrength: number;
+  // Advanced line options
+  separationDistance: number;
+  bidirectional: boolean;
+  evenDistribution: boolean;
 }
 
 // Calculate initial canvas size based on viewport
@@ -155,6 +178,10 @@ const defaultState: AppState = {
   smoothing: 0.3,
   spiralStrength: 0.3,
   warpStrength: 0.5,
+  // Advanced line defaults
+  separationDistance: 0,
+  bidirectional: false,
+  evenDistribution: false,
 };
 
 export function App() {
@@ -250,6 +277,9 @@ export function App() {
       smoothing: state.smoothing,
       spiralStrength: state.spiralStrength,
       warpStrength: state.warpStrength,
+      separationDistance: state.separationDistance,
+      bidirectional: state.bidirectional,
+      evenDistribution: state.evenDistribution,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };

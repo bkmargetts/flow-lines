@@ -49,6 +49,11 @@ export function Controls({ state, updateState }: ControlsProps) {
       smoothing: number;
       spiralStrength?: number;
       warpStrength?: number;
+      lineCount?: number;
+      separationDistance?: number;
+      bidirectional?: boolean;
+      evenDistribution?: boolean;
+      strokeWidth?: number;
     };
     updateState({
       fieldMode: preset.fieldMode,
@@ -59,6 +64,11 @@ export function Controls({ state, updateState }: ControlsProps) {
       smoothing: preset.smoothing,
       ...(preset.spiralStrength !== undefined && { spiralStrength: preset.spiralStrength }),
       ...(preset.warpStrength !== undefined && { warpStrength: preset.warpStrength }),
+      ...(preset.lineCount !== undefined && { lineCount: preset.lineCount }),
+      ...(preset.separationDistance !== undefined && { separationDistance: preset.separationDistance }),
+      ...(preset.bidirectional !== undefined && { bidirectional: preset.bidirectional }),
+      ...(preset.evenDistribution !== undefined && { evenDistribution: preset.evenDistribution }),
+      ...(preset.strokeWidth !== undefined && { strokeWidth: preset.strokeWidth }),
     });
   };
 
@@ -215,6 +225,51 @@ export function Controls({ state, updateState }: ControlsProps) {
             </div>
 
             <div className="control-row">
+              <label>Stroke</label>
+              <input
+                type="range"
+                min="0.1"
+                max="5"
+                step="0.1"
+                value={state.strokeWidth}
+                onChange={(e) => updateState({ strokeWidth: parseFloat(e.target.value) })}
+              />
+              <span className="value">{state.strokeWidth.toFixed(1)}</span>
+            </div>
+
+            <div className="control-row">
+              <label>Separation</label>
+              <input
+                type="range"
+                min="0"
+                max="20"
+                step="1"
+                value={state.separationDistance}
+                onChange={(e) => updateState({ separationDistance: parseInt(e.target.value, 10) })}
+              />
+              <span className="value">{state.separationDistance}</span>
+            </div>
+
+            <div className="toggles-row">
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={state.bidirectional}
+                  onChange={(e) => updateState({ bidirectional: e.target.checked })}
+                />
+                <span>Bidirectional</span>
+              </label>
+              <label className="toggle-label">
+                <input
+                  type="checkbox"
+                  checked={state.evenDistribution}
+                  onChange={(e) => updateState({ evenDistribution: e.target.checked })}
+                />
+                <span>Even spacing</span>
+              </label>
+            </div>
+
+            <div className="control-row">
               <label>Margin</label>
               <input
                 type="range"
@@ -225,19 +280,6 @@ export function Controls({ state, updateState }: ControlsProps) {
                 onChange={(e) => updateState({ margin: parseInt(e.target.value, 10) })}
               />
               <span className="value">{state.margin}</span>
-            </div>
-
-            <div className="control-row">
-              <label>Stroke</label>
-              <input
-                type="range"
-                min="0.5"
-                max="5"
-                step="0.5"
-                value={state.strokeWidth}
-                onChange={(e) => updateState({ strokeWidth: parseFloat(e.target.value) })}
-              />
-              <span className="value">{state.strokeWidth}</span>
             </div>
           </>
         )}
