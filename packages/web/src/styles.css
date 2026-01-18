@@ -198,6 +198,67 @@ button.secondary:hover {
   padding: 8px 12px;
 }
 
+/* Paint mode styles */
+.paint-section {
+  background: var(--bg-tertiary);
+  margin: -24px -24px 16px -24px;
+  padding: 24px;
+  border-bottom: 2px solid var(--accent);
+}
+
+.paint-section .section-title {
+  margin-top: 0;
+  color: var(--accent);
+}
+
+.paint-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.paint-controls button {
+  flex: 1;
+}
+
+.paint-controls button.active {
+  box-shadow: 0 0 0 2px var(--accent-hover);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--accent-hover); }
+  50% { box-shadow: 0 0 0 4px var(--accent-hover), 0 0 12px var(--accent); }
+}
+
+.paint-hint {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.canvas-wrapper.paint-mode {
+  box-shadow: 0 0 0 3px var(--accent), 0 4px 24px rgba(0, 0, 0, 0.3);
+  cursor: crosshair;
+}
+
 @media (max-width: 768px) {
   .app {
     flex-direction: column;
