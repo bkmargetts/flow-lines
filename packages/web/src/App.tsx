@@ -137,9 +137,11 @@ export interface AppState {
   evenDistribution: boolean;
   fillMode: boolean;
   // Variable density options
-  densityPoints: DensityPoint[];
+  variableDensity: boolean;
   densityVariation: number;
   minSeparation: number;
+  // Density point painting
+  densityPoints: DensityPoint[];
   densityMode: boolean;
   densityRadius: number;
   densityStrength: number;
@@ -197,9 +199,11 @@ const defaultState: AppState = {
   evenDistribution: false,
   fillMode: true,
   // Variable density defaults
-  densityPoints: [],
-  densityVariation: 0.5,
+  variableDensity: true,
+  densityVariation: 0.6,
   minSeparation: 1,
+  // Density point painting
+  densityPoints: [],
   densityMode: false,
   densityRadius: 150,
   densityStrength: 1.0,
@@ -239,7 +243,8 @@ export function App() {
       bidirectional: random() > 0.5,
       evenDistribution: random() > 0.5,
       // Density settings (only matter when fillMode is on)
-      densityVariation: 0.3 + random() * 0.7,
+      variableDensity: useFillMode && random() > 0.3, // 70% chance when fill mode
+      densityVariation: 0.4 + random() * 0.6,
       minSeparation: 0.5 + random() * 2,
     });
   }, [updateState]);
@@ -340,7 +345,7 @@ export function App() {
       evenDistribution: state.evenDistribution,
       fillMode: state.fillMode,
       densityPoints: state.densityPoints,
-      densityVariation: state.densityVariation,
+      densityVariation: state.variableDensity ? state.densityVariation : 0,
       minSeparation: state.minSeparation,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),

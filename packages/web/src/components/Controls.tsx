@@ -289,32 +289,46 @@ export function Controls({ state, updateState }: ControlsProps) {
 
             {state.fillMode && (
               <>
-                <div className="presets-label" style={{ marginTop: 12 }}>Density</div>
-                <div className="control-row">
-                  <label>Variation</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={state.densityVariation}
-                    onChange={(e) => updateState({ densityVariation: parseFloat(e.target.value) })}
-                  />
-                  <span className="value">{state.densityVariation.toFixed(2)}</span>
+                <div className="toggles-row" style={{ marginTop: 12 }}>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={state.variableDensity}
+                      onChange={(e) => updateState({ variableDensity: e.target.checked })}
+                    />
+                    <span>Variable density</span>
+                  </label>
                 </div>
 
-                <div className="control-row">
-                  <label>Min Sep</label>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="10"
-                    step="0.5"
-                    value={state.minSeparation}
-                    onChange={(e) => updateState({ minSeparation: parseFloat(e.target.value) })}
-                  />
-                  <span className="value">{state.minSeparation.toFixed(1)}</span>
-                </div>
+                {state.variableDensity && (
+                  <>
+                    <div className="control-row">
+                      <label>Amount</label>
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="1"
+                        step="0.05"
+                        value={state.densityVariation}
+                        onChange={(e) => updateState({ densityVariation: parseFloat(e.target.value) })}
+                      />
+                      <span className="value">{state.densityVariation.toFixed(2)}</span>
+                    </div>
+
+                    <div className="control-row">
+                      <label>Min Sep</label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="5"
+                        step="0.5"
+                        value={state.minSeparation}
+                        onChange={(e) => updateState({ minSeparation: parseFloat(e.target.value) })}
+                      />
+                      <span className="value">{state.minSeparation.toFixed(1)}</span>
+                    </div>
+                  </>
+                )}
 
                 {state.densityPoints.length > 0 && (
                   <div className="density-points-info">
