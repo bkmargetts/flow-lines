@@ -7,6 +7,7 @@ interface PreviewProps {
   height: number;
   paintMode: boolean;
   paintedPoints: Point[];
+  showDots: boolean;
   onPaint: (point: Point) => void;
 }
 
@@ -16,6 +17,7 @@ export function Preview({
   height,
   paintMode,
   paintedPoints,
+  showDots,
   onPaint,
 }: PreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,9 +86,8 @@ export function Preview({
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp);
   }, []);
 
-  // Generate paint dots overlay - only show when actively in paint mode
-  // Dots are small and subtle so they don't obscure the artwork
-  const paintDotsOverlay = paintMode && paintedPoints.length > 0 ? (
+  // Generate paint dots overlay - controlled by showDots toggle
+  const paintDotsOverlay = showDots && paintedPoints.length > 0 ? (
     <svg
       className="paint-overlay"
       viewBox={`0 0 ${width} ${height}`}

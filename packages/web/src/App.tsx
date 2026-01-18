@@ -20,6 +20,7 @@ export interface AppState {
   strokeWidth: number;
   paintMode: boolean;
   paintedPoints: Point[];
+  showDots: boolean;
 }
 
 const defaultState: AppState = {
@@ -39,6 +40,7 @@ const defaultState: AppState = {
   strokeWidth: 1,
   paintMode: false,
   paintedPoints: [],
+  showDots: true,
 };
 
 export function App() {
@@ -130,6 +132,7 @@ export function App() {
           height={state.height}
           paintMode={state.paintMode}
           paintedPoints={state.paintedPoints}
+          showDots={state.showDots}
           onPaint={addPaintedPoint}
         />
       </main>

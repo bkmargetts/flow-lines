@@ -37,6 +37,16 @@ export function Controls({
               </button>
             )}
           </div>
+          {state.paintedPoints.length > 0 && (
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={state.showDots}
+                onChange={(e) => updateState({ showDots: e.target.checked })}
+              />
+              Show seed points
+            </label>
+          )}
           <p className="paint-hint">
             {state.paintMode
               ? 'Click or drag on canvas to place flow line seeds'
