@@ -36,9 +36,10 @@ export interface AppState {
 
 // Calculate initial canvas size based on viewport
 function getInitialCanvasSize(): { width: number; height: number } {
-  const padding = 120; // Space for toolbar and margins
-  const maxWidth = Math.min(window.innerWidth - 32, 1200);
-  const maxHeight = Math.min(window.innerHeight - padding, 1200);
+  const toolbarHeight = 70; // Compact toolbar + padding
+  const horizontalPadding = 24;
+  const maxWidth = Math.min(window.innerWidth - horizontalPadding, 1200);
+  const maxHeight = Math.min(window.innerHeight - toolbarHeight, 1200);
 
   // Round to nearest 50 for cleaner values
   const width = Math.round(maxWidth / 50) * 50;

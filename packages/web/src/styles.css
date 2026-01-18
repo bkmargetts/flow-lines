@@ -60,8 +60,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  padding-bottom: 100px; /* Space for toolbar */
+  padding: 12px;
+  padding-bottom: 72px; /* Space for toolbar */
 }
 
 .canvas {
@@ -100,24 +100,24 @@ body {
 /* Bottom toolbar */
 .toolbar {
   position: fixed;
-  bottom: 24px;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 4px;
-  padding: 8px;
+  gap: 2px;
+  padding: 6px;
   background: var(--surface);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-radius: 22px;
+  border-radius: 18px;
   box-shadow: var(--shadow), 0 0 0 1px var(--border);
   z-index: 100;
 }
 
 .toolbar-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   border: none;
   background: transparent;
   color: var(--text);
@@ -126,6 +126,11 @@ body {
   justify-content: center;
   cursor: pointer;
   transition: all 0.15s ease;
+}
+
+.toolbar-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .toolbar-btn:hover {
@@ -144,20 +149,20 @@ body {
 /* Paint controls bar */
 .paint-controls-bar {
   position: fixed;
-  top: 16px;
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: 10px;
+  padding: 6px 12px;
   background: var(--surface);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-radius: 14px;
+  border-radius: 12px;
   box-shadow: var(--shadow), 0 0 0 1px var(--border);
   z-index: 100;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .paint-label {
@@ -471,7 +476,15 @@ body {
 /* Safe area for iOS */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .toolbar {
-    bottom: calc(24px + env(safe-area-inset-bottom));
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .preview {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+
+  .paint-controls-bar {
+    top: calc(8px + env(safe-area-inset-top));
   }
 
   .sheet {
@@ -482,7 +495,19 @@ body {
 /* Larger screens */
 @media (min-width: 768px) {
   .preview {
-    padding-bottom: 120px;
+    padding: 24px;
+    padding-bottom: 100px;
+  }
+
+  .toolbar {
+    bottom: 20px;
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .toolbar-btn {
+    width: 44px;
+    height: 44px;
   }
 
   .sheet {
@@ -492,7 +517,7 @@ body {
     width: 400px;
     transform: translateX(-50%);
     border-radius: var(--radius-lg);
-    bottom: 100px;
+    bottom: 90px;
     animation: slideUpDesktop 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
