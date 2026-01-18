@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions } from '@flow-lines/core';
+import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions, type Point } from '@flow-lines/core';
 import { Controls } from './components/Controls';
 import { Preview } from './components/Preview';
 
@@ -18,6 +18,8 @@ export interface AppState {
   lacunarity: number;
   strokeColor: string;
   strokeWidth: number;
+  paintMode: boolean;
+  paintedPoints: Point[];
 }
 
 const defaultState: AppState = {
@@ -35,6 +37,8 @@ const defaultState: AppState = {
   lacunarity: 2,
   strokeColor: '#000000',
   strokeWidth: 1,
+  paintMode: false,
+  paintedPoints: [],
 };
 
 export function App() {
@@ -48,11 +52,28 @@ export function App() {
     updateState({ seed: Math.floor(Math.random() * 1000000) });
   }, [updateState]);
 
+  const togglePaintMode = useCallback(() => {
+    updateState({ paintMode: !state.paintMode });
+  }, [state.paintMode, updateState]);
+
+  const clearPaintedPoints = useCallback(() => {
+    updateState({ paintedPoints: [] });
+  }, [updateState]);
+
+  const addPaintedPoint = useCallback((point: Point) => {
+    setState((prev) => ({
+      ...prev,
+      paintedPoints: [...prev.paintedPoints, point],
+    }));
+  }, []);
+
   const svgContent = useMemo(() => {
+    const usePaintedPoints = state.paintMode && state.paintedPoints.length > 0;
+
     const flowOptions: FlowLinesOptions = {
       width: state.width,
       height: state.height,
-      lineCount: state.lineCount,
+      lineCount: usePaintedPoints ? state.paintedPoints.length : state.lineCount,
       seed: state.seed,
       stepLength: state.stepLength,
       maxSteps: state.maxSteps,
@@ -62,6 +83,7 @@ export function App() {
       octaves: state.octaves,
       persistence: state.persistence,
       lacunarity: state.lacunarity,
+      ...(usePaintedPoints && { startPoints: state.paintedPoints }),
     };
 
     const svgOptions: SVGOptions = {
@@ -96,11 +118,20 @@ export function App() {
           updateState={updateState}
           randomizeSeed={randomizeSeed}
           downloadSVG={downloadSVG}
+          togglePaintMode={togglePaintMode}
+          clearPaintedPoints={clearPaintedPoints}
         />
       </aside>
 
       <main className="canvas-container">
-        <Preview svgContent={svgContent} width={state.width} height={state.height} />
+        <Preview
+          svgContent={svgContent}
+          width={state.width}
+          height={state.height}
+          paintMode={state.paintMode}
+          paintedPoints={state.paintedPoints}
+          onPaint={addPaintedPoint}
+        />
       </main>
     </div>
   );

@@ -198,6 +198,31 @@ button.secondary:hover {
   padding: 8px 12px;
 }
 
+/* Paint mode styles */
+.paint-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.paint-controls button {
+  flex: 1;
+}
+
+.paint-controls button.active {
+  box-shadow: 0 0 0 2px var(--accent-hover);
+}
+
+.paint-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.canvas-wrapper.paint-mode {
+  box-shadow: 0 0 0 3px var(--accent), 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
 @media (max-width: 768px) {
   .app {
     flex-direction: column;

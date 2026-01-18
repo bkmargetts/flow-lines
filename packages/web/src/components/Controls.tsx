@@ -5,11 +5,44 @@ interface ControlsProps {
   updateState: (updates: Partial<AppState>) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
+  togglePaintMode: () => void;
+  clearPaintedPoints: () => void;
 }
 
-export function Controls({ state, updateState, randomizeSeed, downloadSVG }: ControlsProps) {
+export function Controls({
+  state,
+  updateState,
+  randomizeSeed,
+  downloadSVG,
+  togglePaintMode,
+  clearPaintedPoints,
+}: ControlsProps) {
   return (
     <div className="controls">
+      <h3 className="section-title">Paint Mode</h3>
+
+      <div className="control-group">
+        <div className="paint-controls">
+          <button
+            type="button"
+            className={state.paintMode ? 'primary active' : 'secondary'}
+            onClick={togglePaintMode}
+          >
+            {state.paintMode ? 'Painting ON' : 'Painting OFF'}
+          </button>
+          {state.paintedPoints.length > 0 && (
+            <button type="button" className="secondary" onClick={clearPaintedPoints}>
+              Clear ({state.paintedPoints.length})
+            </button>
+          )}
+        </div>
+        {state.paintMode && (
+          <p className="paint-hint">
+            Click or drag on canvas to place flow line starting points
+          </p>
+        )}
+      </div>
+
       <h3 className="section-title">Canvas</h3>
 
       <div className="control-group">
