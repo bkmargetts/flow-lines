@@ -84,8 +84,18 @@ export function App() {
     setState((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  const randomizeSeed = useCallback(() => {
-    updateState({ seed: Math.floor(Math.random() * 1000000) });
+  const randomizeAll = useCallback(() => {
+    const random = () => Math.random();
+    updateState({
+      seed: Math.floor(random() * 1000000),
+      lineCount: Math.floor(random() * 300) + 50,
+      maxSteps: Math.floor(random() * 400) + 100,
+      stepLength: Math.floor(random() * 4) + 1,
+      noiseScale: 0.002 + random() * 0.015,
+      octaves: Math.floor(random() * 6) + 1,
+      persistence: 0.2 + random() * 0.6,
+      lacunarity: 1.5 + random() * 2,
+    });
   }, [updateState]);
 
   const togglePaintMode = useCallback(() => {
@@ -203,7 +213,7 @@ export function App() {
 
       {/* Bottom toolbar */}
       <Toolbar
-        onRandomize={randomizeSeed}
+        onRandomize={randomizeAll}
         onDownload={downloadSVG}
         onTogglePaint={togglePaintMode}
         onToggleAttractor={toggleAttractorMode}
