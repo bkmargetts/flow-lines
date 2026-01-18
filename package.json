@@ -1,0 +1,26 @@
+{
+  "name": "flow-lines",
+  "version": "0.1.0",
+  "description": "A generative art toolbox for creating beautiful SVG artwork for pen plotters",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean"
+  },
+  "keywords": [
+    "generative-art",
+    "svg",
+    "pen-plotter",
+    "flow-lines",
+    "perlin-noise"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
