@@ -233,7 +233,6 @@ export function App() {
       smoothing: random() * 0.8,
       spiralStrength: random() * 0.6,
       warpStrength: 0.3 + random() * 0.5,
-      strokeWidth: 0.3 + random() * 1.2,
       // Line mode settings
       fillMode: useFillMode,
       separationDistance: useFillMode ? Math.floor(random() * 12) + 3 : Math.floor(random() * 10),

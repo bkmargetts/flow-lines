@@ -625,18 +625,24 @@ function generateStreamlines(
       densityPoints, densityNoise, densityNoiseScale, densityVariation
     );
 
-    // Use a smaller collision check threshold to allow tighter packing
-    // In dense areas (small effectiveSep), use even smaller threshold
-    const collisionThreshold = effectiveSep * 0.7;
-    if (spatialGrid.hasNearby(seedPoint.x, seedPoint.y, collisionThreshold)) {
-      continue;
+    // In dense areas (small separation), SKIP collision check entirely to allow overlapping
+    // In sparse areas, still check to prevent too much overlap
+    const densityRatio = effectiveSep / baseSeparation;
+    const skipCollisionCheck = densityRatio < 0.5 || (densityRatio < 0.8 && random() > 0.5);
+
+    if (!skipCollisionCheck) {
+      const collisionThreshold = effectiveSep * 0.5;
+      if (spatialGrid.hasNearby(seedPoint.x, seedPoint.y, collisionThreshold)) {
+        continue;
+      }
     }
 
-    // Trace line in both directions from seed
+    // Trace line - in dense areas, don't stop at collisions
     const line = traceStreamlineVariable(
       field, seedPoint, stepLength, maxSteps, margin,
       spatialGrid, baseSeparation, minSeparation,
-      densityPoints, densityNoise, densityNoiseScale, densityVariation, attractors
+      densityPoints, densityNoise, densityNoiseScale, densityVariation, attractors,
+      skipCollisionCheck // Pass flag to allow overlapping traces
     );
 
     if (line.points.length < minLineLength) {
@@ -651,19 +657,24 @@ function generateStreamlines(
 
     lines.push(finalLine);
 
-    // Add points to spatial grid - but only every few points to allow tighter packing
-    const gridSampleRate = Math.max(1, Math.floor(effectiveSep / 2));
-    for (let i = 0; i < finalLine.points.length; i += gridSampleRate) {
-      spatialGrid.add(finalLine.points[i]);
-    }
-    // Always add endpoints
-    if (finalLine.points.length > 1) {
-      spatialGrid.add(finalLine.points[finalLine.points.length - 1]);
+    // Only add to spatial grid in sparse areas
+    if (!skipCollisionCheck) {
+      const gridSampleRate = Math.max(1, Math.floor(effectiveSep / 2));
+      for (let i = 0; i < finalLine.points.length; i += gridSampleRate) {
+        spatialGrid.add(finalLine.points[i]);
+      }
+      if (finalLine.points.length > 1) {
+        spatialGrid.add(finalLine.points[finalLine.points.length - 1]);
+      }
     }
 
     // Generate new seed candidates from this line
-    // Sample more frequently for denser lines
-    const sampleInterval = Math.max(1, Math.floor(finalLine.points.length / 30));
+    // Sample MORE frequently in dense areas to pack more lines
+    const denseSampling = densityRatio < 0.5;
+    const sampleInterval = denseSampling
+      ? Math.max(1, Math.floor(finalLine.points.length / 50))
+      : Math.max(1, Math.floor(finalLine.points.length / 20));
+
     for (let i = 0; i < finalLine.points.length - 1; i += sampleInterval) {
       const p0 = finalLine.points[i];
       const p1 = finalLine.points[Math.min(i + 1, finalLine.points.length - 1)];
@@ -685,8 +696,8 @@ function generateStreamlines(
       const nx = -dy / len;
       const ny = dx / len;
 
-      // Create seeds on both sides at the local separation distance
-      const offset = localSep * (0.8 + random() * 0.4); // Some randomness
+      // Create seeds on both sides - use SMALLER offset in dense areas
+      const offset = localSep * (0.5 + random() * 0.5);
 
       const seed1: Point = {
         x: p0.x + nx * offset,
@@ -724,6 +735,7 @@ function generateStreamlines(
 
 /**
  * Trace a streamline with variable density, stopping when hitting other lines
+ * (unless skipCollisionCheck is true for dense areas)
  */
 function traceStreamlineVariable(
   field: FlowField,
@@ -738,7 +750,8 @@ function traceStreamlineVariable(
   densityNoise: ReturnType<typeof createNoise> | null,
   densityNoiseScale: number,
   densityVariation: number,
-  attractors?: Attractor[]
+  attractors?: Attractor[],
+  skipCollisionCheck: boolean = false
 ): FlowLine {
   // Trace forward
   const forwardPoints: Point[] = [{ ...start }];
@@ -753,14 +766,15 @@ function traceStreamlineVariable(
 
     if (!field.isInBounds(next.x, next.y, margin)) break;
 
-    // Calculate separation at this point
-    const localSep = calculateSeparation(
-      next.x, next.y, baseSeparation, minSeparation,
-      densityPoints, densityNoise, densityNoiseScale, densityVariation
-    );
-
-    // Use smaller collision threshold to allow tighter packing
-    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
+    // In dense areas, skip collision check to allow overlapping lines
+    if (!skipCollisionCheck) {
+      // Calculate separation at this point
+      const localSep = calculateSeparation(
+        next.x, next.y, baseSeparation, minSeparation,
+        densityPoints, densityNoise, densityNoiseScale, densityVariation
+      );
+      if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
+    }
 
     forwardPoints.push(next);
     current = next;
@@ -779,14 +793,14 @@ function traceStreamlineVariable(
 
     if (!field.isInBounds(next.x, next.y, margin)) break;
 
-    // Calculate separation at this point
-    const localSep = calculateSeparation(
-      next.x, next.y, baseSeparation, minSeparation,
-      densityPoints, densityNoise, densityNoiseScale, densityVariation
-    );
-
-    // Use smaller collision threshold to allow tighter packing
-    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
+    // In dense areas, skip collision check
+    if (!skipCollisionCheck) {
+      const localSep = calculateSeparation(
+        next.x, next.y, baseSeparation, minSeparation,
+        densityPoints, densityNoise, densityNoiseScale, densityVariation
+      );
+      if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
+    }
 
     backwardPoints.push(next);
     current = next;
