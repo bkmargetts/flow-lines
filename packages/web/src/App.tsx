@@ -1,8 +1,10 @@
 import { useState, useCallback, useMemo } from 'react';
 import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions, type Point, type Attractor } from '@flow-lines/core';
-import { Controls } from './components/Controls';
 import { Preview } from './components/Preview';
-import { ControlPanel } from './components/ControlPanel';
+import { Toolbar } from './components/Toolbar';
+import { Sheet } from './components/Sheet';
+import { Controls } from './components/Controls';
+import { PaintControls } from './components/PaintControls';
 
 export type BrushType = 'attractor' | 'repeller';
 
@@ -24,7 +26,6 @@ export interface AppState {
   paintMode: boolean;
   paintedPoints: Point[];
   showDots: boolean;
-  // Attractor state
   attractorMode: boolean;
   attractors: Attractor[];
   attractorBrushType: BrushType;
@@ -51,7 +52,6 @@ const defaultState: AppState = {
   paintMode: false,
   paintedPoints: [],
   showDots: true,
-  // Attractor defaults
   attractorMode: false,
   attractors: [],
   attractorBrushType: 'attractor',
@@ -62,7 +62,7 @@ const defaultState: AppState = {
 
 export function App() {
   const [state, setState] = useState<AppState>(defaultState);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -73,11 +73,20 @@ export function App() {
   }, [updateState]);
 
   const togglePaintMode = useCallback(() => {
-    updateState({
-      paintMode: !state.paintMode,
+    setState((prev) => ({
+      ...prev,
+      paintMode: !prev.paintMode,
       attractorMode: false,
-    });
-  }, [state.paintMode, updateState]);
+    }));
+  }, []);
+
+  const toggleAttractorMode = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      attractorMode: !prev.attractorMode,
+      paintMode: false,
+    }));
+  }, []);
 
   const clearPaintedPoints = useCallback(() => {
     updateState({ paintedPoints: [] });
@@ -90,30 +99,18 @@ export function App() {
     }));
   }, []);
 
-  const toggleAttractorMode = useCallback(() => {
-    updateState({
-      attractorMode: !state.attractorMode,
-      paintMode: false,
-    });
-  }, [state.attractorMode, updateState]);
-
   const addAttractor = useCallback((x: number, y: number) => {
-    const strength = state.attractorBrushType === 'attractor'
-      ? state.attractorStrength
-      : -state.attractorStrength;
+    setState((prev) => {
+      const strength = prev.attractorBrushType === 'attractor'
+        ? prev.attractorStrength
+        : -prev.attractorStrength;
 
-    const newAttractor: Attractor = {
-      x,
-      y,
-      radius: state.attractorRadius,
-      strength,
-    };
-
-    setState((prev) => ({
-      ...prev,
-      attractors: [...prev.attractors, newAttractor],
-    }));
-  }, [state.attractorBrushType, state.attractorRadius, state.attractorStrength]);
+      return {
+        ...prev,
+        attractors: [...prev.attractors, { x, y, radius: prev.attractorRadius, strength }],
+      };
+    });
+  }, []);
 
   const clearAttractors = useCallback(() => {
     updateState({ attractors: [] });
@@ -160,40 +157,49 @@ export function App() {
     URL.revokeObjectURL(url);
   }, [svgContent, state.seed]);
 
-  const togglePanel = useCallback(() => {
-    setPanelOpen((prev) => !prev);
-  }, []);
+  const isInteractive = state.paintMode || state.attractorMode;
 
   return (
-    <div className={`app ${panelOpen ? 'panel-open' : ''}`}>
-      <ControlPanel isOpen={panelOpen} onToggle={togglePanel}>
-        <Controls
+    <div className="app">
+      <Preview
+        svgContent={svgContent}
+        width={state.width}
+        height={state.height}
+        paintMode={state.paintMode}
+        paintedPoints={state.paintedPoints}
+        showDots={state.showDots}
+        onPaint={addPaintedPoint}
+        attractorMode={state.attractorMode}
+        attractors={state.attractors}
+        showAttractors={state.showAttractors}
+        onAddAttractor={addAttractor}
+      />
+
+      {/* Paint/Attractor controls bar - shows when in interactive mode */}
+      {isInteractive && (
+        <PaintControls
           state={state}
           updateState={updateState}
-          randomizeSeed={randomizeSeed}
-          downloadSVG={downloadSVG}
-          togglePaintMode={togglePaintMode}
-          clearPaintedPoints={clearPaintedPoints}
-          toggleAttractorMode={toggleAttractorMode}
-          clearAttractors={clearAttractors}
+          onClearPoints={clearPaintedPoints}
+          onClearAttractors={clearAttractors}
         />
-      </ControlPanel>
+      )}
 
-      <main className="canvas-container">
-        <Preview
-          svgContent={svgContent}
-          width={state.width}
-          height={state.height}
-          paintMode={state.paintMode}
-          paintedPoints={state.paintedPoints}
-          showDots={state.showDots}
-          onPaint={addPaintedPoint}
-          attractorMode={state.attractorMode}
-          attractors={state.attractors}
-          showAttractors={state.showAttractors}
-          onAddAttractor={addAttractor}
-        />
-      </main>
+      {/* Bottom toolbar */}
+      <Toolbar
+        onRandomize={randomizeSeed}
+        onDownload={downloadSVG}
+        onTogglePaint={togglePaintMode}
+        onToggleAttractor={toggleAttractorMode}
+        onOpenSettings={() => setSheetOpen(true)}
+        paintMode={state.paintMode}
+        attractorMode={state.attractorMode}
+      />
+
+      {/* Settings sheet */}
+      <Sheet isOpen={sheetOpen} onClose={() => setSheetOpen(false)}>
+        <Controls state={state} updateState={updateState} />
+      </Sheet>
     </div>
   );
 }
