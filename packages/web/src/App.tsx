@@ -71,7 +71,10 @@ export function App() {
   }, [updateState]);
 
   const togglePaintMode = useCallback(() => {
-    updateState({ paintMode: !state.paintMode });
+    updateState({
+      paintMode: !state.paintMode,
+      attractorMode: false, // Disable attractor mode when enabling paint mode
+    });
   }, [state.paintMode, updateState]);
 
   const clearPaintedPoints = useCallback(() => {
@@ -86,7 +89,10 @@ export function App() {
   }, []);
 
   const toggleAttractorMode = useCallback(() => {
-    updateState({ attractorMode: !state.attractorMode });
+    updateState({
+      attractorMode: !state.attractorMode,
+      paintMode: false, // Disable paint mode when enabling attractor mode
+    });
   }, [state.attractorMode, updateState]);
 
   const addAttractor = useCallback((x: number, y: number) => {
