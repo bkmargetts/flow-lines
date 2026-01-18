@@ -50,6 +50,8 @@ export function Controls({ state, updateState }: ControlsProps) {
       spiralStrength?: number;
       warpStrength?: number;
       lineCount?: number;
+      maxSteps?: number;
+      stepLength?: number;
       separationDistance?: number;
       bidirectional?: boolean;
       evenDistribution?: boolean;
@@ -65,6 +67,8 @@ export function Controls({ state, updateState }: ControlsProps) {
       ...(preset.spiralStrength !== undefined && { spiralStrength: preset.spiralStrength }),
       ...(preset.warpStrength !== undefined && { warpStrength: preset.warpStrength }),
       ...(preset.lineCount !== undefined && { lineCount: preset.lineCount }),
+      ...(preset.maxSteps !== undefined && { maxSteps: preset.maxSteps }),
+      ...(preset.stepLength !== undefined && { stepLength: preset.stepLength }),
       ...(preset.separationDistance !== undefined && { separationDistance: preset.separationDistance }),
       ...(preset.bidirectional !== undefined && { bidirectional: preset.bidirectional }),
       ...(preset.evenDistribution !== undefined && { evenDistribution: preset.evenDistribution }),
