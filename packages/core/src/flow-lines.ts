@@ -23,6 +23,7 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   separationDistance?: number;  // Min distance between lines (0 = disabled)
   bidirectional?: boolean;      // Trace lines in both directions from seed
   evenDistribution?: boolean;   // Use Poisson disk sampling for seed points
+  fillMode?: boolean;           // Streamline filling - systematically fill space with parallel lines
 }
 
 export interface FlowLinesResult {
@@ -114,6 +115,7 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     separationDistance = 0,
     bidirectional = false,
     evenDistribution = false,
+    fillMode = false,
   } = options;
 
   const field = new FlowField({
@@ -129,6 +131,14 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     spiralStrength,
     warpStrength,
   });
+
+  // Use fill mode for streamline-style parallel lines
+  if (fillMode && separationDistance > 0) {
+    return generateStreamlines(
+      field, width, height, lineCount, stepLength, maxSteps,
+      margin, minLineLength, separationDistance, smoothing, attractors, seed
+    );
+  }
 
   const lines: FlowLine[] = [];
   const spatialGrid = separationDistance > 0 ? new SpatialGrid(separationDistance) : null;
@@ -473,4 +483,179 @@ export function generateFlowLinesGrid(options: Omit<FlowLinesOptions, 'startPoin
     lineCount: startPoints.length,
     startPoints,
   });
+}
+
+/**
+ * Generate streamlines that fill space with parallel flowing lines
+ * This creates the wispy, organic effect by seeding new lines adjacent to existing ones
+ */
+function generateStreamlines(
+  field: FlowField,
+  width: number,
+  height: number,
+  maxLines: number,
+  stepLength: number,
+  maxSteps: number,
+  margin: number,
+  minLineLength: number,
+  separationDistance: number,
+  smoothing: number,
+  attractors?: Attractor[],
+  seed: number = 0
+): FlowLinesResult {
+  const lines: FlowLine[] = [];
+  const spatialGrid = new SpatialGrid(separationDistance);
+
+  // Queue of candidate seed points with their source direction
+  const seedQueue: Array<{ point: Point; normalX: number; normalY: number }> = [];
+
+  // Seeded random
+  let s = seed;
+  const random = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+
+  // Start with a few random seed points to kick off the process
+  const initialSeeds = Math.min(5, Math.ceil(maxLines / 100));
+  for (let i = 0; i < initialSeeds; i++) {
+    const x = margin + random() * (width - 2 * margin);
+    const y = margin + random() * (height - 2 * margin);
+    seedQueue.push({ point: { x, y }, normalX: 0, normalY: 0 });
+  }
+
+  // Process seed queue
+  while (seedQueue.length > 0 && lines.length < maxLines) {
+    const { point: seedPoint } = seedQueue.shift()!;
+
+    // Skip if too close to existing lines
+    if (spatialGrid.hasNearby(seedPoint.x, seedPoint.y, separationDistance * 0.9)) {
+      continue;
+    }
+
+    // Trace line in both directions from seed
+    const line = traceStreamline(
+      field, seedPoint, stepLength, maxSteps, margin,
+      spatialGrid, separationDistance, attractors
+    );
+
+    if (line.points.length < minLineLength) {
+      continue;
+    }
+
+    // Apply smoothing
+    let finalLine = line;
+    if (smoothing > 0 && line.points.length > 2) {
+      finalLine = { points: smoothLine(line.points, smoothing) };
+    }
+
+    lines.push(finalLine);
+
+    // Add all points to spatial grid
+    spatialGrid.addLine(finalLine.points);
+
+    // Generate new seed candidates from this line
+    // Sample points along the line and create seeds perpendicular to flow direction
+    const sampleInterval = Math.max(1, Math.floor(finalLine.points.length / 20));
+
+    for (let i = 0; i < finalLine.points.length - 1; i += sampleInterval) {
+      const p0 = finalLine.points[i];
+      const p1 = finalLine.points[Math.min(i + 1, finalLine.points.length - 1)];
+
+      // Direction along line
+      const dx = p1.x - p0.x;
+      const dy = p1.y - p0.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+
+      if (len < 0.001) continue;
+
+      // Perpendicular (normal) direction
+      const nx = -dy / len;
+      const ny = dx / len;
+
+      // Create seeds on both sides of the line at separation distance
+      const offset = separationDistance * (1 + random() * 0.2); // Slight randomness
+
+      const seed1: Point = {
+        x: p0.x + nx * offset,
+        y: p0.y + ny * offset,
+      };
+      const seed2: Point = {
+        x: p0.x - nx * offset,
+        y: p0.y - ny * offset,
+      };
+
+      // Add to queue if in bounds and not too close to existing
+      if (field.isInBounds(seed1.x, seed1.y, margin)) {
+        seedQueue.push({ point: seed1, normalX: nx, normalY: ny });
+      }
+      if (field.isInBounds(seed2.x, seed2.y, margin)) {
+        seedQueue.push({ point: seed2, normalX: -nx, normalY: -ny });
+      }
+    }
+
+    // Shuffle the queue occasionally to prevent bias
+    if (lines.length % 10 === 0 && seedQueue.length > 10) {
+      for (let i = seedQueue.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [seedQueue[i], seedQueue[j]] = [seedQueue[j], seedQueue[i]];
+      }
+    }
+  }
+
+  return { lines, width, height, seed };
+}
+
+/**
+ * Trace a streamline bidirectionally, stopping when hitting other lines
+ */
+function traceStreamline(
+  field: FlowField,
+  start: Point,
+  stepLength: number,
+  maxSteps: number,
+  margin: number,
+  spatialGrid: SpatialGrid,
+  separationDistance: number,
+  attractors?: Attractor[]
+): FlowLine {
+  // Trace forward
+  const forwardPoints: Point[] = [{ ...start }];
+  let current = { ...start };
+
+  for (let i = 0; i < maxSteps; i++) {
+    const vector = field.getVector(current.x, current.y, attractors);
+    const next: Point = {
+      x: current.x + vector.x * stepLength,
+      y: current.y + vector.y * stepLength,
+    };
+
+    if (!field.isInBounds(next.x, next.y, margin)) break;
+    if (spatialGrid.hasNearby(next.x, next.y, separationDistance * 0.8)) break;
+
+    forwardPoints.push(next);
+    current = next;
+  }
+
+  // Trace backward
+  const backwardPoints: Point[] = [];
+  current = { ...start };
+
+  for (let i = 0; i < maxSteps; i++) {
+    const vector = field.getVector(current.x, current.y, attractors);
+    const next: Point = {
+      x: current.x - vector.x * stepLength,
+      y: current.y - vector.y * stepLength,
+    };
+
+    if (!field.isInBounds(next.x, next.y, margin)) break;
+    if (spatialGrid.hasNearby(next.x, next.y, separationDistance * 0.8)) break;
+
+    backwardPoints.push(next);
+    current = next;
+  }
+
+  // Combine: backward (reversed) + forward
+  backwardPoints.reverse();
+  return { points: [...backwardPoints, ...forwardPoints] };
 }

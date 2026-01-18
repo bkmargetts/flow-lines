@@ -55,6 +55,7 @@ export function Controls({ state, updateState }: ControlsProps) {
       separationDistance?: number;
       bidirectional?: boolean;
       evenDistribution?: boolean;
+      fillMode?: boolean;
       strokeWidth?: number;
     };
     updateState({
@@ -72,6 +73,7 @@ export function Controls({ state, updateState }: ControlsProps) {
       ...(preset.separationDistance !== undefined && { separationDistance: preset.separationDistance }),
       ...(preset.bidirectional !== undefined && { bidirectional: preset.bidirectional }),
       ...(preset.evenDistribution !== undefined && { evenDistribution: preset.evenDistribution }),
+      ...(preset.fillMode !== undefined && { fillMode: preset.fillMode }),
       ...(preset.strokeWidth !== undefined && { strokeWidth: preset.strokeWidth }),
     });
   };
@@ -258,19 +260,31 @@ export function Controls({ state, updateState }: ControlsProps) {
               <label className="toggle-label">
                 <input
                   type="checkbox"
-                  checked={state.bidirectional}
-                  onChange={(e) => updateState({ bidirectional: e.target.checked })}
+                  checked={state.fillMode}
+                  onChange={(e) => updateState({ fillMode: e.target.checked })}
                 />
-                <span>Bidirectional</span>
+                <span>Fill mode</span>
               </label>
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={state.evenDistribution}
-                  onChange={(e) => updateState({ evenDistribution: e.target.checked })}
-                />
-                <span>Even spacing</span>
-              </label>
+              {!state.fillMode && (
+                <>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={state.bidirectional}
+                      onChange={(e) => updateState({ bidirectional: e.target.checked })}
+                    />
+                    <span>Bidirectional</span>
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={state.evenDistribution}
+                      onChange={(e) => updateState({ evenDistribution: e.target.checked })}
+                    />
+                    <span>Even spacing</span>
+                  </label>
+                </>
+              )}
             </div>
 
             <div className="control-row">

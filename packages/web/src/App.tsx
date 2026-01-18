@@ -17,13 +17,12 @@ export const FIELD_PRESETS = {
     octaves: 1,
     persistence: 0.3,
     lacunarity: 2,
-    smoothing: 0.8,
-    lineCount: 1500,
-    maxSteps: 2000,
+    smoothing: 0.5,
+    lineCount: 2000,
+    maxSteps: 3000,
     stepLength: 1,
-    separationDistance: 2,
-    bidirectional: true,
-    evenDistribution: true,
+    separationDistance: 3,
+    fillMode: true,
     strokeWidth: 0.3,
   },
   flowing: {
@@ -135,6 +134,7 @@ export interface AppState {
   separationDistance: number;
   bidirectional: boolean;
   evenDistribution: boolean;
+  fillMode: boolean;
 }
 
 // Calculate initial canvas size based on viewport
@@ -186,6 +186,7 @@ const defaultState: AppState = {
   separationDistance: 0,
   bidirectional: false,
   evenDistribution: false,
+  fillMode: false,
 };
 
 export function App() {
@@ -284,6 +285,7 @@ export function App() {
       separationDistance: state.separationDistance,
       bidirectional: state.bidirectional,
       evenDistribution: state.evenDistribution,
+      fillMode: state.fillMode,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };
