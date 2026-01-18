@@ -259,6 +259,102 @@ button.secondary:hover {
   cursor: crosshair;
 }
 
+/* Attractor mode styles */
+.attractor-section {
+  background: var(--bg-tertiary);
+  padding: 16px;
+  margin: 0 -24px 16px -24px;
+  border-bottom: 2px solid #4ecdc4;
+}
+
+.attractor-section .section-title {
+  margin-top: 0;
+  color: #4ecdc4;
+}
+
+.brush-type-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.brush-type-selector button {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+}
+
+.brush-type-selector button.attractor-type {
+  background: var(--bg-secondary);
+  border: 2px solid #4ecdc4;
+  color: var(--text-secondary);
+}
+
+.brush-type-selector button.attractor-type.active {
+  background: #4ecdc4;
+  color: var(--bg-primary);
+}
+
+.brush-type-selector button.repeller-type {
+  background: var(--bg-secondary);
+  border: 2px solid #ff6b6b;
+  color: var(--text-secondary);
+}
+
+.brush-type-selector button.repeller-type.active {
+  background: #ff6b6b;
+  color: var(--bg-primary);
+}
+
+button.small {
+  padding: 8px 12px;
+  font-size: 0.8rem;
+}
+
+.attractor-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.attractor-controls button {
+  flex: 1;
+}
+
+.attractor-controls button.active {
+  box-shadow: 0 0 0 2px #4ecdc4;
+  animation: pulse-attractor 2s infinite;
+}
+
+@keyframes pulse-attractor {
+  0%, 100% { box-shadow: 0 0 0 2px #4ecdc4; }
+  50% { box-shadow: 0 0 0 4px #4ecdc4, 0 0 12px #4ecdc4; }
+}
+
+.canvas-wrapper.attractor-mode {
+  box-shadow: 0 0 0 3px #4ecdc4, 0 4px 24px rgba(0, 0, 0, 0.3);
+  cursor: crosshair;
+}
+
+/* Tooltip styles */
+.tooltip-trigger {
+  position: relative;
+}
+
+.tooltip {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  max-width: 250px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  line-height: 1.4;
+  pointer-events: none;
+}
+
 @media (max-width: 768px) {
   .app {
     flex-direction: column;

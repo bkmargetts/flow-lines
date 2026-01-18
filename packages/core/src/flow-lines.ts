@@ -1,4 +1,4 @@
-import { FlowField, FlowFieldOptions } from './flow-field.js';
+import { FlowField, FlowFieldOptions, type Attractor } from './flow-field.js';
 
 export interface Point {
   x: number;
@@ -17,6 +17,7 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   minLineLength?: number;
   fieldResolution?: number;
   startPoints?: Point[];
+  attractors?: Attractor[];
 }
 
 export interface FlowLinesResult {
@@ -45,6 +46,7 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     persistence,
     lacunarity,
     startPoints,
+    attractors,
   } = options;
 
   const field = new FlowField({
@@ -70,7 +72,7 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
   );
 
   for (const start of starts) {
-    const line = traceLine(field, start, stepLength, maxSteps, margin);
+    const line = traceLine(field, start, stepLength, maxSteps, margin, attractors);
 
     if (line.points.length >= minLineLength) {
       lines.push(line);
@@ -122,13 +124,14 @@ function traceLine(
   start: Point,
   stepLength: number,
   maxSteps: number,
-  margin: number
+  margin: number,
+  attractors?: Attractor[]
 ): FlowLine {
   const points: Point[] = [{ ...start }];
   let current = { ...start };
 
   for (let i = 0; i < maxSteps; i++) {
-    const vector = field.getVector(current.x, current.y);
+    const vector = field.getVector(current.x, current.y, attractors);
 
     const next: Point = {
       x: current.x + vector.x * stepLength,

@@ -16,6 +16,13 @@ export interface Vector2D {
   y: number;
 }
 
+export interface Attractor {
+  x: number;
+  y: number;
+  radius: number;
+  strength: number; // positive = attract, negative = repel
+}
+
 /**
  * A flow field that generates directional vectors based on noise
  */
@@ -85,14 +92,46 @@ export class FlowField {
   }
 
   /**
-   * Get the direction vector at a given position
+   * Get the direction vector at a given position, optionally influenced by attractors
    */
-  getVector(x: number, y: number): Vector2D {
+  getVector(x: number, y: number, attractors?: Attractor[]): Vector2D {
     const angle = this.getAngle(x, y);
-    return {
-      x: Math.cos(angle),
-      y: Math.sin(angle),
-    };
+    let vx = Math.cos(angle);
+    let vy = Math.sin(angle);
+
+    // Apply attractor influences
+    if (attractors && attractors.length > 0) {
+      for (const attractor of attractors) {
+        const dx = attractor.x - x;
+        const dy = attractor.y - y;
+        const distSq = dx * dx + dy * dy;
+        const dist = Math.sqrt(distSq);
+
+        // Only apply influence within the attractor's radius
+        if (dist < attractor.radius && dist > 0) {
+          // Falloff: stronger effect closer to center
+          const falloff = 1 - dist / attractor.radius;
+          const influence = falloff * falloff * attractor.strength;
+
+          // Normalize direction to/from attractor
+          const dirX = dx / dist;
+          const dirY = dy / dist;
+
+          // Blend with the noise-based vector
+          vx += dirX * influence;
+          vy += dirY * influence;
+        }
+      }
+
+      // Normalize the resulting vector
+      const len = Math.sqrt(vx * vx + vy * vy);
+      if (len > 0) {
+        vx /= len;
+        vy /= len;
+      }
+    }
+
+    return { x: vx, y: vy };
   }
 
   /**

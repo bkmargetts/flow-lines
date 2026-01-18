@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
-import type { Point } from '@flow-lines/core';
+import type { Point, Attractor } from '@flow-lines/core';
 
 interface PreviewProps {
   svgContent: string;
@@ -9,6 +9,10 @@ interface PreviewProps {
   paintedPoints: Point[];
   showDots: boolean;
   onPaint: (point: Point) => void;
+  attractorMode: boolean;
+  attractors: Attractor[];
+  showAttractors: boolean;
+  onAddAttractor: (x: number, y: number) => void;
 }
 
 export function Preview({
@@ -19,6 +23,10 @@ export function Preview({
   paintedPoints,
   showDots,
   onPaint,
+  attractorMode,
+  attractors,
+  showAttractors,
+  onAddAttractor,
 }: PreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPainting, setIsPainting] = useState(false);
@@ -50,21 +58,33 @@ export function Preview({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!paintMode) return;
+      // Handle attractor mode - single click only
+      if (attractorMode) {
+        e.preventDefault();
+        const point = getCanvasPoint(e.clientX, e.clientY);
+        if (point) {
+          onAddAttractor(point.x, point.y);
+        }
+        return;
+      }
 
-      e.preventDefault();
-      setIsPainting(true);
+      // Handle paint mode - drag to paint
+      if (paintMode) {
+        e.preventDefault();
+        setIsPainting(true);
 
-      const point = getCanvasPoint(e.clientX, e.clientY);
-      if (point) {
-        onPaint(point);
+        const point = getCanvasPoint(e.clientX, e.clientY);
+        if (point) {
+          onPaint(point);
+        }
       }
     },
-    [paintMode, getCanvasPoint, onPaint]
+    [paintMode, attractorMode, getCanvasPoint, onPaint, onAddAttractor]
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
+      // Only drag painting in paint mode, not attractor mode
       if (!paintMode || !isPainting) return;
 
       const point = getCanvasPoint(e.clientX, e.clientY);
@@ -114,16 +134,59 @@ export function Preview({
     </svg>
   ) : null;
 
+  // Generate attractor zones overlay
+  const attractorOverlay = showAttractors && attractors.length > 0 ? (
+    <svg
+      className="attractor-overlay"
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: displayWidth,
+        height: displayHeight,
+        pointerEvents: 'none',
+      }}
+    >
+      {attractors.map((attractor, i) => {
+        const isAttractor = attractor.strength > 0;
+        const color = isAttractor ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)';
+        const strokeColor = isAttractor ? 'rgba(76, 175, 80, 0.7)' : 'rgba(244, 67, 54, 0.7)';
+
+        return (
+          <g key={i}>
+            <circle
+              cx={attractor.x}
+              cy={attractor.y}
+              r={attractor.radius}
+              fill={color}
+              stroke={strokeColor}
+              strokeWidth={1}
+            />
+            <circle
+              cx={attractor.x}
+              cy={attractor.y}
+              r={4}
+              fill={strokeColor}
+            />
+          </g>
+        );
+      })}
+    </svg>
+  ) : null;
+
+  const isInteractive = paintMode || attractorMode;
+
   return (
     <div
       ref={containerRef}
-      className={`canvas-wrapper ${paintMode ? 'paint-mode' : ''}`}
+      className={`canvas-wrapper ${paintMode ? 'paint-mode' : ''} ${attractorMode ? 'attractor-mode' : ''}`}
       style={{
         width: displayWidth,
         height: displayHeight,
         position: 'relative',
-        cursor: paintMode ? 'crosshair' : 'default',
-        touchAction: paintMode ? 'none' : 'auto',
+        cursor: isInteractive ? 'crosshair' : 'default',
+        touchAction: isInteractive ? 'none' : 'auto',
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -132,6 +195,7 @@ export function Preview({
     >
       <div dangerouslySetInnerHTML={{ __html: svgContent }} />
       {paintDotsOverlay}
+      {attractorOverlay}
     </div>
   );
 }
