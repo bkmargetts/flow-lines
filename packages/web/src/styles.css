@@ -60,17 +60,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
-  padding-bottom: 60px; /* Space for toolbar */
+  padding: 4px;
+  padding-bottom: 56px; /* Space for toolbar */
 }
 
 .canvas {
   background: white;
-  border-radius: var(--radius);
+  border-radius: 8px;
   box-shadow: var(--shadow);
   position: relative;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: box-shadow 0.2s ease;
   touch-action: none;
+  max-width: calc(100vw - 8px);
+  max-height: calc(100vh - 64px);
 }
 
 .canvas svg {
@@ -475,16 +477,17 @@ body {
 
 /* Safe area for iOS */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .toolbar {
-    bottom: calc(6px + env(safe-area-inset-bottom));
+  .preview {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: calc(52px + env(safe-area-inset-bottom));
   }
 
-  .preview {
-    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  .toolbar {
+    bottom: calc(4px + env(safe-area-inset-bottom));
   }
 
   .paint-controls-bar {
-    top: calc(4px + env(safe-area-inset-top));
+    top: env(safe-area-inset-top);
   }
 
   .sheet {

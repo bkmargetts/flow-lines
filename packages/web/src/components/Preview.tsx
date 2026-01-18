@@ -46,8 +46,8 @@ export function Preview({
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Calculate scale to fit
-  const padding = 8;
+  // Calculate scale to fit - minimal padding for maximum canvas
+  const padding = 4;
   const availableWidth = containerSize.width - padding * 2;
   const availableHeight = containerSize.height - padding * 2;
   const scale = Math.min(availableWidth / width, availableHeight / height, 1);
