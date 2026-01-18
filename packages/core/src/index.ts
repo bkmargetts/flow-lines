@@ -4,7 +4,7 @@ export type { NoiseOptions } from './noise.js';
 
 // Flow field
 export { FlowField } from './flow-field.js';
-export type { FlowFieldOptions, Vector2D, Attractor } from './flow-field.js';
+export type { FlowFieldOptions, Vector2D, Attractor, FieldMode } from './flow-field.js';
 
 // Flow lines generation
 export { generateFlowLines, generateFlowLinesGrid } from './flow-lines.js';

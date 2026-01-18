@@ -1,4 +1,4 @@
-import { FlowField, FlowFieldOptions, type Attractor } from './flow-field.js';
+import { FlowField, FlowFieldOptions, type Attractor, type FieldMode } from './flow-field.js';
 
 export interface Point {
   x: number;
@@ -18,6 +18,7 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   fieldResolution?: number;
   startPoints?: Point[];
   attractors?: Attractor[];
+  smoothing?: number;  // 0-1, how much to smooth lines (0 = none, 1 = max)
 }
 
 export interface FlowLinesResult {
@@ -45,8 +46,12 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     octaves,
     persistence,
     lacunarity,
+    fieldMode,
+    spiralStrength,
+    warpStrength,
     startPoints,
     attractors,
+    smoothing = 0,
   } = options;
 
   const field = new FlowField({
@@ -58,6 +63,9 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     octaves,
     persistence,
     lacunarity,
+    fieldMode,
+    spiralStrength,
+    warpStrength,
   });
 
   const lines: FlowLine[] = [];
@@ -72,7 +80,12 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
   );
 
   for (const start of starts) {
-    const line = traceLine(field, start, stepLength, maxSteps, margin, attractors);
+    let line = traceLine(field, start, stepLength, maxSteps, margin, attractors);
+
+    // Apply smoothing if requested
+    if (smoothing > 0 && line.points.length > 2) {
+      line = { points: smoothLine(line.points, smoothing) };
+    }
 
     if (line.points.length >= minLineLength) {
       lines.push(line);
@@ -148,6 +161,44 @@ function traceLine(
   }
 
   return { points };
+}
+
+/**
+ * Smooth a line using Chaikin's corner-cutting algorithm
+ */
+function smoothLine(points: Point[], strength: number): Point[] {
+  if (points.length < 3) return points;
+
+  // Number of smoothing iterations based on strength
+  const iterations = Math.ceil(strength * 3);
+
+  let result = points;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const smoothed: Point[] = [result[0]]; // Keep first point
+
+    for (let i = 0; i < result.length - 1; i++) {
+      const p0 = result[i];
+      const p1 = result[i + 1];
+
+      // Chaikin's algorithm: 25% and 75% points
+      const q: Point = {
+        x: 0.75 * p0.x + 0.25 * p1.x,
+        y: 0.75 * p0.y + 0.25 * p1.y,
+      };
+      const r: Point = {
+        x: 0.25 * p0.x + 0.75 * p1.x,
+        y: 0.25 * p0.y + 0.75 * p1.y,
+      };
+
+      smoothed.push(q, r);
+    }
+
+    smoothed.push(result[result.length - 1]); // Keep last point
+    result = smoothed;
+  }
+
+  return result;
 }
 
 /**

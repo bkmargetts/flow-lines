@@ -157,6 +157,86 @@ export class SimplexNoise {
 
     return value / maxValue;
   }
+
+  /**
+   * Curl noise - divergence-free noise for smooth, swirling flow
+   * Returns a 2D vector that is perpendicular to the noise gradient
+   */
+  curl2D(
+    x: number,
+    y: number,
+    octaves: number = 4,
+    persistence: number = 0.5,
+    lacunarity: number = 2,
+    epsilon: number = 0.0001
+  ): { x: number; y: number } {
+    // Compute partial derivatives using central differences
+    const n1 = this.fbm(x, y + epsilon, octaves, persistence, lacunarity);
+    const n2 = this.fbm(x, y - epsilon, octaves, persistence, lacunarity);
+    const n3 = this.fbm(x + epsilon, y, octaves, persistence, lacunarity);
+    const n4 = this.fbm(x - epsilon, y, octaves, persistence, lacunarity);
+
+    // Curl = (dN/dy, -dN/dx)
+    const curlX = (n1 - n2) / (2 * epsilon);
+    const curlY = -(n3 - n4) / (2 * epsilon);
+
+    return { x: curlX, y: curlY };
+  }
+
+  /**
+   * Ridged multifractal noise - creates sharp ridges/creases
+   */
+  ridged(
+    x: number,
+    y: number,
+    octaves: number = 4,
+    persistence: number = 0.5,
+    lacunarity: number = 2,
+    offset: number = 1
+  ): number {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = 1;
+    let weight = 1;
+
+    for (let i = 0; i < octaves; i++) {
+      let signal = this.noise2D(x * frequency, y * frequency);
+      signal = offset - Math.abs(signal);
+      signal *= signal;
+      signal *= weight;
+      weight = Math.min(1, Math.max(0, signal * 2));
+      value += signal * amplitude;
+      amplitude *= persistence;
+      frequency *= lacunarity;
+    }
+
+    return value;
+  }
+
+  /**
+   * Warped/domain-warped noise for organic distortion
+   */
+  warpedFbm(
+    x: number,
+    y: number,
+    octaves: number = 4,
+    persistence: number = 0.5,
+    lacunarity: number = 2,
+    warpStrength: number = 0.5
+  ): number {
+    // First pass: get warp offsets
+    const warpX = this.fbm(x, y, octaves, persistence, lacunarity);
+    const warpY = this.fbm(x + 5.2, y + 1.3, octaves, persistence, lacunarity);
+
+    // Second pass: sample noise at warped coordinates
+    return this.fbm(
+      x + warpX * warpStrength,
+      y + warpY * warpStrength,
+      octaves,
+      persistence,
+      lacunarity
+    );
+  }
 }
 
 /**

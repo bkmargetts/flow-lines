@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions, type Point, type Attractor } from '@flow-lines/core';
+import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions, type Point, type Attractor, type FieldMode } from '@flow-lines/core';
 import { Preview } from './components/Preview';
 import { Toolbar } from './components/Toolbar';
 import { Sheet } from './components/Sheet';
@@ -7,6 +7,77 @@ import { Controls } from './components/Controls';
 import { PaintControls } from './components/PaintControls';
 
 export type BrushType = 'attractor' | 'repeller';
+
+// Flow field presets for different organic styles
+export const FIELD_PRESETS = {
+  smooth: {
+    name: 'Smooth',
+    fieldMode: 'curl' as FieldMode,
+    noiseScale: 0.003,
+    octaves: 2,
+    persistence: 0.3,
+    lacunarity: 2,
+    smoothing: 0.5,
+  },
+  wispy: {
+    name: 'Wispy',
+    fieldMode: 'curl' as FieldMode,
+    noiseScale: 0.002,
+    octaves: 3,
+    persistence: 0.4,
+    lacunarity: 2.5,
+    smoothing: 0.7,
+  },
+  turbulent: {
+    name: 'Turbulent',
+    fieldMode: 'turbulent' as FieldMode,
+    noiseScale: 0.006,
+    octaves: 5,
+    persistence: 0.6,
+    lacunarity: 2,
+    smoothing: 0.2,
+  },
+  spiral: {
+    name: 'Spiral',
+    fieldMode: 'spiral' as FieldMode,
+    noiseScale: 0.004,
+    octaves: 3,
+    persistence: 0.5,
+    lacunarity: 2,
+    smoothing: 0.4,
+    spiralStrength: 0.3,
+  },
+  ridged: {
+    name: 'Ridged',
+    fieldMode: 'ridged' as FieldMode,
+    noiseScale: 0.004,
+    octaves: 4,
+    persistence: 0.5,
+    lacunarity: 2,
+    smoothing: 0.3,
+  },
+  organic: {
+    name: 'Organic',
+    fieldMode: 'warped' as FieldMode,
+    noiseScale: 0.004,
+    octaves: 4,
+    persistence: 0.5,
+    lacunarity: 2,
+    smoothing: 0.5,
+    warpStrength: 0.6,
+  },
+  classic: {
+    name: 'Classic',
+    fieldMode: 'normal' as FieldMode,
+    noiseScale: 0.005,
+    octaves: 4,
+    persistence: 0.5,
+    lacunarity: 2,
+    smoothing: 0,
+  },
+} as const;
+
+export type PresetName = keyof typeof FIELD_PRESETS;
 
 export interface AppState {
   width: number;
@@ -32,6 +103,11 @@ export interface AppState {
   attractorRadius: number;
   attractorStrength: number;
   showAttractors: boolean;
+  // Organic pattern options
+  fieldMode: FieldMode;
+  smoothing: number;
+  spiralStrength: number;
+  warpStrength: number;
 }
 
 // Calculate initial canvas size based on viewport
@@ -74,6 +150,11 @@ const defaultState: AppState = {
   attractorRadius: 50,
   attractorStrength: 1.0,
   showAttractors: true,
+  // Organic pattern defaults - start with curl for smoother flow
+  fieldMode: 'curl',
+  smoothing: 0.3,
+  spiralStrength: 0.3,
+  warpStrength: 0.5,
 };
 
 export function App() {
@@ -86,6 +167,9 @@ export function App() {
 
   const randomizeAll = useCallback(() => {
     const random = () => Math.random();
+    const modes: FieldMode[] = ['normal', 'curl', 'spiral', 'turbulent', 'ridged', 'warped'];
+    const randomMode = modes[Math.floor(random() * modes.length)];
+
     updateState({
       seed: Math.floor(random() * 1000000),
       lineCount: Math.floor(random() * 300) + 50,
@@ -95,6 +179,10 @@ export function App() {
       octaves: Math.floor(random() * 6) + 1,
       persistence: 0.2 + random() * 0.6,
       lacunarity: 1.5 + random() * 2,
+      fieldMode: randomMode,
+      smoothing: random() * 0.8,
+      spiralStrength: random() * 0.6,
+      warpStrength: 0.3 + random() * 0.5,
     });
   }, [updateState]);
 
@@ -158,6 +246,10 @@ export function App() {
       octaves: state.octaves,
       persistence: state.persistence,
       lacunarity: state.lacunarity,
+      fieldMode: state.fieldMode,
+      smoothing: state.smoothing,
+      spiralStrength: state.spiralStrength,
+      warpStrength: state.warpStrength,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };

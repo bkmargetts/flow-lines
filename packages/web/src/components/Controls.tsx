@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import type { AppState } from '../App';
+import { FIELD_PRESETS, type PresetName } from '../App';
+import type { FieldMode } from '@flow-lines/core';
 
 interface ControlsProps {
   state: AppState;
   updateState: (updates: Partial<AppState>) => void;
 }
 
-type Tab = 'lines' | 'noise' | 'canvas';
+type Tab = 'style' | 'lines' | 'noise' | 'canvas';
 
 // Paper size presets (in pixels at 96 DPI for screen, scalable for print)
 const PAPER_PRESETS = [
@@ -21,17 +23,56 @@ const PAPER_PRESETS = [
   { name: '16:9 Wide', width: 1200, height: 675 },
 ] as const;
 
+const FIELD_MODE_NAMES: Record<FieldMode, string> = {
+  normal: 'Classic',
+  curl: 'Curl',
+  spiral: 'Spiral',
+  turbulent: 'Turbulent',
+  ridged: 'Ridged',
+  warped: 'Warped',
+};
+
 export function Controls({ state, updateState }: ControlsProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('lines');
+  const [activeTab, setActiveTab] = useState<Tab>('style');
 
   const applyPreset = (width: number, height: number) => {
     updateState({ width, height });
+  };
+
+  const applyStylePreset = (presetName: PresetName) => {
+    const preset = FIELD_PRESETS[presetName] as {
+      fieldMode: FieldMode;
+      noiseScale: number;
+      octaves: number;
+      persistence: number;
+      lacunarity: number;
+      smoothing: number;
+      spiralStrength?: number;
+      warpStrength?: number;
+    };
+    updateState({
+      fieldMode: preset.fieldMode,
+      noiseScale: preset.noiseScale,
+      octaves: preset.octaves,
+      persistence: preset.persistence,
+      lacunarity: preset.lacunarity,
+      smoothing: preset.smoothing,
+      ...(preset.spiralStrength !== undefined && { spiralStrength: preset.spiralStrength }),
+      ...(preset.warpStrength !== undefined && { warpStrength: preset.warpStrength }),
+    });
   };
 
   return (
     <div className="controls">
       {/* Segmented control for tabs */}
       <div className="segment-control">
+        <button
+          type="button"
+          className={activeTab === 'style' ? 'active' : ''}
+          onClick={() => setActiveTab('style')}
+        >
+          Style
+        </button>
         <button
           type="button"
           className={activeTab === 'lines' ? 'active' : ''}
@@ -57,6 +98,81 @@ export function Controls({ state, updateState }: ControlsProps) {
 
       {/* Tab content */}
       <div className="controls-content">
+        {activeTab === 'style' && (
+          <>
+            <div className="presets-label">Presets</div>
+            <div className="presets-grid">
+              {(Object.keys(FIELD_PRESETS) as PresetName[]).map((presetName) => (
+                <button
+                  key={presetName}
+                  type="button"
+                  className={`preset-btn ${state.fieldMode === FIELD_PRESETS[presetName].fieldMode ? 'active' : ''}`}
+                  onClick={() => applyStylePreset(presetName)}
+                >
+                  {FIELD_PRESETS[presetName].name}
+                </button>
+              ))}
+            </div>
+
+            <div className="presets-label" style={{ marginTop: 16 }}>Field Mode</div>
+            <div className="presets-grid">
+              {(Object.keys(FIELD_MODE_NAMES) as FieldMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`preset-btn ${state.fieldMode === mode ? 'active' : ''}`}
+                  onClick={() => updateState({ fieldMode: mode })}
+                >
+                  {FIELD_MODE_NAMES[mode]}
+                </button>
+              ))}
+            </div>
+
+            <div className="control-row" style={{ marginTop: 16 }}>
+              <label>Smoothing</label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={state.smoothing}
+                onChange={(e) => updateState({ smoothing: parseFloat(e.target.value) })}
+              />
+              <span className="value">{state.smoothing.toFixed(1)}</span>
+            </div>
+
+            {state.fieldMode === 'spiral' && (
+              <div className="control-row">
+                <label>Spiral</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={state.spiralStrength}
+                  onChange={(e) => updateState({ spiralStrength: parseFloat(e.target.value) })}
+                />
+                <span className="value">{state.spiralStrength.toFixed(2)}</span>
+              </div>
+            )}
+
+            {state.fieldMode === 'warped' && (
+              <div className="control-row">
+                <label>Warp</label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1"
+                  step="0.05"
+                  value={state.warpStrength}
+                  onChange={(e) => updateState({ warpStrength: parseFloat(e.target.value) })}
+                />
+                <span className="value">{state.warpStrength.toFixed(2)}</span>
+              </div>
+            )}
+          </>
+        )}
+
         {activeTab === 'lines' && (
           <>
             <div className="control-row">
