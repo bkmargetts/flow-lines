@@ -84,7 +84,8 @@ export function Preview({
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp);
   }, []);
 
-  // Generate paint dots overlay SVG
+  // Generate paint dots overlay - only show when actively in paint mode
+  // Dots are small and subtle so they don't obscure the artwork
   const paintDotsOverlay = paintMode && paintedPoints.length > 0 ? (
     <svg
       className="paint-overlay"
@@ -103,8 +104,10 @@ export function Preview({
           key={i}
           cx={point.x}
           cy={point.y}
-          r={4 / scale}
-          fill="rgba(233, 69, 96, 0.6)"
+          r={2}
+          fill="rgba(233, 69, 96, 0.4)"
+          stroke="rgba(233, 69, 96, 0.8)"
+          strokeWidth={0.5}
         />
       ))}
     </svg>
