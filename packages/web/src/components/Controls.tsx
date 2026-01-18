@@ -287,6 +287,43 @@ export function Controls({ state, updateState }: ControlsProps) {
               )}
             </div>
 
+            {state.fillMode && (
+              <>
+                <div className="presets-label" style={{ marginTop: 12 }}>Density</div>
+                <div className="control-row">
+                  <label>Variation</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.densityVariation}
+                    onChange={(e) => updateState({ densityVariation: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.densityVariation.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Min Sep</label>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="10"
+                    step="0.5"
+                    value={state.minSeparation}
+                    onChange={(e) => updateState({ minSeparation: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.minSeparation.toFixed(1)}</span>
+                </div>
+
+                {state.densityPoints.length > 0 && (
+                  <div className="density-points-info">
+                    {state.densityPoints.length} density point{state.densityPoints.length !== 1 ? 's' : ''} placed
+                  </div>
+                )}
+              </>
+            )}
+
             <div className="control-row">
               <label>Margin</label>
               <input

@@ -1,4 +1,5 @@
 import { FlowField, FlowFieldOptions, type Attractor, type FieldMode } from './flow-field.js';
+import { createNoise } from './noise.js';
 
 export interface Point {
   x: number;
@@ -7,6 +8,13 @@ export interface Point {
 
 export interface FlowLine {
   points: Point[];
+}
+
+export interface DensityPoint {
+  x: number;
+  y: number;
+  radius: number;      // How far the density effect extends
+  strength: number;    // 0-1, how much denser at the center (1 = max density)
 }
 
 export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
@@ -24,6 +32,11 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   bidirectional?: boolean;      // Trace lines in both directions from seed
   evenDistribution?: boolean;   // Use Poisson disk sampling for seed points
   fillMode?: boolean;           // Streamline filling - systematically fill space with parallel lines
+  // Variable density options
+  densityPoints?: DensityPoint[];     // Focal points of high density
+  densityVariation?: number;          // 0-1, how much noise affects density
+  densityNoiseScale?: number;         // Scale of density variation noise
+  minSeparation?: number;             // Minimum separation (for dense areas)
 }
 
 export interface FlowLinesResult {
@@ -114,6 +127,10 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     smoothing = 0,
     separationDistance = 0,
     bidirectional = false,
+    densityPoints = [],
+    densityVariation = 0,
+    densityNoiseScale = 0.003,
+    minSeparation = 1,
     evenDistribution = false,
     fillMode = false,
   } = options;
@@ -136,7 +153,8 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
   if (fillMode && separationDistance > 0) {
     return generateStreamlines(
       field, width, height, lineCount, stepLength, maxSteps,
-      margin, minLineLength, separationDistance, smoothing, attractors, seed
+      margin, minLineLength, separationDistance, smoothing, attractors, seed,
+      densityPoints, densityVariation, densityNoiseScale, minSeparation
     );
   }
 
@@ -486,6 +504,51 @@ export function generateFlowLinesGrid(options: Omit<FlowLinesOptions, 'startPoin
 }
 
 /**
+ * Calculate the effective separation distance at a given position
+ * based on density points and noise variation
+ */
+function calculateSeparation(
+  x: number,
+  y: number,
+  baseSeparation: number,
+  minSeparation: number,
+  densityPoints: DensityPoint[],
+  densityNoise: ReturnType<typeof createNoise> | null,
+  densityNoiseScale: number,
+  densityVariation: number
+): number {
+  let densityMultiplier = 1;
+
+  // Apply density points - areas with high density have lower separation
+  for (const dp of densityPoints) {
+    const dx = x - dp.x;
+    const dy = y - dp.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < dp.radius) {
+      // Smooth falloff from center (1 at center, 0 at edge)
+      const falloff = 1 - (dist / dp.radius);
+      // Cubic falloff for smoother transition
+      const smoothFalloff = falloff * falloff * (3 - 2 * falloff);
+      // Reduce separation based on strength (strength 1 = minSeparation at center)
+      const reduction = smoothFalloff * dp.strength;
+      densityMultiplier = Math.min(densityMultiplier, 1 - reduction * 0.8);
+    }
+  }
+
+  // Apply noise variation
+  if (densityNoise && densityVariation > 0) {
+    const noiseVal = densityNoise.fbm(x * densityNoiseScale, y * densityNoiseScale, 2, 0.5, 2);
+    // Map noise from [-1,1] to [0.5, 1.5] range, then apply variation amount
+    const noiseMultiplier = 1 + (noiseVal * 0.5 * densityVariation);
+    densityMultiplier *= noiseMultiplier;
+  }
+
+  // Calculate final separation, clamped to minimum
+  return Math.max(minSeparation, baseSeparation * densityMultiplier);
+}
+
+/**
  * Generate streamlines that fill space with parallel flowing lines
  * This creates the wispy, organic effect by seeding new lines adjacent to existing ones
  */
@@ -498,13 +561,21 @@ function generateStreamlines(
   maxSteps: number,
   margin: number,
   minLineLength: number,
-  separationDistance: number,
+  baseSeparation: number,
   smoothing: number,
   attractors?: Attractor[],
-  seed: number = 0
+  seed: number = 0,
+  densityPoints: DensityPoint[] = [],
+  densityVariation: number = 0,
+  densityNoiseScale: number = 0.003,
+  minSeparation: number = 1
 ): FlowLinesResult {
   const lines: FlowLine[] = [];
-  const spatialGrid = new SpatialGrid(separationDistance);
+  // Use minimum separation for spatial grid to ensure we catch all potential collisions
+  const spatialGrid = new SpatialGrid(Math.max(minSeparation, baseSeparation * 0.5));
+
+  // Create density noise if variation is enabled
+  const densityNoise = densityVariation > 0 ? createNoise(seed + 12345) : null;
 
   // Queue of candidate seed points with their source direction
   const seedQueue: Array<{ point: Point; normalX: number; normalY: number }> = [];
@@ -516,7 +587,15 @@ function generateStreamlines(
     return s / 0x7fffffff;
   };
 
-  // Start with a few random seed points to kick off the process
+  // Start with seed points - prefer density point centers if available
+  if (densityPoints.length > 0) {
+    // Seed from density point centers for better coverage of dense areas
+    for (const dp of densityPoints) {
+      seedQueue.push({ point: { x: dp.x, y: dp.y }, normalX: 0, normalY: 0 });
+    }
+  }
+
+  // Add some random seeds too
   const initialSeeds = Math.min(5, Math.ceil(maxLines / 100));
   for (let i = 0; i < initialSeeds; i++) {
     const x = margin + random() * (width - 2 * margin);
@@ -528,15 +607,22 @@ function generateStreamlines(
   while (seedQueue.length > 0 && lines.length < maxLines) {
     const { point: seedPoint } = seedQueue.shift()!;
 
+    // Calculate effective separation at this point
+    const effectiveSep = calculateSeparation(
+      seedPoint.x, seedPoint.y, baseSeparation, minSeparation,
+      densityPoints, densityNoise, densityNoiseScale, densityVariation
+    );
+
     // Skip if too close to existing lines
-    if (spatialGrid.hasNearby(seedPoint.x, seedPoint.y, separationDistance * 0.9)) {
+    if (spatialGrid.hasNearby(seedPoint.x, seedPoint.y, effectiveSep * 0.9)) {
       continue;
     }
 
     // Trace line in both directions from seed
-    const line = traceStreamline(
+    const line = traceStreamlineVariable(
       field, seedPoint, stepLength, maxSteps, margin,
-      spatialGrid, separationDistance, attractors
+      spatialGrid, baseSeparation, minSeparation,
+      densityPoints, densityNoise, densityNoiseScale, densityVariation, attractors
     );
 
     if (line.points.length < minLineLength) {
@@ -555,12 +641,18 @@ function generateStreamlines(
     spatialGrid.addLine(finalLine.points);
 
     // Generate new seed candidates from this line
-    // Sample points along the line and create seeds perpendicular to flow direction
-    const sampleInterval = Math.max(1, Math.floor(finalLine.points.length / 20));
+    // Sample more frequently in dense areas
+    const baseSampleInterval = Math.max(1, Math.floor(finalLine.points.length / 20));
 
-    for (let i = 0; i < finalLine.points.length - 1; i += sampleInterval) {
+    for (let i = 0; i < finalLine.points.length - 1; i += baseSampleInterval) {
       const p0 = finalLine.points[i];
       const p1 = finalLine.points[Math.min(i + 1, finalLine.points.length - 1)];
+
+      // Calculate local separation for seeding
+      const localSep = calculateSeparation(
+        p0.x, p0.y, baseSeparation, minSeparation,
+        densityPoints, densityNoise, densityNoiseScale, densityVariation
+      );
 
       // Direction along line
       const dx = p1.x - p0.x;
@@ -573,8 +665,8 @@ function generateStreamlines(
       const nx = -dy / len;
       const ny = dx / len;
 
-      // Create seeds on both sides of the line at separation distance
-      const offset = separationDistance * (1 + random() * 0.2); // Slight randomness
+      // Create seeds on both sides at the local separation distance
+      const offset = localSep * (1 + random() * 0.2); // Slight randomness
 
       const seed1: Point = {
         x: p0.x + nx * offset,
@@ -585,7 +677,7 @@ function generateStreamlines(
         y: p0.y - ny * offset,
       };
 
-      // Add to queue if in bounds and not too close to existing
+      // Add to queue if in bounds
       if (field.isInBounds(seed1.x, seed1.y, margin)) {
         seedQueue.push({ point: seed1, normalX: nx, normalY: ny });
       }
@@ -604,6 +696,79 @@ function generateStreamlines(
   }
 
   return { lines, width, height, seed };
+}
+
+/**
+ * Trace a streamline with variable density, stopping when hitting other lines
+ */
+function traceStreamlineVariable(
+  field: FlowField,
+  start: Point,
+  stepLength: number,
+  maxSteps: number,
+  margin: number,
+  spatialGrid: SpatialGrid,
+  baseSeparation: number,
+  minSeparation: number,
+  densityPoints: DensityPoint[],
+  densityNoise: ReturnType<typeof createNoise> | null,
+  densityNoiseScale: number,
+  densityVariation: number,
+  attractors?: Attractor[]
+): FlowLine {
+  // Trace forward
+  const forwardPoints: Point[] = [{ ...start }];
+  let current = { ...start };
+
+  for (let i = 0; i < maxSteps; i++) {
+    const vector = field.getVector(current.x, current.y, attractors);
+    const next: Point = {
+      x: current.x + vector.x * stepLength,
+      y: current.y + vector.y * stepLength,
+    };
+
+    if (!field.isInBounds(next.x, next.y, margin)) break;
+
+    // Calculate separation at this point
+    const localSep = calculateSeparation(
+      next.x, next.y, baseSeparation, minSeparation,
+      densityPoints, densityNoise, densityNoiseScale, densityVariation
+    );
+
+    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.8)) break;
+
+    forwardPoints.push(next);
+    current = next;
+  }
+
+  // Trace backward
+  const backwardPoints: Point[] = [];
+  current = { ...start };
+
+  for (let i = 0; i < maxSteps; i++) {
+    const vector = field.getVector(current.x, current.y, attractors);
+    const next: Point = {
+      x: current.x - vector.x * stepLength,
+      y: current.y - vector.y * stepLength,
+    };
+
+    if (!field.isInBounds(next.x, next.y, margin)) break;
+
+    // Calculate separation at this point
+    const localSep = calculateSeparation(
+      next.x, next.y, baseSeparation, minSeparation,
+      densityPoints, densityNoise, densityNoiseScale, densityVariation
+    );
+
+    if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.8)) break;
+
+    backwardPoints.push(next);
+    current = next;
+  }
+
+  // Combine: backward (reversed) + forward
+  backwardPoints.reverse();
+  return { points: [...backwardPoints, ...forwardPoints] };
 }
 
 /**

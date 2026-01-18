@@ -93,6 +93,10 @@ body {
   box-shadow: 0 0 0 3px var(--success), var(--shadow);
 }
 
+.canvas.density {
+  box-shadow: 0 0 0 3px var(--accent-secondary), var(--shadow);
+}
+
 .canvas .overlay {
   position: absolute;
   inset: 0;
@@ -185,6 +189,19 @@ body {
 .paint-label {
   color: var(--text-secondary);
   font-weight: 500;
+}
+
+.paint-label.density-label {
+  color: var(--accent-secondary);
+}
+
+.density-points-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  background: rgba(88, 86, 214, 0.1);
+  border-radius: 6px;
+  margin-top: 8px;
 }
 
 .toggle-label {

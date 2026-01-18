@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions, type Point, type Attractor, type FieldMode } from '@flow-lines/core';
+import { generateFlowLines, toSVG, type FlowLinesOptions, type SVGOptions, type Point, type Attractor, type FieldMode, type DensityPoint } from '@flow-lines/core';
 import { Preview } from './components/Preview';
 import { Toolbar } from './components/Toolbar';
 import { Sheet } from './components/Sheet';
@@ -7,6 +7,7 @@ import { Controls } from './components/Controls';
 import { PaintControls } from './components/PaintControls';
 
 export type BrushType = 'attractor' | 'repeller';
+export type DensityBrushType = 'density';
 
 // Flow field presets for different organic styles
 export const FIELD_PRESETS = {
@@ -135,6 +136,14 @@ export interface AppState {
   bidirectional: boolean;
   evenDistribution: boolean;
   fillMode: boolean;
+  // Variable density options
+  densityPoints: DensityPoint[];
+  densityVariation: number;
+  minSeparation: number;
+  densityMode: boolean;
+  densityRadius: number;
+  densityStrength: number;
+  showDensityPoints: boolean;
 }
 
 // Calculate initial canvas size based on viewport
@@ -187,6 +196,14 @@ const defaultState: AppState = {
   bidirectional: false,
   evenDistribution: false,
   fillMode: false,
+  // Variable density defaults
+  densityPoints: [],
+  densityVariation: 0,
+  minSeparation: 1,
+  densityMode: false,
+  densityRadius: 100,
+  densityStrength: 0.8,
+  showDensityPoints: true,
 };
 
 export function App() {
@@ -223,6 +240,7 @@ export function App() {
       ...prev,
       paintMode: !prev.paintMode,
       attractorMode: false,
+      densityMode: false,
     }));
   }, []);
 
@@ -231,6 +249,7 @@ export function App() {
       ...prev,
       attractorMode: !prev.attractorMode,
       paintMode: false,
+      densityMode: false,
     }));
   }, []);
 
@@ -262,6 +281,31 @@ export function App() {
     updateState({ attractors: [] });
   }, [updateState]);
 
+  const toggleDensityMode = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      densityMode: !prev.densityMode,
+      paintMode: false,
+      attractorMode: false,
+    }));
+  }, []);
+
+  const addDensityPoint = useCallback((x: number, y: number) => {
+    setState((prev) => ({
+      ...prev,
+      densityPoints: [...prev.densityPoints, {
+        x,
+        y,
+        radius: prev.densityRadius,
+        strength: prev.densityStrength,
+      }],
+    }));
+  }, []);
+
+  const clearDensityPoints = useCallback(() => {
+    updateState({ densityPoints: [] });
+  }, [updateState]);
+
   const svgContent = useMemo(() => {
     const usePaintedPoints = state.paintedPoints.length > 0;
 
@@ -286,6 +330,9 @@ export function App() {
       bidirectional: state.bidirectional,
       evenDistribution: state.evenDistribution,
       fillMode: state.fillMode,
+      densityPoints: state.densityPoints,
+      densityVariation: state.densityVariation,
+      minSeparation: state.minSeparation,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };
@@ -311,7 +358,7 @@ export function App() {
     URL.revokeObjectURL(url);
   }, [svgContent, state.seed]);
 
-  const isInteractive = state.paintMode || state.attractorMode;
+  const isInteractive = state.paintMode || state.attractorMode || state.densityMode;
 
   return (
     <div className="app">
@@ -327,15 +374,20 @@ export function App() {
         attractors={state.attractors}
         showAttractors={state.showAttractors}
         onAddAttractor={addAttractor}
+        densityMode={state.densityMode}
+        densityPoints={state.densityPoints}
+        showDensityPoints={state.showDensityPoints}
+        onAddDensityPoint={addDensityPoint}
       />
 
-      {/* Paint/Attractor controls bar - shows when in interactive mode */}
+      {/* Paint/Attractor/Density controls bar - shows when in interactive mode */}
       {isInteractive && (
         <PaintControls
           state={state}
           updateState={updateState}
           onClearPoints={clearPaintedPoints}
           onClearAttractors={clearAttractors}
+          onClearDensityPoints={clearDensityPoints}
         />
       )}
 
@@ -345,9 +397,11 @@ export function App() {
         onDownload={downloadSVG}
         onTogglePaint={togglePaintMode}
         onToggleAttractor={toggleAttractorMode}
+        onToggleDensity={toggleDensityMode}
         onOpenSettings={() => setSheetOpen(true)}
         paintMode={state.paintMode}
         attractorMode={state.attractorMode}
+        densityMode={state.densityMode}
       />
 
       {/* Settings sheet */}

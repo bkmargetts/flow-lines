@@ -3,9 +3,11 @@ interface ToolbarProps {
   onDownload: () => void;
   onTogglePaint: () => void;
   onToggleAttractor: () => void;
+  onToggleDensity: () => void;
   onOpenSettings: () => void;
   paintMode: boolean;
   attractorMode: boolean;
+  densityMode: boolean;
 }
 
 export function Toolbar({
@@ -13,9 +15,11 @@ export function Toolbar({
   onDownload,
   onTogglePaint,
   onToggleAttractor,
+  onToggleDensity,
   onOpenSettings,
   paintMode,
   attractorMode,
+  densityMode,
 }: ToolbarProps) {
   return (
     <div className="toolbar">
@@ -53,6 +57,19 @@ export function Toolbar({
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="3" />
           <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        className={`toolbar-btn ${densityMode ? 'active' : ''}`}
+        onClick={onToggleDensity}
+        aria-label="Density mode"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="6" />
+          <circle cx="12" cy="12" r="2" />
         </svg>
       </button>
 

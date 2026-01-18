@@ -8,7 +8,7 @@ export type { FlowFieldOptions, Vector2D, Attractor, FieldMode } from './flow-fi
 
 // Flow lines generation
 export { generateFlowLines, generateFlowLinesGrid } from './flow-lines.js';
-export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point } from './flow-lines.js';
+export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point, DensityPoint } from './flow-lines.js';
 
 // SVG export
 export { toSVG, parseSVGOptions } from './svg.js';

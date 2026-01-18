@@ -5,6 +5,7 @@ interface PaintControlsProps {
   updateState: (updates: Partial<AppState>) => void;
   onClearPoints: () => void;
   onClearAttractors: () => void;
+  onClearDensityPoints: () => void;
 }
 
 export function PaintControls({
@@ -12,6 +13,7 @@ export function PaintControls({
   updateState,
   onClearPoints,
   onClearAttractors,
+  onClearDensityPoints,
 }: PaintControlsProps) {
   if (state.paintMode) {
     return (
@@ -85,6 +87,44 @@ export function PaintControls({
         {state.attractors.length > 0 && (
           <button type="button" className="clear-btn" onClick={onClearAttractors}>
             Clear ({state.attractors.length})
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (state.densityMode) {
+    return (
+      <div className="paint-controls-bar">
+        <span className="paint-label density-label">Density</span>
+
+        <div className="slider-compact">
+          <label>R</label>
+          <input
+            type="range"
+            min="30"
+            max="300"
+            step="10"
+            value={state.densityRadius}
+            onChange={(e) => updateState({ densityRadius: parseInt(e.target.value, 10) })}
+          />
+        </div>
+
+        <div className="slider-compact">
+          <label>S</label>
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.05"
+            value={state.densityStrength}
+            onChange={(e) => updateState({ densityStrength: parseFloat(e.target.value) })}
+          />
+        </div>
+
+        {state.densityPoints.length > 0 && (
+          <button type="button" className="clear-btn" onClick={onClearDensityPoints}>
+            Clear ({state.densityPoints.length})
           </button>
         )}
       </div>
