@@ -32,6 +32,16 @@ export function Preview({
   const [isPainting, setIsPainting] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
+  // Zoom/pan state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const gestureRef = useRef({
+    initialDistance: 0,
+    initialZoom: 1,
+    lastCenter: { x: 0, y: 0 },
+    isPinching: false,
+  });
+
   // Measure container
   useEffect(() => {
     const updateSize = () => {
@@ -50,26 +60,32 @@ export function Preview({
   const padding = 4;
   const availableWidth = containerSize.width - padding * 2;
   const availableHeight = containerSize.height - padding * 2;
-  const scale = Math.min(availableWidth / width, availableHeight / height, 1);
-  const displayWidth = width * scale;
-  const displayHeight = height * scale;
+  const baseScale = Math.min(availableWidth / width, availableHeight / height, 1);
+  const displayWidth = width * baseScale;
+  const displayHeight = height * baseScale;
 
   const getCanvasPoint = useCallback(
     (clientX: number, clientY: number): Point | null => {
       if (!containerRef.current) return null;
 
       const rect = containerRef.current.getBoundingClientRect();
-      const x = (clientX - rect.left) / scale;
-      const y = (clientY - rect.top) / scale;
+      const effectiveScale = baseScale * zoom;
+
+      // Account for pan offset
+      const x = (clientX - rect.left - pan.x) / effectiveScale;
+      const y = (clientY - rect.top - pan.y) / effectiveScale;
 
       if (x < 0 || x > width || y < 0 || y > height) return null;
       return { x, y };
     },
-    [scale, width, height]
+    [baseScale, zoom, pan, width, height]
   );
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      // Ignore if pinching
+      if (gestureRef.current.isPinching) return;
+
       if (attractorMode) {
         const point = getCanvasPoint(e.clientX, e.clientY);
         if (point) onAddAttractor(point.x, point.y);
@@ -88,6 +104,8 @@ export function Preview({
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!paintMode || !isPainting) return;
+      if (gestureRef.current.isPinching) return;
+
       const point = getCanvasPoint(e.clientX, e.clientY);
       if (point) onPaint(point);
     },
@@ -96,6 +114,74 @@ export function Preview({
 
   const handlePointerUp = useCallback(() => {
     setIsPainting(false);
+  }, []);
+
+  // Touch gesture handlers for pinch-to-zoom
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      const centerY = (touch1.clientY + touch2.clientY) / 2;
+
+      gestureRef.current = {
+        initialDistance: distance,
+        initialZoom: zoom,
+        lastCenter: { x: centerX, y: centerY },
+        isPinching: true,
+      };
+    }
+  }, [zoom]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && gestureRef.current.isPinching) {
+      e.preventDefault();
+
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const distance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      const centerY = (touch1.clientY + touch2.clientY) / 2;
+
+      // Calculate new zoom
+      const scaleFactor = distance / gestureRef.current.initialDistance;
+      const newZoom = Math.min(Math.max(gestureRef.current.initialZoom * scaleFactor, 0.5), 5);
+
+      // Calculate pan delta
+      const deltaX = centerX - gestureRef.current.lastCenter.x;
+      const deltaY = centerY - gestureRef.current.lastCenter.y;
+
+      setZoom(newZoom);
+      setPan(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY,
+      }));
+
+      gestureRef.current.lastCenter = { x: centerX, y: centerY };
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    gestureRef.current.isPinching = false;
+  }, []);
+
+  // Double tap to reset zoom
+  const lastTapRef = useRef(0);
+  const handleDoubleTap = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    }
+    lastTapRef.current = now;
   }, []);
 
   useEffect(() => {
@@ -111,11 +197,20 @@ export function Preview({
       <div
         ref={containerRef}
         className={`canvas ${isInteractive ? 'interactive' : ''} ${paintMode ? 'paint' : ''} ${attractorMode ? 'attractor' : ''}`}
-        style={{ width: displayWidth, height: displayHeight }}
+        style={{
+          width: displayWidth,
+          height: displayHeight,
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: 'center center',
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={handleDoubleTap}
       >
         <div dangerouslySetInnerHTML={{ __html: svgContent }} />
 
@@ -151,6 +246,10 @@ export function Preview({
           </svg>
         )}
       </div>
+
+      {zoom !== 1 && (
+        <div className="zoom-badge">{Math.round(zoom * 100)}%</div>
+      )}
     </div>
   );
 }

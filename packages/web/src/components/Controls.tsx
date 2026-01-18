@@ -64,7 +64,7 @@ export function Controls({ state, updateState }: ControlsProps) {
               <input
                 type="range"
                 min="10"
-                max="500"
+                max="2000"
                 step="10"
                 value={state.lineCount}
                 onChange={(e) => updateState({ lineCount: parseInt(e.target.value, 10) })}

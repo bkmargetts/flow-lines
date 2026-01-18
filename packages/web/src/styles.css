@@ -99,6 +99,21 @@ body {
   pointer-events: none;
 }
 
+.zoom-badge {
+  position: absolute;
+  bottom: 64px;
+  right: 12px;
+  background: var(--surface);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow);
+}
+
 /* Bottom toolbar */
 .toolbar {
   position: fixed;
