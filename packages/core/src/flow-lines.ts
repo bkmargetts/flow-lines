@@ -17,6 +17,42 @@ export interface DensityPoint {
   strength: number;    // 0-1, how much denser at the center (1 = max density)
 }
 
+/**
+ * Configuration for density variation algorithm
+ */
+export interface DensityConfig {
+  points: DensityPoint[];
+  variation: number;
+  noiseScale: number;
+  minSeparation: number;
+  noise: ReturnType<typeof createNoise> | null;
+}
+
+/**
+ * Configuration for organic aesthetics (pen plotter output)
+ */
+export interface OrganicConfig {
+  wobble: number;
+  velocityFadeout: boolean;
+  edgeAttraction: number;
+  wobbleNoise: ReturnType<typeof createNoise> | null;
+}
+
+/**
+ * Configuration for line tracing
+ */
+export interface TraceConfig {
+  stepLength: number;
+  maxSteps: number;
+  margin: number;
+  baseSeparation: number;
+  attractors?: Attractor[];
+  density: DensityConfig;
+  organic: OrganicConfig;
+  canvasWidth: number;
+  canvasHeight: number;
+}
+
 export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   lineCount: number;
   stepLength?: number;
@@ -593,11 +629,33 @@ function generateStreamlines(
   // Use small cell size for spatial grid to allow dense packing
   const spatialGrid = new SpatialGrid(Math.max(minSeparation * 0.5, 1));
 
-  // Create density noise if variation is enabled
-  const densityNoise = densityVariation > 0 ? createNoise(seed + 12345) : null;
+  // Build config objects once
+  const densityConfig: DensityConfig = {
+    points: densityPoints,
+    variation: densityVariation,
+    noiseScale: densityNoiseScale,
+    minSeparation,
+    noise: densityVariation > 0 ? createNoise(seed + 12345) : null,
+  };
 
-  // Create wobble noise for organic hand-drawn look
-  const wobbleNoise = organicWobble > 0 ? createNoise(seed + 54321) : null;
+  const organicConfig: OrganicConfig = {
+    wobble: organicWobble,
+    velocityFadeout,
+    edgeAttraction,
+    wobbleNoise: organicWobble > 0 ? createNoise(seed + 54321) : null,
+  };
+
+  const traceConfig: TraceConfig = {
+    stepLength,
+    maxSteps,
+    margin,
+    baseSeparation,
+    attractors,
+    density: densityConfig,
+    organic: organicConfig,
+    canvasWidth: width,
+    canvasHeight: height,
+  };
 
   // Queue of candidate seed points
   const seedQueue: Array<{ point: Point; priority: number }> = [];
@@ -615,8 +673,7 @@ function generateStreamlines(
     const x = margin + random() * (width - 2 * margin);
     const y = margin + random() * (height - 2 * margin);
     // Higher priority for seeds in potentially dense areas
-    const sep = calculateSeparation(x, y, baseSeparation, minSeparation,
-      densityPoints, densityNoise, densityNoiseScale, densityVariation);
+    const sep = calculateSeparationWithConfig(x, y, baseSeparation, densityConfig);
     const priority = baseSeparation / sep; // Dense areas get higher priority
     seedQueue.push({ point: { x, y }, priority });
   }
@@ -634,9 +691,8 @@ function generateStreamlines(
     const { point: seedPoint } = seedQueue.shift()!;
 
     // Calculate effective separation at this point
-    const effectiveSep = calculateSeparation(
-      seedPoint.x, seedPoint.y, baseSeparation, minSeparation,
-      densityPoints, densityNoise, densityNoiseScale, densityVariation
+    const effectiveSep = calculateSeparationWithConfig(
+      seedPoint.x, seedPoint.y, baseSeparation, densityConfig
     );
 
     // In dense areas (small separation), SKIP collision check entirely to allow overlapping
@@ -653,11 +709,7 @@ function generateStreamlines(
 
     // Trace line - in dense areas, don't stop at collisions
     const line = traceStreamlineVariable(
-      field, seedPoint, stepLength, maxSteps, margin,
-      spatialGrid, baseSeparation, minSeparation,
-      densityPoints, densityNoise, densityNoiseScale, densityVariation, attractors,
-      skipCollisionCheck, // Pass flag to allow overlapping traces
-      wobbleNoise, organicWobble, velocityFadeout, edgeAttraction, width, height
+      field, seedPoint, spatialGrid, traceConfig, skipCollisionCheck
     );
 
     if (line.points.length < minLineLength) {
@@ -695,9 +747,8 @@ function generateStreamlines(
       const p1 = finalLine.points[Math.min(i + 1, finalLine.points.length - 1)];
 
       // Calculate local separation for seeding
-      const localSep = calculateSeparation(
-        p0.x, p0.y, baseSeparation, minSeparation,
-        densityPoints, densityNoise, densityNoiseScale, densityVariation
+      const localSep = calculateSeparationWithConfig(
+        p0.x, p0.y, baseSeparation, densityConfig
       );
 
       // Direction along line
@@ -756,46 +807,35 @@ function generateStreamlines(
 function traceStreamlineVariable(
   field: FlowField,
   start: Point,
-  stepLength: number,
-  maxSteps: number,
-  margin: number,
   spatialGrid: SpatialGrid,
-  baseSeparation: number,
-  minSeparation: number,
-  densityPoints: DensityPoint[],
-  densityNoise: ReturnType<typeof createNoise> | null,
-  densityNoiseScale: number,
-  densityVariation: number,
-  attractors?: Attractor[],
-  skipCollisionCheck: boolean = false,
-  wobbleNoise: ReturnType<typeof createNoise> | null = null,
-  organicWobble: number = 0,
-  velocityFadeout: boolean = false,
-  edgeAttraction: number = 0,
-  canvasWidth: number = 0,
-  canvasHeight: number = 0
+  config: TraceConfig,
+  skipCollisionCheck: boolean = false
 ): FlowLine {
+  const { stepLength, maxSteps, margin, baseSeparation, attractors, density, organic, canvasWidth, canvasHeight } = config;
+
   // Minimum velocity threshold - lines end naturally at low-flow areas
-  const minVelocity = velocityFadeout ? 0.15 : 0;
+  const minVelocity = organic.velocityFadeout ? 0.15 : 0;
   // Wobble scale affects the frequency of perturbations
   const wobbleScale = 0.02;
 
-  // Trace forward
-  const forwardPoints: Point[] = [{ ...start }];
-  let current = { ...start };
-  let stepIndex = 0;
-
-  for (let i = 0; i < maxSteps; i++) {
+  // Helper to compute a single trace step
+  const computeStep = (
+    current: Point,
+    direction: 1 | -1,
+    stepIdx: number
+  ): { next: Point; shouldStop: boolean } => {
     let vector = field.getVector(current.x, current.y, attractors);
 
     // Check velocity - end line naturally at low-flow areas
     const velocity = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-    if (velocityFadeout && velocity < minVelocity) break;
+    if (organic.velocityFadeout && velocity < minVelocity) {
+      return { next: current, shouldStop: true };
+    }
 
     // Add edge attraction - pull toward nearest edge for graceful endings
-    if (edgeAttraction > 0 && canvasWidth > 0 && canvasHeight > 0) {
+    if (organic.edgeAttraction > 0 && canvasWidth > 0 && canvasHeight > 0) {
       const edgeInfluence = calculateEdgeInfluence(
-        current.x, current.y, canvasWidth, canvasHeight, margin, edgeAttraction
+        current.x, current.y, canvasWidth, canvasHeight, margin, organic.edgeAttraction
       );
       vector = {
         x: vector.x + edgeInfluence.x,
@@ -810,107 +850,77 @@ function traceStreamlineVariable(
     }
 
     let next: Point = {
-      x: current.x + vector.x * stepLength,
-      y: current.y + vector.y * stepLength,
+      x: current.x + direction * vector.x * stepLength,
+      y: current.y + direction * vector.y * stepLength,
     };
 
     // Add organic wobble - subtle perpendicular perturbation
-    if (wobbleNoise && organicWobble > 0) {
-      // Use noise to create smooth but irregular wobble
-      const wobbleVal = wobbleNoise.noise2D(
-        current.x * wobbleScale + stepIndex * 0.1,
+    if (organic.wobbleNoise && organic.wobble > 0) {
+      const wobbleVal = organic.wobbleNoise.noise2D(
+        current.x * wobbleScale + direction * stepIdx * 0.1,
         current.y * wobbleScale
       );
-      // Perpendicular direction
-      const perpX = -vector.y;
-      const perpY = vector.x;
-      // Scale wobble by step length for consistency
-      const wobbleAmount = wobbleVal * organicWobble * stepLength * 0.5;
+      // Perpendicular direction (flip for backward)
+      const perpX = direction === 1 ? -vector.y : vector.y;
+      const perpY = direction === 1 ? vector.x : -vector.x;
+      const wobbleAmount = wobbleVal * organic.wobble * stepLength * 0.5;
       next.x += perpX * wobbleAmount;
       next.y += perpY * wobbleAmount;
     }
 
-    if (!field.isInBounds(next.x, next.y, margin)) break;
+    if (!field.isInBounds(next.x, next.y, margin)) {
+      return { next, shouldStop: true };
+    }
 
     // In dense areas, skip collision check to allow overlapping lines
     if (!skipCollisionCheck) {
-      const localSep = calculateSeparation(
-        next.x, next.y, baseSeparation, minSeparation,
-        densityPoints, densityNoise, densityNoiseScale, densityVariation
-      );
-      if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
+      const localSep = calculateSeparationWithConfig(next.x, next.y, baseSeparation, density);
+      if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) {
+        return { next, shouldStop: true };
+      }
     }
 
+    return { next, shouldStop: false };
+  };
+
+  // Trace forward
+  const forwardPoints: Point[] = [{ ...start }];
+  let current = { ...start };
+  for (let i = 0; i < maxSteps; i++) {
+    const { next, shouldStop } = computeStep(current, 1, i);
+    if (shouldStop) break;
     forwardPoints.push(next);
     current = next;
-    stepIndex++;
   }
 
   // Trace backward
   const backwardPoints: Point[] = [];
   current = { ...start };
-  stepIndex = 0;
-
   for (let i = 0; i < maxSteps; i++) {
-    let vector = field.getVector(current.x, current.y, attractors);
-
-    // Check velocity
-    const velocity = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-    if (velocityFadeout && velocity < minVelocity) break;
-
-    // Add edge attraction
-    if (edgeAttraction > 0 && canvasWidth > 0 && canvasHeight > 0) {
-      const edgeInfluence = calculateEdgeInfluence(
-        current.x, current.y, canvasWidth, canvasHeight, margin, edgeAttraction
-      );
-      vector = {
-        x: vector.x + edgeInfluence.x,
-        y: vector.y + edgeInfluence.y,
-      };
-      const newLen = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-      if (newLen > 0.001) {
-        vector.x /= newLen;
-        vector.y /= newLen;
-      }
-    }
-
-    // Go in opposite direction
-    let next: Point = {
-      x: current.x - vector.x * stepLength,
-      y: current.y - vector.y * stepLength,
-    };
-
-    // Add organic wobble (use negative stepIndex for different pattern)
-    if (wobbleNoise && organicWobble > 0) {
-      const wobbleVal = wobbleNoise.noise2D(
-        current.x * wobbleScale - stepIndex * 0.1,
-        current.y * wobbleScale
-      );
-      const perpX = vector.y; // Opposite perpendicular for backward
-      const perpY = -vector.x;
-      const wobbleAmount = wobbleVal * organicWobble * stepLength * 0.5;
-      next.x += perpX * wobbleAmount;
-      next.y += perpY * wobbleAmount;
-    }
-
-    if (!field.isInBounds(next.x, next.y, margin)) break;
-
-    if (!skipCollisionCheck) {
-      const localSep = calculateSeparation(
-        next.x, next.y, baseSeparation, minSeparation,
-        densityPoints, densityNoise, densityNoiseScale, densityVariation
-      );
-      if (spatialGrid.hasNearby(next.x, next.y, localSep * 0.5)) break;
-    }
-
+    const { next, shouldStop } = computeStep(current, -1, i);
+    if (shouldStop) break;
     backwardPoints.push(next);
     current = next;
-    stepIndex++;
   }
 
   // Combine: backward (reversed) + forward
   backwardPoints.reverse();
   return { points: [...backwardPoints, ...forwardPoints] };
+}
+
+/**
+ * Calculate separation using DensityConfig
+ */
+function calculateSeparationWithConfig(
+  x: number,
+  y: number,
+  baseSeparation: number,
+  density: DensityConfig
+): number {
+  return calculateSeparation(
+    x, y, baseSeparation, density.minSeparation,
+    density.points, density.noise, density.noiseScale, density.variation
+  );
 }
 
 /**
@@ -958,56 +968,3 @@ function calculateEdgeInfluence(
   };
 }
 
-/**
- * Trace a streamline bidirectionally, stopping when hitting other lines
- */
-function traceStreamline(
-  field: FlowField,
-  start: Point,
-  stepLength: number,
-  maxSteps: number,
-  margin: number,
-  spatialGrid: SpatialGrid,
-  separationDistance: number,
-  attractors?: Attractor[]
-): FlowLine {
-  // Trace forward
-  const forwardPoints: Point[] = [{ ...start }];
-  let current = { ...start };
-
-  for (let i = 0; i < maxSteps; i++) {
-    const vector = field.getVector(current.x, current.y, attractors);
-    const next: Point = {
-      x: current.x + vector.x * stepLength,
-      y: current.y + vector.y * stepLength,
-    };
-
-    if (!field.isInBounds(next.x, next.y, margin)) break;
-    if (spatialGrid.hasNearby(next.x, next.y, separationDistance * 0.8)) break;
-
-    forwardPoints.push(next);
-    current = next;
-  }
-
-  // Trace backward
-  const backwardPoints: Point[] = [];
-  current = { ...start };
-
-  for (let i = 0; i < maxSteps; i++) {
-    const vector = field.getVector(current.x, current.y, attractors);
-    const next: Point = {
-      x: current.x - vector.x * stepLength,
-      y: current.y - vector.y * stepLength,
-    };
-
-    if (!field.isInBounds(next.x, next.y, margin)) break;
-    if (spatialGrid.hasNearby(next.x, next.y, separationDistance * 0.8)) break;
-
-    backwardPoints.push(next);
-    current = next;
-  }
-
-  // Combine: backward (reversed) + forward
-  backwardPoints.reverse();
-  return { points: [...backwardPoints, ...forwardPoints] };
-}
