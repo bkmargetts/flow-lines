@@ -162,6 +162,14 @@ export interface AppState {
   swarmFormInfluence: number;
   swarmVoidSize: number;
   swarmEnergyVariation: number;
+  // Form hatching mode (contour-following organic lines)
+  formHatchingMode: boolean;
+  formScale: number;
+  formContrast: number;
+  hatchDensity: number;
+  hatchLengthVariation: number;
+  hatchAngleVariation: number;
+  hatchOverlap: number;
 }
 
 // Calculate initial canvas size based on viewport
@@ -240,6 +248,14 @@ const defaultState: AppState = {
   swarmFormInfluence: 0.6,
   swarmVoidSize: 0.5,
   swarmEnergyVariation: 0.6,
+  // Form hatching defaults - organic contour-following lines
+  formHatchingMode: false,
+  formScale: 0.003,
+  formContrast: 0.8,
+  hatchDensity: 1.0,
+  hatchLengthVariation: 0.6,
+  hatchAngleVariation: 0.3,
+  hatchOverlap: 0.8,
 };
 
 export function App() {
@@ -400,6 +416,14 @@ export function App() {
       swarmFormInfluence: state.swarmFormInfluence,
       swarmVoidSize: state.swarmVoidSize,
       swarmEnergyVariation: state.swarmEnergyVariation,
+      // Form hatching mode
+      formHatchingMode: state.formHatchingMode,
+      formScale: state.formScale,
+      formContrast: state.formContrast,
+      hatchDensity: state.hatchDensity,
+      hatchLengthVariation: state.hatchLengthVariation,
+      hatchAngleVariation: state.hatchAngleVariation,
+      hatchOverlap: state.hatchOverlap,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };

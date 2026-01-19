@@ -247,12 +247,22 @@ export function Controls({ state, updateState }: ControlsProps) {
               <label className="toggle-label">
                 <input
                   type="checkbox"
-                  checked={state.swarmMode}
-                  onChange={(e) => updateState({ swarmMode: e.target.checked, fillMode: e.target.checked ? false : state.fillMode })}
+                  checked={state.formHatchingMode}
+                  onChange={(e) => updateState({ formHatchingMode: e.target.checked, swarmMode: false, fillMode: false })}
                 />
-                <span>Swarm mode</span>
+                <span>Form hatching</span>
               </label>
-              {!state.swarmMode && (
+              {!state.formHatchingMode && (
+                <label className="toggle-label">
+                  <input
+                    type="checkbox"
+                    checked={state.swarmMode}
+                    onChange={(e) => updateState({ swarmMode: e.target.checked, fillMode: e.target.checked ? false : state.fillMode })}
+                  />
+                  <span>Swarm mode</span>
+                </label>
+              )}
+              {!state.swarmMode && !state.formHatchingMode && (
                 <label className="toggle-label">
                   <input
                     type="checkbox"
@@ -262,7 +272,7 @@ export function Controls({ state, updateState }: ControlsProps) {
                   <span>Fill mode</span>
                 </label>
               )}
-              {!state.fillMode && !state.swarmMode && (
+              {!state.fillMode && !state.swarmMode && !state.formHatchingMode && (
                 <>
                   <label className="toggle-label">
                     <input
@@ -391,6 +401,91 @@ export function Controls({ state, updateState }: ControlsProps) {
                     onChange={(e) => updateState({ swarmEnergyVariation: parseFloat(e.target.value) })}
                   />
                   <span className="value">{state.swarmEnergyVariation.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+
+            {/* Form hatching controls */}
+            {state.formHatchingMode && (
+              <>
+                <div className="presets-label" style={{ marginTop: 16 }}>Form Hatching</div>
+
+                <div className="control-row">
+                  <label>Form scale</label>
+                  <input
+                    type="range"
+                    min="0.001"
+                    max="0.01"
+                    step="0.0005"
+                    value={state.formScale}
+                    onChange={(e) => updateState({ formScale: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.formScale.toFixed(4)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Contrast</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.formContrast}
+                    onChange={(e) => updateState({ formContrast: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.formContrast.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Density</label>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="3"
+                    step="0.1"
+                    value={state.hatchDensity}
+                    onChange={(e) => updateState({ hatchDensity: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.hatchDensity.toFixed(1)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Length variation</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.hatchLengthVariation}
+                    onChange={(e) => updateState({ hatchLengthVariation: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.hatchLengthVariation.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Angle variation</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.hatchAngleVariation}
+                    onChange={(e) => updateState({ hatchAngleVariation: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.hatchAngleVariation.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Wobble</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.organicWobble}
+                    onChange={(e) => updateState({ organicWobble: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.organicWobble.toFixed(2)}</span>
                 </div>
               </>
             )}

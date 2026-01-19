@@ -169,6 +169,14 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   swarmFormInfluence?: number;        // 0-1, 3D form wrapping effect
   swarmVoidSize?: number;             // 0-1, size of empty regions
   swarmEnergyVariation?: number;      // 0-1, line length variation
+  // Form hatching mode - contour-following lines that wrap around implied 3D forms
+  formHatchingMode?: boolean;         // Enable form hatching
+  formScale?: number;                 // Scale of form noise (larger = bigger forms)
+  formContrast?: number;              // 0-1, how extreme the density variation is
+  hatchDensity?: number;              // Lines per unit area in dense regions
+  hatchLengthVariation?: number;      // 0-1, variation in line lengths
+  hatchAngleVariation?: number;       // 0-1, deviation from perfect contour following
+  hatchOverlap?: number;              // 0-1, how much lines can overlap/pile up
 }
 
 export interface FlowLinesResult {
@@ -280,6 +288,14 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     swarmFormInfluence = 0.6,
     swarmVoidSize = 0.5,
     swarmEnergyVariation = 0.6,
+    // Form hatching options
+    formHatchingMode = false,
+    formScale = 0.003,
+    formContrast = 0.8,
+    hatchDensity = 1.0,
+    hatchLengthVariation = 0.6,
+    hatchAngleVariation = 0.3,
+    hatchOverlap = 0.8,
   } = options;
 
   const field = new FlowField({
@@ -295,6 +311,17 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     spiralStrength,
     warpStrength,
   });
+
+  // Use form hatching mode for organic contour-following lines
+  if (formHatchingMode) {
+    return generateFormHatching(
+      width, height, lineCount, stepLength, maxSteps,
+      margin, minLineLength, seed,
+      formScale, formContrast, hatchDensity,
+      hatchLengthVariation, hatchAngleVariation, hatchOverlap,
+      organicWobble
+    );
+  }
 
   // Use swarm mode for particle/agent-based organic generation
   if (swarmMode) {
@@ -1559,6 +1586,181 @@ function spawnChildAgent(
     clusterAffinity: parent.clusterAffinity * (0.8 + random() * 0.4),
     isAlive: true,
     stepsAlive: 0,
+  };
+}
+
+/**
+ * Generate form hatching lines - contour-following lines that wrap around implied 3D forms
+ * This creates organic, hand-drawn looking art with extreme density variation
+ */
+function generateFormHatching(
+  width: number,
+  height: number,
+  maxLines: number,
+  stepLength: number,
+  maxSteps: number,
+  margin: number,
+  minLineLength: number,
+  seed: number,
+  formScale: number,
+  formContrast: number,
+  hatchDensity: number,
+  lengthVariation: number,
+  angleVariation: number,
+  overlap: number,
+  wobble: number
+): FlowLinesResult {
+  // Create noise generators
+  const formNoise = createNoise(seed);           // The implied 3D form/surface
+  const densityNoise = createNoise(seed + 1111); // Where lines should be dense
+  const lengthNoise = createNoise(seed + 2222);  // Line length variation
+  const wobbleNoise = createNoise(seed + 3333);  // Organic wobble
+  const angleNoise = createNoise(seed + 4444);   // Angle deviation
+
+  // Seeded random
+  let s = seed;
+  const random = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+
+  const lines: FlowLine[] = [];
+
+  // Calculate how many seed points to generate based on density
+  // We'll generate MORE seeds and let density filtering reduce them
+  const seedMultiplier = 5 + hatchDensity * 10; // 5-15x more seeds than maxLines
+  const totalSeeds = Math.floor(maxLines * seedMultiplier);
+
+  // Generate seed points with density-weighted probability
+  const seeds: Point[] = [];
+  for (let i = 0; i < totalSeeds && seeds.length < maxLines * 3; i++) {
+    const x = margin + random() * (width - 2 * margin);
+    const y = margin + random() * (height - 2 * margin);
+
+    // Get density at this point - use fbm for organic variation
+    const density = densityNoise.fbm(
+      x * formScale * 0.5,
+      y * formScale * 0.5,
+      4, 0.5, 2
+    );
+
+    // Density ranges from -1 to 1
+    // Apply contrast to make extremes more extreme
+    const contrastDensity = Math.sign(density) * Math.pow(Math.abs(density), 1 / (1 + formContrast));
+
+    // Convert to spawn probability (0 to 1)
+    // High contrast means dense areas get MANY lines, sparse areas get ZERO
+    const spawnProb = Math.pow((contrastDensity + 1) * 0.5, 2 - formContrast * 1.5);
+
+    // Only spawn if random passes density test
+    if (random() < spawnProb) {
+      seeds.push({ x, y });
+    }
+  }
+
+  // Trace a line from each seed following contour direction
+  for (const seedPoint of seeds) {
+    if (lines.length >= maxLines) break;
+
+    const trail: Point[] = [{ ...seedPoint }];
+    let x = seedPoint.x;
+    let y = seedPoint.y;
+
+    // Determine line length based on noise + variation
+    const baseLengthNoise = lengthNoise.noise2D(x * formScale, y * formScale);
+    const lengthMult = 0.3 + (baseLengthNoise + 1) * 0.5 * (1 - lengthVariation) + random() * lengthVariation;
+    const targetSteps = Math.floor(maxSteps * lengthMult);
+
+    // Trace the line
+    for (let step = 0; step < targetSteps; step++) {
+      // Compute gradient of form noise (this tells us the "slope" direction)
+      const eps = 2;
+      const formHere = formNoise.fbm(x * formScale, y * formScale, 3, 0.5, 2);
+      const formRight = formNoise.fbm((x + eps) * formScale, y * formScale, 3, 0.5, 2);
+      const formUp = formNoise.fbm(x * formScale, (y + eps) * formScale, 3, 0.5, 2);
+
+      // Gradient direction (slope of the form)
+      const gradX = (formRight - formHere) / eps;
+      const gradY = (formUp - formHere) / eps;
+
+      // Contour direction is perpendicular to gradient (like elevation lines on a map)
+      let dirX = -gradY;
+      let dirY = gradX;
+
+      // Normalize
+      const len = Math.sqrt(dirX * dirX + dirY * dirY);
+      if (len > 0.001) {
+        dirX /= len;
+        dirY /= len;
+      } else {
+        // Flat area - use random direction
+        const angle = random() * Math.PI * 2;
+        dirX = Math.cos(angle);
+        dirY = Math.sin(angle);
+      }
+
+      // Add angle variation (deviation from perfect contour)
+      if (angleVariation > 0) {
+        const angleOffset = angleNoise.noise2D(
+          x * formScale * 2 + step * 0.1,
+          y * formScale * 2
+        ) * Math.PI * 0.5 * angleVariation;
+
+        const cos = Math.cos(angleOffset);
+        const sin = Math.sin(angleOffset);
+        const newDirX = dirX * cos - dirY * sin;
+        const newDirY = dirX * sin + dirY * cos;
+        dirX = newDirX;
+        dirY = newDirY;
+      }
+
+      // Calculate next position
+      let nextX = x + dirX * stepLength;
+      let nextY = y + dirY * stepLength;
+
+      // Add organic wobble
+      if (wobble > 0) {
+        const wobbleVal = wobbleNoise.noise2D(
+          x * 0.02 + step * 0.1,
+          y * 0.02
+        );
+        // Perpendicular to direction
+        const perpX = -dirY;
+        const perpY = dirX;
+        const wobbleAmount = wobbleVal * wobble * stepLength * 2;
+        nextX += perpX * wobbleAmount;
+        nextY += perpY * wobbleAmount;
+      }
+
+      // Check bounds
+      if (nextX < margin || nextX > width - margin ||
+          nextY < margin || nextY > height - margin) {
+        break;
+      }
+
+      // Update position and add to trail
+      x = nextX;
+      y = nextY;
+      trail.push({ x, y });
+
+      // Early termination based on density (lines can end in sparse areas)
+      const localDensity = densityNoise.fbm(x * formScale * 0.5, y * formScale * 0.5, 4, 0.5, 2);
+      if (localDensity < -0.3 && random() < 0.1 * (1 + formContrast)) {
+        break;
+      }
+    }
+
+    // Only keep lines that meet minimum length
+    if (trail.length >= minLineLength) {
+      lines.push({ points: trail });
+    }
+  }
+
+  return {
+    lines,
+    width,
+    height,
+    seed,
   };
 }
 
