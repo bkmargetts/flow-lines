@@ -8,7 +8,7 @@ interface ControlsProps {
   updateState: (updates: Partial<AppState>) => void;
 }
 
-type Tab = 'style' | 'lines' | 'noise' | 'canvas';
+type Tab = 'style' | 'lines' | 'pattern' | 'canvas';
 
 // Paper size presets (in pixels at 96 DPI for screen, scalable for print)
 const PAPER_PRESETS = [
@@ -98,10 +98,10 @@ export function Controls({ state, updateState }: ControlsProps) {
         </button>
         <button
           type="button"
-          className={activeTab === 'noise' ? 'active' : ''}
-          onClick={() => setActiveTab('noise')}
+          className={activeTab === 'pattern' ? 'active' : ''}
+          onClick={() => setActiveTab('pattern')}
         >
-          Noise
+          Pattern
         </button>
         <button
           type="button"
@@ -231,19 +231,6 @@ export function Controls({ state, updateState }: ControlsProps) {
             </div>
 
             <div className="control-row">
-              <label>Stroke</label>
-              <input
-                type="range"
-                min="0.1"
-                max="5"
-                step="0.1"
-                value={state.strokeWidth}
-                onChange={(e) => updateState({ strokeWidth: parseFloat(e.target.value) })}
-              />
-              <span className="value">{state.strokeWidth.toFixed(1)}</span>
-            </div>
-
-            <div className="control-row">
               <label>Separation</label>
               <input
                 type="range"
@@ -281,7 +268,7 @@ export function Controls({ state, updateState }: ControlsProps) {
                       checked={state.evenDistribution}
                       onChange={(e) => updateState({ evenDistribution: e.target.checked })}
                     />
-                    <span>Even spacing</span>
+                    <span>Uniform spread</span>
                   </label>
                 </>
               )}
@@ -296,14 +283,14 @@ export function Controls({ state, updateState }: ControlsProps) {
                       checked={state.variableDensity}
                       onChange={(e) => updateState({ variableDensity: e.target.checked })}
                     />
-                    <span>Variable density</span>
+                    <span>Fill density</span>
                   </label>
                 </div>
 
                 {state.variableDensity && (
                   <>
                     <div className="control-row">
-                      <label>Amount</label>
+                      <label>Density</label>
                       <input
                         type="range"
                         min="0.1"
@@ -338,26 +325,13 @@ export function Controls({ state, updateState }: ControlsProps) {
               </>
             )}
 
-            <div className="control-row">
-              <label>Margin</label>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                value={state.margin}
-                onChange={(e) => updateState({ margin: parseInt(e.target.value, 10) })}
-              />
-              <span className="value">{state.margin}</span>
-            </div>
-
             {/* Organic aesthetics section - only shown in fill mode */}
             {state.fillMode && (
               <>
                 <div className="presets-label" style={{ marginTop: 16 }}>Organic Feel</div>
 
                 <div className="control-row">
-                  <label>Wobble</label>
+                  <label>Line wobble</label>
                   <input
                     type="range"
                     min="0"
@@ -370,7 +344,7 @@ export function Controls({ state, updateState }: ControlsProps) {
                 </div>
 
                 <div className="control-row">
-                  <label>Edge Pull</label>
+                  <label>Edge attraction</label>
                   <input
                     type="range"
                     min="0"
@@ -389,7 +363,7 @@ export function Controls({ state, updateState }: ControlsProps) {
                       checked={state.velocityFadeout}
                       onChange={(e) => updateState({ velocityFadeout: e.target.checked })}
                     />
-                    <span>Natural endings</span>
+                    <span>Soft endings</span>
                   </label>
                 </div>
               </>
@@ -397,7 +371,7 @@ export function Controls({ state, updateState }: ControlsProps) {
           </>
         )}
 
-        {activeTab === 'noise' && (
+        {activeTab === 'pattern' && (
           <>
             <div className="control-row">
               <label>Scale</label>
@@ -439,7 +413,7 @@ export function Controls({ state, updateState }: ControlsProps) {
             </div>
 
             <div className="control-row">
-              <label>Lacunarity</label>
+              <label>Complexity</label>
               <input
                 type="range"
                 min="1"
@@ -509,6 +483,34 @@ export function Controls({ state, updateState }: ControlsProps) {
 
             <div className="size-display">
               {state.width} × {state.height} px
+            </div>
+
+            <div className="presets-label" style={{ marginTop: 16 }}>Output Settings</div>
+
+            <div className="control-row">
+              <label>Stroke</label>
+              <input
+                type="range"
+                min="0.1"
+                max="5"
+                step="0.1"
+                value={state.strokeWidth}
+                onChange={(e) => updateState({ strokeWidth: parseFloat(e.target.value) })}
+              />
+              <span className="value">{state.strokeWidth.toFixed(1)}</span>
+            </div>
+
+            <div className="control-row">
+              <label>Margin</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={state.margin}
+                onChange={(e) => updateState({ margin: parseInt(e.target.value, 10) })}
+              />
+              <span className="value">{state.margin}</span>
             </div>
           </>
         )}
