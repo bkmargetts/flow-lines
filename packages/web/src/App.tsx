@@ -232,13 +232,13 @@ const defaultState: AppState = {
   spacingVariation: 0.4,
   // Swarm mode defaults
   swarmMode: false,
-  swarmAgentCount: 200,
+  swarmAgentCount: 300,
   swarmClusterBias: 0.6,
   swarmChildSpawnRate: 0.3,
   swarmFlowInfluence: 0.7,
-  swarmClusterAttraction: 0.3,
-  swarmFormInfluence: 0.4,
-  swarmVoidSize: 0.3,
+  swarmClusterAttraction: 0.6,
+  swarmFormInfluence: 0.6,
+  swarmVoidSize: 0.5,
   swarmEnergyVariation: 0.6,
 };
 

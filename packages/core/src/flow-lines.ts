@@ -272,13 +272,13 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     spacingVariation = 0,
     // Swarm mode options
     swarmMode = false,
-    swarmAgentCount = 200,
+    swarmAgentCount = 300,
     swarmClusterBias = 0.6,
     swarmChildSpawnRate = 0.3,
     swarmFlowInfluence = 0.7,
-    swarmClusterAttraction = 0.3,
-    swarmFormInfluence = 0.4,
-    swarmVoidSize = 0.3,
+    swarmClusterAttraction = 0.6,
+    swarmFormInfluence = 0.6,
+    swarmVoidSize = 0.5,
     swarmEnergyVariation = 0.6,
   } = options;
 
@@ -1188,12 +1188,12 @@ function generateSwarmLines(
     baseEnergy: maxSteps * 0.5,
     energyVariation,
     lowEnergySlowdown: true,
-    clusterRadius: stepLength * 20,
+    clusterRadius: Math.min(width, height) * 0.1,
     clusterAttraction,
     densityNoise: createNoise(seed + 11111),
     densityNoiseScale: 0.003,
     spawnDensityBias: clusterBias,
-    voidThreshold: -0.3 - voidSize * 0.5,
+    voidThreshold: -0.2 - voidSize * 0.6,
     voidRepulsion: voidSize,
     formNoise: createNoise(seed + 22222),
     formNoiseScale: 0.005,
@@ -1254,7 +1254,7 @@ function generateSwarmLines(
       if (agents.length < config.maxAgents && agent.energy > agent.maxEnergy * 0.3) {
         const localDensity = getDensityValue(agent.position.x, agent.position.y, config);
         const spawnChance = config.childSpawnRate * (0.5 + localDensity * 0.5);
-        if (random() < spawnChance * 0.01) {
+        if (random() < spawnChance * 0.1) {
           const child = spawnChildAgent(agent, config, random, nextId++, field);
           if (child) {
             agents.push(child);
@@ -1422,7 +1422,7 @@ function updateSwarmAgent(
     if (clusterCount > 0) {
       clusterX /= clusterCount;
       clusterY /= clusterCount;
-      const strength = config.clusterAttraction * agent.clusterAffinity * 0.3;
+      const strength = config.clusterAttraction * agent.clusterAffinity;
       dir.x = dir.x * (1 - strength) + clusterX * strength;
       dir.y = dir.y * (1 - strength) + clusterY * strength;
     }
@@ -1431,7 +1431,7 @@ function updateSwarmAgent(
   // 4. Add form wrapping (curl-like effect for 3D illusion)
   if (config.formInfluence > 0 && config.formNoise) {
     // Use gradient of noise to create curl effect
-    const eps = 1;
+    const eps = 5;
     const nx = config.formNoise.noise2D(
       agent.position.x * config.formNoiseScale,
       agent.position.y * config.formNoiseScale
