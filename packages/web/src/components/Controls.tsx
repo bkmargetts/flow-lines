@@ -356,6 +356,32 @@ export function Controls({ state, updateState }: ControlsProps) {
                   <span className="value">{state.edgeAttraction.toFixed(2)}</span>
                 </div>
 
+                <div className="control-row">
+                  <label>Line fatigue</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.lineFatigue}
+                    onChange={(e) => updateState({ lineFatigue: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.lineFatigue.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Spacing variation</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.spacingVariation}
+                    onChange={(e) => updateState({ spacingVariation: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.spacingVariation.toFixed(2)}</span>
+                </div>
+
                 <div className="toggles-row" style={{ marginTop: 8 }}>
                   <label className="toggle-label">
                     <input

@@ -36,6 +36,8 @@ export interface OrganicConfig {
   velocityFadeout: boolean;
   edgeAttraction: number;
   wobbleNoise: ReturnType<typeof createNoise> | null;
+  lineFatigue: number;              // 0-1, probability of early line termination
+  fatigueNoise: ReturnType<typeof createNoise> | null;
 }
 
 /**
@@ -77,6 +79,8 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   organicWobble?: number;             // 0-1, subtle random perturbations for hand-drawn look
   velocityFadeout?: boolean;          // End lines naturally at low-velocity areas
   edgeAttraction?: number;            // 0-1, strength of pull toward canvas edges for graceful endings
+  lineFatigue?: number;               // 0-1, probability of early line termination for length variation
+  spacingVariation?: number;          // 0-1, irregularity in line spacing (clusters and gaps)
 }
 
 export interface FlowLinesResult {
@@ -176,6 +180,8 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     organicWobble = 0,
     velocityFadeout = false,
     edgeAttraction = 0,
+    lineFatigue = 0,
+    spacingVariation = 0,
   } = options;
 
   const field = new FlowField({
@@ -198,7 +204,7 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
       field, width, height, lineCount, stepLength, maxSteps,
       margin, minLineLength, separationDistance, smoothing, attractors, seed,
       densityPoints, densityVariation, densityNoiseScale, minSeparation,
-      organicWobble, velocityFadeout, edgeAttraction
+      organicWobble, velocityFadeout, edgeAttraction, lineFatigue, spacingVariation
     );
   }
 
@@ -623,7 +629,9 @@ function generateStreamlines(
   minSeparation: number = 1,
   organicWobble: number = 0,
   velocityFadeout: boolean = false,
-  edgeAttraction: number = 0
+  edgeAttraction: number = 0,
+  lineFatigue: number = 0,
+  spacingVariation: number = 0
 ): FlowLinesResult {
   const lines: FlowLine[] = [];
   // Use small cell size for spatial grid to allow dense packing
@@ -643,6 +651,8 @@ function generateStreamlines(
     velocityFadeout,
     edgeAttraction,
     wobbleNoise: organicWobble > 0 ? createNoise(seed + 54321) : null,
+    lineFatigue,
+    fatigueNoise: lineFatigue > 0 ? createNoise(seed + 99999) : null,
   };
 
   const traceConfig: TraceConfig = {
@@ -743,6 +753,11 @@ function generateStreamlines(
       : Math.max(1, Math.floor(finalLine.points.length / 20));
 
     for (let i = 0; i < finalLine.points.length - 1; i += sampleInterval) {
+      // Random skip for organic gaps (controlled by spacingVariation)
+      if (spacingVariation > 0 && random() < 0.2 * spacingVariation) {
+        continue;
+      }
+
       const p0 = finalLine.points[i];
       const p1 = finalLine.points[Math.min(i + 1, finalLine.points.length - 1)];
 
@@ -758,12 +773,27 @@ function generateStreamlines(
 
       if (len < 0.001) continue;
 
-      // Perpendicular (normal) direction
-      const nx = -dy / len;
-      const ny = dx / len;
+      // Perpendicular (normal) direction - base angle
+      let nx = -dy / len;
+      let ny = dx / len;
 
-      // Create seeds on both sides - use SMALLER offset in dense areas
-      const offset = localSep * (0.5 + random() * 0.5);
+      // Add angular jitter for irregular spacing (not always perfectly perpendicular)
+      if (spacingVariation > 0) {
+        const angleJitter = (random() - 0.5) * 0.5 * spacingVariation;
+        const cos = Math.cos(angleJitter);
+        const sin = Math.sin(angleJitter);
+        const newNx = nx * cos - ny * sin;
+        const newNy = nx * sin + ny * cos;
+        nx = newNx;
+        ny = newNy;
+      }
+
+      // Create seeds on both sides - offset varies more with spacingVariation
+      // Without variation: 50-100% of localSep
+      // With full variation: 30-150% of localSep (more clusters and gaps)
+      const offsetMin = spacingVariation > 0 ? 0.3 : 0.5;
+      const offsetRange = spacingVariation > 0 ? 1.2 : 0.5;
+      const offset = localSep * (offsetMin + random() * offsetRange);
 
       const seed1: Point = {
         x: p0.x + nx * offset,
@@ -813,10 +843,14 @@ function traceStreamlineVariable(
 ): FlowLine {
   const { stepLength, maxSteps, margin, baseSeparation, attractors, density, organic, canvasWidth, canvasHeight } = config;
 
-  // Minimum velocity threshold - lines end naturally at low-flow areas
-  const minVelocity = organic.velocityFadeout ? 0.15 : 0;
   // Wobble scale affects the frequency of perturbations
   const wobbleScale = 0.02;
+  // Minimum steps before fatigue can terminate a line
+  const minStepsBeforeFatigue = 10;
+  // Velocity threshold for step reduction (steps shrink below this velocity)
+  const velocityThreshold = 0.3;
+  // Minimum step size before termination (smaller = more gradual fadeout)
+  const minStepSize = 0.5;
 
   // Helper to compute a single trace step
   const computeStep = (
@@ -826,10 +860,38 @@ function traceStreamlineVariable(
   ): { next: Point; shouldStop: boolean } => {
     let vector = field.getVector(current.x, current.y, attractors);
 
-    // Check velocity - end line naturally at low-flow areas
+    // Calculate velocity for gradual fadeout
     const velocity = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-    if (organic.velocityFadeout && velocity < minVelocity) {
-      return { next: current, shouldStop: true };
+
+    // Gradual velocity fadeout - reduce step length at low-velocity areas
+    // instead of hard cutoff, creating smoother, more natural line endings
+    let effectiveStep = stepLength;
+    if (organic.velocityFadeout && velocity < velocityThreshold) {
+      // Step shrinks proportionally to velocity, with minimum 10% of normal
+      effectiveStep = stepLength * Math.max(0.1, velocity / velocityThreshold);
+      // Stop when step becomes too small to be visible
+      if (effectiveStep < minStepSize) {
+        return { next: current, shouldStop: true };
+      }
+    }
+
+    // Line fatigue - random early termination for natural length variation
+    // Creates regions of short lines and regions of long lines based on noise
+    if (organic.lineFatigue > 0 && organic.fatigueNoise && stepIdx > minStepsBeforeFatigue) {
+      // Noise determines base termination probability in this area
+      const fatigueNoiseVal = organic.fatigueNoise.noise2D(current.x * 0.008, current.y * 0.008);
+      // Second noise sample acts as pseudo-random for termination decision
+      const randomVal = organic.fatigueNoise.noise2D(
+        current.x * 0.1 + stepIdx * 0.5,
+        current.y * 0.1 + direction * 100
+      );
+      // Termination chance increases with fatigue setting and noise value
+      // At fatigue=1, base chance is ~3% per step in "fatigued" areas
+      const terminationChance = organic.lineFatigue * 0.03 * (1 + fatigueNoiseVal);
+      // Terminate if pseudo-random value falls below threshold
+      if ((randomVal + 1) * 0.5 < terminationChance) {
+        return { next: current, shouldStop: true };
+      }
     }
 
     // Add edge attraction - pull toward nearest edge for graceful endings
@@ -850,20 +912,30 @@ function traceStreamlineVariable(
     }
 
     let next: Point = {
-      x: current.x + direction * vector.x * stepLength,
-      y: current.y + direction * vector.y * stepLength,
+      x: current.x + direction * vector.x * effectiveStep,
+      y: current.y + direction * vector.y * effectiveStep,
     };
 
-    // Add organic wobble - subtle perpendicular perturbation
+    // Add organic wobble - perpendicular perturbation for hand-drawn look
+    // Uses two noise frequencies: high-freq for jitter, low-freq for broader curves
     if (organic.wobbleNoise && organic.wobble > 0) {
-      const wobbleVal = organic.wobbleNoise.noise2D(
+      // High-frequency wobble (fine jitter)
+      const highFreqWobble = organic.wobbleNoise.noise2D(
         current.x * wobbleScale + direction * stepIdx * 0.1,
         current.y * wobbleScale
       );
+      // Low-frequency wobble (broad, sweeping curves)
+      const lowFreqWobble = organic.wobbleNoise.noise2D(
+        current.x * wobbleScale * 0.2 + direction * stepIdx * 0.02,
+        current.y * wobbleScale * 0.2
+      );
+      // Blend: 60% high-freq jitter + 40% low-freq curves
+      const wobbleVal = highFreqWobble * 0.6 + lowFreqWobble * 0.4;
       // Perpendicular direction (flip for backward)
       const perpX = direction === 1 ? -vector.y : vector.y;
       const perpY = direction === 1 ? vector.x : -vector.x;
-      const wobbleAmount = wobbleVal * organic.wobble * stepLength * 0.5;
+      // 6x stronger than before (was 0.5, now 3.0)
+      const wobbleAmount = wobbleVal * organic.wobble * stepLength * 3.0;
       next.x += perpX * wobbleAmount;
       next.y += perpY * wobbleAmount;
     }
@@ -944,14 +1016,15 @@ function calculateEdgeInfluence(
   // Find the closest edge
   const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
 
-  // Only apply edge attraction when close to edge (within 20% of smaller dimension)
-  const threshold = Math.min(width, height) * 0.2;
+  // Only apply edge attraction when close to edge (within 30% of smaller dimension)
+  const threshold = Math.min(width, height) * 0.3;
   if (minDist > threshold) {
     return { x: 0, y: 0 };
   }
 
-  // Influence grows as we get closer to edge
-  const influence = strength * (1 - minDist / threshold) * 0.3;
+  // Influence grows exponentially as we get closer to edge
+  // Exponential curve (power 1.5) creates gentle pull that accelerates near edge
+  const influence = strength * Math.pow(1 - minDist / threshold, 1.5);
 
   // Direction toward nearest edge
   let edgeX = 0;

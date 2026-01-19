@@ -150,6 +150,8 @@ export interface AppState {
   organicWobble: number;
   velocityFadeout: boolean;
   edgeAttraction: number;
+  lineFatigue: number;
+  spacingVariation: number;
 }
 
 // Calculate initial canvas size based on viewport
@@ -212,10 +214,12 @@ const defaultState: AppState = {
   densityRadius: 150,
   densityStrength: 1.0,
   showDensityPoints: true,
-  // Organic aesthetics - subtle defaults for natural look
+  // Organic aesthetics - defaults for natural hand-drawn look
   organicWobble: 0.3,
   velocityFadeout: true,
   edgeAttraction: 0.4,
+  lineFatigue: 0.3,
+  spacingVariation: 0.4,
 };
 
 export function App() {
@@ -258,6 +262,8 @@ export function App() {
       organicWobble: random() * 0.6,
       velocityFadeout: random() > 0.3, // 70% chance
       edgeAttraction: random() * 0.6,
+      lineFatigue: random() * 0.5,
+      spacingVariation: random() * 0.6,
     });
   }, [updateState]);
 
@@ -362,6 +368,8 @@ export function App() {
       organicWobble: state.organicWobble,
       velocityFadeout: state.velocityFadeout,
       edgeAttraction: state.edgeAttraction,
+      lineFatigue: state.lineFatigue,
+      spacingVariation: state.spacingVariation,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };
