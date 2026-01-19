@@ -152,6 +152,16 @@ export interface AppState {
   edgeAttraction: number;
   lineFatigue: number;
   spacingVariation: number;
+  // Swarm mode (particle/agent-based generation)
+  swarmMode: boolean;
+  swarmAgentCount: number;
+  swarmClusterBias: number;
+  swarmChildSpawnRate: number;
+  swarmFlowInfluence: number;
+  swarmClusterAttraction: number;
+  swarmFormInfluence: number;
+  swarmVoidSize: number;
+  swarmEnergyVariation: number;
 }
 
 // Calculate initial canvas size based on viewport
@@ -220,6 +230,16 @@ const defaultState: AppState = {
   edgeAttraction: 0.4,
   lineFatigue: 0.3,
   spacingVariation: 0.4,
+  // Swarm mode defaults
+  swarmMode: false,
+  swarmAgentCount: 200,
+  swarmClusterBias: 0.6,
+  swarmChildSpawnRate: 0.3,
+  swarmFlowInfluence: 0.7,
+  swarmClusterAttraction: 0.3,
+  swarmFormInfluence: 0.4,
+  swarmVoidSize: 0.3,
+  swarmEnergyVariation: 0.6,
 };
 
 export function App() {
@@ -370,6 +390,16 @@ export function App() {
       edgeAttraction: state.edgeAttraction,
       lineFatigue: state.lineFatigue,
       spacingVariation: state.spacingVariation,
+      // Swarm mode
+      swarmMode: state.swarmMode,
+      swarmAgentCount: state.swarmAgentCount,
+      swarmClusterBias: state.swarmClusterBias,
+      swarmChildSpawnRate: state.swarmChildSpawnRate,
+      swarmFlowInfluence: state.swarmFlowInfluence,
+      swarmClusterAttraction: state.swarmClusterAttraction,
+      swarmFormInfluence: state.swarmFormInfluence,
+      swarmVoidSize: state.swarmVoidSize,
+      swarmEnergyVariation: state.swarmEnergyVariation,
       ...(usePaintedPoints && { startPoints: state.paintedPoints }),
       ...(state.attractors.length > 0 && { attractors: state.attractors }),
     };

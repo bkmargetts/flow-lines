@@ -55,6 +55,84 @@ export interface TraceConfig {
   canvasHeight: number;
 }
 
+/**
+ * A particle agent that traces a line through the flow field
+ */
+export interface Agent {
+  id: number;
+  position: Point;
+  velocity: { x: number; y: number };
+
+  // Energy system (controls lifespan)
+  energy: number;           // Current energy, depletes over time
+  maxEnergy: number;        // Starting energy (varies per agent)
+  energyDecayRate: number;  // How fast energy depletes per step
+
+  // Trail (accumulated points for the line)
+  trail: Point[];
+
+  // Agent personality (varies for organic variation)
+  wanderStrength: number;   // How much agent deviates from flow field (0-1)
+  speedMultiplier: number;  // Movement speed variation (0.5-1.5)
+  clusterAffinity: number;  // How attracted to nearby agents (0-1)
+
+  // State
+  isAlive: boolean;
+  stepsAlive: number;
+}
+
+/**
+ * Configuration for swarm-based generation
+ */
+export interface SwarmConfig {
+  // Agent population
+  initialAgentCount: number;
+  maxAgents: number;
+  maxLinesOutput: number;
+
+  // Spawning
+  spawnClusterBias: number;     // 0-1, how clustered initial spawns are
+  childSpawnRate: number;       // 0-1, probability of spawning child per step
+  childSpawnDistance: number;   // Distance from parent for child spawn
+
+  // Movement
+  baseStepLength: number;
+  flowFieldInfluence: number;   // 0-1, how much agents follow flow field
+  noiseWanderScale: number;     // Scale of wandering noise
+
+  // Energy
+  baseEnergy: number;           // Starting energy (in steps)
+  energyVariation: number;      // 0-1, randomness in starting energy
+  lowEnergySlowdown: boolean;   // Agents slow down as energy depletes
+
+  // Clustering
+  clusterRadius: number;        // Radius to detect nearby agents
+  clusterAttraction: number;    // 0-1, pull toward cluster centers
+
+  // Density control
+  densityNoise: ReturnType<typeof createNoise> | null;
+  densityNoiseScale: number;
+  spawnDensityBias: number;     // 0-1, spawn more in dense areas
+
+  // Void regions
+  voidThreshold: number;        // Noise value below which no spawning occurs
+  voidRepulsion: number;        // 0-1, agents avoid void regions
+
+  // 3D form illusion
+  formNoise: ReturnType<typeof createNoise> | null;
+  formNoiseScale: number;       // Scale of "form" noise for wrapping effect
+  formInfluence: number;        // 0-1, how much lines wrap around forms
+
+  // Wander noise
+  wanderNoise: ReturnType<typeof createNoise> | null;
+
+  // Canvas bounds
+  width: number;
+  height: number;
+  margin: number;
+  minLineLength: number;
+}
+
 export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   lineCount: number;
   stepLength?: number;
@@ -81,6 +159,16 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   edgeAttraction?: number;            // 0-1, strength of pull toward canvas edges for graceful endings
   lineFatigue?: number;               // 0-1, probability of early line termination for length variation
   spacingVariation?: number;          // 0-1, irregularity in line spacing (clusters and gaps)
+  // Swarm mode options (particle/agent-based generation)
+  swarmMode?: boolean;                // Enable swarm generation
+  swarmAgentCount?: number;           // Initial agents (default: 200)
+  swarmClusterBias?: number;          // 0-1, clustering of initial spawns
+  swarmChildSpawnRate?: number;       // 0-1, child spawn frequency
+  swarmFlowInfluence?: number;        // 0-1, how much agents follow field
+  swarmClusterAttraction?: number;    // 0-1, agents pull toward each other
+  swarmFormInfluence?: number;        // 0-1, 3D form wrapping effect
+  swarmVoidSize?: number;             // 0-1, size of empty regions
+  swarmEnergyVariation?: number;      // 0-1, line length variation
 }
 
 export interface FlowLinesResult {
@@ -182,6 +270,16 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     edgeAttraction = 0,
     lineFatigue = 0,
     spacingVariation = 0,
+    // Swarm mode options
+    swarmMode = false,
+    swarmAgentCount = 200,
+    swarmClusterBias = 0.6,
+    swarmChildSpawnRate = 0.3,
+    swarmFlowInfluence = 0.7,
+    swarmClusterAttraction = 0.3,
+    swarmFormInfluence = 0.4,
+    swarmVoidSize = 0.3,
+    swarmEnergyVariation = 0.6,
   } = options;
 
   const field = new FlowField({
@@ -197,6 +295,17 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     spiralStrength,
     warpStrength,
   });
+
+  // Use swarm mode for particle/agent-based organic generation
+  if (swarmMode) {
+    return generateSwarmLines(
+      field, width, height, lineCount, stepLength, maxSteps,
+      margin, minLineLength, seed, attractors,
+      swarmAgentCount, swarmClusterBias, swarmChildSpawnRate,
+      swarmFlowInfluence, swarmClusterAttraction, swarmFormInfluence,
+      swarmVoidSize, swarmEnergyVariation
+    );
+  }
 
   // Use fill mode for streamline-style parallel lines
   if (fillMode && separationDistance > 0) {
@@ -1038,6 +1147,418 @@ function calculateEdgeInfluence(
   return {
     x: edgeX * influence,
     y: edgeY * influence,
+  };
+}
+
+/**
+ * Generate lines using particle/agent swarm system
+ * Creates organic, chaotic patterns with natural clustering and voids
+ */
+function generateSwarmLines(
+  field: FlowField,
+  width: number,
+  height: number,
+  maxLines: number,
+  stepLength: number,
+  maxSteps: number,
+  margin: number,
+  minLineLength: number,
+  seed: number,
+  attractors?: Attractor[],
+  agentCount: number = 200,
+  clusterBias: number = 0.6,
+  childSpawnRate: number = 0.3,
+  flowInfluence: number = 0.7,
+  clusterAttraction: number = 0.3,
+  formInfluence: number = 0.4,
+  voidSize: number = 0.3,
+  energyVariation: number = 0.6
+): FlowLinesResult {
+  // Build swarm config
+  const config: SwarmConfig = {
+    initialAgentCount: agentCount,
+    maxAgents: agentCount * 10,
+    maxLinesOutput: maxLines,
+    spawnClusterBias: clusterBias,
+    childSpawnRate,
+    childSpawnDistance: stepLength * 5,
+    baseStepLength: stepLength,
+    flowFieldInfluence: flowInfluence,
+    noiseWanderScale: 0.01,
+    baseEnergy: maxSteps * 0.5,
+    energyVariation,
+    lowEnergySlowdown: true,
+    clusterRadius: stepLength * 20,
+    clusterAttraction,
+    densityNoise: createNoise(seed + 11111),
+    densityNoiseScale: 0.003,
+    spawnDensityBias: clusterBias,
+    voidThreshold: -0.3 - voidSize * 0.5,
+    voidRepulsion: voidSize,
+    formNoise: createNoise(seed + 22222),
+    formNoiseScale: 0.005,
+    formInfluence,
+    wanderNoise: createNoise(seed + 33333),
+    width,
+    height,
+    margin,
+    minLineLength,
+  };
+
+  // Seeded random
+  let s = seed;
+  const random = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+
+  // Generate initial agents with clustered spawning
+  const agents: Agent[] = [];
+  let nextId = 0;
+
+  for (let i = 0; i < config.initialAgentCount; i++) {
+    const agent = trySpawnAgent(config, random, nextId++, field, null);
+    if (agent) {
+      agents.push(agent);
+    }
+  }
+
+  const completedLines: FlowLine[] = [];
+  let iteration = 0;
+  const maxIterations = maxSteps * 100;
+
+  // Main simulation loop
+  while (
+    agents.some(a => a.isAlive) &&
+    completedLines.length < config.maxLinesOutput &&
+    iteration < maxIterations
+  ) {
+    // Update all living agents
+    for (let i = 0; i < agents.length; i++) {
+      const agent = agents[i];
+      if (!agent.isAlive) continue;
+
+      // Move agent
+      updateSwarmAgent(agent, field, config, agents, random, attractors);
+
+      // Check termination
+      if (shouldAgentTerminate(agent, config, field)) {
+        agent.isAlive = false;
+        if (agent.trail.length >= config.minLineLength) {
+          completedLines.push({ points: [...agent.trail] });
+        }
+        continue;
+      }
+
+      // Try to spawn child
+      if (agents.length < config.maxAgents && agent.energy > agent.maxEnergy * 0.3) {
+        const localDensity = getDensityValue(agent.position.x, agent.position.y, config);
+        const spawnChance = config.childSpawnRate * (0.5 + localDensity * 0.5);
+        if (random() < spawnChance * 0.01) {
+          const child = spawnChildAgent(agent, config, random, nextId++, field);
+          if (child) {
+            agents.push(child);
+          }
+        }
+      }
+    }
+
+    iteration++;
+  }
+
+  // Collect remaining trails from living agents
+  for (const agent of agents) {
+    if (agent.trail.length >= config.minLineLength) {
+      if (!completedLines.some(l => l.points === agent.trail)) {
+        completedLines.push({ points: [...agent.trail] });
+      }
+    }
+  }
+
+  return {
+    lines: completedLines,
+    width,
+    height,
+    seed,
+  };
+}
+
+/**
+ * Try to spawn an agent at a position based on density
+ */
+function trySpawnAgent(
+  config: SwarmConfig,
+  random: () => number,
+  id: number,
+  field: FlowField,
+  parent: Agent | null
+): Agent | null {
+  let x: number, y: number;
+  let attempts = 0;
+  const maxAttempts = 50;
+
+  // Find a valid spawn position
+  while (attempts < maxAttempts) {
+    if (parent) {
+      // Spawn near parent (perpendicular to velocity)
+      const perpX = -parent.velocity.y;
+      const perpY = parent.velocity.x;
+      const side = random() > 0.5 ? 1 : -1;
+      const dist = config.childSpawnDistance * (0.5 + random());
+      x = parent.position.x + perpX * dist * side;
+      y = parent.position.y + perpY * dist * side;
+    } else {
+      // Initial spawn - use cluster bias
+      x = config.margin + random() * (config.width - 2 * config.margin);
+      y = config.margin + random() * (config.height - 2 * config.margin);
+    }
+
+    // Check bounds
+    if (!field.isInBounds(x, y, config.margin)) {
+      attempts++;
+      continue;
+    }
+
+    // Check density-based spawn probability
+    const densityVal = getDensityValue(x, y, config);
+
+    // In void regions, reject spawn
+    if (densityVal < config.voidThreshold) {
+      attempts++;
+      continue;
+    }
+
+    // Higher density = higher spawn chance (for clustering)
+    const spawnProb = Math.pow((densityVal + 1) * 0.5, 2 - config.spawnClusterBias * 1.5);
+    if (random() > spawnProb && !parent) {
+      attempts++;
+      continue;
+    }
+
+    // Create the agent
+    const energyMult = 0.5 + (densityVal + 1) * 0.5; // Dense areas = more energy
+    const baseEnergy = config.baseEnergy * (1 - config.energyVariation * 0.5 + random() * config.energyVariation);
+    const maxEnergy = baseEnergy * energyMult;
+
+    return {
+      id,
+      position: { x, y },
+      velocity: { x: 0, y: 0 },
+      energy: maxEnergy,
+      maxEnergy,
+      energyDecayRate: 1,
+      trail: [{ x, y }],
+      wanderStrength: 0.2 + random() * 0.6,
+      speedMultiplier: 0.7 + random() * 0.6,
+      clusterAffinity: 0.3 + random() * 0.4,
+      isAlive: true,
+      stepsAlive: 0,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Get density value at position using noise
+ */
+function getDensityValue(x: number, y: number, config: SwarmConfig): number {
+  if (!config.densityNoise) return 0;
+  return config.densityNoise.fbm(
+    x * config.densityNoiseScale,
+    y * config.densityNoiseScale,
+    4, 0.5, 2
+  );
+}
+
+/**
+ * Update an agent's position and state
+ */
+function updateSwarmAgent(
+  agent: Agent,
+  field: FlowField,
+  config: SwarmConfig,
+  allAgents: Agent[],
+  random: () => number,
+  attractors?: Attractor[]
+): void {
+  // 1. Get base direction from flow field
+  let dir = field.getVector(agent.position.x, agent.position.y, attractors);
+
+  // 2. Add wandering noise for organic deviation
+  if (config.wanderNoise) {
+    const wanderAngle = config.wanderNoise.noise2D(
+      agent.position.x * config.noiseWanderScale + agent.id * 100,
+      agent.position.y * config.noiseWanderScale
+    ) * Math.PI * agent.wanderStrength;
+
+    const cos = Math.cos(wanderAngle);
+    const sin = Math.sin(wanderAngle);
+    const newX = dir.x * cos - dir.y * sin;
+    const newY = dir.x * sin + dir.y * cos;
+    dir = { x: newX, y: newY };
+  }
+
+  // 3. Add cluster attraction (pull toward nearby agents)
+  if (config.clusterAttraction > 0 && agent.clusterAffinity > 0) {
+    let clusterX = 0, clusterY = 0, clusterCount = 0;
+
+    for (const other of allAgents) {
+      if (!other.isAlive || other.id === agent.id) continue;
+
+      const dx = other.position.x - agent.position.x;
+      const dy = other.position.y - agent.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < config.clusterRadius && dist > 0.001) {
+        // Weight by inverse distance
+        const weight = 1 - dist / config.clusterRadius;
+        clusterX += (dx / dist) * weight;
+        clusterY += (dy / dist) * weight;
+        clusterCount++;
+      }
+    }
+
+    if (clusterCount > 0) {
+      clusterX /= clusterCount;
+      clusterY /= clusterCount;
+      const strength = config.clusterAttraction * agent.clusterAffinity * 0.3;
+      dir.x = dir.x * (1 - strength) + clusterX * strength;
+      dir.y = dir.y * (1 - strength) + clusterY * strength;
+    }
+  }
+
+  // 4. Add form wrapping (curl-like effect for 3D illusion)
+  if (config.formInfluence > 0 && config.formNoise) {
+    // Use gradient of noise to create curl effect
+    const eps = 1;
+    const nx = config.formNoise.noise2D(
+      agent.position.x * config.formNoiseScale,
+      agent.position.y * config.formNoiseScale
+    );
+    const nxr = config.formNoise.noise2D(
+      (agent.position.x + eps) * config.formNoiseScale,
+      agent.position.y * config.formNoiseScale
+    );
+    const nyu = config.formNoise.noise2D(
+      agent.position.x * config.formNoiseScale,
+      (agent.position.y + eps) * config.formNoiseScale
+    );
+
+    // Curl = perpendicular to gradient
+    const gradX = (nxr - nx) / eps;
+    const gradY = (nyu - nx) / eps;
+    const curlX = -gradY;
+    const curlY = gradX;
+
+    dir.x = dir.x * (1 - config.formInfluence) + curlX * config.formInfluence;
+    dir.y = dir.y * (1 - config.formInfluence) + curlY * config.formInfluence;
+  }
+
+  // 5. Add void repulsion (push away from empty areas)
+  if (config.voidRepulsion > 0 && config.densityNoise) {
+    const densityVal = getDensityValue(agent.position.x, agent.position.y, config);
+    if (densityVal < config.voidThreshold + 0.2) {
+      // Compute gradient of density to push toward denser areas
+      const eps = 5;
+      const dRight = getDensityValue(agent.position.x + eps, agent.position.y, config);
+      const dUp = getDensityValue(agent.position.x, agent.position.y + eps, config);
+      const gradX = (dRight - densityVal) / eps;
+      const gradY = (dUp - densityVal) / eps;
+
+      const repulsion = config.voidRepulsion * (1 - (densityVal - config.voidThreshold) / 0.2);
+      dir.x += gradX * repulsion * 2;
+      dir.y += gradY * repulsion * 2;
+    }
+  }
+
+  // Normalize direction
+  const len = Math.sqrt(dir.x * dir.x + dir.y * dir.y);
+  if (len > 0.001) {
+    dir.x /= len;
+    dir.y /= len;
+  }
+
+  // Calculate speed with energy slowdown
+  let speed = config.baseStepLength * agent.speedMultiplier;
+  if (config.lowEnergySlowdown) {
+    const energyRatio = agent.energy / agent.maxEnergy;
+    speed *= 0.3 + energyRatio * 0.7;
+  }
+
+  // Update position
+  agent.velocity = dir;
+  agent.position.x += dir.x * speed;
+  agent.position.y += dir.y * speed;
+  agent.trail.push({ x: agent.position.x, y: agent.position.y });
+
+  // Deplete energy
+  agent.energy -= agent.energyDecayRate;
+  agent.stepsAlive++;
+}
+
+/**
+ * Check if agent should terminate
+ */
+function shouldAgentTerminate(agent: Agent, config: SwarmConfig, field: FlowField): boolean {
+  // Energy depleted
+  if (agent.energy <= 0) return true;
+
+  // Out of bounds
+  if (!field.isInBounds(agent.position.x, agent.position.y, config.margin)) return true;
+
+  // Deep in void region
+  const densityVal = getDensityValue(agent.position.x, agent.position.y, config);
+  if (densityVal < config.voidThreshold - 0.1) return true;
+
+  // Trail too long (safety)
+  if (agent.trail.length > 5000) return true;
+
+  return false;
+}
+
+/**
+ * Spawn a child agent from parent
+ */
+function spawnChildAgent(
+  parent: Agent,
+  config: SwarmConfig,
+  random: () => number,
+  id: number,
+  field: FlowField
+): Agent | null {
+  // Child spawns perpendicular to parent's movement
+  const perpX = -parent.velocity.y;
+  const perpY = parent.velocity.x;
+  const side = random() > 0.5 ? 1 : -1;
+  const dist = config.childSpawnDistance * (0.5 + random() * 0.5);
+
+  const x = parent.position.x + perpX * dist * side;
+  const y = parent.position.y + perpY * dist * side;
+
+  if (!field.isInBounds(x, y, config.margin)) return null;
+
+  // Check void
+  const densityVal = getDensityValue(x, y, config);
+  if (densityVal < config.voidThreshold) return null;
+
+  // Child inherits reduced energy from parent
+  const childEnergy = parent.energy * (0.4 + random() * 0.3);
+  parent.energy -= childEnergy * 0.3; // Parent loses some energy
+
+  return {
+    id,
+    position: { x, y },
+    velocity: { ...parent.velocity },
+    energy: childEnergy,
+    maxEnergy: childEnergy,
+    energyDecayRate: parent.energyDecayRate,
+    trail: [{ x, y }],
+    wanderStrength: parent.wanderStrength * (0.8 + random() * 0.4),
+    speedMultiplier: parent.speedMultiplier * (0.8 + random() * 0.4),
+    clusterAffinity: parent.clusterAffinity * (0.8 + random() * 0.4),
+    isAlive: true,
+    stepsAlive: 0,
   };
 }
 

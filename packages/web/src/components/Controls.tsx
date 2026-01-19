@@ -247,12 +247,22 @@ export function Controls({ state, updateState }: ControlsProps) {
               <label className="toggle-label">
                 <input
                   type="checkbox"
-                  checked={state.fillMode}
-                  onChange={(e) => updateState({ fillMode: e.target.checked })}
+                  checked={state.swarmMode}
+                  onChange={(e) => updateState({ swarmMode: e.target.checked, fillMode: e.target.checked ? false : state.fillMode })}
                 />
-                <span>Fill mode</span>
+                <span>Swarm mode</span>
               </label>
-              {!state.fillMode && (
+              {!state.swarmMode && (
+                <label className="toggle-label">
+                  <input
+                    type="checkbox"
+                    checked={state.fillMode}
+                    onChange={(e) => updateState({ fillMode: e.target.checked })}
+                  />
+                  <span>Fill mode</span>
+                </label>
+              )}
+              {!state.fillMode && !state.swarmMode && (
                 <>
                   <label className="toggle-label">
                     <input
@@ -274,7 +284,118 @@ export function Controls({ state, updateState }: ControlsProps) {
               )}
             </div>
 
-            {state.fillMode && (
+            {/* Swarm mode controls */}
+            {state.swarmMode && (
+              <>
+                <div className="presets-label" style={{ marginTop: 16 }}>Swarm Behavior</div>
+
+                <div className="control-row">
+                  <label>Agents</label>
+                  <input
+                    type="range"
+                    min="50"
+                    max="1000"
+                    step="10"
+                    value={state.swarmAgentCount}
+                    onChange={(e) => updateState({ swarmAgentCount: parseInt(e.target.value, 10) })}
+                  />
+                  <span className="value">{state.swarmAgentCount}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Clustering</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.swarmClusterBias}
+                    onChange={(e) => updateState({ swarmClusterBias: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.swarmClusterBias.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Child spawn</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.swarmChildSpawnRate}
+                    onChange={(e) => updateState({ swarmChildSpawnRate: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.swarmChildSpawnRate.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Flow follow</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.swarmFlowInfluence}
+                    onChange={(e) => updateState({ swarmFlowInfluence: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.swarmFlowInfluence.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Attraction</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.swarmClusterAttraction}
+                    onChange={(e) => updateState({ swarmClusterAttraction: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.swarmClusterAttraction.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>3D form</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.swarmFormInfluence}
+                    onChange={(e) => updateState({ swarmFormInfluence: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.swarmFormInfluence.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Void size</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="0.8"
+                    step="0.05"
+                    value={state.swarmVoidSize}
+                    onChange={(e) => updateState({ swarmVoidSize: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.swarmVoidSize.toFixed(2)}</span>
+                </div>
+
+                <div className="control-row">
+                  <label>Length variation</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={state.swarmEnergyVariation}
+                    onChange={(e) => updateState({ swarmEnergyVariation: parseFloat(e.target.value) })}
+                  />
+                  <span className="value">{state.swarmEnergyVariation.toFixed(2)}</span>
+                </div>
+              </>
+            )}
+
+            {state.fillMode && !state.swarmMode && (
               <>
                 <div className="toggles-row" style={{ marginTop: 12 }}>
                   <label className="toggle-label">
