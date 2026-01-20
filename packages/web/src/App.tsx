@@ -1,10 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { TechniquesPage } from './pages/techniques';
 import { FlowLinesPage } from './pages/techniques/FlowLinesPage';
 
 export function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         {/* Redirect root to techniques */}
         <Route path="/" element={<Navigate to="/techniques" replace />} />
@@ -18,7 +18,7 @@ export function App() {
         {/* 404 fallback */}
         <Route path="*" element={<Navigate to="/techniques" replace />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
