@@ -1,22 +1,16 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { TechniquesPage } from './pages/techniques';
 import { FlowLinesPage } from './pages/techniques/FlowLinesPage';
 
 export function App() {
   return (
     <HashRouter>
       <Routes>
-        {/* Redirect root to techniques */}
-        <Route path="/" element={<Navigate to="/techniques" replace />} />
-
-        {/* Techniques list */}
-        <Route path="/techniques" element={<TechniquesPage />} />
-
-        {/* Flow Lines technique */}
+        {/* Flow Lines is the main/default view */}
+        <Route path="/" element={<FlowLinesPage />} />
         <Route path="/techniques/flow-lines" element={<FlowLinesPage />} />
 
-        {/* 404 fallback */}
-        <Route path="*" element={<Navigate to="/techniques" replace />} />
+        {/* 404 fallback to main */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
   );
