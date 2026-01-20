@@ -4,12 +4,18 @@ import { describe, it, expect } from 'vitest';
 describe('Web App', () => {
   it('should be able to import core module', async () => {
     const core = await import('@flow-lines/core');
-    expect(core.generateFlowLines).toBeDefined();
     expect(core.toSVG).toBeDefined();
+    expect(core.FlowField).toBeDefined();
+  });
+
+  it('should be able to import technique module', async () => {
+    const technique = await import('@flow-lines/technique-flow-lines');
+    expect(technique.generateFlowLines).toBeDefined();
   });
 
   it('should generate valid SVG output', async () => {
-    const { generateFlowLines, toSVG } = await import('@flow-lines/core');
+    const { generateFlowLines } = await import('@flow-lines/technique-flow-lines');
+    const { toSVG } = await import('@flow-lines/core');
 
     const result = generateFlowLines({
       width: 100,
@@ -27,7 +33,7 @@ describe('Web App', () => {
   });
 
   it('should generate flow lines from custom start points', async () => {
-    const { generateFlowLines } = await import('@flow-lines/core');
+    const { generateFlowLines } = await import('@flow-lines/technique-flow-lines');
 
     const startPoints = [
       { x: 25, y: 25 },
