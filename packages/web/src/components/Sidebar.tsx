@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 
 interface Branch {
   name: string;
+  displayName: string;
   url: string;
+  isMain: boolean;
 }
 
 interface Technique {
@@ -19,21 +21,29 @@ interface SidebarProps {
   repoName: string;
 }
 
-// Extract technique name from branch name (e.g., "feature/techniques/flow-lines/foo" -> "flow-lines")
-function getTechniqueFromBranch(branchName: string): string | null {
-  const match = branchName.match(/(?:feature\/)?techniques\/([^/]+)/);
-  return match ? match[1] : null;
+// Clean up branch name for display
+function getDisplayName(branchName: string): string {
+  // Remove common prefixes and suffixes
+  let name = branchName
+    .replace(/^(feature|claude|feat|fix|chore)\//, '')  // Remove common prefixes
+    .replace(/^techniques\/[^/]+\//, '')                  // Remove techniques/xxx/ prefix
+    .replace(/-[a-zA-Z0-9]{5}$/, '');                     // Remove session ID suffixes like -aMcvK
+
+  // Convert kebab-case to title case
+  name = name
+    .split(/[-_]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+  return name || branchName;
 }
 
 // Get the deployed URL for a branch
 function getBranchUrl(repoOwner: string, repoName: string, branchName: string): string {
-  // For GitHub Pages, branches are typically deployed to subpaths or separate deployments
-  // Adjust this based on your deployment strategy
   if (branchName === 'main' || branchName === 'master') {
     return `https://${repoOwner}.github.io/${repoName}/`;
   }
-  // For feature branches, assume they're deployed to a subdirectory or query param
-  // This could be configured based on your CI/CD setup
+  // For feature branches - adjust based on your deployment strategy
   return `https://${repoOwner}.github.io/${repoName}/?branch=${encodeURIComponent(branchName)}`;
 }
 
@@ -58,36 +68,30 @@ export function Sidebar({ isOpen, onClose, repoOwner, repoName }: SidebarProps) 
           throw new Error(`GitHub API error: ${response.status}`);
         }
 
-        const branches: { name: string }[] = await response.json();
+        const apiBranches: { name: string }[] = await response.json();
 
-        // Group branches by technique
-        const techniqueMap = new Map<string, Branch[]>();
+        // Convert to our Branch format
+        const allBranches: Branch[] = apiBranches.map(b => ({
+          name: b.name,
+          displayName: b.name === 'main' || b.name === 'master'
+            ? `main`
+            : getDisplayName(b.name),
+          url: getBranchUrl(repoOwner, repoName, b.name),
+          isMain: b.name === 'main' || b.name === 'master',
+        }));
 
-        for (const branch of branches) {
-          const technique = getTechniqueFromBranch(branch.name);
-          if (technique) {
-            if (!techniqueMap.has(technique)) {
-              techniqueMap.set(technique, []);
-            }
-            techniqueMap.get(technique)!.push({
-              name: branch.name,
-              url: getBranchUrl(repoOwner, repoName, branch.name),
-            });
-          }
-        }
+        // Sort: main first, then alphabetically by display name
+        allBranches.sort((a, b) => {
+          if (a.isMain && !b.isMain) return -1;
+          if (!a.isMain && b.isMain) return 1;
+          return a.displayName.localeCompare(b.displayName);
+        });
 
-        // Also add main/master as a "stable" option under each technique
-        const mainBranch = branches.find(b => b.name === 'main' || b.name === 'master');
-
+        // For now, all branches go under "Flow Lines" since it's the only technique
+        // In the future, we could parse branch names to categorize by technique
         setTechniques(prev => prev.map(t => ({
           ...t,
-          branches: [
-            ...(mainBranch ? [{
-              name: 'stable (main)',
-              url: getBranchUrl(repoOwner, repoName, mainBranch.name),
-            }] : []),
-            ...(techniqueMap.get(t.id) || []),
-          ],
+          branches: allBranches,
           isLoading: false,
         })));
 
@@ -166,16 +170,14 @@ export function Sidebar({ isOpen, onClose, repoOwner, repoName }: SidebarProps) 
                     <a
                       key={branch.name}
                       href={branch.url}
-                      className="branch-link"
-                      target="_self"
+                      className={`branch-link ${branch.isMain ? 'main-branch' : ''}`}
+                      title={branch.name}
                     >
                       <span className="branch-icon">
-                        {branch.name.includes('stable') ? '●' : '○'}
+                        {branch.isMain ? '●' : '○'}
                       </span>
                       <span className="branch-name">
-                        {branch.name.includes('stable')
-                          ? 'Stable'
-                          : branch.name.replace(/^.*\/techniques\/[^/]+\//, '').replace(/^claude\//, '').replace(/-aMcvK$/, '')}
+                        {branch.displayName}
                       </span>
                     </a>
                   ))
