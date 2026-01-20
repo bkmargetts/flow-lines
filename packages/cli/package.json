@@ -23,6 +23,7 @@
   "license": "MIT",
   "dependencies": {
     "@flow-lines/core": "workspace:*",
+    "@flow-lines/technique-flow-lines": "workspace:*",
     "commander": "^12.0.0"
   },
   "devDependencies": {

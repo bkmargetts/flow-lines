@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { AppState } from '../App';
 import { FIELD_PRESETS, type PresetName } from '../App';
-import type { FieldMode } from '@flow-lines/core';
+import type { FieldMode } from '@flow-lines/technique-flow-lines';
 
 interface ControlsProps {
   state: AppState;

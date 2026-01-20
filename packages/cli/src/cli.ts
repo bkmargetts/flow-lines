@@ -3,13 +3,12 @@
 import { Command } from 'commander';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { toSVG, type SVGOptions } from '@flow-lines/core';
 import {
   generateFlowLines,
   generateFlowLinesGrid,
-  toSVG,
   type FlowLinesOptions,
-  type SVGOptions,
-} from '@flow-lines/core';
+} from '@flow-lines/technique-flow-lines';
 
 const program = new Command();
 

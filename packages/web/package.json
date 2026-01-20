@@ -20,8 +20,10 @@
   "license": "MIT",
   "dependencies": {
     "@flow-lines/core": "workspace:*",
+    "@flow-lines/technique-flow-lines": "workspace:*",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
-import type { Point, Attractor, DensityPoint } from '@flow-lines/core';
+import type { Point, Attractor, DensityPoint } from '@flow-lines/technique-flow-lines';
 
 interface PreviewProps {
   svgContent: string;
