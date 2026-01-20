@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { toSVG, type SVGOptions } from '@flow-lines/core';
 import { generateFlowLines, type FlowLinesOptions, type Point, type Attractor, type FieldMode, type DensityPoint } from '@flow-lines/technique-flow-lines';
 import { Preview } from '../../components/Preview';
@@ -7,6 +6,11 @@ import { Toolbar } from '../../components/Toolbar';
 import { Sheet } from '../../components/Sheet';
 import { Controls } from '../../components/Controls';
 import { PaintControls } from '../../components/PaintControls';
+import { Sidebar } from '../../components/Sidebar';
+
+// GitHub repo info for fetching branches
+const REPO_OWNER = 'bkmargetts';
+const REPO_NAME = 'flow-lines';
 
 export type BrushType = 'attractor' | 'repeller';
 export type DensityBrushType = 'density';
@@ -263,6 +267,7 @@ const defaultState: AppState = {
 export function FlowLinesPage() {
   const [state, setState] = useState<AppState>(defaultState);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -455,9 +460,25 @@ export function FlowLinesPage() {
 
   return (
     <div className="app">
-      <Link to="/techniques" className="back-link">
-        ← Techniques
-      </Link>
+      {/* Menu toggle button */}
+      <button
+        className="menu-toggle"
+        onClick={() => setSidebarOpen(true)}
+        aria-label="Open menu"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {/* Sidebar */}
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        repoOwner={REPO_OWNER}
+        repoName={REPO_NAME}
+      />
+
       <Preview
         svgContent={svgContent}
         width={state.width}
