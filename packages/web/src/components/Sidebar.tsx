@@ -23,8 +23,19 @@ interface SidebarProps {
 
 // Clean up branch name for display
 function getDisplayName(branchName: string): string {
-  // Display branch name as-is
-  return branchName;
+  // Remove common prefixes and suffixes
+  let name = branchName
+    .replace(/^(feature|claude|feat|fix|chore)\//, '')  // Remove common prefixes
+    .replace(/^techniques\/[^/]+\//, '')                  // Remove techniques/xxx/ prefix
+    .replace(/-[a-zA-Z0-9]{5}$/, '');                     // Remove session ID suffixes like -aMcvK
+
+  // Convert kebab-case to title case
+  name = name
+    .split(/[-_]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+  return name || branchName;
 }
 
 // Get the deployed URL for a branch
