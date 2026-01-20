@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Branch {
   name: string;
   displayName: string;
   url: string;
   isMain: boolean;
-  isCurrent: boolean;
 }
 
 interface Technique {
@@ -44,14 +43,21 @@ function getCurrentBranch(): string {
   return branch ? decodeURIComponent(branch) : 'main';
 }
 
+// Check if a branch is the current one being viewed
+function isBranchCurrent(branchName: string, isMain: boolean): boolean {
+  const currentBranch = getCurrentBranch();
+  if (isMain) {
+    return currentBranch === 'main' || currentBranch === 'master' || currentBranch === branchName;
+  }
+  return branchName === currentBranch;
+}
+
 export function Sidebar({ isOpen, onClose, repoOwner, repoName }: SidebarProps) {
   const [techniques, setTechniques] = useState<Technique[]>([
     { id: 'flow-lines', name: 'Flow Lines', branches: [], isLoading: true },
   ]);
   const [expandedTechnique, setExpandedTechnique] = useState<string | null>('flow-lines');
   const [error, setError] = useState<string | null>(null);
-
-  const currentBranch = useMemo(() => getCurrentBranch(), []);
 
   // Fetch branches from GitHub API
   useEffect(() => {
@@ -72,15 +78,11 @@ export function Sidebar({ isOpen, onClose, repoOwner, repoName }: SidebarProps) 
         // Convert to our Branch format
         const allBranches: Branch[] = apiBranches.map(b => {
           const isMain = b.name === 'main' || b.name === 'master';
-          const isCurrent = isMain
-            ? (currentBranch === 'main' || currentBranch === 'master')
-            : b.name === currentBranch;
           return {
             name: b.name,
             displayName: isMain ? 'main' : getDisplayName(b.name),
             url: getBranchUrl(repoOwner, repoName, b.name),
             isMain,
-            isCurrent,
           };
         });
 
@@ -170,25 +172,28 @@ export function Sidebar({ isOpen, onClose, repoOwner, repoName }: SidebarProps) 
                 ) : technique.branches.length === 0 ? (
                   <div className="branch-empty">No branches found</div>
                 ) : (
-                  technique.branches.map(branch => (
-                    <a
-                      key={branch.name}
-                      href={branch.url}
-                      className={`branch-link ${branch.isMain ? 'main-branch' : ''} ${branch.isCurrent ? 'current' : ''}`}
-                      title={branch.name}
-                      aria-current={branch.isCurrent ? 'page' : undefined}
-                    >
-                      <span className="branch-icon">
-                        {branch.isCurrent ? '●' : '○'}
-                      </span>
-                      <span className="branch-name">
-                        {branch.displayName}
-                      </span>
-                      {branch.isCurrent && (
-                        <span className="current-indicator">current</span>
-                      )}
-                    </a>
-                  ))
+                  technique.branches.map(branch => {
+                    const isCurrent = isBranchCurrent(branch.name, branch.isMain);
+                    return (
+                      <a
+                        key={branch.name}
+                        href={branch.url}
+                        className={`branch-link ${branch.isMain ? 'main-branch' : ''} ${isCurrent ? 'current' : ''}`}
+                        title={branch.name}
+                        aria-current={isCurrent ? 'page' : undefined}
+                      >
+                        <span className="branch-icon">
+                          {isCurrent ? '●' : '○'}
+                        </span>
+                        <span className="branch-name">
+                          {branch.displayName}
+                        </span>
+                        {isCurrent && (
+                          <span className="current-indicator">current</span>
+                        )}
+                      </a>
+                    );
+                  })
                 )}
               </div>
             </div>
