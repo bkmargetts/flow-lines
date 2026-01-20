@@ -773,13 +773,15 @@ body {
   white-space: nowrap;
 }
 
-.branch-link.current {
+.branch-link.current,
+.branch-link.current:hover {
   background: var(--accent-bg);
   color: var(--accent);
   font-weight: 500;
 }
 
-.branch-link.current .branch-icon {
+.branch-link.current .branch-icon,
+.branch-link.current:hover .branch-icon {
   color: var(--accent);
 }
 

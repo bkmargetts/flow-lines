@@ -40,7 +40,8 @@ function getBranchUrl(repoOwner: string, repoName: string, branchName: string): 
 function getCurrentBranch(): string {
   const params = new URLSearchParams(window.location.search);
   const branch = params.get('branch');
-  return branch || 'main';
+  // URLSearchParams already decodes, but be explicit
+  return branch ? decodeURIComponent(branch) : 'main';
 }
 
 export function Sidebar({ isOpen, onClose, repoOwner, repoName }: SidebarProps) {
