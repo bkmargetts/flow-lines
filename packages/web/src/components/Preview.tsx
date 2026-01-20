@@ -13,6 +13,10 @@ interface PreviewProps {
   attractors: Attractor[];
   showAttractors: boolean;
   onAddAttractor: (x: number, y: number) => void;
+  densityMode: boolean;
+  densityPoints: DensityPoint[];
+  showDensityPoints: boolean;
+  onAddDensityPoint: (x: number, y: number) => void;
 }
 
 export function Preview({
@@ -27,6 +31,10 @@ export function Preview({
   attractors,
   showAttractors,
   onAddAttractor,
+  densityMode,
+  densityPoints,
+  showDensityPoints,
+  onAddDensityPoint,
 }: PreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPainting, setIsPainting] = useState(false);
@@ -92,13 +100,19 @@ export function Preview({
         return;
       }
 
+      if (densityMode) {
+        const point = getCanvasPoint(e.clientX, e.clientY);
+        if (point) onAddDensityPoint(point.x, point.y);
+        return;
+      }
+
       if (paintMode) {
         setIsPainting(true);
         const point = getCanvasPoint(e.clientX, e.clientY);
         if (point) onPaint(point);
       }
     },
-    [paintMode, attractorMode, getCanvasPoint, onPaint, onAddAttractor]
+    [paintMode, attractorMode, densityMode, getCanvasPoint, onPaint, onAddAttractor, onAddDensityPoint]
   );
 
   const handlePointerMove = useCallback(
@@ -190,13 +204,13 @@ export function Preview({
     return () => window.removeEventListener('pointerup', handleGlobalPointerUp);
   }, []);
 
-  const isInteractive = paintMode || attractorMode;
+  const isInteractive = paintMode || attractorMode || densityMode;
 
   return (
     <div className="preview">
       <div
         ref={containerRef}
-        className={`canvas ${isInteractive ? 'interactive' : ''} ${paintMode ? 'paint' : ''} ${attractorMode ? 'attractor' : ''}`}
+        className={`canvas ${isInteractive ? 'interactive' : ''} ${paintMode ? 'paint' : ''} ${attractorMode ? 'attractor' : ''} ${densityMode ? 'density' : ''}`}
         style={{
           width: displayWidth,
           height: displayHeight,
@@ -242,6 +256,33 @@ export function Preview({
                 stroke={a.strength > 0 ? 'rgba(78, 205, 196, 0.6)' : 'rgba(255, 107, 107, 0.6)'}
                 strokeWidth={2}
               />
+            ))}
+          </svg>
+        )}
+
+        {/* Density points overlay */}
+        {showDensityPoints && densityPoints.length > 0 && (
+          <svg className="overlay" viewBox={`0 0 ${width} ${height}`}>
+            {densityPoints.map((dp, i) => (
+              <g key={i}>
+                {/* Outer radius circle */}
+                <circle
+                  cx={dp.x}
+                  cy={dp.y}
+                  r={dp.radius}
+                  fill="rgba(147, 112, 219, 0.15)"
+                  stroke="rgba(147, 112, 219, 0.4)"
+                  strokeWidth={2}
+                  strokeDasharray="4 2"
+                />
+                {/* Inner strength indicator */}
+                <circle
+                  cx={dp.x}
+                  cy={dp.y}
+                  r={dp.radius * dp.strength * 0.3}
+                  fill="rgba(147, 112, 219, 0.4)"
+                />
+              </g>
             ))}
           </svg>
         )}
