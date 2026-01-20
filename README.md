@@ -4,7 +4,8 @@ A generative art toolbox for creating beautiful SVG artwork for pen plotters.
 
 ## Features
 
-- **Flow Lines Generator**: Create beautiful flow field art based on Perlin/Simplex noise
+- **Multiple Techniques**: Modular architecture supporting different generative art techniques
+- **Flow Lines**: Create flow field art with multiple modes (swarm, form hatching, fill)
 - **CLI Tool**: Generate artwork from the command line
 - **Web App**: Interactive browser-based interface for designing artwork
 - **SVG Export**: All output is SVG, perfect for pen plotters
@@ -15,9 +16,11 @@ This is a monorepo using pnpm workspaces:
 
 ```
 packages/
-  core/     # Shared algorithms and SVG generation
-  cli/      # Command-line interface
-  web/      # React-based web application
+  core/                 # Shared utilities (noise, SVG export, flow field)
+  techniques/
+    flow-lines/         # Flow lines generative technique
+  cli/                  # Command-line interface
+  web/                  # React-based web application
 ```
 
 ## Getting Started
@@ -34,8 +37,22 @@ packages/
 pnpm install
 
 # Build all packages
-pnpm build
+npm run build
 ```
+
+### Running the Web App
+
+```bash
+# Start development server
+pnpm --filter @flow-lines/web dev
+
+# Build for production
+pnpm --filter @flow-lines/web build
+```
+
+The web app is available at `http://localhost:5173` and provides:
+- `/techniques` - List of available generative techniques
+- `/techniques/flow-lines` - Interactive flow lines generator
 
 ### Using the CLI
 
@@ -74,25 +91,44 @@ pnpm --filter @flow-lines/cli start grid \
 | `--stroke-width` | SVG stroke width | 1 |
 | `-o, --output` | Output file path | flow-lines.svg |
 
-### Running the Web App
+## Flow Lines Modes
 
-```bash
-# Start development server
-pnpm --filter @flow-lines/web dev
+The flow-lines technique includes several generation modes:
 
-# Build for production
-pnpm --filter @flow-lines/web build
-```
+- **Default**: Basic flow field line tracing from random or specified seed points
+- **Fill Mode**: Systematic space-filling with evenly-spaced parallel lines
+- **Swarm Mode**: Particle/agent-based generation with organic clustering behavior
+- **Form Hatching**: Contour-following lines that wrap around implied 3D forms
+
+## Adding New Techniques
+
+To add a new generative art technique:
+
+1. Create a new package under `packages/techniques/<technique-name>/`
+2. Add dependency on `@flow-lines/core` for shared utilities
+3. Add a route and page in the web app
+4. Add a card to the techniques list
+
+See `CLAUDE.md` for detailed architecture documentation.
 
 ## Development
 
 ```bash
 # Run tests
-pnpm test
+npm test
 
 # Run tests in watch mode
 pnpm --filter @flow-lines/core test:watch
+
+# Lint
+pnpm lint
 ```
+
+## Deployment
+
+The web app is configured for GitHub Pages deployment:
+- Uses HashRouter for client-side routing compatibility
+- Base path configured as `/flow-lines/`
 
 ## License
 
