@@ -1,7 +1,20 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { ImageField } from './image-field.js';
-import { GrayscaleImage } from './image.js';
+import { GrayscaleImage, sampleBilinear } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
+
+export interface FocusOptions {
+  /** Focal point x in output canvas coordinates */
+  x: number;
+  /** Focal point y in output canvas coordinates */
+  y: number;
+  /** Radius of full rendering detail around the focal point, px */
+  radius: number;
+  /** Distance over which detail fades out beyond the radius, px (default: radius) */
+  falloff?: number;
+  /** How strongly detail is suppressed outside the focus, 0-1 (default 0.85) */
+  strength?: number;
+}
 
 export interface PenInkOptions {
   /** Output width in px (default 800) */
@@ -49,6 +62,21 @@ export interface PenInkOptions {
 
   /** Hand-drawn wobble amplitude in px; 0 disables (default 0.8) */
   wobble?: number;
+
+  /**
+   * Emphasize detailed/textured regions: flat areas get sparser, lighter,
+   * looser strokes. 0 disables, 1 is maximum effect (default 0.3)
+   */
+  detailEmphasis?: number;
+  /** Concentrate rendering detail around a focal point */
+  focus?: FocusOptions;
+  /**
+   * Subject mask (bright = important), e.g. from an ML segmenter. Any
+   * resolution; it is stretched over the full canvas
+   */
+  subjectMask?: GrayscaleImage;
+  /** How strongly the mask suppresses the background, 0-1 (default 1) */
+  maskStrength?: number;
 }
 
 /** Angle offsets (degrees) for successive hatch layers */
@@ -68,6 +96,56 @@ interface PassConfig {
   margin: number;
   minLineLength: number;
   seedSpacing: number;
+}
+
+/**
+ * Build the importance sampler in [0, 1]: 1 = render with full detail,
+ * 0 = fade toward blank paper. Sources (auto detail, focal point, subject
+ * mask) compose multiplicatively — each can only demote a region.
+ */
+function buildImportance(
+  field: ImageField,
+  width: number,
+  height: number,
+  options: PenInkOptions
+): ((x: number, y: number) => number) | null {
+  const detailEmphasis = Math.max(0, Math.min(1, options.detailEmphasis ?? 0.3));
+  const focus = options.focus;
+  const mask = options.subjectMask;
+  const maskStrength = Math.max(0, Math.min(1, options.maskStrength ?? 1));
+
+  const useDetail = detailEmphasis > 0;
+  const useFocus = !!focus && (focus.strength ?? 0.85) > 0;
+  const useMask = !!mask && maskStrength > 0;
+
+  if (!useDetail && !useFocus && !useMask) return null;
+
+  const focusStrength = focus ? Math.max(0, Math.min(1, focus.strength ?? 0.85)) : 0;
+  const focusFalloff = focus ? Math.max(1, focus.falloff ?? focus.radius) : 1;
+  const maskScaleX = mask ? mask.width / width : 0;
+  const maskScaleY = mask ? mask.height / height : 0;
+
+  return (x: number, y: number): number => {
+    let importance = 1;
+
+    if (useDetail) {
+      importance *= 1 - detailEmphasis * (1 - field.getDetail(x, y));
+    }
+
+    if (useFocus && focus) {
+      const dist = Math.hypot(x - focus.x, y - focus.y);
+      const t = Math.max(0, Math.min(1, (dist - focus.radius) / focusFalloff));
+      const fade = t * t * (3 - 2 * t); // smoothstep
+      importance *= 1 - focusStrength * fade;
+    }
+
+    if (useMask && mask) {
+      const m = sampleBilinear(mask, x * maskScaleX, y * maskScaleY);
+      importance *= 1 - maskStrength * (1 - m);
+    }
+
+    return importance;
+  };
 }
 
 /**
@@ -112,6 +190,14 @@ export function imageToPenInk(
     normalizeContrast: options.normalizeContrast,
   });
 
+  const importance = buildImportance(field, width, height, options);
+
+  // Where importance drops, tone is lightened toward paper, the white
+  // cutoff rises, and stroke spacing opens up — backgrounds dissolve into
+  // a few loose gestures instead of competing with the subject.
+  const effectiveDarkness = (x: number, y: number, imp: number): number =>
+    field.getDarkness(x, y) * (0.25 + 0.75 * imp);
+
   const lines: FlowLine[] = [];
 
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
@@ -121,16 +207,31 @@ export function imageToPenInk(
     const angleOffset = (LAYER_ANGLES[layer] * Math.PI) / 180;
 
     const spacingAt = (x: number, y: number): number => {
-      const d = field.getDarkness(x, y);
+      let d = field.getDarkness(x, y);
+      let spacingScale = 1;
+
+      if (importance) {
+        const imp = importance(x, y);
+        d = effectiveDarkness(x, y, imp);
+        spacingScale = 1 + (1 - imp) * 0.6;
+      }
+
       const u = Math.min(1, Math.max(0, (d - whiteCutoff) / (1 - whiteCutoff)));
       const t = Math.pow(u, toneGamma);
-      return maxSpacing + (minSpacing - maxSpacing) * t;
+      return (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
     };
+
+    const isDrawable = importance
+      ? (x: number, y: number): boolean => {
+          const imp = importance(x, y);
+          return effectiveDarkness(x, y, imp) >= threshold + (1 - imp) * 0.25;
+        }
+      : (x: number, y: number): boolean => field.getDarkness(x, y) >= threshold;
 
     lines.push(
       ...tracePass(field, seed + layer * 7919, {
         angleOffset,
-        isDrawable: (x, y) => field.getDarkness(x, y) >= threshold,
+        isDrawable,
         spacingAt,
         stepLength,
         maxSteps,
@@ -144,10 +245,16 @@ export function imageToPenInk(
   // Outline pass: follow strong edges with tight, fixed spacing
   if (drawOutlines) {
     const outlineSpacing = Math.max(1.2, minSpacing * 0.8);
+
+    const isDrawable = importance
+      ? (x: number, y: number): boolean =>
+          field.getEdgeStrength(x, y) >= outlineThreshold + (1 - importance(x, y)) * 0.5
+      : (x: number, y: number): boolean => field.getEdgeStrength(x, y) >= outlineThreshold;
+
     lines.push(
       ...tracePass(field, seed + 104729, {
         angleOffset: 0,
-        isDrawable: (x, y) => field.getEdgeStrength(x, y) >= outlineThreshold,
+        isDrawable,
         spacingAt: () => outlineSpacing,
         stepLength: Math.min(stepLength, 1.5),
         maxSteps,
@@ -161,7 +268,14 @@ export function imageToPenInk(
   let result: FlowLinesResult = { lines, width, height, seed };
 
   if (wobble > 0) {
-    result = applyHandDrawnStyle(result, { amplitude: wobble, seed });
+    result = applyHandDrawnStyle(result, {
+      amplitude: wobble,
+      seed,
+      // Background strokes get visibly shakier than the subject
+      amplitudeScale: importance
+        ? (x, y) => 1 + (1 - importance(x, y)) * 0.9
+        : undefined,
+    });
   }
 
   return result;

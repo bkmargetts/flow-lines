@@ -1,5 +1,6 @@
 import { useRef } from 'react';
-import type { InkSettings } from '../App';
+import type { GrayscaleImage, Point } from '@flow-lines/core';
+import type { InkSettings, SegmentStatus } from '../App';
 
 interface ImageControlsProps {
   settings: InkSettings;
@@ -8,6 +9,14 @@ interface ImageControlsProps {
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
+  focusPoint: Point | null;
+  focusSelectMode: boolean;
+  toggleFocusSelect: () => void;
+  clearFocus: () => void;
+  subjectMask: GrayscaleImage | null;
+  segmentStatus: SegmentStatus;
+  isolateSubject: () => void;
+  clearSubjectMask: () => void;
 }
 
 export function ImageControls({
@@ -17,6 +26,14 @@ export function ImageControls({
   onImageFile,
   randomizeSeed,
   downloadSVG,
+  focusPoint,
+  focusSelectMode,
+  toggleFocusSelect,
+  clearFocus,
+  subjectMask,
+  segmentStatus,
+  isolateSubject,
+  clearSubjectMask,
 }: ImageControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,6 +98,120 @@ export function ImageControls({
           onChange={(e) => updateSettings({ margin: parseInt(e.target.value, 10) })}
         />
       </div>
+
+      <h3 className="section-title">Subject Focus</h3>
+
+      <div className="control-group">
+        <label>
+          Detail Emphasis <span>{settings.detailEmphasis.toFixed(2)}</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={settings.detailEmphasis}
+          onChange={(e) => updateSettings({ detailEmphasis: parseFloat(e.target.value) })}
+        />
+        <p className="paint-hint">
+          Detailed areas keep tight hatching; flat areas fade toward paper.
+        </p>
+      </div>
+
+      <div className="control-group">
+        <div className="paint-controls">
+          <button
+            type="button"
+            className={focusSelectMode ? 'secondary active' : 'secondary'}
+            onClick={toggleFocusSelect}
+            disabled={!imageName}
+          >
+            {focusSelectMode ? 'Click the subject…' : focusPoint ? 'Move Focus' : 'Set Focus Point'}
+          </button>
+          {focusPoint && (
+            <button type="button" className="secondary" onClick={clearFocus}>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {focusPoint && (
+        <>
+          <div className="control-group">
+            <label>
+              Focus Radius <span>{settings.focusRadiusPct}%</span>
+            </label>
+            <input
+              type="range"
+              min="5"
+              max="60"
+              step="1"
+              value={settings.focusRadiusPct}
+              onChange={(e) => updateSettings({ focusRadiusPct: parseInt(e.target.value, 10) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Focus Strength <span>{settings.focusStrength.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={settings.focusStrength}
+              onChange={(e) => updateSettings({ focusStrength: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <div className="paint-controls">
+              <button
+                type="button"
+                className="secondary"
+                onClick={isolateSubject}
+                disabled={segmentStatus === 'loading'}
+              >
+                {segmentStatus === 'loading'
+                  ? 'Isolating…'
+                  : subjectMask
+                    ? 'Re-isolate Subject (AI)'
+                    : 'Isolate Subject (AI)'}
+              </button>
+              {subjectMask && (
+                <button type="button" className="secondary" onClick={clearSubjectMask}>
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="paint-hint">
+              {segmentStatus === 'error'
+                ? 'Subject isolation failed — check your connection and try again.'
+                : subjectMask
+                  ? 'Subject isolated. Background is suppressed by the mask.'
+                  : 'Runs in your browser; downloads a ~6MB model on first use. Segments the object at the focus point.'}
+            </p>
+          </div>
+
+          {subjectMask && (
+            <div className="control-group">
+              <label>
+                Mask Strength <span>{settings.maskStrength.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={settings.maskStrength}
+                onChange={(e) => updateSettings({ maskStrength: parseFloat(e.target.value) })}
+              />
+            </div>
+          )}
+        </>
+      )}
 
       <h3 className="section-title">Hatching</h3>
 

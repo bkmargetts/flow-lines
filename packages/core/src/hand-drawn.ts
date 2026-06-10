@@ -10,6 +10,11 @@ export interface HandDrawnOptions {
   jitter?: number;
   /** Random seed for reproducibility */
   seed?: number;
+  /**
+   * Optional per-location multiplier on the wobble amplitude, sampled at
+   * each stroke's midpoint (e.g. to loosen background strokes)
+   */
+  amplitudeScale?: (x: number, y: number) => number;
 }
 
 /**
@@ -41,8 +46,14 @@ export function applyHandDrawnStyle(
     // Per-line noise track, offset so strokes are decorrelated
     const track = lineIndex * 0.731 + 0.5;
 
+    const midpoint = line.points[Math.floor(line.points.length / 2)];
+    const localScale = options.amplitudeScale
+      ? options.amplitudeScale(midpoint.x, midpoint.y)
+      : 1;
+
     // Vary how shaky this particular stroke is
-    const lineAmplitude = amplitude * (0.7 + 0.6 * (noise.noise2D(track, -7.3) * 0.5 + 0.5));
+    const lineAmplitude =
+      amplitude * localScale * (0.7 + 0.6 * (noise.noise2D(track, -7.3) * 0.5 + 0.5));
 
     const offsetX = jitter * noise.noise2D(track, 11.7);
     const offsetY = jitter * noise.noise2D(track, 23.1);

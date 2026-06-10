@@ -76,6 +76,12 @@ PNG or JPEG into plotter-ready strokes that mimic a pen-and-ink drawing:
 - Strong edges are traced as outlines
 - A subtle per-stroke wobble and misregistration makes the result feel
   hand-drawn rather than machine-perfect
+- Subject isolation focuses ink where it matters: detailed regions keep
+  tight hatching while flat backgrounds fade (`--detail`), rendering can
+  fall off around a focal point (`--focus`), and a subject mask
+  (`--mask`, or one-click AI isolation in the web app) suppresses the
+  background entirely — backgrounds dissolve into loose gestures the way
+  an artist would treat them
 
 Key options:
 
@@ -91,6 +97,12 @@ Key options:
 | `--no-follow-tone` | Hatch at fixed angles instead of following contours | off |
 | `--no-outlines` | Skip the edge outline pass | off |
 | `--wobble` | Hand-drawn wobble amplitude in px (0 = ruler-straight) | 0.8 |
+| `--detail` | Emphasize detailed regions; flat areas fade (0-1) | 0.3 |
+| `--focus` | Focal point `x,y` in output coordinates | none |
+| `--focus-radius` | Radius of full detail around the focal point (px) | 25% of output |
+| `--focus-strength` | How strongly detail fades outside the focus (0-1) | 0.85 |
+| `--mask` | Subject mask image (bright = subject) | none |
+| `--mask-strength` | How strongly the mask suppresses the background (0-1) | 1 |
 | `-s, --seed` | Random seed for reproducibility | random |
 
 ### CLI Options

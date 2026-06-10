@@ -1,6 +1,12 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import type { Point } from '@flow-lines/core';
 
+interface FocusMarker {
+  x: number;
+  y: number;
+  radius: number;
+}
+
 interface PreviewProps {
   svgContent: string;
   width: number;
@@ -9,6 +15,9 @@ interface PreviewProps {
   paintedPoints: Point[];
   showDots: boolean;
   onPaint: (point: Point) => void;
+  focusSelectMode?: boolean;
+  focusMarker?: FocusMarker | null;
+  onSetFocus?: (point: Point) => void;
 }
 
 export function Preview({
@@ -19,6 +28,9 @@ export function Preview({
   paintedPoints,
   showDots,
   onPaint,
+  focusSelectMode = false,
+  focusMarker = null,
+  onSetFocus,
 }: PreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPainting, setIsPainting] = useState(false);
@@ -50,6 +62,15 @@ export function Preview({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (focusSelectMode && onSetFocus) {
+        e.preventDefault();
+        const point = getCanvasPoint(e.clientX, e.clientY);
+        if (point) {
+          onSetFocus(point);
+        }
+        return;
+      }
+
       if (!paintMode) return;
 
       e.preventDefault();
@@ -60,7 +81,7 @@ export function Preview({
         onPaint(point);
       }
     },
-    [paintMode, getCanvasPoint, onPaint]
+    [paintMode, focusSelectMode, getCanvasPoint, onPaint, onSetFocus]
   );
 
   const handlePointerMove = useCallback(
@@ -114,6 +135,32 @@ export function Preview({
     </svg>
   ) : null;
 
+  const focusOverlay = focusMarker ? (
+    <svg
+      className="focus-overlay"
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: displayWidth,
+        height: displayHeight,
+        pointerEvents: 'none',
+      }}
+    >
+      <circle
+        cx={focusMarker.x}
+        cy={focusMarker.y}
+        r={focusMarker.radius}
+        fill="none"
+        stroke="rgba(233, 69, 96, 0.5)"
+        strokeWidth={1.5}
+        strokeDasharray="6 4"
+      />
+      <circle cx={focusMarker.x} cy={focusMarker.y} r={4} fill="rgba(233, 69, 96, 0.8)" />
+    </svg>
+  ) : null;
+
   return (
     <div
       ref={containerRef}
@@ -122,8 +169,8 @@ export function Preview({
         width: displayWidth,
         height: displayHeight,
         position: 'relative',
-        cursor: paintMode ? 'crosshair' : 'default',
-        touchAction: paintMode ? 'none' : 'auto',
+        cursor: paintMode || focusSelectMode ? 'crosshair' : 'default',
+        touchAction: paintMode || focusSelectMode ? 'none' : 'auto',
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -132,6 +179,7 @@ export function Preview({
     >
       <div dangerouslySetInnerHTML={{ __html: svgContent }} />
       {paintDotsOverlay}
+      {focusOverlay}
     </div>
   );
 }

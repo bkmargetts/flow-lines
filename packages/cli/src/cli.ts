@@ -181,6 +181,12 @@ program
   .option('--no-outlines', 'Skip the edge outline pass')
   .option('--outline-threshold <number>', 'Edge strength needed for outlines (0-1)', '0.35')
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
+  .option('--detail <number>', 'Emphasize detailed regions; flat areas fade (0-1)', '0.3')
+  .option('--focus <x,y>', 'Focal point in output coordinates; detail falls off around it')
+  .option('--focus-radius <number>', 'Radius of full detail around the focal point (px; default 25% of output)')
+  .option('--focus-strength <number>', 'How strongly detail fades outside the focus (0-1)', '0.85')
+  .option('--mask <file>', 'Subject mask image (bright = subject), e.g. from an ML segmenter')
+  .option('--mask-strength <number>', 'How strongly the mask suppresses the background (0-1)', '1')
   .option('--working-size <number>', 'Internal analysis resolution', '600')
   .option('--stroke-color <color>', 'SVG stroke color', '#000000')
   .option('--stroke-width <number>', 'SVG stroke width', '1')
@@ -194,9 +200,34 @@ program
     const image = loadImage(inputPath);
     console.log(`  Image size: ${image.width}x${image.height}`);
 
+    const outputWidth = parseInt(options.width, 10);
+    const outputHeight = options.height
+      ? parseInt(options.height, 10)
+      : Math.max(1, Math.round((outputWidth * image.height) / image.width));
+
+    let focus: PenInkOptions['focus'];
+    if (options.focus) {
+      const [fx, fy] = String(options.focus).split(',').map((v: string) => parseFloat(v));
+      if (!Number.isFinite(fx) || !Number.isFinite(fy)) {
+        throw new Error(`Invalid --focus "${options.focus}", expected "x,y"`);
+      }
+      focus = {
+        x: fx,
+        y: fy,
+        radius: options.focusRadius
+          ? parseFloat(options.focusRadius)
+          : Math.min(outputWidth, outputHeight) * 0.25,
+        strength: parseFloat(options.focusStrength),
+      };
+    }
+
     const penInkOptions: PenInkOptions = {
-      width: parseInt(options.width, 10),
+      width: outputWidth,
       height: options.height ? parseInt(options.height, 10) : undefined,
+      detailEmphasis: parseFloat(options.detail),
+      focus,
+      subjectMask: options.mask ? loadImage(resolve(process.cwd(), options.mask)) : undefined,
+      maskStrength: parseFloat(options.maskStrength),
       seed: options.seed ? parseInt(options.seed, 10) : undefined,
       margin: parseInt(options.margin, 10),
       layers: parseInt(options.layers, 10),

@@ -127,6 +127,103 @@ describe('imageToPenInk', () => {
   });
 });
 
+describe('subject isolation', () => {
+  // Uniform mid-dark image: no intrinsic detail anywhere
+  const flatDark = makeImage(100, 100, () => 0.4);
+
+  const pointsIn = (
+    lines: { points: { x: number; y: number }[] }[],
+    cx: number,
+    cy: number,
+    r: number
+  ) =>
+    lines.reduce(
+      (sum, line) =>
+        sum + line.points.filter((p) => Math.hypot(p.x - cx, p.y - cy) < r).length,
+      0
+    );
+
+  it('concentrates strokes around a focal point', () => {
+    const result = imageToPenInk(flatDark, {
+      width: 240,
+      seed: 21,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      focus: { x: 70, y: 120, radius: 30, strength: 1 },
+    });
+
+    const nearFocus = pointsIn(result.lines, 70, 120, 35);
+    const farAway = pointsIn(result.lines, 180, 120, 35);
+
+    expect(nearFocus).toBeGreaterThan(100);
+    expect(farAway).toBeLessThan(nearFocus * 0.1);
+  });
+
+  it('suppresses regions outside a subject mask', () => {
+    // Mask: left half subject, right half background
+    const mask = makeImage(80, 80, (u) => (u < 0.5 ? 1 : 0));
+
+    const result = imageToPenInk(flatDark, {
+      width: 240,
+      seed: 22,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      subjectMask: mask,
+      maskStrength: 1,
+    });
+
+    const leftPoints = pointsIn(result.lines, 60, 120, 50);
+    const rightPoints = pointsIn(result.lines, 180, 120, 50);
+
+    expect(leftPoints).toBeGreaterThan(100);
+    expect(rightPoints).toBeLessThan(leftPoints * 0.1);
+  });
+
+  it('emphasizes textured regions over flat ones', () => {
+    // Left half: strong vertical stripes; right half: flat at the same mean tone
+    const striped = makeImage(160, 160, (u) =>
+      u < 0.5 ? 0.5 + 0.25 * Math.sin(u * Math.PI * 60) : 0.5
+    );
+
+    const result = imageToPenInk(striped, {
+      width: 240,
+      seed: 23,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 1,
+      normalizeContrast: false,
+    });
+
+    const texturedPoints = pointsIn(result.lines, 60, 120, 50);
+    const flatPoints = pointsIn(result.lines, 180, 120, 50);
+
+    expect(texturedPoints).toBeGreaterThan(50);
+    expect(flatPoints).toBeLessThan(texturedPoints * 0.25);
+  });
+
+  it('keeps full rendering when isolation features are disabled', () => {
+    const withDefaults = imageToPenInk(flatDark, {
+      width: 200,
+      seed: 24,
+      wobble: 0,
+      detailEmphasis: 0,
+    });
+    const explicit = imageToPenInk(flatDark, {
+      width: 200,
+      seed: 24,
+      wobble: 0,
+      detailEmphasis: 0,
+      maskStrength: 0,
+    });
+
+    expect(withDefaults.lines).toEqual(explicit.lines);
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

@@ -44,6 +44,7 @@ export class ImageField {
   private orientCos: GrayscaleImage;
   private orientSin: GrayscaleImage;
   private edge: GrayscaleImage;
+  private detail: GrayscaleImage;
   private scaleX: number;
   private scaleY: number;
 
@@ -169,6 +170,24 @@ export class ImageField {
     }
 
     this.edge = { width, height, data: edgeData };
+
+    // Detail map: gradient energy pooled over a neighbourhood, so textured
+    // and structured regions score high while flat areas score near zero
+    const energy: GrayscaleImage = { width, height, data: new Float32Array(width * height) };
+    for (let i = 0; i < width * height; i++) {
+      energy.data[i] = Math.sqrt(gx[i] * gx[i] + gy[i] * gy[i]);
+    }
+
+    const pooled = gaussianBlur(energy, Math.max(3, Math.max(width, height) / 50));
+    const pooledSorted = Float32Array.from(pooled.data).sort();
+    const detailRef = Math.max(pooledSorted[Math.floor(pooledSorted.length * 0.9)], 1e-6);
+
+    const detailData = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      detailData[i] = Math.min(1, pooled.data[i] / detailRef);
+    }
+
+    this.detail = { width, height, data: detailData };
   }
 
   /** Darkness in [0, 1] at canvas coordinates (1 = black) */
@@ -186,6 +205,11 @@ export class ImageField {
   /** Edge strength in [0, 1] at canvas coordinates */
   getEdgeStrength(x: number, y: number): number {
     return sampleBilinear(this.edge, x * this.scaleX, y * this.scaleY);
+  }
+
+  /** Local detail/texture density in [0, 1] at canvas coordinates */
+  getDetail(x: number, y: number): number {
+    return sampleBilinear(this.detail, x * this.scaleX, y * this.scaleY);
   }
 
   isInBounds(x: number, y: number, margin: number = 0): boolean {

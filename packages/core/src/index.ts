@@ -30,7 +30,7 @@ export type { ImageFieldOptions } from './image-field.js';
 
 // Image to pen-and-ink rendering
 export { imageToPenInk } from './pen-ink.js';
-export type { PenInkOptions } from './pen-ink.js';
+export type { PenInkOptions, FocusOptions } from './pen-ink.js';
 
 // Hand-drawn styling
 export { applyHandDrawnStyle } from './hand-drawn.js';
