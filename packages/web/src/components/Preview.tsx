@@ -62,15 +62,6 @@ export function Preview({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (focusSelectMode && onSetFocus) {
-        e.preventDefault();
-        const point = getCanvasPoint(e.clientX, e.clientY);
-        if (point) {
-          onSetFocus(point);
-        }
-        return;
-      }
-
       if (!paintMode) return;
 
       e.preventDefault();
@@ -81,7 +72,22 @@ export function Preview({
         onPaint(point);
       }
     },
-    [paintMode, focusSelectMode, getCanvasPoint, onPaint, onSetFocus]
+    [paintMode, getCanvasPoint, onPaint]
+  );
+
+  // Focus uses click, not pointerdown: browsers don't fire click after a
+  // scroll/pan gesture, so touch scrolling over the preview keeps working
+  // and only deliberate taps place focus points
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!focusSelectMode || !onSetFocus) return;
+
+      const point = getCanvasPoint(e.clientX, e.clientY);
+      if (point) {
+        onSetFocus(point);
+      }
+    },
+    [focusSelectMode, getCanvasPoint, onSetFocus]
   );
 
   const handlePointerMove = useCallback(
@@ -174,12 +180,13 @@ export function Preview({
         height: displayHeight,
         position: 'relative',
         cursor: paintMode || focusSelectMode ? 'crosshair' : 'default',
-        touchAction: paintMode || focusSelectMode ? 'none' : 'auto',
+        touchAction: paintMode ? 'none' : 'auto',
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onClick={handleClick}
     >
       <div dangerouslySetInnerHTML={{ __html: svgContent }} />
       {paintDotsOverlay}
