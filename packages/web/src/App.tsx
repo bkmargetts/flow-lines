@@ -64,6 +64,7 @@ export interface InkSettings {
   fieldSmoothing: number;
   formStrength: number;
   depthIsolation: number;
+  autoStyle: boolean;
 }
 
 export type SegmentStatus = 'idle' | 'loading' | 'error';
@@ -123,6 +124,7 @@ const defaultInkSettings: InkSettings = {
   fieldSmoothing: 4,
   formStrength: 0.8,
   depthIsolation: 0.5,
+  autoStyle: true,
 };
 
 /**
@@ -401,6 +403,7 @@ export function App() {
         depthMap: depthMap ?? undefined,
         formStrength: inkSettings.formStrength,
         depthIsolation: inkSettings.depthIsolation,
+        autoStyle: inkSettings.autoStyle,
         detailEmphasis: inkSettings.detailEmphasis,
         toneGamma: inkSettings.toneGamma,
         workingSize: inkSettings.workingSize,

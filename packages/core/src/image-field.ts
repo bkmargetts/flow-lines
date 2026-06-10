@@ -58,6 +58,7 @@ export class ImageField {
   private scaleY: number;
   private depth: GrayscaleImage | null = null;
   private depthEdge: GrayscaleImage | null = null;
+  private formConfidence: GrayscaleImage | null = null;
 
   constructor(image: GrayscaleImage, options: ImageFieldOptions) {
     this.width = options.width;
@@ -270,12 +271,17 @@ export class ImageField {
     }
     meanEnergy = Math.max(meanEnergy / (width * height), 1e-12);
 
-    // Blend depth-derived orientation over the luminance-derived field
+    // Blend depth-derived orientation over the luminance-derived field,
+    // keeping the raw confidence around for per-stroke style dispatch
+    const confidence = new Float32Array(width * height);
     for (let i = 0; i < width * height; i++) {
-      const w = formStrength * (energy[i] / (energy[i] + 0.1 * meanEnergy));
+      const conf = energy[i] / (energy[i] + 0.1 * meanEnergy);
+      confidence[i] = conf;
+      const w = formStrength * conf;
       this.orientCos.data[i] = w * tanCos[i] + (1 - w) * this.orientCos.data[i];
       this.orientSin.data[i] = w * tanSin[i] + (1 - w) * this.orientSin.data[i];
     }
+    this.formConfidence = { width, height, data: confidence };
 
     // Depth discontinuities: normalize gradient magnitude by a high
     // percentile, then fold into the edge map so contours trace silhouettes
@@ -310,6 +316,15 @@ export class ImageField {
   getDepthEdge(x: number, y: number): number {
     if (!this.depthEdge) return 0;
     return sampleBilinear(this.depthEdge, x * this.scaleX, y * this.scaleY);
+  }
+
+  /**
+   * How confidently the depth map describes a curved 3D form here,
+   * in [0, 1]; 0 without a depth map or on depth-flat regions
+   */
+  getFormConfidence(x: number, y: number): number {
+    if (!this.formConfidence) return 0;
+    return sampleBilinear(this.formConfidence, x * this.scaleX, y * this.scaleY);
   }
 
   /**

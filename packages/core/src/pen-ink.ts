@@ -159,6 +159,14 @@ export interface PenInkOptions {
    * the way an artist does — no thick pen required (default 2)
    */
   outlinePasses?: number;
+
+  /**
+   * Choose mark-making per region automatically the way an illustrator
+   * does: short cross-contour marks wrap curved 3D forms (needs a depth
+   * map), directional ticks render texture, and everything else gets
+   * flowing hatch lines (default false)
+   */
+  autoStyle?: boolean;
 }
 
 /** Angle offsets (degrees) for successive hatch layers */
@@ -178,18 +186,11 @@ interface PassConfig {
   margin: number;
   minLineLength: number;
   seedSpacing: number;
-  /**
-   * Local texture amount in [0, 1]; textured strokes become short
-   * directional ticks with angle jitter, like fur or fabric marks
-   */
-  textureAt?: (x: number, y: number) => number;
-  /** Target tick length in textured areas, px */
-  tickLength?: number;
-  /** Global cap on stroke arc length for this pass, px */
-  maxArcLength?: number;
+  /** Resolve per-stroke style (direction, length budget) at the seed */
+  paramsFor: (x: number, y: number, random: () => number) => StrokeParams;
 }
 
-/** Per-stroke parameters resolved at the seed (texture shortens strokes) */
+/** Per-stroke parameters resolved at the seed */
 interface StrokeParams {
   angleOffset: number;
   maxArcLength: number;
@@ -318,6 +319,7 @@ export function imageToPenInk(
   const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
   const crossContour = options.crossContour ?? false;
   const maxStrokeLength = options.maxStrokeLength ?? 0;
+  const autoStyle = options.autoStyle ?? false;
 
   const wobble = options.wobble ?? 0.8;
 
@@ -403,14 +405,53 @@ export function imageToPenInk(
 
     // Busy regions (fur, foliage, fabric) read as texture, not form —
     // render them with short directional ticks instead of long streamlines
-    const textureAt =
+    const textureAmount =
       textureStrokes > 0
         ? (x: number, y: number): number => {
             const d = field.getDetail(x, y);
             const t = Math.min(1, Math.max(0, (d - 0.25) / 0.45));
             return t * t * (3 - 2 * t) * textureStrokes;
           }
-        : undefined;
+        : null;
+
+    const longest = maxSteps * stepLength;
+    const crossCap = maxSpacing * 3.5;
+    const layerAngle = angleOffset;
+
+    // Per-stroke style dispatch, resolved at each seed:
+    //   ticks for texture, capped cross-contour marks wrapping curved 3D
+    //   forms (autoStyle + depth), flowing hatch lines everywhere else
+    const paramsFor = (x: number, y: number, random: () => number): StrokeParams => {
+      const texture = textureAmount ? textureAmount(x, y) : 0;
+      let cap = maxStrokeLength > 0 ? maxStrokeLength * (0.8 + 0.4 * random()) : Infinity;
+      let rotate = 0;
+
+      if (
+        autoStyle &&
+        !crossContour &&
+        texture < 0.45 &&
+        field.getFormConfidence(x, y) > 0.5
+      ) {
+        rotate = Math.PI / 2;
+        cap = Math.min(cap, crossCap * (0.8 + 0.4 * random()));
+      }
+
+      if (texture > 0.01) {
+        const tick = maxSpacing * 0.9 * (0.7 + 0.6 * random());
+        return {
+          angleOffset:
+            layerAngle * (1 - 0.8 * texture) + (random() - 0.5) * 0.5 * texture + rotate,
+          // Geometric interpolation: stroke length spans orders of
+          // magnitude, so a linear blend barely shortens anything
+          maxArcLength: Math.min(
+            cap,
+            Math.exp(Math.log(longest) + (Math.log(tick) - Math.log(longest)) * texture)
+          ),
+        };
+      }
+
+      return { angleOffset: layerAngle + rotate, maxArcLength: cap };
+    };
 
     lines.push(
       ...tracePass(field, seed + layer * 7919, {
@@ -422,9 +463,7 @@ export function imageToPenInk(
         margin,
         minLineLength,
         seedSpacing: Math.max(minSpacing * 2, maxSpacing / 2),
-        textureAt,
-        tickLength: maxSpacing * 0.9,
-        maxArcLength: maxStrokeLength > 0 ? maxStrokeLength : undefined,
+        paramsFor,
       })
     );
   }
@@ -593,32 +632,7 @@ function tracePass(field: ImageField, seed: number, pass: PassConfig): FlowLine[
       candidate = scanCandidates[scanIndex++];
     }
 
-    // In textured regions strokes become short ticks: random length around
-    // tickLength, angle jittered, and cross-hatch offsets collapse toward
-    // the local orientation (fur is layered in one direction, not crossed)
-    const texture = pass.textureAt ? pass.textureAt(candidate.x, candidate.y) : 0;
-    // Pass-level cap (with per-stroke variation, so cut ends don't align)
-    const passCap = pass.maxArcLength
-      ? pass.maxArcLength * (0.8 + 0.4 * random())
-      : Infinity;
-
-    let params: StrokeParams;
-    if (texture > 0.01) {
-      const tick = (pass.tickLength ?? 12) * (0.7 + 0.6 * random());
-      const longest = pass.maxSteps * pass.stepLength;
-      params = {
-        angleOffset:
-          pass.angleOffset * (1 - 0.8 * texture) + (random() - 0.5) * 0.5 * texture,
-        // Geometric interpolation: stroke length spans orders of magnitude,
-        // so a linear blend would barely shorten anything until texture ≈ 1
-        maxArcLength: Math.min(
-          passCap,
-          Math.exp(Math.log(longest) + (Math.log(tick) - Math.log(longest)) * texture)
-        ),
-      };
-    } else {
-      params = { angleOffset: pass.angleOffset, maxArcLength: passCap };
-    }
+    const params = pass.paramsFor(candidate.x, candidate.y, random);
 
     const line = traceStreamline(field, grid, candidate, pass, params);
     if (!line) continue;
