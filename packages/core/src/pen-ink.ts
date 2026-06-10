@@ -360,8 +360,9 @@ export function imageToPenInk(
       height,
       Math.min(stepLength, 2)
     );
+    // Fine pen: feature lines are accents, not cartoon outlines
     for (const points of featureLines) {
-      lines.push({ points, pen: 'bold' });
+      lines.push({ points });
     }
   }
 
