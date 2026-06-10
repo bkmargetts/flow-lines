@@ -324,6 +324,50 @@ describe('portrait rendering', () => {
     }
   });
 
+  it('suppresses soft interior contours inside faces, keeps strong ones as fine', () => {
+    // Strong edge on the right (outside the face) sets the edge scale;
+    // a soft edge sits inside the face oval on the left
+    const image = makeImage(160, 160, (u) => {
+      if (u > 0.75) return 0.05; // strong dark band, right
+      if (u > 0.2 && u < 0.22) return 0.32; // moderate edge inside face
+      return 0.55;
+    });
+
+    const faceOval = [
+      { x: 0.02, y: 0.02 },
+      { x: 0.6, y: 0.02 },
+      { x: 0.6, y: 0.98 },
+      { x: 0.02, y: 0.98 },
+    ];
+
+    const base = {
+      width: 320,
+      seed: 71,
+      wobble: 0,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      layers: 1,
+      whiteCutoff: 0.95, // suppress hatching so only contours remain
+    };
+
+    const plain = imageToPenInk(image, base);
+    const portrait = imageToPenInk(image, {
+      ...base,
+      portrait: { faceOvals: [faceOval], skinLightening: 0 },
+    });
+
+    const leftContours = (lines: typeof plain.lines) =>
+      lines.filter((l) => l.points.length > 0 && l.points[0].x < 0.6 * 320);
+
+    // Without a face, the soft interior edge is drawn bold
+    expect(leftContours(plain.lines).some((l) => l.pen === 'bold')).toBe(true);
+    // With a face over it, the soft interior contour disappears
+    expect(leftContours(portrait.lines).filter((l) => l.pen === 'bold').length).toBe(0);
+    // The strong band edge outside the face survives in both
+    expect(plain.lines.some((l) => l.points[0]?.x > 0.6 * 320)).toBe(true);
+    expect(portrait.lines.some((l) => l.points[0]?.x > 0.6 * 320)).toBe(true);
+  });
+
   it('keeps feature regions detailed even when a mask suppresses them', () => {
     const dark = makeImage(80, 80, () => 0.2);
     // Mask marks everything as background

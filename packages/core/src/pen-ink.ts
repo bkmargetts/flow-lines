@@ -346,8 +346,60 @@ export function imageToPenInk(
       importance,
     });
 
+    // Inside detected faces, interior edges (nose shadows, smile creases,
+    // jaw shadows) must not become hard lines — artists leave face
+    // interiors to tone. Only clearly strong edges survive there, demoted
+    // to the fine pen; the face silhouette stays bold.
+    const insideFace =
+      portraitMaps && (portraitMaps.skin || portraitMaps.feature)
+        ? (x: number, y: number): boolean => {
+            const s = portraitMaps.skin ? portraitMaps.skin(x, y) : 0;
+            const f = portraitMaps.feature ? portraitMaps.feature(x, y) : 0;
+            return Math.max(s, f) > 0.6;
+          }
+        : null;
+
     for (const points of contours) {
-      lines.push({ points, pen: 'bold' });
+      if (!insideFace) {
+        lines.push({ points, pen: 'bold' });
+        continue;
+      }
+
+      let run: Point[] = [];
+      let runPen: 'fine' | 'bold' | null = null;
+
+      const flush = (): void => {
+        if (run.length >= 2 && runPen) {
+          let length = 0;
+          for (let i = 1; i < run.length; i++) {
+            length += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
+          }
+          if (length >= 8) {
+            lines.push({ points: run, pen: runPen });
+          }
+        }
+        run = [];
+      };
+
+      for (const p of points) {
+        let pen: 'fine' | 'bold' | null;
+        if (!insideFace(p.x, p.y)) {
+          pen = 'bold';
+        } else if (field.getEdgeStrength(p.x, p.y) >= outlineThreshold + 0.2) {
+          pen = 'fine';
+        } else {
+          pen = null;
+        }
+
+        if (pen !== runPen) {
+          flush();
+          runPen = pen;
+        }
+        if (pen) {
+          run.push(p);
+        }
+      }
+      flush();
     }
   }
 
