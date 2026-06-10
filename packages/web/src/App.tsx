@@ -11,7 +11,7 @@ import {
   type Point,
 } from '@flow-lines/core';
 import { Controls } from './components/Controls';
-import { ImageControls } from './components/ImageControls';
+import { ImageControls, PRESETS } from './components/ImageControls';
 import { Preview } from './components/Preview';
 
 export type Mode = 'flow' | 'image';
@@ -58,6 +58,10 @@ export interface InkSettings {
   workingSize: number;
   skinLightening: number;
   featureLines: boolean;
+  textureStrokes: number;
+  crossContour: boolean;
+  maxStrokeLength: number;
+  fieldSmoothing: number;
 }
 
 export type SegmentStatus = 'idle' | 'loading' | 'error';
@@ -110,6 +114,10 @@ const defaultInkSettings: InkSettings = {
   workingSize: 600,
   skinLightening: 0.55,
   featureLines: true,
+  textureStrokes: 0.6,
+  crossContour: false,
+  maxStrokeLength: 0,
+  fieldSmoothing: 4,
 };
 
 /**
@@ -164,12 +172,15 @@ export function App() {
   // Subject isolation state. Focus points are stored normalized (0-1)
   // so they survive output width changes.
   const [focusPoints, setFocusPoints] = useState<Point[]>([]);
-  const [focusSelectMode, setFocusSelectMode] = useState(false);
   const [subjectMask, setSubjectMask] = useState<GrayscaleImage | null>(null);
   const [segmentStatus, setSegmentStatus] = useState<SegmentStatus>('idle');
   const [portraitState, setPortraitState] = useState<PortraitState | null>(null);
   const [portraitStatus, setPortraitStatus] = useState<PortraitStatus>('idle');
+  const [preset, setPreset] = useState('classic');
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Tokens discard results of superseded async AI runs
+  const segmentTokenRef = useRef(0);
+  const portraitTokenRef = useRef(0);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -203,50 +214,37 @@ export function App() {
     }));
   }, []);
 
-  const handleImageFile = useCallback((file: File) => {
-    loadImageFile(file)
-      .then(({ gray, canvas }) => {
-        setSourceImage(gray);
-        setImageName(file.name);
-        sourceCanvasRef.current = canvas;
-        // Focus, mask and faces belong to the previous image
-        setFocusPoints([]);
-        setSubjectMask(null);
-        setSegmentStatus('idle');
-        setPortraitState(null);
-        setPortraitStatus('idle');
+  const detectFaces = useCallback(() => {
+    const canvas = sourceCanvasRef.current;
+    if (!canvas) return;
+
+    const token = ++portraitTokenRef.current;
+    setPortraitStatus('loading');
+    import('./face-landmarks')
+      .then(({ detectPortrait }) => detectPortrait(canvas))
+      .then((detected) => {
+        if (token !== portraitTokenRef.current) return;
+        setPortraitState(detected);
+        setPortraitStatus(detected ? 'idle' : 'none');
       })
       .catch(() => {
-        setImageName(null);
-        setSourceImage(null);
-        sourceCanvasRef.current = null;
+        if (token !== portraitTokenRef.current) return;
+        setPortraitState(null);
+        setPortraitStatus('error');
       });
   }, []);
 
-  const handleSetFocus = useCallback((normalized: Point) => {
-    // Stay in select mode so several subjects can be marked in a row
-    setFocusPoints((prev) => [...prev, normalized]);
-    // Moved focus invalidates a mask computed for the old points
-    setSubjectMask(null);
-  }, []);
-
-  const clearFocus = useCallback(() => {
-    setFocusPoints([]);
-    setFocusSelectMode(false);
-    setSubjectMask(null);
-    setSegmentStatus('idle');
-  }, []);
-
-  const isolateSubject = useCallback(() => {
+  const runIsolation = useCallback((points: Point[]) => {
     const canvas = sourceCanvasRef.current;
-    if (!canvas || focusPoints.length === 0) return;
+    if (!canvas || points.length === 0) return;
 
+    const token = ++segmentTokenRef.current;
     setSegmentStatus('loading');
     import('./segmentation')
       .then(async ({ isolateSubjectAt }) => {
         // One segmentation per focus point, unioned into a single mask
         let union: GrayscaleImage | null = null;
-        for (const point of focusPoints) {
+        for (const point of points) {
           const mask = await isolateSubjectAt(canvas, point.x, point.y);
           if (!union) {
             union = mask;
@@ -259,31 +257,74 @@ export function App() {
         return union;
       })
       .then((mask) => {
+        if (token !== segmentTokenRef.current) return;
         setSubjectMask(mask);
         setSegmentStatus('idle');
       })
       .catch(() => {
+        if (token !== segmentTokenRef.current) return;
         setSubjectMask(null);
         setSegmentStatus('error');
       });
-  }, [focusPoints]);
-
-  const detectFaces = useCallback(() => {
-    const canvas = sourceCanvasRef.current;
-    if (!canvas) return;
-
-    setPortraitStatus('loading');
-    import('./face-landmarks')
-      .then(({ detectPortrait }) => detectPortrait(canvas))
-      .then((detected) => {
-        setPortraitState(detected);
-        setPortraitStatus(detected ? 'idle' : 'none');
-      })
-      .catch(() => {
-        setPortraitState(null);
-        setPortraitStatus('error');
-      });
   }, []);
+
+  const handleImageFile = useCallback(
+    (file: File) => {
+      loadImageFile(file)
+        .then(({ gray, canvas }) => {
+          setSourceImage(gray);
+          setImageName(file.name);
+          sourceCanvasRef.current = canvas;
+          // Focus, mask and faces belong to the previous image
+          setFocusPoints([]);
+          setSubjectMask(null);
+          setSegmentStatus('idle');
+          setPortraitState(null);
+          setPortraitStatus('idle');
+          // Effortless portraits: look for faces as soon as a photo lands
+          detectFaces();
+        })
+        .catch(() => {
+          setImageName(null);
+          setSourceImage(null);
+          sourceCanvasRef.current = null;
+        });
+    },
+    [detectFaces]
+  );
+
+  const handleSetFocus = useCallback(
+    (normalized: Point) => {
+      // Every tap adds a subject and re-runs isolation over all of them
+      setFocusPoints((prev) => {
+        const next = [...prev, normalized];
+        runIsolation(next);
+        return next;
+      });
+    },
+    [runIsolation]
+  );
+
+  const clearFocus = useCallback(() => {
+    segmentTokenRef.current++;
+    setFocusPoints([]);
+    setSubjectMask(null);
+    setSegmentStatus('idle');
+  }, []);
+
+  const isolateSubject = useCallback(() => {
+    runIsolation(focusPoints);
+  }, [runIsolation, focusPoints]);
+
+  const applyPreset = useCallback(
+    (name: string) => {
+      const def = PRESETS[name];
+      if (!def) return;
+      setPreset(name);
+      updateInkSettings(def.settings);
+    },
+    [updateInkSettings]
+  );
 
   const generated = useMemo(() => {
     if (mode === 'image') {
@@ -308,6 +349,10 @@ export function App() {
         followTone: inkSettings.followTone,
         drawOutlines: inkSettings.drawOutlines,
         wobble: inkSettings.wobble,
+        textureStrokes: inkSettings.textureStrokes,
+        crossContour: inkSettings.crossContour,
+        maxStrokeLength: inkSettings.maxStrokeLength,
+        fieldSmoothing: inkSettings.fieldSmoothing,
         detailEmphasis: inkSettings.detailEmphasis,
         toneGamma: inkSettings.toneGamma,
         workingSize: inkSettings.workingSize,
@@ -408,13 +453,13 @@ export function App() {
           <ImageControls
             settings={inkSettings}
             imageName={imageName}
+            preset={preset}
+            applyPreset={applyPreset}
             updateSettings={updateInkSettings}
             onImageFile={handleImageFile}
             randomizeSeed={randomizeSeed}
             downloadSVG={downloadSVG}
             focusPoints={focusPoints}
-            focusSelectMode={focusSelectMode}
-            toggleFocusSelect={() => setFocusSelectMode((v) => !v)}
             clearFocus={clearFocus}
             subjectMask={subjectMask}
             segmentStatus={segmentStatus}
@@ -424,6 +469,7 @@ export function App() {
             portraitStatus={portraitStatus}
             detectFaces={detectFaces}
             clearPortrait={() => {
+              portraitTokenRef.current++;
               setPortraitState(null);
               setPortraitStatus('idle');
             }}
@@ -454,7 +500,7 @@ export function App() {
             paintedPoints={mode === 'flow' ? state.paintedPoints : []}
             showDots={state.showDots}
             onPaint={addPaintedPoint}
-            focusSelectMode={mode === 'image' && focusSelectMode}
+            focusSelectMode={mode === 'image' && !!sourceImage}
             focusMarkers={
               mode === 'image'
                 ? focusPoints.map((point) => ({

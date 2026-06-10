@@ -86,6 +86,13 @@ PNG or JPEG into plotter-ready strokes that mimic a pen-and-ink drawing:
 - Portrait mode (web app): AI face detection lightens skin so paper does
   the work, keeps eyes/brows/lips crisply detailed, and draws clean
   feature lines from facial landmarks — handles multiple faces
+- Bold contour lines: edges are linked into long, confident outline
+  strokes (the lines an artist draws first), exported on a separate
+  bold-pen SVG layer for multi-pen plotting
+- Texture strokes (`--texture`): fur, foliage and fabric render as short
+  directional tick marks instead of long streamlines
+- The web app ships one-click style presets (Classic, Portrait, Pet,
+  Landscape, Sketch) — upload a photo, tap your subject, download
 
 Key options:
 

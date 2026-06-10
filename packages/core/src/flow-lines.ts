@@ -7,6 +7,11 @@ export interface Point {
 
 export interface FlowLine {
   points: Point[];
+  /**
+   * Pen weight class. 'bold' lines (contours, accents) render thicker and
+   * are exported as a separate SVG layer for multi-pen plotting
+   */
+  pen?: 'fine' | 'bold';
 }
 
 export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {

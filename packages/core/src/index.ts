@@ -38,3 +38,7 @@ export type { HandDrawnOptions } from './hand-drawn.js';
 
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
+
+// Contour extraction
+export { traceContours } from './contours.js';
+export type { ContourOptions } from './contours.js';

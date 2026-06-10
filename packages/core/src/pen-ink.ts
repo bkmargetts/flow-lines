@@ -7,6 +7,7 @@ import {
   buildPortraitMaps,
   featureStrokesToLines,
 } from './portrait.js';
+import { traceContours } from './contours.js';
 
 export interface FocusOptions {
   /** Focal point x in output canvas coordinates */
@@ -57,6 +58,25 @@ export interface PenInkOptions {
   drawOutlines?: boolean;
   /** Edge strength threshold for outlines, 0-1 (default 0.35) */
   outlineThreshold?: number;
+
+  /**
+   * Render textured regions (fur, foliage, fabric) with short directional
+   * tick strokes instead of long streamlines — 0 disables, 1 is maximum
+   * (default 0.6)
+   */
+  textureStrokes?: number;
+
+  /**
+   * Hatch across forms instead of along them: strokes wrap around the
+   * cross-section of tubes and limbs like classic etching/engraving
+   * shading, rather than flowing parallel to edges (default false)
+   */
+  crossContour?: boolean;
+  /**
+   * Cap on hatch stroke length in px — short strokes read as individually
+   * placed marks rather than traced streamlines. 0 = unlimited (default 0)
+   */
+  maxStrokeLength?: number;
 
   /** Integration step length in px (default 1.5) */
   stepLength?: number;
@@ -111,6 +131,21 @@ interface PassConfig {
   margin: number;
   minLineLength: number;
   seedSpacing: number;
+  /**
+   * Local texture amount in [0, 1]; textured strokes become short
+   * directional ticks with angle jitter, like fur or fabric marks
+   */
+  textureAt?: (x: number, y: number) => number;
+  /** Target tick length in textured areas, px */
+  tickLength?: number;
+  /** Global cap on stroke arc length for this pass, px */
+  maxArcLength?: number;
+}
+
+/** Per-stroke parameters resolved at the seed (texture shortens strokes) */
+interface StrokeParams {
+  angleOffset: number;
+  maxArcLength: number;
 }
 
 /**
@@ -205,6 +240,9 @@ export function imageToPenInk(
 
   const drawOutlines = options.drawOutlines ?? true;
   const outlineThreshold = options.outlineThreshold ?? 0.35;
+  const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
+  const crossContour = options.crossContour ?? false;
+  const maxStrokeLength = options.maxStrokeLength ?? 0;
 
   const wobble = options.wobble ?? 0.8;
 
@@ -261,7 +299,8 @@ export function imageToPenInk(
   // so shadows accumulate cross-hatched coverage.
   for (let layer = 0; layer < layers; layer++) {
     const threshold = whiteCutoff + (layer / layers) * (0.92 - whiteCutoff);
-    const angleOffset = (LAYER_ANGLES[layer] * Math.PI) / 180;
+    const angleOffset =
+      (LAYER_ANGLES[layer] * Math.PI) / 180 + (crossContour ? Math.PI / 2 : 0);
 
     const spacingAt = (x: number, y: number): number => {
       let d = baseDarkness(x, y);
@@ -285,6 +324,17 @@ export function imageToPenInk(
         }
       : (x: number, y: number): boolean => baseDarkness(x, y) >= threshold;
 
+    // Busy regions (fur, foliage, fabric) read as texture, not form —
+    // render them with short directional ticks instead of long streamlines
+    const textureAt =
+      textureStrokes > 0
+        ? (x: number, y: number): number => {
+            const d = field.getDetail(x, y);
+            const t = Math.min(1, Math.max(0, (d - 0.25) / 0.45));
+            return t * t * (3 - 2 * t) * textureStrokes;
+          }
+        : undefined;
+
     lines.push(
       ...tracePass(field, seed + layer * 7919, {
         angleOffset,
@@ -295,37 +345,80 @@ export function imageToPenInk(
         margin,
         minLineLength,
         seedSpacing: Math.max(minSpacing * 2, maxSpacing / 2),
+        textureAt,
+        tickLength: maxSpacing * 0.9,
+        maxArcLength: maxStrokeLength > 0 ? maxStrokeLength : undefined,
       })
     );
   }
 
-  // Outline pass: follow strong edges with tight, fixed spacing
+  // Contour pass: link edge ridges into long, confident outline strokes —
+  // the committed lines an artist draws first. Drawn with the bold pen.
   if (drawOutlines) {
-    const outlineSpacing = Math.max(1.2, minSpacing * 0.8);
+    const contours = traceContours(field, {
+      highThreshold: outlineThreshold,
+      lowThreshold: outlineThreshold * 0.4,
+      minLength: Math.max(minLineLength * 3, 14),
+      stepLength: Math.min(stepLength, 2),
+      margin,
+      importance,
+    });
 
-    // Skip outlines where hatching is already near-black — stacking the
-    // two just muddies dark features like eyes and hair
-    const notSaturated = (x: number, y: number): boolean => baseDarkness(x, y) < 0.82;
+    // Inside detected faces, interior edges (nose shadows, smile creases,
+    // jaw shadows) must not become hard lines — artists leave face
+    // interiors to tone. Only clearly strong edges survive there, demoted
+    // to the fine pen; the face silhouette stays bold.
+    const insideFace =
+      portraitMaps && (portraitMaps.skin || portraitMaps.feature)
+        ? (x: number, y: number): boolean => {
+            const s = portraitMaps.skin ? portraitMaps.skin(x, y) : 0;
+            const f = portraitMaps.feature ? portraitMaps.feature(x, y) : 0;
+            return Math.max(s, f) > 0.6;
+          }
+        : null;
 
-    const isDrawable = importance
-      ? (x: number, y: number): boolean =>
-          notSaturated(x, y) &&
-          field.getEdgeStrength(x, y) >= outlineThreshold + (1 - importance(x, y)) * 0.5
-      : (x: number, y: number): boolean =>
-          notSaturated(x, y) && field.getEdgeStrength(x, y) >= outlineThreshold;
+    for (const points of contours) {
+      if (!insideFace) {
+        lines.push({ points, pen: 'bold' });
+        continue;
+      }
 
-    lines.push(
-      ...tracePass(field, seed + 104729, {
-        angleOffset: 0,
-        isDrawable,
-        spacingAt: () => outlineSpacing,
-        stepLength: Math.min(stepLength, 1.5),
-        maxSteps,
-        margin,
-        minLineLength: Math.max(minLineLength, 6),
-        seedSpacing: 4,
-      })
-    );
+      let run: Point[] = [];
+      let runPen: 'fine' | 'bold' | null = null;
+
+      const flush = (): void => {
+        if (run.length >= 2 && runPen) {
+          let length = 0;
+          for (let i = 1; i < run.length; i++) {
+            length += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
+          }
+          if (length >= 8) {
+            lines.push({ points: run, pen: runPen });
+          }
+        }
+        run = [];
+      };
+
+      for (const p of points) {
+        let pen: 'fine' | 'bold' | null;
+        if (!insideFace(p.x, p.y)) {
+          pen = 'bold';
+        } else if (field.getEdgeStrength(p.x, p.y) >= outlineThreshold + 0.2) {
+          pen = 'fine';
+        } else {
+          pen = null;
+        }
+
+        if (pen !== runPen) {
+          flush();
+          runPen = pen;
+        }
+        if (pen) {
+          run.push(p);
+        }
+      }
+      flush();
+    }
   }
 
   // Clean feature strokes (eyelids, brows, lip lines) drawn from landmark
@@ -337,6 +430,7 @@ export function imageToPenInk(
       height,
       Math.min(stepLength, 2)
     );
+    // Fine pen: feature lines are accents, not cartoon outlines
     for (const points of featureLines) {
       lines.push({ points });
     }
@@ -397,7 +491,34 @@ function tracePass(field: ImageField, seed: number, pass: PassConfig): FlowLine[
       candidate = scanCandidates[scanIndex++];
     }
 
-    const line = traceStreamline(field, grid, candidate, pass);
+    // In textured regions strokes become short ticks: random length around
+    // tickLength, angle jittered, and cross-hatch offsets collapse toward
+    // the local orientation (fur is layered in one direction, not crossed)
+    const texture = pass.textureAt ? pass.textureAt(candidate.x, candidate.y) : 0;
+    // Pass-level cap (with per-stroke variation, so cut ends don't align)
+    const passCap = pass.maxArcLength
+      ? pass.maxArcLength * (0.8 + 0.4 * random())
+      : Infinity;
+
+    let params: StrokeParams;
+    if (texture > 0.01) {
+      const tick = (pass.tickLength ?? 12) * (0.7 + 0.6 * random());
+      const longest = pass.maxSteps * pass.stepLength;
+      params = {
+        angleOffset:
+          pass.angleOffset * (1 - 0.8 * texture) + (random() - 0.5) * 0.5 * texture,
+        // Geometric interpolation: stroke length spans orders of magnitude,
+        // so a linear blend would barely shorten anything until texture ≈ 1
+        maxArcLength: Math.min(
+          passCap,
+          Math.exp(Math.log(longest) + (Math.log(tick) - Math.log(longest)) * texture)
+        ),
+      };
+    } else {
+      params = { angleOffset: pass.angleOffset, maxArcLength: passCap };
+    }
+
+    const line = traceStreamline(field, grid, candidate, pass, params);
     if (!line) continue;
 
     lines.push(line);
@@ -432,7 +553,8 @@ function traceStreamline(
   field: ImageField,
   grid: SpatialGrid,
   start: Point,
-  pass: PassConfig
+  pass: PassConfig,
+  params: StrokeParams
 ): FlowLine | null {
   if (!field.isInBounds(start.x, start.y, pass.margin)) return null;
   if (!pass.isDrawable(start.x, start.y)) return null;
@@ -440,8 +562,8 @@ function traceStreamline(
     return null;
   }
 
-  const forward = integrate(field, grid, start, pass, 1);
-  const backward = integrate(field, grid, start, pass, -1);
+  const forward = integrate(field, grid, start, pass, params, 1);
+  const backward = integrate(field, grid, start, pass, params, -1);
 
   backward.reverse();
   const points = [...backward, { ...start }, ...forward];
@@ -461,16 +583,20 @@ function integrate(
   grid: SpatialGrid,
   start: Point,
   pass: PassConfig,
+  params: StrokeParams,
   sign: 1 | -1
 ): Point[] {
   const points: Point[] = [];
-  const halfSteps = Math.ceil(pass.maxSteps / 2);
   const h = pass.stepLength;
+  const halfSteps = Math.min(
+    Math.ceil(pass.maxSteps / 2),
+    Math.max(1, Math.ceil(params.maxArcLength / 2 / h))
+  );
 
   let x = start.x;
   let y = start.y;
 
-  const theta0 = field.getOrientation(x, y) + pass.angleOffset;
+  const theta0 = field.getOrientation(x, y) + params.angleOffset;
   let prevDx = Math.cos(theta0) * sign;
   let prevDy = Math.sin(theta0) * sign;
 
@@ -478,7 +604,7 @@ function integrate(
   const selfSkip = Math.ceil((pass.spacingAt(start.x, start.y) * 2.5) / h);
 
   for (let i = 0; i < halfSteps; i++) {
-    const theta = field.getOrientation(x, y) + pass.angleOffset;
+    const theta = field.getOrientation(x, y) + params.angleOffset;
     let dx = Math.cos(theta);
     let dy = Math.sin(theta);
 
@@ -493,7 +619,7 @@ function integrate(
     const my = y + dy * h * 0.5;
     if (!field.isInBounds(mx, my, pass.margin)) break;
 
-    const thetaMid = field.getOrientation(mx, my) + pass.angleOffset;
+    const thetaMid = field.getOrientation(mx, my) + params.angleOffset;
     let mdx = Math.cos(thetaMid);
     let mdy = Math.sin(thetaMid);
     if (mdx * dx + mdy * dy < 0) {

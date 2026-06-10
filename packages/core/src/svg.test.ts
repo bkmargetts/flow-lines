@@ -92,6 +92,50 @@ describe('toSVG', () => {
   });
 });
 
+describe('toSVG pen layers', () => {
+  const twoPenResult = {
+    width: 100,
+    height: 100,
+    seed: 1,
+    lines: [
+      {
+        points: [
+          { x: 10, y: 10 },
+          { x: 90, y: 10 },
+        ],
+      },
+      {
+        points: [
+          { x: 10, y: 50 },
+          { x: 90, y: 50 },
+        ],
+        pen: 'bold' as const,
+      },
+    ],
+  };
+
+  it('emits one layer per pen with distinct widths', () => {
+    const svg = toSVG(twoPenResult, { strokeWidth: 1, boldStrokeWidth: 2.4 });
+
+    expect(svg).toContain('xmlns:inkscape');
+    expect(svg).toContain('inkscape:groupmode="layer"');
+    expect(svg).toContain('inkscape:label="1-fine"');
+    expect(svg).toContain('inkscape:label="2-bold"');
+    expect(svg).toContain('stroke-width="1"');
+    expect(svg).toContain('stroke-width="2.4"');
+  });
+
+  it('defaults bold width to double the fine width', () => {
+    const svg = toSVG(twoPenResult, { strokeWidth: 0.8 });
+    expect(svg).toContain('stroke-width="1.6"');
+  });
+
+  it('keeps flat output when no bold lines exist', () => {
+    const svg = toSVG({ ...twoPenResult, lines: [twoPenResult.lines[0]] });
+    expect(svg).not.toContain('inkscape');
+  });
+});
+
 describe('parseSVGOptions', () => {
   it('should parse valid options', () => {
     const options = parseSVGOptions({

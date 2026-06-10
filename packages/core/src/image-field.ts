@@ -45,6 +45,8 @@ export class ImageField {
   private orientSin: GrayscaleImage;
   private edge: GrayscaleImage;
   private detail: GrayscaleImage;
+  private gx: Float32Array;
+  private gy: Float32Array;
   private scaleX: number;
   private scaleY: number;
 
@@ -188,6 +190,32 @@ export class ImageField {
     }
 
     this.detail = { width, height, data: detailData };
+    this.gx = gx;
+    this.gy = gy;
+  }
+
+  /**
+   * Raw working-resolution edge data for contour extraction: normalized
+   * edge magnitudes, Sobel gradients, and the canvas-to-raster scale
+   */
+  getEdgeData(): {
+    width: number;
+    height: number;
+    magnitude: Float32Array;
+    gx: Float32Array;
+    gy: Float32Array;
+    scaleX: number;
+    scaleY: number;
+  } {
+    return {
+      width: this.edge.width,
+      height: this.edge.height,
+      magnitude: this.edge.data,
+      gx: this.gx,
+      gy: this.gy,
+      scaleX: this.scaleX,
+      scaleY: this.scaleY,
+    };
   }
 
   /** Darkness in [0, 1] at canvas coordinates (1 = black) */
