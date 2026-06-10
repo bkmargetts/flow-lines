@@ -62,10 +62,13 @@ export interface InkSettings {
   crossContour: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
+  formStrength: number;
+  depthIsolation: number;
 }
 
 export type SegmentStatus = 'idle' | 'loading' | 'error';
 export type PortraitStatus = 'idle' | 'loading' | 'error' | 'none';
+export type DepthStatus = 'idle' | 'loading' | 'error';
 
 export interface PortraitState {
   faceCount: number;
@@ -118,6 +121,8 @@ const defaultInkSettings: InkSettings = {
   crossContour: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
+  formStrength: 0.8,
+  depthIsolation: 0.5,
 };
 
 /**
@@ -176,11 +181,14 @@ export function App() {
   const [segmentStatus, setSegmentStatus] = useState<SegmentStatus>('idle');
   const [portraitState, setPortraitState] = useState<PortraitState | null>(null);
   const [portraitStatus, setPortraitStatus] = useState<PortraitStatus>('idle');
+  const [depthMap, setDepthMap] = useState<GrayscaleImage | null>(null);
+  const [depthStatus, setDepthStatus] = useState<DepthStatus>('idle');
   const [preset, setPreset] = useState('classic');
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   // Tokens discard results of superseded async AI runs
   const segmentTokenRef = useRef(0);
   const portraitTokenRef = useRef(0);
+  const depthTokenRef = useRef(0);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -234,6 +242,32 @@ export function App() {
       });
   }, []);
 
+  const estimateDepthMap = useCallback(() => {
+    const canvas = sourceCanvasRef.current;
+    if (!canvas) return;
+
+    const token = ++depthTokenRef.current;
+    setDepthStatus('loading');
+    import('./depth')
+      .then(({ estimateDepth }) => estimateDepth(canvas))
+      .then((depth) => {
+        if (token !== depthTokenRef.current) return;
+        setDepthMap(depth);
+        setDepthStatus('idle');
+      })
+      .catch(() => {
+        if (token !== depthTokenRef.current) return;
+        setDepthMap(null);
+        setDepthStatus('error');
+      });
+  }, []);
+
+  const clearDepth = useCallback(() => {
+    depthTokenRef.current++;
+    setDepthMap(null);
+    setDepthStatus('idle');
+  }, []);
+
   const runIsolation = useCallback((points: Point[]) => {
     const canvas = sourceCanvasRef.current;
     if (!canvas || points.length === 0) return;
@@ -281,8 +315,15 @@ export function App() {
           setSegmentStatus('idle');
           setPortraitState(null);
           setPortraitStatus('idle');
+          setDepthMap(null);
+          setDepthStatus('idle');
           // Effortless portraits: look for faces as soon as a photo lands
           detectFaces();
+          // 3D form needs the depth model (~25MB on first use); run it
+          // automatically only where WebGPU makes it fast
+          if ('gpu' in navigator) {
+            estimateDepthMap();
+          }
         })
         .catch(() => {
           setImageName(null);
@@ -290,7 +331,7 @@ export function App() {
           sourceCanvasRef.current = null;
         });
     },
-    [detectFaces]
+    [detectFaces, estimateDepthMap]
   );
 
   const handleSetFocus = useCallback(
@@ -353,6 +394,9 @@ export function App() {
         crossContour: inkSettings.crossContour,
         maxStrokeLength: inkSettings.maxStrokeLength,
         fieldSmoothing: inkSettings.fieldSmoothing,
+        depthMap: depthMap ?? undefined,
+        formStrength: inkSettings.formStrength,
+        depthIsolation: inkSettings.depthIsolation,
         detailEmphasis: inkSettings.detailEmphasis,
         toneGamma: inkSettings.toneGamma,
         workingSize: inkSettings.workingSize,
@@ -409,7 +453,7 @@ export function App() {
 
     const result = generateFlowLines(flowOptions);
     return { svg: toSVG(result, svgOptions), width: state.width, height: state.height };
-  }, [mode, state, inkSettings, sourceImage, focusPoints, subjectMask, portraitState]);
+  }, [mode, state, inkSettings, sourceImage, focusPoints, subjectMask, portraitState, depthMap]);
 
   const downloadSVG = useCallback(() => {
     if (!generated.svg) return;
@@ -468,6 +512,10 @@ export function App() {
             portraitState={portraitState}
             portraitStatus={portraitStatus}
             detectFaces={detectFaces}
+            depthMap={depthMap}
+            depthStatus={depthStatus}
+            estimateDepthMap={estimateDepthMap}
+            clearDepth={clearDepth}
             clearPortrait={() => {
               portraitTokenRef.current++;
               setPortraitState(null);

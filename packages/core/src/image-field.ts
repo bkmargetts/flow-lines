@@ -23,6 +23,13 @@ export interface ImageFieldOptions {
   followTone?: boolean;
   /** Auto-stretch contrast before rendering (default true) */
   normalizeContrast?: boolean;
+  /**
+   * Estimated depth map (bright = near), e.g. from a monocular depth
+   * model. Drives form-following stroke orientation and silhouette edges
+   */
+  depthMap?: GrayscaleImage;
+  /** How strongly depth overrides the image-gradient orientation, 0-1 (default 0.8) */
+  formStrength?: number;
 }
 
 /**
@@ -49,6 +56,8 @@ export class ImageField {
   private gy: Float32Array;
   private scaleX: number;
   private scaleY: number;
+  private depth: GrayscaleImage | null = null;
+  private depthEdge: GrayscaleImage | null = null;
 
   constructor(image: GrayscaleImage, options: ImageFieldOptions) {
     this.width = options.width;
@@ -192,6 +201,115 @@ export class ImageField {
     this.detail = { width, height, data: detailData };
     this.gx = gx;
     this.gy = gy;
+
+    if (options.depthMap) {
+      this.attachDepth(options.depthMap, options.formStrength ?? 0.8);
+    }
+  }
+
+  /**
+   * Blend a depth map into the field: stroke orientation follows the 3D
+   * form (tangent to the depth gradient, i.e. along the surface), and
+   * depth discontinuities become silhouette edges that strengthen the
+   * edge map and let strokes terminate cleanly at object boundaries.
+   */
+  private attachDepth(depthMap: GrayscaleImage, formStrength: number): void {
+    const { width, height } = this.tone;
+
+    // Resample the depth map onto the working raster
+    const raw = new Float32Array(width * height);
+    const sx = depthMap.width / width;
+    const sy = depthMap.height / height;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        raw[y * width + x] = sampleBilinear(depthMap, x * sx, y * sy);
+      }
+    }
+
+    const depth = gaussianBlur({ width, height, data: raw }, 1.5);
+    this.depth = depth;
+
+    // Sobel gradients of depth
+    const at = (x: number, y: number): number => {
+      const cx = Math.max(0, Math.min(width - 1, x));
+      const cy = Math.max(0, Math.min(height - 1, y));
+      return depth.data[cy * width + cx];
+    };
+
+    const energy = new Float32Array(width * height);
+    const tanCos = new Float32Array(width * height);
+    const tanSin = new Float32Array(width * height);
+    let meanEnergy = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const tl = at(x - 1, y - 1);
+        const tc = at(x, y - 1);
+        const tr = at(x + 1, y - 1);
+        const ml = at(x - 1, y);
+        const mr = at(x + 1, y);
+        const bl = at(x - 1, y + 1);
+        const bc = at(x, y + 1);
+        const br = at(x + 1, y + 1);
+
+        const dgx = (tr + 2 * mr + br - tl - 2 * ml - bl) / 4;
+        const dgy = (bl + 2 * bc + br - tl - 2 * tc - tr) / 4;
+
+        const i = y * width + x;
+        const e = dgx * dgx + dgy * dgy;
+        energy[i] = e;
+        meanEnergy += e;
+
+        // Tangent to the depth gradient = direction along the form.
+        // In doubled-angle space, rotating by 90° negates the vector.
+        if (e > 1e-12) {
+          tanCos[i] = -((dgx * dgx - dgy * dgy) / e);
+          tanSin[i] = -((2 * dgx * dgy) / e);
+        }
+      }
+    }
+    meanEnergy = Math.max(meanEnergy / (width * height), 1e-12);
+
+    // Blend depth-derived orientation over the luminance-derived field
+    for (let i = 0; i < width * height; i++) {
+      const w = formStrength * (energy[i] / (energy[i] + 0.1 * meanEnergy));
+      this.orientCos.data[i] = w * tanCos[i] + (1 - w) * this.orientCos.data[i];
+      this.orientSin.data[i] = w * tanSin[i] + (1 - w) * this.orientSin.data[i];
+    }
+
+    // Depth discontinuities: normalize gradient magnitude by a high
+    // percentile, then fold into the edge map so contours trace silhouettes
+    const mag = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      mag[i] = Math.sqrt(energy[i]);
+    }
+    const sorted = Float32Array.from(mag).sort();
+    const ref = Math.max(sorted[Math.floor(sorted.length * 0.99)], 1e-6);
+
+    const edgeData = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      edgeData[i] = Math.min(1, mag[i] / ref);
+      this.edge.data[i] = Math.max(this.edge.data[i], edgeData[i]);
+    }
+
+    this.depthEdge = { width, height, data: edgeData };
+  }
+
+  /** Whether a depth map is attached */
+  hasDepth(): boolean {
+    return this.depth !== null;
+  }
+
+  /** Depth in [0, 1] at canvas coordinates (1 = near); 0.5 when no depth map */
+  getDepth(x: number, y: number): number {
+    if (!this.depth) return 0.5;
+    return sampleBilinear(this.depth, x * this.scaleX, y * this.scaleY);
+  }
+
+  /** Depth discontinuity strength in [0, 1] at canvas coordinates */
+  getDepthEdge(x: number, y: number): number {
+    if (!this.depthEdge) return 0;
+    return sampleBilinear(this.depthEdge, x * this.scaleX, y * this.scaleY);
   }
 
   /**

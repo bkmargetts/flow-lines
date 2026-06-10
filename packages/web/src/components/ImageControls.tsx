@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { GrayscaleImage, Point } from '@flow-lines/core';
-import type { InkSettings, PortraitState, PortraitStatus, SegmentStatus } from '../App';
+import type { DepthStatus, InkSettings, PortraitState, PortraitStatus, SegmentStatus } from '../App';
 
 /** Curated parameter bundles — the only decision most users need to make */
 export const PRESETS: Record<string, { label: string; settings: Partial<InkSettings> }> = {
@@ -128,6 +128,10 @@ interface ImageControlsProps {
   portraitStatus: PortraitStatus;
   detectFaces: () => void;
   clearPortrait: () => void;
+  depthMap: GrayscaleImage | null;
+  depthStatus: DepthStatus;
+  estimateDepthMap: () => void;
+  clearDepth: () => void;
 }
 
 export function ImageControls({
@@ -149,6 +153,10 @@ export function ImageControls({
   portraitStatus,
   detectFaces,
   clearPortrait,
+  depthMap,
+  depthStatus,
+  estimateDepthMap,
+  clearDepth,
 }: ImageControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -162,6 +170,8 @@ export function ImageControls({
   if (segmentStatus === 'loading') statusParts.push('isolating subject…');
   else if (subjectMask)
     statusParts.push(`subject${focusPoints.length > 1 ? 's' : ''} isolated`);
+  if (depthStatus === 'loading') statusParts.push('estimating depth…');
+  else if (depthMap) statusParts.push('3D form applied');
 
   return (
     <div className="controls">
@@ -204,6 +214,17 @@ export function ImageControls({
             <button type="button" className="secondary" onClick={clearFocus}>
               Clear Focus ({focusPoints.length})
             </button>
+          )}
+
+          {imageName && !depthMap && depthStatus !== 'loading' && (
+            <button type="button" className="secondary" onClick={estimateDepthMap}>
+              Add 3D Form (AI)
+            </button>
+          )}
+          {depthStatus === 'error' && (
+            <p className="paint-hint">
+              Depth estimation failed — check your connection and try again.
+            </p>
           )}
         </div>
       </div>
@@ -543,6 +564,50 @@ export function ImageControls({
             onChange={(e) => updateSettings({ fieldSmoothing: parseInt(e.target.value, 10) })}
           />
         </div>
+
+        {depthMap && (
+          <>
+            <div className="control-group">
+              <label>
+                Form Strength <span>{settings.formStrength.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={settings.formStrength}
+                onChange={(e) => updateSettings({ formStrength: parseFloat(e.target.value) })}
+              />
+              <p className="paint-hint">
+                How strongly strokes follow the estimated 3D form.
+              </p>
+            </div>
+
+            <div className="control-group">
+              <label>
+                Depth Fade <span>{settings.depthIsolation.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={settings.depthIsolation}
+                onChange={(e) => updateSettings({ depthIsolation: parseFloat(e.target.value) })}
+              />
+              <p className="paint-hint">
+                Fades distant background toward paper, like atmospheric recession.
+              </p>
+            </div>
+
+            <div className="control-group">
+              <button type="button" className="secondary" onClick={clearDepth}>
+                Clear 3D Form
+              </button>
+            </div>
+          </>
+        )}
 
         <div className="control-group">
           <label>

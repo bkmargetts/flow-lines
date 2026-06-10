@@ -579,6 +579,120 @@ describe('etching mode', () => {
   });
 });
 
+describe('depth-aware rendering', () => {
+  const flat = makeImage(100, 100, () => 0.45);
+
+  // Vertical cylinder bulging toward the viewer, axis along y
+  const tubeDepth = makeImage(100, 100, (u) => {
+    const d = (u - 0.5) / 0.4;
+    return Math.abs(d) < 1 ? 0.2 + 0.7 * Math.sqrt(1 - d * d) : 0.2;
+  });
+
+  it('orients strokes along the 3D form on the flanks of a cylinder', () => {
+    const field = new ImageField(flat, {
+      width: 200,
+      height: 200,
+      normalizeContrast: false,
+      depthMap: tubeDepth,
+      formStrength: 1,
+    });
+
+    // On the cylinder flank the depth gradient points in x, so strokes
+    // run along the axis (vertical)
+    const angle = field.getOrientation(150, 100);
+    const distFromVertical = Math.abs(Math.abs(angle) - Math.PI / 2);
+    expect(distFromVertical).toBeLessThan(0.25);
+
+    // Without depth the same flat image falls back to the hatch angle
+    const noDepth = new ImageField(flat, {
+      width: 200,
+      height: 200,
+      normalizeContrast: false,
+    });
+    expect(Math.abs(noDepth.getOrientation(150, 100) - -Math.PI / 4)).toBeLessThan(0.1);
+  });
+
+  it('terminates strokes at depth discontinuities', () => {
+    // One flat depth plane in front of another, same luminance everywhere
+    const stepDepth = makeImage(100, 100, (u) => (u < 0.5 ? 0.85 : 0.2));
+
+    const result = imageToPenInk(flat, {
+      width: 240,
+      seed: 91,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      textureStrokes: 0,
+      normalizeContrast: false,
+      depthMap: stepDepth,
+      depthIsolation: 0,
+      layers: 1,
+    });
+
+    // No single stroke may straddle the silhouette at x = 120
+    for (const line of result.lines) {
+      const left = line.points.some((p) => p.x < 112);
+      const right = line.points.some((p) => p.x > 128);
+      expect(left && right).toBe(false);
+    }
+  });
+
+  it('fades far regions when the scene has depth separation', () => {
+    const stepDepth = makeImage(100, 100, (u) => (u < 0.5 ? 0.9 : 0.15));
+
+    const result = imageToPenInk(flat, {
+      width: 240,
+      seed: 92,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      textureStrokes: 0,
+      normalizeContrast: false,
+      depthMap: stepDepth,
+      depthIsolation: 1,
+    });
+
+    const count = (x0: number, x1: number) =>
+      result.lines.reduce(
+        (sum, l) => sum + l.points.filter((p) => p.x >= x0 && p.x < x1).length,
+        0
+      );
+
+    const near = count(0, 110);
+    const far = count(130, 240);
+    expect(near).toBeGreaterThan(100);
+    expect(far).toBeLessThan(near * 0.15);
+  });
+
+  it('ignores depth isolation when the scene is depth-flat', () => {
+    const flatDepth = makeImage(50, 50, () => 0.5);
+
+    const withDepth = imageToPenInk(flat, {
+      width: 200,
+      seed: 93,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      textureStrokes: 0,
+      normalizeContrast: false,
+      depthMap: flatDepth,
+      depthIsolation: 1,
+      formStrength: 0,
+    });
+    const without = imageToPenInk(flat, {
+      width: 200,
+      seed: 93,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      textureStrokes: 0,
+      normalizeContrast: false,
+    });
+
+    expect(withDepth.lines).toEqual(without.lines);
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

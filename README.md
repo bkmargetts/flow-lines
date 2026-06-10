@@ -92,7 +92,11 @@ PNG or JPEG into plotter-ready strokes that mimic a pen-and-ink drawing:
 - Texture strokes (`--texture`): fur, foliage and fabric render as short
   directional tick marks instead of long streamlines
 - The web app ships one-click style presets (Classic, Portrait, Pet,
-  Landscape, Sketch) — upload a photo, tap your subject, download
+  Landscape, Sketch, Etching) — upload a photo, tap your subject, download
+- 3D form awareness: an in-browser monocular depth model (Depth Anything
+  V2) makes strokes follow the actual surface geometry, stop cleanly at
+  silhouettes, and fade distant backgrounds like atmospheric recession.
+  The CLI accepts external depth maps via `--depth-image` (bright = near)
 
 Key options:
 
