@@ -59,6 +59,9 @@ export interface InkSettings {
   skinLightening: number;
   featureLines: boolean;
   textureStrokes: number;
+  crossContour: boolean;
+  maxStrokeLength: number;
+  fieldSmoothing: number;
 }
 
 export type SegmentStatus = 'idle' | 'loading' | 'error';
@@ -112,6 +115,9 @@ const defaultInkSettings: InkSettings = {
   skinLightening: 0.55,
   featureLines: true,
   textureStrokes: 0.6,
+  crossContour: false,
+  maxStrokeLength: 0,
+  fieldSmoothing: 4,
 };
 
 /**
@@ -344,6 +350,9 @@ export function App() {
         drawOutlines: inkSettings.drawOutlines,
         wobble: inkSettings.wobble,
         textureStrokes: inkSettings.textureStrokes,
+        crossContour: inkSettings.crossContour,
+        maxStrokeLength: inkSettings.maxStrokeLength,
+        fieldSmoothing: inkSettings.fieldSmoothing,
         detailEmphasis: inkSettings.detailEmphasis,
         toneGamma: inkSettings.toneGamma,
         workingSize: inkSettings.workingSize,

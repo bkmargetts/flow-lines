@@ -66,6 +66,18 @@ export interface PenInkOptions {
    */
   textureStrokes?: number;
 
+  /**
+   * Hatch across forms instead of along them: strokes wrap around the
+   * cross-section of tubes and limbs like classic etching/engraving
+   * shading, rather than flowing parallel to edges (default false)
+   */
+  crossContour?: boolean;
+  /**
+   * Cap on hatch stroke length in px — short strokes read as individually
+   * placed marks rather than traced streamlines. 0 = unlimited (default 0)
+   */
+  maxStrokeLength?: number;
+
   /** Integration step length in px (default 1.5) */
   stepLength?: number;
   /** Max steps per stroke direction (default: enough to cross the canvas) */
@@ -126,6 +138,8 @@ interface PassConfig {
   textureAt?: (x: number, y: number) => number;
   /** Target tick length in textured areas, px */
   tickLength?: number;
+  /** Global cap on stroke arc length for this pass, px */
+  maxArcLength?: number;
 }
 
 /** Per-stroke parameters resolved at the seed (texture shortens strokes) */
@@ -227,6 +241,8 @@ export function imageToPenInk(
   const drawOutlines = options.drawOutlines ?? true;
   const outlineThreshold = options.outlineThreshold ?? 0.35;
   const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
+  const crossContour = options.crossContour ?? false;
+  const maxStrokeLength = options.maxStrokeLength ?? 0;
 
   const wobble = options.wobble ?? 0.8;
 
@@ -283,7 +299,8 @@ export function imageToPenInk(
   // so shadows accumulate cross-hatched coverage.
   for (let layer = 0; layer < layers; layer++) {
     const threshold = whiteCutoff + (layer / layers) * (0.92 - whiteCutoff);
-    const angleOffset = (LAYER_ANGLES[layer] * Math.PI) / 180;
+    const angleOffset =
+      (LAYER_ANGLES[layer] * Math.PI) / 180 + (crossContour ? Math.PI / 2 : 0);
 
     const spacingAt = (x: number, y: number): number => {
       let d = baseDarkness(x, y);
@@ -330,6 +347,7 @@ export function imageToPenInk(
         seedSpacing: Math.max(minSpacing * 2, maxSpacing / 2),
         textureAt,
         tickLength: maxSpacing * 0.9,
+        maxArcLength: maxStrokeLength > 0 ? maxStrokeLength : undefined,
       })
     );
   }
@@ -477,6 +495,11 @@ function tracePass(field: ImageField, seed: number, pass: PassConfig): FlowLine[
     // tickLength, angle jittered, and cross-hatch offsets collapse toward
     // the local orientation (fur is layered in one direction, not crossed)
     const texture = pass.textureAt ? pass.textureAt(candidate.x, candidate.y) : 0;
+    // Pass-level cap (with per-stroke variation, so cut ends don't align)
+    const passCap = pass.maxArcLength
+      ? pass.maxArcLength * (0.8 + 0.4 * random())
+      : Infinity;
+
     let params: StrokeParams;
     if (texture > 0.01) {
       const tick = (pass.tickLength ?? 12) * (0.7 + 0.6 * random());
@@ -486,12 +509,13 @@ function tracePass(field: ImageField, seed: number, pass: PassConfig): FlowLine[
           pass.angleOffset * (1 - 0.8 * texture) + (random() - 0.5) * 0.5 * texture,
         // Geometric interpolation: stroke length spans orders of magnitude,
         // so a linear blend would barely shorten anything until texture ≈ 1
-        maxArcLength: Math.exp(
-          Math.log(longest) + (Math.log(tick) - Math.log(longest)) * texture
+        maxArcLength: Math.min(
+          passCap,
+          Math.exp(Math.log(longest) + (Math.log(tick) - Math.log(longest)) * texture)
         ),
       };
     } else {
-      params = { angleOffset: pass.angleOffset, maxArcLength: Infinity };
+      params = { angleOffset: pass.angleOffset, maxArcLength: passCap };
     }
 
     const line = traceStreamline(field, grid, candidate, pass, params);

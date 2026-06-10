@@ -524,6 +524,61 @@ describe('texture strokes', () => {
   });
 });
 
+describe('etching mode', () => {
+  // Horizontal luminance ramp: gradient points in x, so along-contour
+  // strokes run vertically and cross-contour strokes run horizontally
+  const ramp = makeImage(120, 120, (u) => 0.15 + 0.5 * u);
+
+  const meanDirection = (lines: { points: { x: number; y: number }[] }[]) => {
+    let dx = 0;
+    let dy = 0;
+    for (const line of lines) {
+      const a = line.points[0];
+      const b = line.points[line.points.length - 1];
+      dx += Math.abs(b.x - a.x);
+      dy += Math.abs(b.y - a.y);
+    }
+    return { dx, dy };
+  };
+
+  const base = {
+    width: 240,
+    seed: 81,
+    wobble: 0,
+    drawOutlines: false,
+    detailEmphasis: 0,
+    textureStrokes: 0,
+    normalizeContrast: false,
+    layers: 1,
+  };
+
+  it('rotates hatching 90° in cross-contour mode', () => {
+    const along = meanDirection(imageToPenInk(ramp, base).lines);
+    const across = meanDirection(imageToPenInk(ramp, { ...base, crossContour: true }).lines);
+
+    expect(along.dy).toBeGreaterThan(along.dx * 2); // vertical strokes
+    expect(across.dx).toBeGreaterThan(across.dy * 2); // horizontal strokes
+  });
+
+  it('caps stroke length at maxStrokeLength', () => {
+    const dark = makeImage(80, 80, () => 0.2);
+    const result = imageToPenInk(dark, { ...base, maxStrokeLength: 20 });
+
+    expect(result.lines.length).toBeGreaterThan(10);
+    for (const line of result.lines) {
+      let len = 0;
+      for (let i = 1; i < line.points.length; i++) {
+        len += Math.hypot(
+          line.points[i].x - line.points[i - 1].x,
+          line.points[i].y - line.points[i - 1].y
+        );
+      }
+      // 1.2x jitter ceiling plus one step of slack
+      expect(len).toBeLessThan(20 * 1.2 + 4);
+    }
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

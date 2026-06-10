@@ -182,6 +182,8 @@ program
   .option('--outline-threshold <number>', 'Edge strength needed for outlines (0-1)', '0.35')
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
+  .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
+  .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
   .option('--bold-width <number>', 'Stroke width for bold contour pen (default: 2x stroke width)')
   .option('--detail <number>', 'Emphasize detailed regions; flat areas fade (0-1)', '0.3')
   .option(
@@ -249,6 +251,8 @@ program
       outlineThreshold: parseFloat(options.outlineThreshold),
       wobble: parseFloat(options.wobble),
       textureStrokes: parseFloat(options.texture),
+      crossContour: options.crossContour ?? false,
+      maxStrokeLength: parseFloat(options.maxStroke),
       workingSize: parseInt(options.workingSize, 10),
     };
 

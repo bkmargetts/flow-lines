@@ -10,11 +10,15 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       layers: 3,
       minSpacing: 2.5,
       maxSpacing: 14,
+      whiteCutoff: 0.08,
       toneGamma: 1.3,
       detailEmphasis: 0.3,
       textureStrokes: 0.6,
       wobble: 0.8,
       workingSize: 600,
+      crossContour: false,
+      maxStrokeLength: 0,
+      fieldSmoothing: 4,
     },
   },
   portrait: {
@@ -29,6 +33,10 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       wobble: 0.9,
       workingSize: 800,
       skinLightening: 0.6,
+      whiteCutoff: 0.08,
+      crossContour: false,
+      maxStrokeLength: 0,
+      fieldSmoothing: 4,
     },
   },
   pet: {
@@ -42,6 +50,10 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       textureStrokes: 1,
       wobble: 1,
       workingSize: 800,
+      whiteCutoff: 0.08,
+      crossContour: false,
+      maxStrokeLength: 0,
+      fieldSmoothing: 4,
     },
   },
   landscape: {
@@ -55,6 +67,10 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       textureStrokes: 0.6,
       wobble: 0.8,
       workingSize: 600,
+      whiteCutoff: 0.08,
+      crossContour: false,
+      maxStrokeLength: 0,
+      fieldSmoothing: 4,
     },
   },
   sketch: {
@@ -68,6 +84,27 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       textureStrokes: 0.5,
       wobble: 1.8,
       workingSize: 600,
+      whiteCutoff: 0.08,
+      crossContour: false,
+      maxStrokeLength: 0,
+      fieldSmoothing: 4,
+    },
+  },
+  etching: {
+    label: 'Etching',
+    settings: {
+      layers: 2,
+      minSpacing: 2.8,
+      maxSpacing: 14,
+      whiteCutoff: 0.15,
+      toneGamma: 1.8,
+      detailEmphasis: 0.35,
+      textureStrokes: 0.15,
+      wobble: 0.4,
+      workingSize: 800,
+      crossContour: true,
+      maxStrokeLength: 48,
+      fieldSmoothing: 8,
     },
   },
 };
@@ -465,6 +502,46 @@ export function ImageControls({
           <p className="paint-hint">
             Renders fur, foliage and fabric as short tick strokes instead of long lines.
           </p>
+        </div>
+
+        <div className="control-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={settings.crossContour}
+              onChange={(e) => updateSettings({ crossContour: e.target.checked })}
+            />
+            Cross-contour hatching (etching style)
+          </label>
+        </div>
+
+        <div className="control-group">
+          <label>
+            Max Stroke Length{' '}
+            <span>{settings.maxStrokeLength === 0 ? 'unlimited' : `${settings.maxStrokeLength}px`}</span>
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="80"
+            step="4"
+            value={settings.maxStrokeLength}
+            onChange={(e) => updateSettings({ maxStrokeLength: parseInt(e.target.value, 10) })}
+          />
+        </div>
+
+        <div className="control-group">
+          <label>
+            Flow Smoothing <span>{settings.fieldSmoothing}</span>
+          </label>
+          <input
+            type="range"
+            min="2"
+            max="12"
+            step="1"
+            value={settings.fieldSmoothing}
+            onChange={(e) => updateSettings({ fieldSmoothing: parseInt(e.target.value, 10) })}
+          />
         </div>
 
         <div className="control-group">
