@@ -693,6 +693,78 @@ describe('depth-aware rendering', () => {
   });
 });
 
+describe('auto style dispatch', () => {
+  const flat = makeImage(100, 100, () => 0.45);
+
+  // Vertical cylinder bulging toward the viewer, axis along y
+  const tubeDepth = makeImage(100, 100, (u) => {
+    const d = (u - 0.5) / 0.4;
+    return Math.abs(d) < 1 ? 0.2 + 0.7 * Math.sqrt(1 - d * d) : 0.2;
+  });
+
+  const meanDirection = (lines: { points: { x: number; y: number }[] }[]) => {
+    let dx = 0;
+    let dy = 0;
+    for (const line of lines) {
+      const a = line.points[0];
+      const b = line.points[line.points.length - 1];
+      dx += Math.abs(b.x - a.x);
+      dy += Math.abs(b.y - a.y);
+    }
+    return { dx, dy };
+  };
+
+  const base = {
+    width: 200,
+    seed: 101,
+    wobble: 0,
+    drawOutlines: false,
+    detailEmphasis: 0,
+    textureStrokes: 0,
+    normalizeContrast: false,
+    layers: 1,
+    depthIsolation: 0,
+    optimize: false,
+  };
+
+  // Strokes seeded on the cylinder flanks
+  const flankLines = (lines: { points: { x: number; y: number }[] }[]) =>
+    lines.filter((l) => {
+      const x = l.points[0].x;
+      return (x > 110 && x < 165) || (x > 35 && x < 90);
+    });
+
+  it('wraps curved forms with capped cross-contour marks', () => {
+    const off = imageToPenInk(flat, { ...base, depthMap: tubeDepth });
+    const on = imageToPenInk(flat, { ...base, depthMap: tubeDepth, autoStyle: true });
+
+    // Without dispatch, flank strokes run along the tube (vertical);
+    // with dispatch they wrap across it (horizontal)
+    const dirOff = meanDirection(flankLines(off.lines));
+    const dirOn = meanDirection(flankLines(on.lines));
+    expect(dirOff.dy).toBeGreaterThan(dirOff.dx);
+    expect(dirOn.dx).toBeGreaterThan(dirOn.dy);
+  });
+
+  it('changes nothing without depth or texture', () => {
+    const off = imageToPenInk(flat, base);
+    const on = imageToPenInk(flat, { ...base, autoStyle: true });
+    expect(on.lines).toEqual(off.lines);
+  });
+
+  it('reports form confidence only on curved regions', () => {
+    const field = new ImageField(flat, {
+      width: 200,
+      height: 200,
+      normalizeContrast: false,
+      depthMap: tubeDepth,
+    });
+
+    expect(field.getFormConfidence(150, 100)).toBeGreaterThan(0.5); // flank
+    expect(field.getFormConfidence(6, 100)).toBeLessThan(0.35); // flat background
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

@@ -605,6 +605,17 @@ export function ImageControls({
             </div>
 
             <div className="control-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={settings.autoStyle}
+                  onChange={(e) => updateSettings({ autoStyle: e.target.checked })}
+                />
+                Auto mark-making (wrap curved forms)
+              </label>
+            </div>
+
+            <div className="control-group">
               <button type="button" className="secondary" onClick={clearDepth}>
                 Clear 3D Form
               </button>

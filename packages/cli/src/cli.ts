@@ -186,6 +186,7 @@ program
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
   .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
   .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
+  .option('--auto-style', 'Per-region mark-making: cross-contour marks wrap curved forms (needs --depth-image)')
   .option('--detail <number>', 'Emphasize detailed regions; flat areas fade (0-1)', '0.3')
   .option(
     '--focus <x,y>',
@@ -247,6 +248,7 @@ program
       depthIsolation: parseFloat(options.depthIsolation),
       outlinePasses: parseInt(options.outlinePasses, 10),
       optimize: options.optimize,
+      autoStyle: options.autoStyle ?? false,
       seed: options.seed ? parseInt(options.seed, 10) : undefined,
       margin: parseInt(options.margin, 10),
       layers: parseInt(options.layers, 10),
