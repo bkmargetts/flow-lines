@@ -159,6 +159,26 @@ button.secondary:hover {
   padding: 24px;
   background: var(--bg-primary);
   overflow: auto;
+  position: relative;
+}
+
+.rendering-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  background: rgba(15, 52, 96, 0.9);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  animation: pulse-soft 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .canvas-wrapper {
