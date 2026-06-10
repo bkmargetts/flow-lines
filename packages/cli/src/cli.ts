@@ -196,6 +196,9 @@ program
   .option('--focus-strength <number>', 'How strongly detail fades outside the focus (0-1)', '0.85')
   .option('--mask <file>', 'Subject mask image (bright = subject), e.g. from an ML segmenter')
   .option('--mask-strength <number>', 'How strongly the mask suppresses the background (0-1)', '1')
+  .option('--depth-image <file>', 'Depth map image (bright = near), e.g. from Depth Anything')
+  .option('--form-strength <number>', 'How strongly depth steers stroke orientation (0-1)', '0.8')
+  .option('--depth-isolation <number>', 'Fade far regions toward paper based on depth (0-1)', '0.5')
   .option('--working-size <number>', 'Internal analysis resolution', '600')
   .option('--stroke-color <color>', 'SVG stroke color', '#000000')
   .option('--stroke-width <number>', 'SVG stroke width', '1')
@@ -236,6 +239,11 @@ program
       focus,
       subjectMask: options.mask ? loadImage(resolve(process.cwd(), options.mask)) : undefined,
       maskStrength: parseFloat(options.maskStrength),
+      depthMap: options.depthImage
+        ? loadImage(resolve(process.cwd(), options.depthImage))
+        : undefined,
+      formStrength: parseFloat(options.formStrength),
+      depthIsolation: parseFloat(options.depthIsolation),
       seed: options.seed ? parseInt(options.seed, 10) : undefined,
       margin: parseInt(options.margin, 10),
       layers: parseInt(options.layers, 10),

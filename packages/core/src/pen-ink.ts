@@ -112,6 +112,20 @@ export interface PenInkOptions {
    * are drawn as clean strokes (see PortraitOptions)
    */
   portrait?: PortraitOptions;
+
+  /**
+   * Estimated depth map (bright = near), e.g. from a monocular depth
+   * model. Stroke orientation follows the 3D form, strokes terminate at
+   * depth discontinuities, and contours trace silhouettes
+   */
+  depthMap?: GrayscaleImage;
+  /** How strongly depth steers stroke orientation, 0-1 (default 0.8) */
+  formStrength?: number;
+  /**
+   * Fade far regions toward paper based on depth, 0-1. Only applies when
+   * the scene has meaningful depth separation (default 0.5)
+   */
+  depthIsolation?: number;
 }
 
 /** Angle offsets (degrees) for successive hatch layers */
@@ -173,11 +187,35 @@ function buildImportance(
     }))
     .filter((f) => f.strength > 0);
 
+  // Depth-based isolation: fade far regions toward paper, but only when
+  // the scene actually has meaningful depth separation
+  const depthIsolation = Math.max(0, Math.min(1, options.depthIsolation ?? 0.5));
+  let depthRemap: ((x: number, y: number) => number) | null = null;
+  if (options.depthMap && depthIsolation > 0) {
+    const data = options.depthMap.data;
+    const stride = Math.max(1, Math.floor(data.length / 5000));
+    const sample: number[] = [];
+    for (let i = 0; i < data.length; i += stride) sample.push(data[i]);
+    sample.sort((a, b) => a - b);
+    const lo = sample[Math.floor(sample.length * 0.15)];
+    const hi = sample[Math.floor(sample.length * 0.85)];
+
+    if (hi - lo > 0.15) {
+      const range = hi - lo;
+      depthRemap = (x: number, y: number): number => {
+        const t = Math.max(0, Math.min(1, (field.getDepth(x, y) - lo) / range));
+        const near = t * t * (3 - 2 * t); // smoothstep
+        return 1 - depthIsolation * (1 - near);
+      };
+    }
+  }
+
   const useDetail = detailEmphasis > 0;
   const useFocus = focusList.length > 0;
   const useMask = !!mask && maskStrength > 0;
+  const useDepth = !!depthRemap;
 
-  if (!useDetail && !useFocus && !useMask) return null;
+  if (!useDetail && !useFocus && !useMask && !useDepth) return null;
 
   const maskScaleX = mask ? mask.width / width : 0;
   const maskScaleY = mask ? mask.height / height : 0;
@@ -205,6 +243,10 @@ function buildImportance(
     if (useMask && mask) {
       const m = sampleBilinear(mask, x * maskScaleX, y * maskScaleY);
       importance *= 1 - maskStrength * (1 - m);
+    }
+
+    if (depthRemap) {
+      importance *= depthRemap(x, y);
     }
 
     return importance;
@@ -254,6 +296,8 @@ export function imageToPenInk(
     hatchAngle: ((options.hatchAngle ?? -45) * Math.PI) / 180,
     followTone: options.followTone,
     normalizeContrast: options.normalizeContrast,
+    depthMap: options.depthMap,
+    formStrength: options.formStrength,
   });
 
   const baseImportance = buildImportance(field, width, height, options);
@@ -633,6 +677,10 @@ function integrate(
     if (!field.isInBounds(nx, ny, pass.margin)) break;
     if (!pass.isDrawable(nx, ny)) break;
     if (grid.hasPointWithin(nx, ny, pass.spacingAt(nx, ny) * D_TEST)) break;
+
+    // Strokes stop at depth discontinuities — hatching must not slide
+    // across a silhouette onto a different surface
+    if (field.getDepthEdge(nx, ny) > 0.45) break;
 
     // Stop instead of drawing a sharp kink
     if (mdx * prevDx + mdy * prevDy < 0.2) break;
