@@ -5,6 +5,7 @@ A generative art toolbox for creating beautiful SVG artwork for pen plotters.
 ## Features
 
 - **Flow Lines Generator**: Create beautiful flow field art based on Perlin/Simplex noise
+- **Image → Pen & Ink**: Render photos as hand-drawn-style hatching and cross-hatching
 - **CLI Tool**: Generate artwork from the command line
 - **Web App**: Interactive browser-based interface for designing artwork
 - **SVG Export**: All output is SVG, perfect for pen plotters
@@ -55,7 +56,42 @@ pnpm --filter @flow-lines/cli start generate \
 pnpm --filter @flow-lines/cli start grid \
   --grid-spacing 25 \
   --output grid-flow.svg
+
+# Render an image as pen-and-ink hatching
+pnpm --filter @flow-lines/cli start image \
+  --input photo.jpg \
+  --width 800 \
+  --output portrait-ink.svg
 ```
+
+### Image → Pen & Ink
+
+The `image` command (and the "Image → Ink" mode in the web app) converts a
+PNG or JPEG into plotter-ready strokes that mimic a pen-and-ink drawing:
+
+- Strokes follow the contours of the image (via a smoothed structure tensor),
+  wrapping around forms the way an artist shades them
+- Local stroke spacing is driven by tone — tight hatching in shadows, open
+  paper in highlights — and darker regions accumulate cross-hatched layers
+- Strong edges are traced as outlines
+- A subtle per-stroke wobble and misregistration makes the result feel
+  hand-drawn rather than machine-perfect
+
+Key options:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-i, --input` | Input image (PNG or JPEG) | required |
+| `-w, --width` | Output width in pixels (height follows the image aspect) | 800 |
+| `--layers` | Hatching layers; shadows get cross-hatched (1-4) | 3 |
+| `--min-spacing` | Stroke spacing in the darkest areas (px) | 2.5 |
+| `--max-spacing` | Stroke spacing in the lightest hatched areas (px) | 14 |
+| `--white-cutoff` | Darkness below which paper stays blank (0-1) | 0.08 |
+| `--hatch-angle` | Fallback hatch angle for flat regions (degrees) | -45 |
+| `--no-follow-tone` | Hatch at fixed angles instead of following contours | off |
+| `--no-outlines` | Skip the edge outline pass | off |
+| `--wobble` | Hand-drawn wobble amplitude in px (0 = ruler-straight) | 0.8 |
+| `-s, --seed` | Random seed for reproducibility | random |
 
 ### CLI Options
 

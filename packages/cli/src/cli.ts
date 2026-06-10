@@ -1,15 +1,42 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { decode as decodeJpeg } from 'jpeg-js';
+import { PNG } from 'pngjs';
 import {
   generateFlowLines,
   generateFlowLinesGrid,
+  grayscaleFromRGBA,
+  imageToPenInk,
   toSVG,
   type FlowLinesOptions,
+  type GrayscaleImage,
+  type PenInkOptions,
   type SVGOptions,
 } from '@flow-lines/core';
+
+/**
+ * Decode a PNG or JPEG file (detected by magic bytes) into a grayscale image
+ */
+function loadImage(path: string): GrayscaleImage {
+  const buffer = readFileSync(path);
+
+  // PNG signature
+  if (buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e) {
+    const png = PNG.sync.read(buffer);
+    return grayscaleFromRGBA(png.data, png.width, png.height);
+  }
+
+  // JPEG signature
+  if (buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    const jpeg = decodeJpeg(buffer, { useTArray: true, maxMemoryUsageInMB: 1024 });
+    return grayscaleFromRGBA(jpeg.data, jpeg.width, jpeg.height);
+  }
+
+  throw new Error(`Unsupported image format: ${path} (only PNG and JPEG are supported)`);
+}
 
 const program = new Command();
 
@@ -126,6 +153,80 @@ program
 
     console.log(`  Seed: ${result.seed}`);
     console.log(`  Generated ${result.lines.length} lines`);
+
+    const svg = toSVG(result, svgOptions);
+    const outputPath = resolve(process.cwd(), options.output);
+
+    writeFileSync(outputPath, svg, 'utf-8');
+    console.log(`\nSaved to: ${outputPath}`);
+  });
+
+program
+  .command('image')
+  .description('Render an image as pen-and-ink style hatching for plotting')
+  .requiredOption('-i, --input <file>', 'Input image (PNG or JPEG)')
+  .option('-w, --width <number>', 'Output width in pixels', '800')
+  .option('-h, --height <number>', 'Output height in pixels (default: match image aspect)')
+  .option('-s, --seed <number>', 'Random seed for reproducibility')
+  .option('-m, --margin <number>', 'Margin from canvas edges', '20')
+  .option('--layers <number>', 'Hatching layers; shadows get cross-hatched (1-4)', '3')
+  .option('--min-spacing <number>', 'Stroke spacing in darkest areas (px)', '2.5')
+  .option('--max-spacing <number>', 'Stroke spacing in lightest hatched areas (px)', '14')
+  .option('--white-cutoff <number>', 'Darkness below which paper stays blank (0-1)', '0.08')
+  .option('--tone-gamma <number>', 'Tone response curve; >1 favors shadows', '1')
+  .option('--hatch-angle <number>', 'Fallback hatch angle in degrees', '-45')
+  .option('--no-follow-tone', 'Hatch at fixed angles instead of following contours')
+  .option('--field-smoothing <number>', 'Direction field smoothing', '4')
+  .option('--no-contrast', 'Skip automatic contrast stretching')
+  .option('--no-outlines', 'Skip the edge outline pass')
+  .option('--outline-threshold <number>', 'Edge strength needed for outlines (0-1)', '0.35')
+  .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
+  .option('--working-size <number>', 'Internal analysis resolution', '600')
+  .option('--stroke-color <color>', 'SVG stroke color', '#000000')
+  .option('--stroke-width <number>', 'SVG stroke width', '1')
+  .option('--background', 'Include background rectangle')
+  .option('--background-color <color>', 'Background color', '#ffffff')
+  .option('-o, --output <file>', 'Output file path', 'pen-ink.svg')
+  .action((options) => {
+    const inputPath = resolve(process.cwd(), options.input);
+
+    console.log(`Loading image: ${inputPath}`);
+    const image = loadImage(inputPath);
+    console.log(`  Image size: ${image.width}x${image.height}`);
+
+    const penInkOptions: PenInkOptions = {
+      width: parseInt(options.width, 10),
+      height: options.height ? parseInt(options.height, 10) : undefined,
+      seed: options.seed ? parseInt(options.seed, 10) : undefined,
+      margin: parseInt(options.margin, 10),
+      layers: parseInt(options.layers, 10),
+      minSpacing: parseFloat(options.minSpacing),
+      maxSpacing: parseFloat(options.maxSpacing),
+      whiteCutoff: parseFloat(options.whiteCutoff),
+      toneGamma: parseFloat(options.toneGamma),
+      hatchAngle: parseFloat(options.hatchAngle),
+      followTone: options.followTone,
+      fieldSmoothing: parseFloat(options.fieldSmoothing),
+      normalizeContrast: options.contrast,
+      drawOutlines: options.outlines,
+      outlineThreshold: parseFloat(options.outlineThreshold),
+      wobble: parseFloat(options.wobble),
+      workingSize: parseInt(options.workingSize, 10),
+    };
+
+    const svgOptions: SVGOptions = {
+      strokeColor: options.strokeColor,
+      strokeWidth: parseFloat(options.strokeWidth),
+      includeBackground: options.background ?? false,
+      backgroundColor: options.backgroundColor,
+    };
+
+    console.log('Rendering pen-and-ink strokes...');
+    const result = imageToPenInk(image, penInkOptions);
+
+    console.log(`  Output size: ${result.width}x${result.height}`);
+    console.log(`  Seed: ${result.seed}`);
+    console.log(`  Generated ${result.lines.length} strokes`);
 
     const svg = toSVG(result, svgOptions);
     const outputPath = resolve(process.cwd(), options.output);
