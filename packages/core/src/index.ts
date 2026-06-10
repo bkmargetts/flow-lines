@@ -35,3 +35,6 @@ export type { PenInkOptions, FocusOptions } from './pen-ink.js';
 // Hand-drawn styling
 export { applyHandDrawnStyle } from './hand-drawn.js';
 export type { HandDrawnOptions } from './hand-drawn.js';
+
+// Portrait-aware rendering
+export type { PortraitOptions } from './portrait.js';

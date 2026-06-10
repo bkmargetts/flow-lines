@@ -2,6 +2,11 @@ import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { ImageField } from './image-field.js';
 import { GrayscaleImage, sampleBilinear } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
+import {
+  PortraitOptions,
+  buildPortraitMaps,
+  featureStrokesToLines,
+} from './portrait.js';
 
 export interface FocusOptions {
   /** Focal point x in output canvas coordinates */
@@ -68,8 +73,11 @@ export interface PenInkOptions {
    * looser strokes. 0 disables, 1 is maximum effect (default 0.3)
    */
   detailEmphasis?: number;
-  /** Concentrate rendering detail around a focal point */
-  focus?: FocusOptions;
+  /**
+   * Concentrate rendering detail around one or more focal points (a region
+   * keeps detail if it is near any of them)
+   */
+  focus?: FocusOptions | FocusOptions[];
   /**
    * Subject mask (bright = important), e.g. from an ML segmenter. Any
    * resolution; it is stretched over the full canvas
@@ -77,6 +85,13 @@ export interface PenInkOptions {
   subjectMask?: GrayscaleImage;
   /** How strongly the mask suppresses the background, 0-1 (default 1) */
   maskStrength?: number;
+
+  /**
+   * Face geometry for portrait-aware rendering: skin is lightened so paper
+   * does the work, facial features keep full detail, and feature polylines
+   * are drawn as clean strokes (see PortraitOptions)
+   */
+  portrait?: PortraitOptions;
 }
 
 /** Angle offsets (degrees) for successive hatch layers */
@@ -110,18 +125,25 @@ function buildImportance(
   options: PenInkOptions
 ): ((x: number, y: number) => number) | null {
   const detailEmphasis = Math.max(0, Math.min(1, options.detailEmphasis ?? 0.3));
-  const focus = options.focus;
   const mask = options.subjectMask;
   const maskStrength = Math.max(0, Math.min(1, options.maskStrength ?? 1));
 
+  const focusList = (Array.isArray(options.focus) ? options.focus : options.focus ? [options.focus] : [])
+    .map((f) => ({
+      x: f.x,
+      y: f.y,
+      radius: f.radius,
+      falloff: Math.max(1, f.falloff ?? f.radius),
+      strength: Math.max(0, Math.min(1, f.strength ?? 0.85)),
+    }))
+    .filter((f) => f.strength > 0);
+
   const useDetail = detailEmphasis > 0;
-  const useFocus = !!focus && (focus.strength ?? 0.85) > 0;
+  const useFocus = focusList.length > 0;
   const useMask = !!mask && maskStrength > 0;
 
   if (!useDetail && !useFocus && !useMask) return null;
 
-  const focusStrength = focus ? Math.max(0, Math.min(1, focus.strength ?? 0.85)) : 0;
-  const focusFalloff = focus ? Math.max(1, focus.falloff ?? focus.radius) : 1;
   const maskScaleX = mask ? mask.width / width : 0;
   const maskScaleY = mask ? mask.height / height : 0;
 
@@ -132,11 +154,17 @@ function buildImportance(
       importance *= 1 - detailEmphasis * (1 - field.getDetail(x, y));
     }
 
-    if (useFocus && focus) {
-      const dist = Math.hypot(x - focus.x, y - focus.y);
-      const t = Math.max(0, Math.min(1, (dist - focus.radius) / focusFalloff));
-      const fade = t * t * (3 - 2 * t); // smoothstep
-      importance *= 1 - focusStrength * fade;
+    if (useFocus) {
+      // A region keeps detail if it is near any focal point
+      let best = 0;
+      for (const f of focusList) {
+        const dist = Math.hypot(x - f.x, y - f.y);
+        const t = Math.max(0, Math.min(1, (dist - f.radius) / f.falloff));
+        const fade = t * t * (3 - 2 * t); // smoothstep
+        best = Math.max(best, 1 - f.strength * fade);
+        if (best >= 1) break;
+      }
+      importance *= best;
     }
 
     if (useMask && mask) {
@@ -190,13 +218,42 @@ export function imageToPenInk(
     normalizeContrast: options.normalizeContrast,
   });
 
-  const importance = buildImportance(field, width, height, options);
+  const baseImportance = buildImportance(field, width, height, options);
+  const portraitMaps = options.portrait
+    ? buildPortraitMaps(options.portrait, width, height)
+    : null;
+
+  // Facial features keep full rendering detail regardless of what the
+  // other importance sources decided
+  const importance =
+    portraitMaps?.feature && baseImportance
+      ? (x: number, y: number): number => {
+          const boost = portraitMaps.featureBoost * portraitMaps.feature!(x, y);
+          return Math.max(baseImportance(x, y), Math.min(1, boost));
+        }
+      : baseImportance;
+
+  // Skin inside face ovals is lightened toward paper — ink artists let
+  // paper do the skin and reserve hatching for shadow planes — but the
+  // features themselves keep their tone
+  const skinFactor =
+    portraitMaps?.skin && portraitMaps.skinLightening > 0
+      ? (x: number, y: number): number => {
+          const feature = portraitMaps.feature ? portraitMaps.feature(x, y) : 0;
+          const skin = portraitMaps.skin!(x, y) * (1 - feature);
+          return 1 - portraitMaps.skinLightening * skin;
+        }
+      : null;
+
+  const baseDarkness = skinFactor
+    ? (x: number, y: number): number => field.getDarkness(x, y) * skinFactor(x, y)
+    : (x: number, y: number): number => field.getDarkness(x, y);
 
   // Where importance drops, tone is lightened toward paper, the white
   // cutoff rises, and stroke spacing opens up — backgrounds dissolve into
   // a few loose gestures instead of competing with the subject.
   const effectiveDarkness = (x: number, y: number, imp: number): number =>
-    field.getDarkness(x, y) * (0.25 + 0.75 * imp);
+    baseDarkness(x, y) * (0.25 + 0.75 * imp);
 
   const lines: FlowLine[] = [];
 
@@ -207,7 +264,7 @@ export function imageToPenInk(
     const angleOffset = (LAYER_ANGLES[layer] * Math.PI) / 180;
 
     const spacingAt = (x: number, y: number): number => {
-      let d = field.getDarkness(x, y);
+      let d = baseDarkness(x, y);
       let spacingScale = 1;
 
       if (importance) {
@@ -226,7 +283,7 @@ export function imageToPenInk(
           const imp = importance(x, y);
           return effectiveDarkness(x, y, imp) >= threshold + (1 - imp) * 0.25;
         }
-      : (x: number, y: number): boolean => field.getDarkness(x, y) >= threshold;
+      : (x: number, y: number): boolean => baseDarkness(x, y) >= threshold;
 
     lines.push(
       ...tracePass(field, seed + layer * 7919, {
@@ -246,10 +303,16 @@ export function imageToPenInk(
   if (drawOutlines) {
     const outlineSpacing = Math.max(1.2, minSpacing * 0.8);
 
+    // Skip outlines where hatching is already near-black — stacking the
+    // two just muddies dark features like eyes and hair
+    const notSaturated = (x: number, y: number): boolean => baseDarkness(x, y) < 0.82;
+
     const isDrawable = importance
       ? (x: number, y: number): boolean =>
+          notSaturated(x, y) &&
           field.getEdgeStrength(x, y) >= outlineThreshold + (1 - importance(x, y)) * 0.5
-      : (x: number, y: number): boolean => field.getEdgeStrength(x, y) >= outlineThreshold;
+      : (x: number, y: number): boolean =>
+          notSaturated(x, y) && field.getEdgeStrength(x, y) >= outlineThreshold;
 
     lines.push(
       ...tracePass(field, seed + 104729, {
@@ -263,6 +326,20 @@ export function imageToPenInk(
         seedSpacing: 4,
       })
     );
+  }
+
+  // Clean feature strokes (eyelids, brows, lip lines) drawn from landmark
+  // geometry — accurate feature lines are what make a sketch read as a person
+  if (options.portrait?.featureStrokes) {
+    const featureLines = featureStrokesToLines(
+      options.portrait.featureStrokes,
+      width,
+      height,
+      Math.min(stepLength, 2)
+    );
+    for (const points of featureLines) {
+      lines.push({ points });
+    }
   }
 
   let result: FlowLinesResult = { lines, width, height, seed };

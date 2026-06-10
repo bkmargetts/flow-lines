@@ -78,10 +78,14 @@ PNG or JPEG into plotter-ready strokes that mimic a pen-and-ink drawing:
   hand-drawn rather than machine-perfect
 - Subject isolation focuses ink where it matters: detailed regions keep
   tight hatching while flat backgrounds fade (`--detail`), rendering can
-  fall off around a focal point (`--focus`), and a subject mask
-  (`--mask`, or one-click AI isolation in the web app) suppresses the
-  background entirely — backgrounds dissolve into loose gestures the way
-  an artist would treat them
+  fall off around one or more focal points (`--focus`, repeatable for
+  multiple subjects), and a subject mask (`--mask`, or click-to-isolate
+  AI segmentation in the web app) suppresses the background entirely —
+  backgrounds dissolve into loose gestures the way an artist would treat
+  them
+- Portrait mode (web app): AI face detection lightens skin so paper does
+  the work, keeps eyes/brows/lips crisply detailed, and draws clean
+  feature lines from facial landmarks — handles multiple faces
 
 Key options:
 

@@ -16,7 +16,7 @@ interface PreviewProps {
   showDots: boolean;
   onPaint: (point: Point) => void;
   focusSelectMode?: boolean;
-  focusMarker?: FocusMarker | null;
+  focusMarkers?: FocusMarker[];
   onSetFocus?: (point: Point) => void;
 }
 
@@ -29,7 +29,7 @@ export function Preview({
   showDots,
   onPaint,
   focusSelectMode = false,
-  focusMarker = null,
+  focusMarkers = [],
   onSetFocus,
 }: PreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,7 +135,7 @@ export function Preview({
     </svg>
   ) : null;
 
-  const focusOverlay = focusMarker ? (
+  const focusOverlay = focusMarkers.length > 0 ? (
     <svg
       className="focus-overlay"
       viewBox={`0 0 ${width} ${height}`}
@@ -148,16 +148,20 @@ export function Preview({
         pointerEvents: 'none',
       }}
     >
-      <circle
-        cx={focusMarker.x}
-        cy={focusMarker.y}
-        r={focusMarker.radius}
-        fill="none"
-        stroke="rgba(233, 69, 96, 0.5)"
-        strokeWidth={1.5}
-        strokeDasharray="6 4"
-      />
-      <circle cx={focusMarker.x} cy={focusMarker.y} r={4} fill="rgba(233, 69, 96, 0.8)" />
+      {focusMarkers.map((marker, i) => (
+        <g key={i}>
+          <circle
+            cx={marker.x}
+            cy={marker.y}
+            r={marker.radius}
+            fill="none"
+            stroke="rgba(233, 69, 96, 0.5)"
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+          />
+          <circle cx={marker.x} cy={marker.y} r={4} fill="rgba(233, 69, 96, 0.8)" />
+        </g>
+      ))}
     </svg>
   ) : null;
 

@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { GrayscaleImage, Point } from '@flow-lines/core';
-import type { InkSettings, SegmentStatus } from '../App';
+import type { InkSettings, PortraitState, PortraitStatus, SegmentStatus } from '../App';
 
 interface ImageControlsProps {
   settings: InkSettings;
@@ -9,7 +9,7 @@ interface ImageControlsProps {
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
-  focusPoint: Point | null;
+  focusPoints: Point[];
   focusSelectMode: boolean;
   toggleFocusSelect: () => void;
   clearFocus: () => void;
@@ -17,6 +17,10 @@ interface ImageControlsProps {
   segmentStatus: SegmentStatus;
   isolateSubject: () => void;
   clearSubjectMask: () => void;
+  portraitState: PortraitState | null;
+  portraitStatus: PortraitStatus;
+  detectFaces: () => void;
+  clearPortrait: () => void;
 }
 
 export function ImageControls({
@@ -26,7 +30,7 @@ export function ImageControls({
   onImageFile,
   randomizeSeed,
   downloadSVG,
-  focusPoint,
+  focusPoints,
   focusSelectMode,
   toggleFocusSelect,
   clearFocus,
@@ -34,6 +38,10 @@ export function ImageControls({
   segmentStatus,
   isolateSubject,
   clearSubjectMask,
+  portraitState,
+  portraitStatus,
+  detectFaces,
+  clearPortrait,
 }: ImageControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,9 +134,13 @@ export function ImageControls({
             onClick={toggleFocusSelect}
             disabled={!imageName}
           >
-            {focusSelectMode ? 'Click the subject…' : focusPoint ? 'Move Focus' : 'Set Focus Point'}
+            {focusSelectMode
+              ? 'Click subjects, then click here to stop'
+              : focusPoints.length > 0
+                ? `Add Focus Points (${focusPoints.length})`
+                : 'Set Focus Points'}
           </button>
-          {focusPoint && (
+          {focusPoints.length > 0 && (
             <button type="button" className="secondary" onClick={clearFocus}>
               Clear
             </button>
@@ -136,7 +148,7 @@ export function ImageControls({
         </div>
       </div>
 
-      {focusPoint && (
+      {focusPoints.length > 0 && (
         <>
           <div className="control-group">
             <label>
@@ -190,8 +202,8 @@ export function ImageControls({
               {segmentStatus === 'error'
                 ? 'Subject isolation failed — check your connection and try again.'
                 : subjectMask
-                  ? 'Subject isolated. Background is suppressed by the mask.'
-                  : 'Runs in your browser; downloads a ~6MB model on first use. Segments the object at the focus point.'}
+                  ? 'Subjects isolated. Background is suppressed by the mask.'
+                  : 'Runs in your browser; downloads a ~6MB model on first use. Segments the object at each focus point.'}
             </p>
           </div>
 
@@ -210,6 +222,68 @@ export function ImageControls({
               />
             </div>
           )}
+        </>
+      )}
+
+      <h3 className="section-title">Portrait</h3>
+
+      <div className="control-group">
+        <div className="paint-controls">
+          <button
+            type="button"
+            className="secondary"
+            onClick={detectFaces}
+            disabled={!imageName || portraitStatus === 'loading'}
+          >
+            {portraitStatus === 'loading'
+              ? 'Detecting…'
+              : portraitState
+                ? 'Re-detect Faces (AI)'
+                : 'Detect Faces (AI)'}
+          </button>
+          {portraitState && (
+            <button type="button" className="secondary" onClick={clearPortrait}>
+              Clear
+            </button>
+          )}
+        </div>
+        <p className="paint-hint">
+          {portraitStatus === 'error'
+            ? 'Face detection failed — check your connection and try again.'
+            : portraitStatus === 'none'
+              ? 'No faces found in this image.'
+              : portraitState
+                ? `${portraitState.faceCount} face${portraitState.faceCount === 1 ? '' : 's'} detected: skin stays light, features stay crisp.`
+                : 'Runs in your browser; downloads a ~4MB model on first use. Lightens skin and draws clean feature lines.'}
+        </p>
+      </div>
+
+      {portraitState && (
+        <>
+          <div className="control-group">
+            <label>
+              Skin Lightening <span>{settings.skinLightening.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={settings.skinLightening}
+              onChange={(e) => updateSettings({ skinLightening: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.featureLines}
+                onChange={(e) => updateSettings({ featureLines: e.target.checked })}
+              />
+              Draw feature lines (eyes, brows, lips)
+            </label>
+          </div>
         </>
       )}
 
@@ -269,6 +343,40 @@ export function ImageControls({
           value={settings.whiteCutoff}
           onChange={(e) => updateSettings({ whiteCutoff: parseFloat(e.target.value) })}
         />
+      </div>
+
+      <div className="control-group">
+        <label>
+          Tone Gamma <span>{settings.toneGamma.toFixed(2)}</span>
+        </label>
+        <input
+          type="range"
+          min="0.5"
+          max="2.5"
+          step="0.05"
+          value={settings.toneGamma}
+          onChange={(e) => updateSettings({ toneGamma: parseFloat(e.target.value) })}
+        />
+        <p className="paint-hint">
+          Higher values keep midtones (like skin) light and push ink into shadows.
+        </p>
+      </div>
+
+      <div className="control-group">
+        <label>
+          Detail Resolution <span>{settings.workingSize}px</span>
+        </label>
+        <input
+          type="range"
+          min="400"
+          max="1000"
+          step="50"
+          value={settings.workingSize}
+          onChange={(e) => updateSettings({ workingSize: parseInt(e.target.value, 10) })}
+        />
+        <p className="paint-hint">
+          Higher keeps small features (eyes, mouths) crisp; lower renders faster.
+        </p>
       </div>
 
       <div className="control-group">
