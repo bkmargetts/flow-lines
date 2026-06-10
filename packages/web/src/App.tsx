@@ -183,6 +183,7 @@ export function App() {
   const [portraitStatus, setPortraitStatus] = useState<PortraitStatus>('idle');
   const [depthMap, setDepthMap] = useState<GrayscaleImage | null>(null);
   const [depthStatus, setDepthStatus] = useState<DepthStatus>('idle');
+  const [depthError, setDepthError] = useState<string | null>(null);
   const [preset, setPreset] = useState('classic');
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   // Tokens discard results of superseded async AI runs
@@ -248,6 +249,7 @@ export function App() {
 
     const token = ++depthTokenRef.current;
     setDepthStatus('loading');
+    setDepthError(null);
     import('./depth')
       .then(({ estimateDepth }) => estimateDepth(canvas))
       .then((depth) => {
@@ -255,10 +257,11 @@ export function App() {
         setDepthMap(depth);
         setDepthStatus('idle');
       })
-      .catch(() => {
+      .catch((err) => {
         if (token !== depthTokenRef.current) return;
         setDepthMap(null);
         setDepthStatus('error');
+        setDepthError(err instanceof Error ? err.message : String(err));
       });
   }, []);
 
@@ -266,6 +269,7 @@ export function App() {
     depthTokenRef.current++;
     setDepthMap(null);
     setDepthStatus('idle');
+    setDepthError(null);
   }, []);
 
   const runIsolation = useCallback((points: Point[]) => {
@@ -514,6 +518,7 @@ export function App() {
             detectFaces={detectFaces}
             depthMap={depthMap}
             depthStatus={depthStatus}
+            depthError={depthError}
             estimateDepthMap={estimateDepthMap}
             clearDepth={clearDepth}
             clearPortrait={() => {

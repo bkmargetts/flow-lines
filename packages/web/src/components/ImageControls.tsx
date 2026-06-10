@@ -130,6 +130,7 @@ interface ImageControlsProps {
   clearPortrait: () => void;
   depthMap: GrayscaleImage | null;
   depthStatus: DepthStatus;
+  depthError: string | null;
   estimateDepthMap: () => void;
   clearDepth: () => void;
 }
@@ -155,6 +156,7 @@ export function ImageControls({
   clearPortrait,
   depthMap,
   depthStatus,
+  depthError,
   estimateDepthMap,
   clearDepth,
 }: ImageControlsProps) {
@@ -223,7 +225,8 @@ export function ImageControls({
           )}
           {depthStatus === 'error' && (
             <p className="paint-hint">
-              Depth estimation failed — check your connection and try again.
+              Depth estimation failed
+              {depthError ? `: ${depthError.slice(0, 200)}` : ' — check your connection and try again.'}
             </p>
           )}
         </div>
