@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { imageToPenInk } from './pen-ink.js';
 import { ImageField } from './image-field.js';
 import { GrayscaleImage } from './image.js';
+import { traceContours } from './contours.js';
 
 /** Build a synthetic grayscale image from a function of normalized coords */
 function makeImage(
@@ -366,6 +367,116 @@ describe('portrait rendering', () => {
 
     expect(count(suppressed.lines)).toBe(0);
     expect(count(withFeature.lines)).toBeGreaterThan(50);
+  });
+});
+
+describe('contour tracing', () => {
+  it('links a circle edge into few long contours', () => {
+    // White background, dark disk: one strong circular edge
+    const disk = makeImage(160, 160, (u, v) =>
+      Math.hypot(u - 0.5, v - 0.5) < 0.3 ? 0.15 : 1
+    );
+    const field = new ImageField(disk, {
+      width: 320,
+      height: 320,
+      normalizeContrast: false,
+    });
+
+    const contours = traceContours(field, { minLength: 20 });
+
+    expect(contours.length).toBeGreaterThan(0);
+    expect(contours.length).toBeLessThan(8); // coherent chains, not fragments
+
+    // The longest contour should cover most of the circle's circumference
+    const lengthOf = (points: { x: number; y: number }[]) => {
+      let len = 0;
+      for (let i = 1; i < points.length; i++) {
+        len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+      }
+      return len;
+    };
+    const longest = Math.max(...contours.map(lengthOf));
+    const circumference = 2 * Math.PI * 0.3 * 320;
+    expect(longest).toBeGreaterThan(circumference * 0.6);
+
+    // And its points should sit near the circle
+    for (const c of contours) {
+      for (const p of c) {
+        const r = Math.hypot(p.x - 160, p.y - 160);
+        expect(Math.abs(r - 0.3 * 320)).toBeLessThan(12);
+      }
+    }
+  });
+
+  it('marks contours as bold pen strokes in the full render', () => {
+    const disk = makeImage(120, 120, (u, v) =>
+      Math.hypot(u - 0.5, v - 0.5) < 0.3 ? 0.2 : 1
+    );
+    const result = imageToPenInk(disk, {
+      width: 240,
+      seed: 51,
+      wobble: 0,
+      normalizeContrast: false,
+    });
+
+    const bold = result.lines.filter((l) => l.pen === 'bold');
+    const fine = result.lines.filter((l) => l.pen !== 'bold');
+    expect(bold.length).toBeGreaterThan(0);
+    expect(fine.length).toBeGreaterThan(0);
+  });
+});
+
+describe('texture strokes', () => {
+  // Left half: clumpy fur-scale texture at mid tone; right half: flat mid tone
+  const furry = makeImage(160, 160, (u, v) =>
+    u < 0.5 ? 0.45 + 0.2 * Math.sin(u * 80) * Math.sin(v * 80) : 0.45
+  );
+
+  const render = (textureStrokes: number) =>
+    imageToPenInk(furry, {
+      width: 320,
+      seed: 61,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      textureStrokes,
+    });
+
+  const avgStrokeLength = (
+    lines: { points: { x: number; y: number }[] }[],
+    x0: number,
+    x1: number
+  ) => {
+    const inRegion = lines.filter(
+      (l) => l.points.length > 0 && l.points[0].x >= x0 && l.points[0].x < x1
+    );
+    if (inRegion.length === 0) return 0;
+    const total = inRegion.reduce((sum, l) => {
+      let len = 0;
+      for (let i = 1; i < l.points.length; i++) {
+        len += Math.hypot(
+          l.points[i].x - l.points[i - 1].x,
+          l.points[i].y - l.points[i - 1].y
+        );
+      }
+      return sum + len;
+    }, 0);
+    return total / inRegion.length;
+  };
+
+  it('shortens strokes into ticks in textured regions', () => {
+    const off = render(0);
+    const on = render(1);
+
+    const texturedOff = avgStrokeLength(off.lines, 0, 150);
+    const texturedOn = avgStrokeLength(on.lines, 0, 150);
+    const flatOn = avgStrokeLength(on.lines, 170, 320);
+
+    // Texture mode shortens strokes in the busy half...
+    expect(texturedOn).toBeLessThan(texturedOff * 0.6);
+    // ...but leaves the flat half drawing long strokes
+    expect(flatOn).toBeGreaterThan(texturedOn * 1.5);
   });
 });
 

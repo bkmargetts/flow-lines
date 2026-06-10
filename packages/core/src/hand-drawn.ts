@@ -40,8 +40,11 @@ export function applyHandDrawnStyle(
 
   const lines: FlowLine[] = result.lines.map((line, lineIndex) => {
     if (line.points.length < 2) {
-      return { points: line.points.map((p) => ({ ...p })) };
+      return { ...line, points: line.points.map((p) => ({ ...p })) };
     }
+
+    // Bold contour lines are drawn with commitment — less shake
+    const penScale = line.pen === 'bold' ? 0.55 : 1;
 
     // Per-line noise track, offset so strokes are decorrelated
     const track = lineIndex * 0.731 + 0.5;
@@ -53,7 +56,7 @@ export function applyHandDrawnStyle(
 
     // Vary how shaky this particular stroke is
     const lineAmplitude =
-      amplitude * localScale * (0.7 + 0.6 * (noise.noise2D(track, -7.3) * 0.5 + 0.5));
+      amplitude * localScale * penScale * (0.7 + 0.6 * (noise.noise2D(track, -7.3) * 0.5 + 0.5));
 
     const offsetX = jitter * noise.noise2D(track, 11.7);
     const offsetY = jitter * noise.noise2D(track, 23.1);
@@ -85,7 +88,7 @@ export function applyHandDrawnStyle(
       };
     }
 
-    return { points };
+    return { ...line, points };
   });
 
   return { ...result, lines };
