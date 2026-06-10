@@ -1,9 +1,10 @@
 import { FilesetResolver, InteractiveSegmenter } from '@mediapipe/tasks-vision';
 import type { GrayscaleImage } from '@flow-lines/core';
 
-// Must match the installed @mediapipe/tasks-vision version so the JS API
-// and the WASM runtime agree
-const WASM_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
+// The WASM runtime is copied out of node_modules into public/mediapipe-wasm
+// at build time (see scripts/copy-mediapipe-wasm.mjs), so it is served from
+// our own origin and always matches the installed package version
+const WASM_BASE = `${import.meta.env.BASE_URL}mediapipe-wasm`;
 const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/interactive_segmenter/magic_touch/float32/1/magic_touch.tflite';
 

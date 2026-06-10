@@ -28,3 +28,6 @@ coverage/
 .env
 .env.local
 .env.*.local
+
+# MediaPipe WASM runtime (copied from node_modules at build time)
+packages/web/public/mediapipe-wasm/
