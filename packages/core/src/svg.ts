@@ -3,8 +3,6 @@ import { FlowLinesResult, FlowLine, Point } from './flow-lines.js';
 export interface SVGOptions {
   strokeColor?: string;
   strokeWidth?: number;
-  /** Stroke width for 'bold' pen lines (default strokeWidth * 2) */
-  boldStrokeWidth?: number;
   backgroundColor?: string;
   includeBackground?: boolean;
   precision?: number;
@@ -18,7 +16,6 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
   const {
     strokeColor = '#000000',
     strokeWidth = 1,
-    boldStrokeWidth = strokeWidth * 2,
     backgroundColor = '#ffffff',
     includeBackground = false,
     precision = 2,
@@ -29,46 +26,20 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
     ? `  <rect width="${result.width}" height="${result.height}" fill="${backgroundColor}"/>\n`
     : '';
 
-  const pathFor = (line: FlowLine): string => lineToPath(line, precision, optimizePaths);
-
-  const pathElement = (d: string, width: number, indent: string): string =>
-    `${indent}<path d="${d}" fill="none" stroke="${strokeColor}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round"/>`;
-
-  const hasBold = result.lines.some((line) => line.pen === 'bold');
-
-  if (!hasBold) {
-    const pathElements = result.lines
-      .map(pathFor)
-      .filter((d) => d.length > 0)
-      .map((d) => pathElement(d, strokeWidth, '  '))
-      .join('\n');
-
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${result.width}" height="${result.height}" viewBox="0 0 ${result.width} ${result.height}">
-${backgroundRect}${pathElements}
-</svg>`;
-  }
-
-  // Two pen weights: emit one Inkscape-style layer per pen so plotter
-  // tools (vpype, AxiDraw, Inkscape) can plot them as separate passes
-  // with different physical pens
-  const layerFor = (pen: 'fine' | 'bold', label: string, width: number): string => {
-    const pathElements = result.lines
-      .filter((line) => (line.pen ?? 'fine') === pen)
-      .map(pathFor)
-      .filter((d) => d.length > 0)
-      .map((d) => pathElement(d, width, '    '))
-      .join('\n');
-
-    return `  <g inkscape:groupmode="layer" inkscape:label="${label}" id="${pen}">
-${pathElements}
-  </g>`;
-  };
+  // Everything plots with one pen at one width: emphasis (bold outlines)
+  // is built from repeated offset strokes upstream, not stroke width
+  const pathElements = result.lines
+    .map((line) => lineToPath(line, precision, optimizePaths))
+    .filter((d) => d.length > 0)
+    .map(
+      (d) =>
+        `  <path d="${d}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`
+    )
+    .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${result.width}" height="${result.height}" viewBox="0 0 ${result.width} ${result.height}">
-${backgroundRect}${layerFor('fine', '1-fine', strokeWidth)}
-${layerFor('bold', '2-bold', boldStrokeWidth)}
+<svg xmlns="http://www.w3.org/2000/svg" width="${result.width}" height="${result.height}" viewBox="0 0 ${result.width} ${result.height}">
+${backgroundRect}${pathElements}
 </svg>`;
 }
 

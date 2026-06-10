@@ -42,3 +42,7 @@ export type { PortraitOptions } from './portrait.js';
 // Contour extraction
 export { traceContours } from './contours.js';
 export type { ContourOptions } from './contours.js';
+
+// Plot optimization
+export { optimizePlot, measurePenTravel } from './optimize.js';
+export type { OptimizePlotOptions } from './optimize.js';

@@ -184,7 +184,8 @@ program
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
   .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
-  .option('--bold-width <number>', 'Stroke width for bold contour pen (default: 2x stroke width)')
+  .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
+  .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
   .option('--detail <number>', 'Emphasize detailed regions; flat areas fade (0-1)', '0.3')
   .option(
     '--focus <x,y>',
@@ -244,6 +245,8 @@ program
         : undefined,
       formStrength: parseFloat(options.formStrength),
       depthIsolation: parseFloat(options.depthIsolation),
+      outlinePasses: parseInt(options.outlinePasses, 10),
+      optimize: options.optimize,
       seed: options.seed ? parseInt(options.seed, 10) : undefined,
       margin: parseInt(options.margin, 10),
       layers: parseInt(options.layers, 10),
@@ -267,7 +270,6 @@ program
     const svgOptions: SVGOptions = {
       strokeColor: options.strokeColor,
       strokeWidth: parseFloat(options.strokeWidth),
-      boldStrokeWidth: options.boldWidth ? parseFloat(options.boldWidth) : undefined,
       includeBackground: options.background ?? false,
       backgroundColor: options.backgroundColor,
     };

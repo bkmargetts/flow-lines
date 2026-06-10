@@ -92,7 +92,7 @@ describe('toSVG', () => {
   });
 });
 
-describe('toSVG pen layers', () => {
+describe('toSVG single pen width', () => {
   const twoPenResult = {
     width: 100,
     height: 100,
@@ -114,24 +114,12 @@ describe('toSVG pen layers', () => {
     ],
   };
 
-  it('emits one layer per pen with distinct widths', () => {
-    const svg = toSVG(twoPenResult, { strokeWidth: 1, boldStrokeWidth: 2.4 });
-
-    expect(svg).toContain('xmlns:inkscape');
-    expect(svg).toContain('inkscape:groupmode="layer"');
-    expect(svg).toContain('inkscape:label="1-fine"');
-    expect(svg).toContain('inkscape:label="2-bold"');
-    expect(svg).toContain('stroke-width="1"');
-    expect(svg).toContain('stroke-width="2.4"');
-  });
-
-  it('defaults bold width to double the fine width', () => {
+  it('renders all lines with one stroke width regardless of pen class', () => {
     const svg = toSVG(twoPenResult, { strokeWidth: 0.8 });
-    expect(svg).toContain('stroke-width="1.6"');
-  });
 
-  it('keeps flat output when no bold lines exist', () => {
-    const svg = toSVG({ ...twoPenResult, lines: [twoPenResult.lines[0]] });
+    const widths = [...svg.matchAll(/stroke-width="([^"]+)"/g)].map((m) => m[1]);
+    expect(widths.length).toBe(2);
+    expect(new Set(widths)).toEqual(new Set(['0.8']));
     expect(svg).not.toContain('inkscape');
   });
 });

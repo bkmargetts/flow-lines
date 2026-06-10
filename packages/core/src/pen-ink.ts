@@ -8,6 +8,26 @@ import {
   featureStrokesToLines,
 } from './portrait.js';
 import { traceContours } from './contours.js';
+import { optimizePlot } from './optimize.js';
+
+/** Offset a polyline perpendicular to its local direction */
+function offsetPolyline(points: Point[], distance: number): Point[] {
+  if (Math.abs(distance) < 1e-6) return points.map((p) => ({ ...p }));
+
+  const out: Point[] = new Array(points.length);
+  for (let i = 0; i < points.length; i++) {
+    const ahead = points[Math.min(i + 1, points.length - 1)];
+    const behind = points[Math.max(i - 1, 0)];
+    const tx = ahead.x - behind.x;
+    const ty = ahead.y - behind.y;
+    const len = Math.hypot(tx, ty) || 1;
+    out[i] = {
+      x: points[i].x + (-ty / len) * distance,
+      y: points[i].y + (tx / len) * distance,
+    };
+  }
+  return out;
+}
 
 export interface FocusOptions {
   /** Focal point x in output canvas coordinates */
@@ -126,6 +146,19 @@ export interface PenInkOptions {
    * the scene has meaningful depth separation (default 0.5)
    */
   depthIsolation?: number;
+
+  /**
+   * Chain nearly-touching strokes and order them to minimize pen-up
+   * travel — faster plots, fewer pen lifts (default true)
+   */
+  optimize?: boolean;
+
+  /**
+   * Emphasis passes for contour outlines: the same single pen draws the
+   * outline this many times with slight offsets, building a bold line
+   * the way an artist does — no thick pen required (default 2)
+   */
+  outlinePasses?: number;
 }
 
 /** Angle offsets (degrees) for successive hatch layers */
@@ -421,9 +454,26 @@ export function imageToPenInk(
           }
         : null;
 
+    const outlinePasses = Math.max(1, Math.min(4, Math.round(options.outlinePasses ?? 2)));
+
+    // Bold outlines are built from repeated single-pen passes with a
+    // slight perpendicular offset, like an artist thickening a line by
+    // drawing over it — every stroke stays plottable with one pen
+    const pushEmphasized = (points: Point[]): void => {
+      lines.push({ points, pen: 'bold' });
+      const spread = 1.1;
+      for (let pass = 1; pass < outlinePasses; pass++) {
+        const offset = spread * (pass - (outlinePasses - 1) / 2);
+        const shifted = offsetPolyline(points, offset);
+        if (shifted.length >= 2) {
+          lines.push({ points: shifted, pen: 'bold' });
+        }
+      }
+    };
+
     for (const points of contours) {
       if (!insideFace) {
-        lines.push({ points, pen: 'bold' });
+        pushEmphasized(points);
         continue;
       }
 
@@ -437,7 +487,11 @@ export function imageToPenInk(
             length += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
           }
           if (length >= 8) {
-            lines.push({ points: run, pen: runPen });
+            if (runPen === 'bold') {
+              pushEmphasized(run);
+            } else {
+              lines.push({ points: run, pen: runPen });
+            }
           }
         }
         run = [];
@@ -491,6 +545,10 @@ export function imageToPenInk(
         ? (x, y) => 1 + (1 - importance(x, y)) * 0.9
         : undefined,
     });
+  }
+
+  if (options.optimize ?? true) {
+    result = optimizePlot(result);
   }
 
   return result;
