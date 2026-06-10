@@ -1,5 +1,6 @@
 import { useRef } from 'react';
-import type { InkSettings } from '../App';
+import type { GrayscaleImage, Point } from '@flow-lines/core';
+import type { InkSettings, PortraitState, PortraitStatus, SegmentStatus } from '../App';
 
 interface ImageControlsProps {
   settings: InkSettings;
@@ -8,6 +9,18 @@ interface ImageControlsProps {
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
+  focusPoints: Point[];
+  focusSelectMode: boolean;
+  toggleFocusSelect: () => void;
+  clearFocus: () => void;
+  subjectMask: GrayscaleImage | null;
+  segmentStatus: SegmentStatus;
+  isolateSubject: () => void;
+  clearSubjectMask: () => void;
+  portraitState: PortraitState | null;
+  portraitStatus: PortraitStatus;
+  detectFaces: () => void;
+  clearPortrait: () => void;
 }
 
 export function ImageControls({
@@ -17,6 +30,18 @@ export function ImageControls({
   onImageFile,
   randomizeSeed,
   downloadSVG,
+  focusPoints,
+  focusSelectMode,
+  toggleFocusSelect,
+  clearFocus,
+  subjectMask,
+  segmentStatus,
+  isolateSubject,
+  clearSubjectMask,
+  portraitState,
+  portraitStatus,
+  detectFaces,
+  clearPortrait,
 }: ImageControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,6 +107,186 @@ export function ImageControls({
         />
       </div>
 
+      <h3 className="section-title">Subject Focus</h3>
+
+      <div className="control-group">
+        <label>
+          Detail Emphasis <span>{settings.detailEmphasis.toFixed(2)}</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={settings.detailEmphasis}
+          onChange={(e) => updateSettings({ detailEmphasis: parseFloat(e.target.value) })}
+        />
+        <p className="paint-hint">
+          Detailed areas keep tight hatching; flat areas fade toward paper.
+        </p>
+      </div>
+
+      <div className="control-group">
+        <div className="paint-controls">
+          <button
+            type="button"
+            className={focusSelectMode ? 'secondary active' : 'secondary'}
+            onClick={toggleFocusSelect}
+            disabled={!imageName}
+          >
+            {focusSelectMode
+              ? 'Click subjects, then click here to stop'
+              : focusPoints.length > 0
+                ? `Add Focus Points (${focusPoints.length})`
+                : 'Set Focus Points'}
+          </button>
+          {focusPoints.length > 0 && (
+            <button type="button" className="secondary" onClick={clearFocus}>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {focusPoints.length > 0 && (
+        <>
+          <div className="control-group">
+            <label>
+              Focus Radius <span>{settings.focusRadiusPct}%</span>
+            </label>
+            <input
+              type="range"
+              min="5"
+              max="60"
+              step="1"
+              value={settings.focusRadiusPct}
+              onChange={(e) => updateSettings({ focusRadiusPct: parseInt(e.target.value, 10) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Focus Strength <span>{settings.focusStrength.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={settings.focusStrength}
+              onChange={(e) => updateSettings({ focusStrength: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <div className="paint-controls">
+              <button
+                type="button"
+                className="secondary"
+                onClick={isolateSubject}
+                disabled={segmentStatus === 'loading'}
+              >
+                {segmentStatus === 'loading'
+                  ? 'Isolating…'
+                  : subjectMask
+                    ? 'Re-isolate Subject (AI)'
+                    : 'Isolate Subject (AI)'}
+              </button>
+              {subjectMask && (
+                <button type="button" className="secondary" onClick={clearSubjectMask}>
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="paint-hint">
+              {segmentStatus === 'error'
+                ? 'Subject isolation failed — check your connection and try again.'
+                : subjectMask
+                  ? 'Subjects isolated. Background is suppressed by the mask.'
+                  : 'Runs in your browser; downloads a ~6MB model on first use. Segments the object at each focus point.'}
+            </p>
+          </div>
+
+          {subjectMask && (
+            <div className="control-group">
+              <label>
+                Mask Strength <span>{settings.maskStrength.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={settings.maskStrength}
+                onChange={(e) => updateSettings({ maskStrength: parseFloat(e.target.value) })}
+              />
+            </div>
+          )}
+        </>
+      )}
+
+      <h3 className="section-title">Portrait</h3>
+
+      <div className="control-group">
+        <div className="paint-controls">
+          <button
+            type="button"
+            className="secondary"
+            onClick={detectFaces}
+            disabled={!imageName || portraitStatus === 'loading'}
+          >
+            {portraitStatus === 'loading'
+              ? 'Detecting…'
+              : portraitState
+                ? 'Re-detect Faces (AI)'
+                : 'Detect Faces (AI)'}
+          </button>
+          {portraitState && (
+            <button type="button" className="secondary" onClick={clearPortrait}>
+              Clear
+            </button>
+          )}
+        </div>
+        <p className="paint-hint">
+          {portraitStatus === 'error'
+            ? 'Face detection failed — check your connection and try again.'
+            : portraitStatus === 'none'
+              ? 'No faces found in this image.'
+              : portraitState
+                ? `${portraitState.faceCount} face${portraitState.faceCount === 1 ? '' : 's'} detected: skin stays light, features stay crisp.`
+                : 'Runs in your browser; downloads a ~4MB model on first use. Lightens skin and draws clean feature lines.'}
+        </p>
+      </div>
+
+      {portraitState && (
+        <>
+          <div className="control-group">
+            <label>
+              Skin Lightening <span>{settings.skinLightening.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={settings.skinLightening}
+              onChange={(e) => updateSettings({ skinLightening: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.featureLines}
+                onChange={(e) => updateSettings({ featureLines: e.target.checked })}
+              />
+              Draw feature lines (eyes, brows, lips)
+            </label>
+          </div>
+        </>
+      )}
+
       <h3 className="section-title">Hatching</h3>
 
       <div className="control-group">
@@ -138,6 +343,40 @@ export function ImageControls({
           value={settings.whiteCutoff}
           onChange={(e) => updateSettings({ whiteCutoff: parseFloat(e.target.value) })}
         />
+      </div>
+
+      <div className="control-group">
+        <label>
+          Tone Gamma <span>{settings.toneGamma.toFixed(2)}</span>
+        </label>
+        <input
+          type="range"
+          min="0.5"
+          max="2.5"
+          step="0.05"
+          value={settings.toneGamma}
+          onChange={(e) => updateSettings({ toneGamma: parseFloat(e.target.value) })}
+        />
+        <p className="paint-hint">
+          Higher values keep midtones (like skin) light and push ink into shadows.
+        </p>
+      </div>
+
+      <div className="control-group">
+        <label>
+          Detail Resolution <span>{settings.workingSize}px</span>
+        </label>
+        <input
+          type="range"
+          min="400"
+          max="1000"
+          step="50"
+          value={settings.workingSize}
+          onChange={(e) => updateSettings({ workingSize: parseInt(e.target.value, 10) })}
+        />
+        <p className="paint-hint">
+          Higher keeps small features (eyes, mouths) crisp; lower renders faster.
+        </p>
       </div>
 
       <div className="control-group">

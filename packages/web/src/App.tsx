@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import {
   generateFlowLines,
   grayscaleFromRGBA,
@@ -6,6 +6,7 @@ import {
   toSVG,
   type FlowLinesOptions,
   type GrayscaleImage,
+  type PortraitOptions,
   type SVGOptions,
   type Point,
 } from '@flow-lines/core';
@@ -49,6 +50,22 @@ export interface InkSettings {
   wobble: number;
   strokeColor: string;
   strokeWidth: number;
+  detailEmphasis: number;
+  focusRadiusPct: number;
+  focusStrength: number;
+  maskStrength: number;
+  toneGamma: number;
+  workingSize: number;
+  skinLightening: number;
+  featureLines: boolean;
+}
+
+export type SegmentStatus = 'idle' | 'loading' | 'error';
+export type PortraitStatus = 'idle' | 'loading' | 'error' | 'none';
+
+export interface PortraitState {
+  faceCount: number;
+  portrait: Pick<PortraitOptions, 'faceOvals' | 'featureRegions' | 'featureStrokes'>;
 }
 
 const defaultState: AppState = {
@@ -85,10 +102,23 @@ const defaultInkSettings: InkSettings = {
   wobble: 0.8,
   strokeColor: '#000000',
   strokeWidth: 1,
+  detailEmphasis: 0.3,
+  focusRadiusPct: 25,
+  focusStrength: 0.85,
+  maskStrength: 1,
+  toneGamma: 1.3,
+  workingSize: 600,
+  skinLightening: 0.55,
+  featureLines: true,
 };
 
-/** Decode an image file into grayscale pixel data via an offscreen canvas */
-function loadImageFile(file: File): Promise<GrayscaleImage> {
+/**
+ * Decode an image file via an offscreen canvas. Returns grayscale pixel
+ * data for rendering plus the RGBA canvas for ML segmentation.
+ */
+function loadImageFile(
+  file: File
+): Promise<{ gray: GrayscaleImage; canvas: HTMLCanvasElement }> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -112,7 +142,7 @@ function loadImageFile(file: File): Promise<GrayscaleImage> {
 
       ctx.drawImage(img, 0, 0, width, height);
       const imageData = ctx.getImageData(0, 0, width, height);
-      resolve(grayscaleFromRGBA(imageData.data, width, height));
+      resolve({ gray: grayscaleFromRGBA(imageData.data, width, height), canvas });
     };
 
     img.onerror = () => {
@@ -130,6 +160,16 @@ export function App() {
   const [inkSettings, setInkSettings] = useState<InkSettings>(defaultInkSettings);
   const [sourceImage, setSourceImage] = useState<GrayscaleImage | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
+
+  // Subject isolation state. Focus points are stored normalized (0-1)
+  // so they survive output width changes.
+  const [focusPoints, setFocusPoints] = useState<Point[]>([]);
+  const [focusSelectMode, setFocusSelectMode] = useState(false);
+  const [subjectMask, setSubjectMask] = useState<GrayscaleImage | null>(null);
+  const [segmentStatus, setSegmentStatus] = useState<SegmentStatus>('idle');
+  const [portraitState, setPortraitState] = useState<PortraitState | null>(null);
+  const [portraitStatus, setPortraitStatus] = useState<PortraitStatus>('idle');
+  const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -165,13 +205,83 @@ export function App() {
 
   const handleImageFile = useCallback((file: File) => {
     loadImageFile(file)
-      .then((image) => {
-        setSourceImage(image);
+      .then(({ gray, canvas }) => {
+        setSourceImage(gray);
         setImageName(file.name);
+        sourceCanvasRef.current = canvas;
+        // Focus, mask and faces belong to the previous image
+        setFocusPoints([]);
+        setSubjectMask(null);
+        setSegmentStatus('idle');
+        setPortraitState(null);
+        setPortraitStatus('idle');
       })
       .catch(() => {
         setImageName(null);
         setSourceImage(null);
+        sourceCanvasRef.current = null;
+      });
+  }, []);
+
+  const handleSetFocus = useCallback((normalized: Point) => {
+    // Stay in select mode so several subjects can be marked in a row
+    setFocusPoints((prev) => [...prev, normalized]);
+    // Moved focus invalidates a mask computed for the old points
+    setSubjectMask(null);
+  }, []);
+
+  const clearFocus = useCallback(() => {
+    setFocusPoints([]);
+    setFocusSelectMode(false);
+    setSubjectMask(null);
+    setSegmentStatus('idle');
+  }, []);
+
+  const isolateSubject = useCallback(() => {
+    const canvas = sourceCanvasRef.current;
+    if (!canvas || focusPoints.length === 0) return;
+
+    setSegmentStatus('loading');
+    import('./segmentation')
+      .then(async ({ isolateSubjectAt }) => {
+        // One segmentation per focus point, unioned into a single mask
+        let union: GrayscaleImage | null = null;
+        for (const point of focusPoints) {
+          const mask = await isolateSubjectAt(canvas, point.x, point.y);
+          if (!union) {
+            union = mask;
+          } else if (union.width === mask.width && union.height === mask.height) {
+            for (let i = 0; i < union.data.length; i++) {
+              union.data[i] = Math.max(union.data[i], mask.data[i]);
+            }
+          }
+        }
+        return union;
+      })
+      .then((mask) => {
+        setSubjectMask(mask);
+        setSegmentStatus('idle');
+      })
+      .catch(() => {
+        setSubjectMask(null);
+        setSegmentStatus('error');
+      });
+  }, [focusPoints]);
+
+  const detectFaces = useCallback(() => {
+    const canvas = sourceCanvasRef.current;
+    if (!canvas) return;
+
+    setPortraitStatus('loading');
+    import('./face-landmarks')
+      .then(({ detectPortrait }) => detectPortrait(canvas))
+      .then((detected) => {
+        setPortraitState(detected);
+        setPortraitStatus(detected ? 'idle' : 'none');
+      })
+      .catch(() => {
+        setPortraitState(null);
+        setPortraitStatus('error');
       });
   }, []);
 
@@ -180,6 +290,11 @@ export function App() {
       if (!sourceImage) {
         return { svg: '', width: inkSettings.width, height: inkSettings.width };
       }
+
+      const outputHeight = Math.max(
+        1,
+        Math.round((inkSettings.width * sourceImage.height) / sourceImage.width)
+      );
 
       const result = imageToPenInk(sourceImage, {
         width: inkSettings.width,
@@ -193,6 +308,27 @@ export function App() {
         followTone: inkSettings.followTone,
         drawOutlines: inkSettings.drawOutlines,
         wobble: inkSettings.wobble,
+        detailEmphasis: inkSettings.detailEmphasis,
+        toneGamma: inkSettings.toneGamma,
+        workingSize: inkSettings.workingSize,
+        focus: focusPoints.map((point) => ({
+          x: point.x * inkSettings.width,
+          y: point.y * outputHeight,
+          radius:
+            (inkSettings.focusRadiusPct / 100) * Math.min(inkSettings.width, outputHeight),
+          strength: inkSettings.focusStrength,
+        })),
+        subjectMask: subjectMask ?? undefined,
+        maskStrength: inkSettings.maskStrength,
+        portrait: portraitState
+          ? {
+              ...portraitState.portrait,
+              featureStrokes: inkSettings.featureLines
+                ? portraitState.portrait.featureStrokes
+                : undefined,
+              skinLightening: inkSettings.skinLightening,
+            }
+          : undefined,
       });
 
       const svg = toSVG(result, {
@@ -228,7 +364,7 @@ export function App() {
 
     const result = generateFlowLines(flowOptions);
     return { svg: toSVG(result, svgOptions), width: state.width, height: state.height };
-  }, [mode, state, inkSettings, sourceImage]);
+  }, [mode, state, inkSettings, sourceImage, focusPoints, subjectMask, portraitState]);
 
   const downloadSVG = useCallback(() => {
     if (!generated.svg) return;
@@ -276,6 +412,21 @@ export function App() {
             onImageFile={handleImageFile}
             randomizeSeed={randomizeSeed}
             downloadSVG={downloadSVG}
+            focusPoints={focusPoints}
+            focusSelectMode={focusSelectMode}
+            toggleFocusSelect={() => setFocusSelectMode((v) => !v)}
+            clearFocus={clearFocus}
+            subjectMask={subjectMask}
+            segmentStatus={segmentStatus}
+            isolateSubject={isolateSubject}
+            clearSubjectMask={() => setSubjectMask(null)}
+            portraitState={portraitState}
+            portraitStatus={portraitStatus}
+            detectFaces={detectFaces}
+            clearPortrait={() => {
+              setPortraitState(null);
+              setPortraitStatus('idle');
+            }}
           />
         ) : (
           <Controls
@@ -303,6 +454,21 @@ export function App() {
             paintedPoints={mode === 'flow' ? state.paintedPoints : []}
             showDots={state.showDots}
             onPaint={addPaintedPoint}
+            focusSelectMode={mode === 'image' && focusSelectMode}
+            focusMarkers={
+              mode === 'image'
+                ? focusPoints.map((point) => ({
+                    x: point.x * generated.width,
+                    y: point.y * generated.height,
+                    radius:
+                      (inkSettings.focusRadiusPct / 100) *
+                      Math.min(generated.width, generated.height),
+                  }))
+                : []
+            }
+            onSetFocus={(point) =>
+              handleSetFocus({ x: point.x / generated.width, y: point.y / generated.height })
+            }
           />
         )}
       </main>

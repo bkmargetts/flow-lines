@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts,.tsx",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "predev": "node scripts/copy-mediapipe-wasm.mjs",
+    "prebuild": "node scripts/copy-mediapipe-wasm.mjs"
   },
   "keywords": [
     "generative-art",
@@ -20,6 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@flow-lines/core": "workspace:*",
+    "@mediapipe/tasks-vision": "^0.10.35",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

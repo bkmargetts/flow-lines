@@ -127,6 +127,248 @@ describe('imageToPenInk', () => {
   });
 });
 
+describe('subject isolation', () => {
+  // Uniform mid-dark image: no intrinsic detail anywhere
+  const flatDark = makeImage(100, 100, () => 0.4);
+
+  const pointsIn = (
+    lines: { points: { x: number; y: number }[] }[],
+    cx: number,
+    cy: number,
+    r: number
+  ) =>
+    lines.reduce(
+      (sum, line) =>
+        sum + line.points.filter((p) => Math.hypot(p.x - cx, p.y - cy) < r).length,
+      0
+    );
+
+  it('concentrates strokes around a focal point', () => {
+    const result = imageToPenInk(flatDark, {
+      width: 240,
+      seed: 21,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      focus: { x: 70, y: 120, radius: 30, strength: 1 },
+    });
+
+    const nearFocus = pointsIn(result.lines, 70, 120, 35);
+    const farAway = pointsIn(result.lines, 180, 120, 35);
+
+    expect(nearFocus).toBeGreaterThan(100);
+    expect(farAway).toBeLessThan(nearFocus * 0.1);
+  });
+
+  it('suppresses regions outside a subject mask', () => {
+    // Mask: left half subject, right half background
+    const mask = makeImage(80, 80, (u) => (u < 0.5 ? 1 : 0));
+
+    const result = imageToPenInk(flatDark, {
+      width: 240,
+      seed: 22,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      subjectMask: mask,
+      maskStrength: 1,
+    });
+
+    const leftPoints = pointsIn(result.lines, 60, 120, 50);
+    const rightPoints = pointsIn(result.lines, 180, 120, 50);
+
+    expect(leftPoints).toBeGreaterThan(100);
+    expect(rightPoints).toBeLessThan(leftPoints * 0.1);
+  });
+
+  it('emphasizes textured regions over flat ones', () => {
+    // Left half: strong vertical stripes; right half: flat at the same mean tone
+    const striped = makeImage(160, 160, (u) =>
+      u < 0.5 ? 0.5 + 0.25 * Math.sin(u * Math.PI * 60) : 0.5
+    );
+
+    const result = imageToPenInk(striped, {
+      width: 240,
+      seed: 23,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 1,
+      normalizeContrast: false,
+    });
+
+    const texturedPoints = pointsIn(result.lines, 60, 120, 50);
+    const flatPoints = pointsIn(result.lines, 180, 120, 50);
+
+    expect(texturedPoints).toBeGreaterThan(50);
+    expect(flatPoints).toBeLessThan(texturedPoints * 0.25);
+  });
+
+  it('protects regions near any of multiple focal points', () => {
+    const result = imageToPenInk(flatDark, {
+      width: 300,
+      seed: 31,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      focus: [
+        { x: 60, y: 150, radius: 25, strength: 1 },
+        { x: 240, y: 150, radius: 25, strength: 1 },
+      ],
+    });
+
+    const left = pointsIn(result.lines, 60, 150, 30);
+    const right = pointsIn(result.lines, 240, 150, 30);
+    const between = pointsIn(result.lines, 150, 150, 30);
+
+    expect(left).toBeGreaterThan(100);
+    expect(right).toBeGreaterThan(100);
+    expect(between).toBeLessThan(Math.min(left, right) * 0.1);
+  });
+
+  it('keeps full rendering when isolation features are disabled', () => {
+    const withDefaults = imageToPenInk(flatDark, {
+      width: 200,
+      seed: 24,
+      wobble: 0,
+      detailEmphasis: 0,
+    });
+    const explicit = imageToPenInk(flatDark, {
+      width: 200,
+      seed: 24,
+      wobble: 0,
+      detailEmphasis: 0,
+      maskStrength: 0,
+    });
+
+    expect(withDefaults.lines).toEqual(explicit.lines);
+  });
+});
+
+describe('portrait rendering', () => {
+  // Mid-dark uniform image, like skin tone in shadow
+  const flatSkin = makeImage(100, 100, () => 0.45);
+
+  const totalPointsIn = (
+    lines: { points: { x: number; y: number }[] }[],
+    x0: number,
+    x1: number
+  ) =>
+    lines.reduce(
+      (sum, line) => sum + line.points.filter((p) => p.x >= x0 && p.x < x1).length,
+      0
+    );
+
+  // A face oval covering the left half of the canvas (normalized coords)
+  const leftHalfOval = [
+    { x: 0.02, y: 0.02 },
+    { x: 0.48, y: 0.02 },
+    { x: 0.48, y: 0.98 },
+    { x: 0.02, y: 0.98 },
+  ];
+
+  it('lightens skin inside face ovals', () => {
+    const base = {
+      width: 240,
+      seed: 41,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+    };
+
+    const plain = imageToPenInk(flatSkin, base);
+    const portrait = imageToPenInk(flatSkin, {
+      ...base,
+      portrait: { faceOvals: [leftHalfOval], skinLightening: 0.8 },
+    });
+
+    const plainLeft = totalPointsIn(plain.lines, 0, 120);
+    const portraitLeft = totalPointsIn(portrait.lines, 0, 120);
+    const portraitRight = totalPointsIn(portrait.lines, 120, 240);
+
+    // Skin region got much lighter; the rest is unaffected
+    expect(portraitLeft).toBeLessThan(plainLeft * 0.5);
+    expect(portraitRight).toBeGreaterThan(plainLeft * 0.7);
+  });
+
+  it('draws feature strokes as clean lines', () => {
+    const white = makeImage(50, 50, () => 1);
+    const result = imageToPenInk(white, {
+      width: 200,
+      seed: 42,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      portrait: {
+        featureStrokes: [
+          [
+            { x: 0.2, y: 0.5 },
+            { x: 0.8, y: 0.5 },
+          ],
+        ],
+      },
+    });
+
+    // The blank image contributes nothing; the stroke is the only line
+    expect(result.lines.length).toBe(1);
+    const points = result.lines[0].points;
+    expect(points[0].x).toBeCloseTo(40, 0);
+    expect(points[points.length - 1].x).toBeCloseTo(160, 0);
+    for (const p of points) {
+      expect(p.y).toBeCloseTo(100, 1);
+    }
+  });
+
+  it('keeps feature regions detailed even when a mask suppresses them', () => {
+    const dark = makeImage(80, 80, () => 0.2);
+    // Mask marks everything as background
+    const emptyMask = makeImage(8, 8, () => 0);
+
+    const suppressed = imageToPenInk(dark, {
+      width: 200,
+      seed: 43,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      subjectMask: emptyMask,
+      maskStrength: 1,
+    });
+
+    const withFeature = imageToPenInk(dark, {
+      width: 200,
+      seed: 43,
+      wobble: 0,
+      drawOutlines: false,
+      detailEmphasis: 0,
+      normalizeContrast: false,
+      subjectMask: emptyMask,
+      maskStrength: 1,
+      portrait: {
+        featureRegions: [
+          [
+            { x: 0.3, y: 0.3 },
+            { x: 0.7, y: 0.3 },
+            { x: 0.7, y: 0.7 },
+            { x: 0.3, y: 0.7 },
+          ],
+        ],
+        featureBoost: 1,
+      },
+    });
+
+    const count = (lines: typeof suppressed.lines) =>
+      lines.reduce((sum, line) => sum + line.points.length, 0);
+
+    expect(count(suppressed.lines)).toBe(0);
+    expect(count(withFeature.lines)).toBeGreaterThan(50);
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {
