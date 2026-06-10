@@ -24,7 +24,7 @@ Brush that increases or decreases line density in painted areas:
 
 - [ ] Multiple noise layers with blending
 - [ ] Animated flow lines (for screen display, not plotter)
-- [ ] Import image as density/direction map
+- [x] Import image as density/direction map (see Image → Pen & Ink mode)
 - [ ] Undo/redo for painting actions
 - [ ] Save/load painting sessions
 - [ ] Export painting data alongside SVG

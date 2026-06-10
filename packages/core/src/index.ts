@@ -13,3 +13,25 @@ export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point } from './flow-
 // SVG export
 export { toSVG, parseSVGOptions } from './svg.js';
 export type { SVGOptions } from './svg.js';
+
+// Image utilities
+export {
+  grayscaleFromRGBA,
+  sampleBilinear,
+  resizeGrayscale,
+  gaussianBlur,
+  normalizeLevels,
+} from './image.js';
+export type { GrayscaleImage } from './image.js';
+
+// Image-derived direction field
+export { ImageField } from './image-field.js';
+export type { ImageFieldOptions } from './image-field.js';
+
+// Image to pen-and-ink rendering
+export { imageToPenInk } from './pen-ink.js';
+export type { PenInkOptions } from './pen-ink.js';
+
+// Hand-drawn styling
+export { applyHandDrawnStyle } from './hand-drawn.js';
+export type { HandDrawnOptions } from './hand-drawn.js';
