@@ -941,6 +941,61 @@ describe('texture styles', () => {
   });
 });
 
+describe('art levers', () => {
+  it('richBlacks puts substantially more ink into near-black areas', () => {
+    const dark = makeImage(80, 80, () => 0.05);
+    const base = {
+      width: 200, seed: 121, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 1, optimize: false,
+    };
+
+    const total = (r: ReturnType<typeof imageToPenInk>) =>
+      r.lines.reduce((s, l) => {
+        let len = 0;
+        for (let i = 1; i < l.points.length; i++) {
+          len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+        }
+        return s + len;
+      }, 0);
+
+    const flat = imageToPenInk(dark, { ...base, richBlacks: false });
+    const rich = imageToPenInk(dark, { ...base, richBlacks: true });
+
+    expect(total(rich)).toBeGreaterThan(total(flat) * 1.4);
+  });
+
+  it('skyStipple renders smooth light regions as dots and leaves features hatched', () => {
+    // Top half: smooth sky gradient; bottom half: dark textured ground
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.5 ? 0.75 - 0.15 * v : 0.3 + 0.1 * Math.sin(u * 60) * Math.sin(v * 60)
+    );
+
+    const base = {
+      width: 320, seed: 122, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 1, optimize: false,
+    };
+
+    const isDot = (l: { points: { x: number; y: number }[] }) => {
+      if (l.points.length < 6 || l.points.length > 10) return false;
+      const xs = l.points.map((p) => p.x);
+      const ys = l.points.map((p) => p.y);
+      return Math.max(...xs) - Math.min(...xs) < 4 && Math.max(...ys) - Math.min(...ys) < 4;
+    };
+
+    const off = imageToPenInk(scene, base);
+    const on = imageToPenInk(scene, { ...base, skyStipple: true });
+
+    const skyDots = on.lines.filter((l) => isDot(l) && l.points[0].y < 150).length;
+    const groundDots = on.lines.filter((l) => isDot(l) && l.points[0].y > 170).length;
+
+    expect(off.lines.filter(isDot).length).toBe(0);
+    expect(skyDots).toBeGreaterThan(80);
+    expect(groundDots).toBeLessThan(skyDots * 0.1);
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

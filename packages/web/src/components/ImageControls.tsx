@@ -19,6 +19,9 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
+      hatchAngle: -45,
+      skyStipple: false,
+      textureStyle: 'ticks',
     },
   },
   portrait: {
@@ -37,6 +40,9 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
+      hatchAngle: -45,
+      skyStipple: false,
+      textureStyle: 'ticks',
     },
   },
   pet: {
@@ -54,40 +60,49 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
+      hatchAngle: -45,
+      skyStipple: false,
+      textureStyle: 'ticks',
     },
   },
   landscape: {
     label: 'Landscape',
     settings: {
       layers: 3,
-      minSpacing: 2.5,
+      minSpacing: 2.2,
       maxSpacing: 16,
-      toneGamma: 1.2,
-      detailEmphasis: 0.5,
-      textureStrokes: 0.6,
-      wobble: 0.8,
-      workingSize: 600,
-      whiteCutoff: 0.08,
+      toneGamma: 1.25,
+      detailEmphasis: 0.45,
+      textureStrokes: 0.7,
+      wobble: 0.9,
+      workingSize: 800,
+      whiteCutoff: 0.1,
+      hatchAngle: 0,
+      skyStipple: true,
       crossContour: false,
-      maxStrokeLength: 0,
-      fieldSmoothing: 4,
+      maxStrokeLength: 70,
+      fieldSmoothing: 5,
+      textureStyle: 'ticks',
     },
   },
   sketch: {
     label: 'Sketch',
     settings: {
-      layers: 2,
-      minSpacing: 3.5,
-      maxSpacing: 20,
-      toneGamma: 1.4,
+      layers: 1,
+      minSpacing: 3.2,
+      maxSpacing: 24,
+      toneGamma: 1.35,
       detailEmphasis: 0.4,
-      textureStrokes: 0.5,
-      wobble: 1.8,
+      textureStrokes: 0.8,
+      wobble: 2.2,
       workingSize: 600,
-      whiteCutoff: 0.08,
+      whiteCutoff: 0.1,
       crossContour: false,
       maxStrokeLength: 0,
-      fieldSmoothing: 4,
+      fieldSmoothing: 3,
+      hatchAngle: -30,
+      skyStipple: false,
+      textureStyle: 'scribble',
     },
   },
   etching: {
@@ -105,6 +120,9 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: true,
       maxStrokeLength: 48,
       fieldSmoothing: 8,
+      hatchAngle: -45,
+      skyStipple: false,
+      textureStyle: 'ticks',
     },
   },
 };
@@ -133,6 +151,8 @@ interface ImageControlsProps {
   depthError: string | null;
   estimateDepthMap: () => void;
   clearDepth: () => void;
+  lowMemory: boolean;
+  disableLowMemory: () => void;
 }
 
 export function ImageControls({
@@ -159,6 +179,8 @@ export function ImageControls({
   depthError,
   estimateDepthMap,
   clearDepth,
+  lowMemory,
+  disableLowMemory,
 }: ImageControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -229,6 +251,16 @@ export function ImageControls({
               {depthError ? `: ${depthError.slice(0, 200)}` : ' — check your connection and try again.'}
             </p>
           )}
+
+          {lowMemory && (
+            <p className="paint-hint">
+              ⚡ Low-memory mode: a previous session crashed on this device, so
+              renders are smaller and lighter here.{' '}
+              <button type="button" className="link-button" onClick={disableLowMemory}>
+                Turn off
+              </button>
+            </p>
+          )}
         </div>
       </div>
 
@@ -265,483 +297,430 @@ export function ImageControls({
       <details className="advanced">
         <summary>Advanced</summary>
 
-        <h3 className="section-title">Canvas</h3>
+        <details className="adv-group">
+          <summary>Tone &amp; Density</summary>
 
-        <div className="control-group">
-          <label>
-            Width <span>{settings.width}px</span>
-          </label>
-          <input
-            type="range"
-            min="200"
-            max="1200"
-            step="50"
-            value={settings.width}
-            onChange={(e) => updateSettings({ width: parseInt(e.target.value, 10) })}
-          />
-        </div>
+          <div className="control-group">
+            <label>
+              Layers <span>{settings.layers}</span>
+            </label>
+            <input
+              type="range" min="1" max="4" step="1"
+              value={settings.layers}
+              onChange={(e) => updateSettings({ layers: parseInt(e.target.value, 10) })}
+            />
+          </div>
 
-        <div className="control-group">
-          <label>
-            Margin <span>{settings.margin}px</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={settings.margin}
-            onChange={(e) => updateSettings({ margin: parseInt(e.target.value, 10) })}
-          />
-        </div>
+          <div className="control-group">
+            <label>
+              Shadow Spacing <span>{settings.minSpacing.toFixed(1)}px</span>
+            </label>
+            <input
+              type="range" min="1.5" max="8" step="0.5"
+              value={settings.minSpacing}
+              onChange={(e) => updateSettings({ minSpacing: parseFloat(e.target.value) })}
+            />
+          </div>
 
-        <h3 className="section-title">Subject Focus</h3>
+          <div className="control-group">
+            <label>
+              Highlight Spacing <span>{settings.maxSpacing.toFixed(0)}px</span>
+            </label>
+            <input
+              type="range" min="6" max="30" step="1"
+              value={settings.maxSpacing}
+              onChange={(e) => updateSettings({ maxSpacing: parseFloat(e.target.value) })}
+            />
+          </div>
 
-        <div className="control-group">
-          <label>
-            Detail Emphasis <span>{settings.detailEmphasis.toFixed(2)}</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={settings.detailEmphasis}
-            onChange={(e) => updateSettings({ detailEmphasis: parseFloat(e.target.value) })}
-          />
-        </div>
+          <div className="control-group">
+            <label>
+              White Cutoff <span>{settings.whiteCutoff.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0" max="0.4" step="0.02"
+              value={settings.whiteCutoff}
+              onChange={(e) => updateSettings({ whiteCutoff: parseFloat(e.target.value) })}
+            />
+          </div>
 
-        {focusPoints.length > 0 && (
-          <>
-            <div className="control-group">
-              <label>
-                Focus Radius <span>{settings.focusRadiusPct}%</span>
-              </label>
+          <div className="control-group">
+            <label>
+              Tone Gamma <span>{settings.toneGamma.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0.5" max="2.5" step="0.05"
+              value={settings.toneGamma}
+              onChange={(e) => updateSettings({ toneGamma: parseFloat(e.target.value) })}
+            />
+            <p className="paint-hint">Higher keeps midtones light, pushes ink into shadows.</p>
+          </div>
+
+          <div className="control-group">
+            <label className="checkbox-label">
               <input
-                type="range"
-                min="5"
-                max="60"
-                step="1"
-                value={settings.focusRadiusPct}
-                onChange={(e) =>
-                  updateSettings({ focusRadiusPct: parseInt(e.target.value, 10) })
-                }
+                type="checkbox"
+                checked={settings.richBlacks}
+                onChange={(e) => updateSettings({ richBlacks: e.target.checked })}
               />
-            </div>
+              Rich blacks (deep shadows go solid)
+            </label>
+          </div>
+        </details>
 
-            <div className="control-group">
-              <label>
-                Focus Strength <span>{settings.focusStrength.toFixed(2)}</span>
-              </label>
+        <details className="adv-group">
+          <summary>Marks &amp; Style</summary>
+
+          <div className="control-group">
+            <label>
+              Hatch Angle <span>{settings.hatchAngle}°</span>
+            </label>
+            <input
+              type="range" min="-90" max="90" step="5"
+              value={settings.hatchAngle}
+              onChange={(e) => updateSettings({ hatchAngle: parseInt(e.target.value, 10) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Wobble <span>{settings.wobble.toFixed(1)}px</span>
+            </label>
+            <input
+              type="range" min="0" max="3" step="0.1"
+              value={settings.wobble}
+              onChange={(e) => updateSettings({ wobble: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Texture Strokes <span>{settings.textureStrokes.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={settings.textureStrokes}
+              onChange={(e) => updateSettings({ textureStrokes: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>Texture Mark Style</label>
+            <select
+              value={settings.textureStyle}
+              onChange={(e) =>
+                updateSettings({
+                  textureStyle: e.target.value as 'ticks' | 'stipple' | 'scribble',
+                })
+              }
+            >
+              <option value="ticks">Directional ticks</option>
+              <option value="stipple">Stipple dots</option>
+              <option value="scribble">Scribble</option>
+            </select>
+          </div>
+
+          <div className="control-group">
+            <label>
+              Max Stroke Length{' '}
+              <span>{settings.maxStrokeLength === 0 ? 'unlimited' : `${settings.maxStrokeLength}px`}</span>
+            </label>
+            <input
+              type="range" min="0" max="80" step="4"
+              value={settings.maxStrokeLength}
+              onChange={(e) => updateSettings({ maxStrokeLength: parseInt(e.target.value, 10) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Flow Smoothing <span>{settings.fieldSmoothing}</span>
+            </label>
+            <input
+              type="range" min="2" max="12" step="1"
+              value={settings.fieldSmoothing}
+              onChange={(e) => updateSettings({ fieldSmoothing: parseInt(e.target.value, 10) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label className="checkbox-label">
               <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={settings.focusStrength}
-                onChange={(e) => updateSettings({ focusStrength: parseFloat(e.target.value) })}
+                type="checkbox"
+                checked={settings.skyStipple}
+                onChange={(e) => updateSettings({ skyStipple: e.target.checked })}
               />
-            </div>
+              Stipple open skies
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.crossContour}
+                onChange={(e) => updateSettings({ crossContour: e.target.checked })}
+              />
+              Cross-contour hatching (etching style)
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.followTone}
+                onChange={(e) => updateSettings({ followTone: e.target.checked })}
+              />
+              Strokes follow image contours
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.drawOutlines}
+                onChange={(e) => updateSettings({ drawOutlines: e.target.checked })}
+              />
+              Bold contour outlines
+            </label>
+          </div>
+        </details>
 
-            <div className="control-group">
-              <div className="paint-controls">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={isolateSubject}
-                  disabled={segmentStatus === 'loading'}
-                >
-                  {segmentStatus === 'loading' ? 'Isolating…' : 'Re-isolate Subjects (AI)'}
-                </button>
-                {subjectMask && (
-                  <button type="button" className="secondary" onClick={clearSubjectMask}>
-                    Clear Mask
-                  </button>
-                )}
-              </div>
-              {segmentStatus === 'error' && (
-                <p className="paint-hint">
-                  Subject isolation failed — check your connection and try again.
-                </p>
-              )}
-            </div>
+        <details className="adv-group">
+          <summary>Subject &amp; Focus</summary>
 
-            {subjectMask && (
+          <div className="control-group">
+            <label>
+              Detail Emphasis <span>{settings.detailEmphasis.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={settings.detailEmphasis}
+              onChange={(e) => updateSettings({ detailEmphasis: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          {focusPoints.length > 0 && (
+            <>
               <div className="control-group">
                 <label>
-                  Mask Strength <span>{settings.maskStrength.toFixed(2)}</span>
+                  Focus Radius <span>{settings.focusRadiusPct}%</span>
                 </label>
                 <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={settings.maskStrength}
-                  onChange={(e) => updateSettings({ maskStrength: parseFloat(e.target.value) })}
+                  type="range" min="5" max="60" step="1"
+                  value={settings.focusRadiusPct}
+                  onChange={(e) =>
+                    updateSettings({ focusRadiusPct: parseInt(e.target.value, 10) })
+                  }
                 />
               </div>
-            )}
-          </>
-        )}
 
-        <h3 className="section-title">Portrait</h3>
+              <div className="control-group">
+                <label>
+                  Focus Strength <span>{settings.focusStrength.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range" min="0" max="1" step="0.05"
+                  value={settings.focusStrength}
+                  onChange={(e) => updateSettings({ focusStrength: parseFloat(e.target.value) })}
+                />
+              </div>
 
-        <div className="control-group">
-          <div className="paint-controls">
-            <button
-              type="button"
-              className="secondary"
-              onClick={detectFaces}
-              disabled={!imageName || portraitStatus === 'loading'}
-            >
-              {portraitStatus === 'loading' ? 'Detecting…' : 'Re-detect Faces (AI)'}
-            </button>
-            {portraitState && (
-              <button type="button" className="secondary" onClick={clearPortrait}>
-                Clear
+              <div className="control-group">
+                <div className="paint-controls">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={isolateSubject}
+                    disabled={segmentStatus === 'loading'}
+                  >
+                    {segmentStatus === 'loading' ? 'Isolating…' : 'Re-isolate Subjects (AI)'}
+                  </button>
+                  {subjectMask && (
+                    <button type="button" className="secondary" onClick={clearSubjectMask}>
+                      Clear Mask
+                    </button>
+                  )}
+                </div>
+                {segmentStatus === 'error' && (
+                  <p className="paint-hint">
+                    Subject isolation failed — check your connection and try again.
+                  </p>
+                )}
+              </div>
+
+              {subjectMask && (
+                <div className="control-group">
+                  <label>
+                    Mask Strength <span>{settings.maskStrength.toFixed(2)}</span>
+                  </label>
+                  <input
+                    type="range" min="0" max="1" step="0.05"
+                    value={settings.maskStrength}
+                    onChange={(e) => updateSettings({ maskStrength: parseFloat(e.target.value) })}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </details>
+
+        <details className="adv-group">
+          <summary>Portrait &amp; 3D Form</summary>
+
+          <div className="control-group">
+            <div className="paint-controls">
+              <button
+                type="button"
+                className="secondary"
+                onClick={detectFaces}
+                disabled={!imageName || portraitStatus === 'loading'}
+              >
+                {portraitStatus === 'loading' ? 'Detecting…' : 'Re-detect Faces (AI)'}
               </button>
+              {portraitState && (
+                <button type="button" className="secondary" onClick={clearPortrait}>
+                  Clear
+                </button>
+              )}
+            </div>
+            {portraitStatus === 'error' && (
+              <p className="paint-hint">Face detection failed — check your connection.</p>
+            )}
+            {portraitStatus === 'none' && (
+              <p className="paint-hint">No faces found in this image.</p>
             )}
           </div>
-          {portraitStatus === 'error' && (
-            <p className="paint-hint">Face detection failed — check your connection.</p>
-          )}
-          {portraitStatus === 'none' && (
-            <p className="paint-hint">No faces found in this image.</p>
-          )}
-        </div>
 
-        {portraitState && (
-          <>
-            <div className="control-group">
-              <label>
-                Skin Lightening <span>{settings.skinLightening.toFixed(2)}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={settings.skinLightening}
-                onChange={(e) => updateSettings({ skinLightening: parseFloat(e.target.value) })}
-              />
-            </div>
-
-            <div className="control-group">
-              <label className="checkbox-label">
+          {portraitState && (
+            <>
+              <div className="control-group">
+                <label>
+                  Skin Lightening <span>{settings.skinLightening.toFixed(2)}</span>
+                </label>
                 <input
-                  type="checkbox"
-                  checked={settings.featureLines}
-                  onChange={(e) => updateSettings({ featureLines: e.target.checked })}
+                  type="range" min="0" max="1" step="0.05"
+                  value={settings.skinLightening}
+                  onChange={(e) => updateSettings({ skinLightening: parseFloat(e.target.value) })}
                 />
-                Draw feature lines (eyes, brows, lips)
-              </label>
-            </div>
-          </>
-        )}
+              </div>
 
-        <h3 className="section-title">Hatching</h3>
+              <div className="control-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.featureLines}
+                    onChange={(e) => updateSettings({ featureLines: e.target.checked })}
+                  />
+                  Draw feature lines (eyes, brows, lips)
+                </label>
+              </div>
+            </>
+          )}
 
-        <div className="control-group">
-          <label>
-            Layers <span>{settings.layers}</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="4"
-            step="1"
-            value={settings.layers}
-            onChange={(e) => updateSettings({ layers: parseInt(e.target.value, 10) })}
-          />
-        </div>
-
-        <div className="control-group">
-          <label>
-            Shadow Spacing <span>{settings.minSpacing.toFixed(1)}px</span>
-          </label>
-          <input
-            type="range"
-            min="1.5"
-            max="8"
-            step="0.5"
-            value={settings.minSpacing}
-            onChange={(e) => updateSettings({ minSpacing: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div className="control-group">
-          <label>
-            Highlight Spacing <span>{settings.maxSpacing.toFixed(0)}px</span>
-          </label>
-          <input
-            type="range"
-            min="6"
-            max="30"
-            step="1"
-            value={settings.maxSpacing}
-            onChange={(e) => updateSettings({ maxSpacing: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div className="control-group">
-          <label>
-            White Cutoff <span>{settings.whiteCutoff.toFixed(2)}</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="0.4"
-            step="0.02"
-            value={settings.whiteCutoff}
-            onChange={(e) => updateSettings({ whiteCutoff: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div className="control-group">
-          <label>
-            Tone Gamma <span>{settings.toneGamma.toFixed(2)}</span>
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="2.5"
-            step="0.05"
-            value={settings.toneGamma}
-            onChange={(e) => updateSettings({ toneGamma: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div className="control-group">
-          <label>
-            Texture Strokes <span>{settings.textureStrokes.toFixed(2)}</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={settings.textureStrokes}
-            onChange={(e) => updateSettings({ textureStrokes: parseFloat(e.target.value) })}
-          />
-          <p className="paint-hint">
-            Renders fur, foliage and fabric as short tick strokes instead of long lines.
-          </p>
-        </div>
-
-        <div className="control-group">
-          <label>Texture Mark Style</label>
-          <select
-            value={settings.textureStyle}
-            onChange={(e) =>
-              updateSettings({
-                textureStyle: e.target.value as 'ticks' | 'stipple' | 'scribble',
-              })
-            }
-          >
-            <option value="ticks">Directional ticks</option>
-            <option value="stipple">Stipple dots</option>
-            <option value="scribble">Scribble</option>
-          </select>
-        </div>
-
-        <div className="control-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={settings.crossContour}
-              onChange={(e) => updateSettings({ crossContour: e.target.checked })}
-            />
-            Cross-contour hatching (etching style)
-          </label>
-        </div>
-
-        <div className="control-group">
-          <label>
-            Max Stroke Length{' '}
-            <span>{settings.maxStrokeLength === 0 ? 'unlimited' : `${settings.maxStrokeLength}px`}</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="80"
-            step="4"
-            value={settings.maxStrokeLength}
-            onChange={(e) => updateSettings({ maxStrokeLength: parseInt(e.target.value, 10) })}
-          />
-        </div>
-
-        <div className="control-group">
-          <label>
-            Flow Smoothing <span>{settings.fieldSmoothing}</span>
-          </label>
-          <input
-            type="range"
-            min="2"
-            max="12"
-            step="1"
-            value={settings.fieldSmoothing}
-            onChange={(e) => updateSettings({ fieldSmoothing: parseInt(e.target.value, 10) })}
-          />
-        </div>
-
-        {depthMap && (
-          <>
-            <div className="control-group">
-              <label>
-                Form Strength <span>{settings.formStrength.toFixed(2)}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={settings.formStrength}
-                onChange={(e) => updateSettings({ formStrength: parseFloat(e.target.value) })}
-              />
-              <p className="paint-hint">
-                How strongly strokes follow the estimated 3D form.
-              </p>
-            </div>
-
-            <div className="control-group">
-              <label>
-                Depth Fade <span>{settings.depthIsolation.toFixed(2)}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={settings.depthIsolation}
-                onChange={(e) => updateSettings({ depthIsolation: parseFloat(e.target.value) })}
-              />
-              <p className="paint-hint">
-                Fades distant background toward paper, like atmospheric recession.
-              </p>
-            </div>
-
-            <div className="control-group">
-              <label className="checkbox-label">
+          {depthMap && (
+            <>
+              <div className="control-group">
+                <label>
+                  Form Strength <span>{settings.formStrength.toFixed(2)}</span>
+                </label>
                 <input
-                  type="checkbox"
-                  checked={settings.autoStyle}
-                  onChange={(e) => updateSettings({ autoStyle: e.target.checked })}
+                  type="range" min="0" max="1" step="0.05"
+                  value={settings.formStrength}
+                  onChange={(e) => updateSettings({ formStrength: parseFloat(e.target.value) })}
                 />
-                Auto mark-making (wrap curved forms)
-              </label>
-            </div>
+              </div>
 
-            <div className="control-group">
-              <button type="button" className="secondary" onClick={clearDepth}>
-                Clear 3D Form
-              </button>
-            </div>
-          </>
-        )}
+              <div className="control-group">
+                <label>
+                  Depth Fade <span>{settings.depthIsolation.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range" min="0" max="1" step="0.05"
+                  value={settings.depthIsolation}
+                  onChange={(e) => updateSettings({ depthIsolation: parseFloat(e.target.value) })}
+                />
+              </div>
 
-        <div className="control-group">
-          <label>
-            Detail Resolution <span>{settings.workingSize}px</span>
-          </label>
-          <input
-            type="range"
-            min="400"
-            max="1000"
-            step="50"
-            value={settings.workingSize}
-            onChange={(e) => updateSettings({ workingSize: parseInt(e.target.value, 10) })}
-          />
-        </div>
+              <div className="control-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={settings.autoStyle}
+                    onChange={(e) => updateSettings({ autoStyle: e.target.checked })}
+                  />
+                  Auto mark-making (wrap curved forms)
+                </label>
+                <button type="button" className="secondary" onClick={clearDepth}>
+                  Clear 3D Form
+                </button>
+              </div>
+            </>
+          )}
+        </details>
 
-        <div className="control-group">
-          <label>
-            Hatch Angle <span>{settings.hatchAngle}°</span>
-          </label>
-          <input
-            type="range"
-            min="-90"
-            max="90"
-            step="5"
-            value={settings.hatchAngle}
-            onChange={(e) => updateSettings({ hatchAngle: parseInt(e.target.value, 10) })}
-          />
-        </div>
+        <details className="adv-group">
+          <summary>Canvas &amp; Output</summary>
 
-        <div className="control-group">
-          <label className="checkbox-label">
+          <div className="control-group">
+            <label>
+              Width <span>{settings.width}px</span>
+            </label>
             <input
-              type="checkbox"
-              checked={settings.followTone}
-              onChange={(e) => updateSettings({ followTone: e.target.checked })}
+              type="range" min="200" max="1200" step="50"
+              value={settings.width}
+              onChange={(e) => updateSettings({ width: parseInt(e.target.value, 10) })}
             />
-            Strokes follow image contours
-          </label>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={settings.drawOutlines}
-              onChange={(e) => updateSettings({ drawOutlines: e.target.checked })}
-            />
-            Bold contour outlines
-          </label>
-        </div>
-
-        <h3 className="section-title">Hand-Drawn Feel</h3>
-
-        <div className="control-group">
-          <label>
-            Wobble <span>{settings.wobble.toFixed(1)}px</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="3"
-            step="0.1"
-            value={settings.wobble}
-            onChange={(e) => updateSettings({ wobble: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <h3 className="section-title">Style</h3>
-
-        <div className="control-group">
-          <label>
-            Stroke Width <span>{settings.strokeWidth}px</span>
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="3"
-            step="0.25"
-            value={settings.strokeWidth}
-            onChange={(e) => updateSettings({ strokeWidth: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div className="control-group">
-          <label>Stroke Color</label>
-          <input
-            type="text"
-            value={settings.strokeColor}
-            onChange={(e) => updateSettings({ strokeColor: e.target.value })}
-          />
-        </div>
-
-        <h3 className="section-title">Seed</h3>
-
-        <div className="control-group">
-          <div className="seed-input">
-            <input
-              type="number"
-              value={settings.seed}
-              onChange={(e) => updateSettings({ seed: parseInt(e.target.value, 10) || 0 })}
-            />
-            <button type="button" className="secondary" onClick={randomizeSeed}>
-              🎲
-            </button>
           </div>
-        </div>
+
+          <div className="control-group">
+            <label>
+              Margin <span>{settings.margin}px</span>
+            </label>
+            <input
+              type="range" min="0" max="100" step="5"
+              value={settings.margin}
+              onChange={(e) => updateSettings({ margin: parseInt(e.target.value, 10) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Detail Resolution <span>{settings.workingSize}px</span>
+            </label>
+            <input
+              type="range" min="400" max="1000" step="50"
+              value={settings.workingSize}
+              onChange={(e) => updateSettings({ workingSize: parseInt(e.target.value, 10) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Stroke Width <span>{settings.strokeWidth}px</span>
+            </label>
+            <input
+              type="range" min="0.5" max="3" step="0.25"
+              value={settings.strokeWidth}
+              onChange={(e) => updateSettings({ strokeWidth: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>Stroke Color</label>
+            <input
+              type="text"
+              value={settings.strokeColor}
+              onChange={(e) => updateSettings({ strokeColor: e.target.value })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>Seed</label>
+            <div className="seed-input">
+              <input
+                type="number"
+                value={settings.seed}
+                onChange={(e) => updateSettings({ seed: parseInt(e.target.value, 10) || 0 })}
+              />
+            </div>
+          </div>
+        </details>
       </details>
+
     </div>
   );
 }

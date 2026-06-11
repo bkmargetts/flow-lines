@@ -222,6 +222,8 @@ program
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
   .option('--texture-style <style>', 'Mark style for textured regions: ticks|stipple|scribble', 'ticks')
+  .option('--sky-stipple', 'Stipple smooth light regions (open skies) instead of hatching')
+  .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
   .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
   .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
@@ -312,6 +314,8 @@ program
       wobble: parseFloat(options.wobble),
       textureStrokes: parseFloat(options.texture),
       textureStyle: options.textureStyle as 'ticks' | 'stipple' | 'scribble',
+      skyStipple: options.skyStipple ?? false,
+      richBlacks: options.richBlacks,
       crossContour: options.crossContour ?? false,
       maxStrokeLength: parseFloat(options.maxStroke),
       workingSize: parseInt(options.workingSize, 10),

@@ -60,12 +60,32 @@ export interface InkSettings {
   featureLines: boolean;
   textureStrokes: number;
   textureStyle: 'ticks' | 'stipple' | 'scribble';
+  skyStipple: boolean;
+  richBlacks: boolean;
   crossContour: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
   formStrength: number;
   depthIsolation: number;
   autoStyle: boolean;
+}
+
+/** Tight-memory devices get smaller renders */
+const IS_MOBILE =
+  typeof navigator !== 'undefined' && /iP(hone|ad|od)|Android/.test(navigator.userAgent);
+
+/** Crash breadcrumb: set while a depth result is being applied; if it is
+ * still there on startup, the page died mid-apply — drop to low memory */
+const APPLY_FLAG = 'fl-applying-depth';
+const LOW_MEM_FLAG = 'fl-low-memory';
+
+function detectLowMemory(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  if (localStorage.getItem(APPLY_FLAG)) {
+    localStorage.removeItem(APPLY_FLAG);
+    localStorage.setItem(LOW_MEM_FLAG, '1');
+  }
+  return localStorage.getItem(LOW_MEM_FLAG) === '1';
 }
 
 export type SegmentStatus = 'idle' | 'loading' | 'error';
@@ -121,6 +141,8 @@ const defaultInkSettings: InkSettings = {
   featureLines: true,
   textureStrokes: 0.6,
   textureStyle: 'ticks',
+  skyStipple: false,
+  richBlacks: true,
   crossContour: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
@@ -189,6 +211,7 @@ export function App() {
   const [depthStatus, setDepthStatus] = useState<DepthStatus>('idle');
   const [depthError, setDepthError] = useState<string | null>(null);
   const [preset, setPreset] = useState('classic');
+  const [lowMemory, setLowMemory] = useState(detectLowMemory);
   const [inkRender, setInkRender] = useState<RenderedSVG | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -208,7 +231,27 @@ export function App() {
   const randomizeSeed = useCallback(() => {
     const seed = Math.floor(Math.random() * 1000000);
     if (mode === 'image') {
-      updateInkSettings({ seed });
+      // Surprise me: a new seed barely changes the look, so the dice also
+      // rolls the artistic levers within tasteful ranges
+      const r = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
+      const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
+
+      updateInkSettings({
+        seed,
+        hatchAngle: Math.round(r(-90, 90) / 5) * 5,
+        wobble: Math.round(r(0.3, 2.2) * 10) / 10,
+        layers: pick([2, 2, 3, 3, 4]),
+        minSpacing: Math.round(r(2, 3.5) * 10) / 10,
+        maxSpacing: Math.round(r(10, 22)),
+        toneGamma: Math.round(r(1.1, 1.9) * 20) / 20,
+        textureStrokes: Math.round(r(0.2, 1) * 20) / 20,
+        textureStyle: pick(['ticks', 'ticks', 'ticks', 'stipple', 'scribble']),
+        crossContour: Math.random() < 0.2,
+        skyStipple: Math.random() < 0.3,
+        maxStrokeLength: pick([0, 0, 40, 60, 80]),
+        detailEmphasis: Math.round(r(0.2, 0.5) * 20) / 20,
+      });
+      setPreset('');
     } else {
       updateState({ seed });
     }
@@ -256,12 +299,19 @@ export function App() {
     const token = ++depthTokenRef.current;
     setDepthStatus('loading');
     setDepthError(null);
-    import('./depth')
-      .then(({ estimateDepth }) => estimateDepth(canvas))
+    import('./depth-client')
+      .then(({ estimateDepthInWorker }) => estimateDepthInWorker(canvas))
       .then((depth) => {
         if (token !== depthTokenRef.current) return;
-        setDepthMap(depth);
-        setDepthStatus('idle');
+        // Breadcrumb: if the page dies while the heavier depth render is
+        // applied, the next visit detects it and enters low-memory mode
+        localStorage.setItem(APPLY_FLAG, '1');
+        // Let the depth worker teardown and GC settle before the render
+        setTimeout(() => {
+          if (token !== depthTokenRef.current) return;
+          setDepthMap(depth);
+          setDepthStatus('idle');
+        }, 300);
       })
       .catch((err) => {
         if (token !== depthTokenRef.current) return;
@@ -383,9 +433,13 @@ export function App() {
   useEffect(() => {
     if (mode !== 'image' || !sourceImage) return;
 
+    // Memory budget: dense depth renders have killed pages on phones
+    const cap = lowMemory ? 420 : IS_MOBILE ? 520 : Infinity;
+    const jobWidth = Math.min(inkSettings.width, cap);
+
     const outputHeight = Math.max(
       1,
-      Math.round((inkSettings.width * sourceImage.height) / sourceImage.width)
+      Math.round((jobWidth * sourceImage.height) / sourceImage.width)
     );
 
     setIsRendering(true);
@@ -393,10 +447,9 @@ export function App() {
       .render(
         sourceImage,
         {
-          width: inkSettings.width,
+          width: jobWidth,
           margin: inkSettings.margin,
           seed: inkSettings.seed,
-          layers: inkSettings.layers,
           minSpacing: inkSettings.minSpacing,
           maxSpacing: inkSettings.maxSpacing,
           whiteCutoff: inkSettings.whiteCutoff,
@@ -406,6 +459,7 @@ export function App() {
           wobble: inkSettings.wobble,
           textureStrokes: inkSettings.textureStrokes,
           textureStyle: inkSettings.textureStyle,
+          skyStipple: inkSettings.skyStipple,
           crossContour: inkSettings.crossContour,
           maxStrokeLength: inkSettings.maxStrokeLength,
           fieldSmoothing: inkSettings.fieldSmoothing,
@@ -415,12 +469,14 @@ export function App() {
           autoStyle: inkSettings.autoStyle,
           detailEmphasis: inkSettings.detailEmphasis,
           toneGamma: inkSettings.toneGamma,
-          workingSize: inkSettings.workingSize,
+          workingSize: Math.min(inkSettings.workingSize, cap),
+          layers: lowMemory ? Math.min(2, inkSettings.layers) : inkSettings.layers,
+          richBlacks: lowMemory ? false : inkSettings.richBlacks,
           focus: focusPoints.map((point) => ({
-            x: point.x * inkSettings.width,
+            x: point.x * jobWidth,
             y: point.y * outputHeight,
             radius:
-              (inkSettings.focusRadiusPct / 100) * Math.min(inkSettings.width, outputHeight),
+              (inkSettings.focusRadiusPct / 100) * Math.min(jobWidth, outputHeight),
             strength: inkSettings.focusStrength,
           })),
           subjectMask: subjectMask ?? undefined,
@@ -441,6 +497,8 @@ export function App() {
         }
       )
       .then((rendered) => {
+        // Survived the apply — clear the crash breadcrumb
+        localStorage.removeItem(APPLY_FLAG);
         setInkRender(rendered);
         setIsRendering(false);
       })
@@ -450,7 +508,7 @@ export function App() {
           setIsRendering(false);
         }
       });
-  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap]);
+  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap, lowMemory]);
 
   const generated = useMemo(() => {
     if (mode === 'image') {
@@ -547,6 +605,11 @@ export function App() {
             depthMap={depthMap}
             depthStatus={depthStatus}
             depthError={depthError}
+            lowMemory={lowMemory}
+            disableLowMemory={() => {
+              localStorage.removeItem(LOW_MEM_FLAG);
+              setLowMemory(false);
+            }}
             estimateDepthMap={estimateDepthMap}
             clearDepth={clearDepth}
             clearPortrait={() => {

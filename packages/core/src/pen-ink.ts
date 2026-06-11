@@ -111,6 +111,17 @@ export interface PenInkOptions {
    * tone-driven stipple dots, or wandering scribble strokes
    */
   textureStyle?: 'ticks' | 'stipple' | 'scribble';
+  /**
+   * Stipple smooth light-mid regions (open skies, soft gradients) instead
+   * of hatching them — the classic illustrated-sky treatment (default false)
+   */
+  skyStipple?: boolean;
+  /**
+   * Let the darkest tones saturate toward solid black by tightening
+   * spacing below minSpacing — committed dark masses instead of uniformly
+   * gray cross-hatch (default true)
+   */
+  richBlacks?: boolean;
 
   /**
    * Hatch across forms instead of along them: strokes wrap around the
@@ -355,6 +366,8 @@ export function imageToPenInk(
   const outlineThreshold = options.outlineThreshold ?? 0.35;
   const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
   const textureStyle = options.textureStyle ?? 'ticks';
+  const skyStipple = options.skyStipple ?? false;
+  const richBlacks = options.richBlacks ?? true;
   const crossContour = options.crossContour ?? false;
   const maxStrokeLength = options.maxStrokeLength ?? 0;
   const autoStyle = options.autoStyle ?? false;
@@ -432,7 +445,16 @@ export function imageToPenInk(
 
       const u = Math.min(1, Math.max(0, (d - whiteCutoff) / (1 - whiteCutoff)));
       const t = Math.pow(u, toneGamma);
-      return (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
+      let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
+
+      // Deep shadows commit to near-solid black instead of plateauing at
+      // the regular minimum spacing
+      if (richBlacks && d > 0.82) {
+        const deep = Math.min(1, (d - 0.82) / 0.15);
+        spacing *= 1 - 0.55 * deep;
+      }
+
+      return spacing;
     };
 
     const isDrawable = importance
@@ -462,6 +484,19 @@ export function imageToPenInk(
     //   forms (autoStyle + depth), flowing hatch lines everywhere else
     const paramsFor = (x: number, y: number, random: () => number): StrokeParams => {
       const texture = textureAmount ? textureAmount(x, y) : 0;
+
+      // Open skies and soft gradients: smooth, featureless, light-mid tone.
+      // Dots render them the way illustrators do, with cloud highlights
+      // left as paper by the white cutoff.
+      if (
+        skyStipple &&
+        texture < 0.25 &&
+        field.getDetail(x, y) < 0.25 &&
+        field.getFormConfidence(x, y) < 0.3 &&
+        baseDarkness(x, y) < 0.55
+      ) {
+        return { angleOffset: 0, maxArcLength: 0, dot: true };
+      }
       let cap = maxStrokeLength > 0 ? maxStrokeLength * (0.8 + 0.4 * random()) : Infinity;
       let rotate = 0;
 
