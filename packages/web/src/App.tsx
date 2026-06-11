@@ -60,6 +60,8 @@ export interface InkSettings {
   featureLines: boolean;
   textureStrokes: number;
   textureStyle: 'ticks' | 'stipple' | 'scribble';
+  skyStipple: boolean;
+  richBlacks: boolean;
   crossContour: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
@@ -121,6 +123,8 @@ const defaultInkSettings: InkSettings = {
   featureLines: true,
   textureStrokes: 0.6,
   textureStyle: 'ticks',
+  skyStipple: false,
+  richBlacks: true,
   crossContour: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
@@ -406,6 +410,8 @@ export function App() {
           wobble: inkSettings.wobble,
           textureStrokes: inkSettings.textureStrokes,
           textureStyle: inkSettings.textureStyle,
+          skyStipple: inkSettings.skyStipple,
+          richBlacks: inkSettings.richBlacks,
           crossContour: inkSettings.crossContour,
           maxStrokeLength: inkSettings.maxStrokeLength,
           fieldSmoothing: inkSettings.fieldSmoothing,

@@ -26,6 +26,11 @@ const PRESETS = {
     '--layers', '2', '--max-spacing', '12', '--tone-gamma', '1.45', '--texture', '1',
     '--wobble', '1', '--working-size', '800',
   ],
+  landscape: [
+    '--layers', '3', '--min-spacing', '2.2', '--max-spacing', '16', '--tone-gamma', '1.25',
+    '--texture', '0.7', '--wobble', '0.9', '--working-size', '800', '--white-cutoff', '0.1',
+    '--hatch-angle', '0', '--sky-stipple', '--max-stroke', '70', '--field-smoothing', '5',
+  ],
   sketch: [
     '--layers', '2', '--min-spacing', '3.5', '--max-spacing', '20', '--tone-gamma', '1.4',
     '--texture', '0.5', '--wobble', '1.8',

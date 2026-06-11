@@ -19,6 +19,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
+      hatchAngle: -45,
+      skyStipple: false,
     },
   },
   portrait: {
@@ -37,6 +39,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
+      hatchAngle: -45,
+      skyStipple: false,
     },
   },
   pet: {
@@ -54,23 +58,27 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
+      hatchAngle: -45,
+      skyStipple: false,
     },
   },
   landscape: {
     label: 'Landscape',
     settings: {
       layers: 3,
-      minSpacing: 2.5,
+      minSpacing: 2.2,
       maxSpacing: 16,
-      toneGamma: 1.2,
-      detailEmphasis: 0.5,
-      textureStrokes: 0.6,
-      wobble: 0.8,
-      workingSize: 600,
-      whiteCutoff: 0.08,
+      toneGamma: 1.25,
+      detailEmphasis: 0.45,
+      textureStrokes: 0.7,
+      wobble: 0.9,
+      workingSize: 800,
+      whiteCutoff: 0.1,
+      hatchAngle: 0,
+      skyStipple: true,
       crossContour: false,
-      maxStrokeLength: 0,
-      fieldSmoothing: 4,
+      maxStrokeLength: 70,
+      fieldSmoothing: 5,
     },
   },
   sketch: {
@@ -88,6 +96,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
+      hatchAngle: -45,
+      skyStipple: false,
     },
   },
   etching: {
@@ -105,6 +115,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       crossContour: true,
       maxStrokeLength: 48,
       fieldSmoothing: 8,
+      hatchAngle: -45,
+      skyStipple: false,
     },
   },
 };
@@ -526,6 +538,25 @@ export function ImageControls({
           <p className="paint-hint">
             Renders fur, foliage and fabric as short tick strokes instead of long lines.
           </p>
+        </div>
+
+        <div className="control-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={settings.skyStipple}
+              onChange={(e) => updateSettings({ skyStipple: e.target.checked })}
+            />
+            Stipple open skies
+          </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={settings.richBlacks}
+              onChange={(e) => updateSettings({ richBlacks: e.target.checked })}
+            />
+            Rich blacks (deep shadows go solid)
+          </label>
         </div>
 
         <div className="control-group">
