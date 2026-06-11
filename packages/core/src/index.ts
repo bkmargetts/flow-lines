@@ -43,6 +43,9 @@ export type { PortraitOptions } from './portrait.js';
 export { traceContours } from './contours.js';
 export type { ContourOptions } from './contours.js';
 
+// Iso-contour tracing (tonal mass boundaries, e.g. cloud edges)
+export { traceIsoContours } from './iso-contours.js';
+
 // Plot optimization
 export { optimizePlot, measurePenTravel } from './optimize.js';
 export type { OptimizePlotOptions } from './optimize.js';

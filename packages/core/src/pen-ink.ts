@@ -8,6 +8,7 @@ import {
   featureStrokesToLines,
 } from './portrait.js';
 import { traceContours } from './contours.js';
+import { traceIsoContours } from './iso-contours.js';
 import { optimizePlot } from './optimize.js';
 import { createNoise } from './noise.js';
 
@@ -258,6 +259,11 @@ interface StrokeParams {
   maxArcLength: number;
   /** Place a stipple dot instead of tracing a stroke */
   dot?: boolean;
+  /**
+   * Spacing to the next dot, px. Stipple density carries the tone by
+   * itself, so it needs a far tighter curve than hatch line spacing
+   */
+  dotSpacing?: number;
   /** Random heading drift per integration step, radians (scribble) */
   headingJitter?: number;
   /** Per-stroke random source for heading drift */
@@ -454,6 +460,29 @@ export function imageToPenInk(
   const effectiveDarkness = (x: number, y: number, imp: number): number =>
     baseDarkness(x, y) * (0.25 + 0.75 * imp);
 
+  // Sky tone is judged on raw photo tone, never the banded value plan
+  // (quantization rounds a grey sky to paper or a hatch band — both kill
+  // the stipple window) — and the ABSOLUTE pre-normalization tone is
+  // folded in: an overcast sky is usually the brightest region in the
+  // frame, so contrast stretching maps it to paper, but the artist's
+  // judgment "this sky is grey, not white" doesn't depend on the rest
+  // of the photo
+  const skyDark = (x: number, y: number): number =>
+    Math.max(field.getDarkness(x, y), field.getAbsoluteDarkness(x, y));
+
+  const skyEligible = skyStipple
+    ? (x: number, y: number): boolean =>
+        field.getDetail(x, y) < 0.25 &&
+        field.getFormConfidence(x, y) < 0.3 &&
+        skyDark(x, y) < 0.62
+    : null;
+
+  // A sky stipples once it is perceptibly grey; raising the white cutoff
+  // can still push it back to paper, but importance cannot blank it —
+  // smooth skies always score low on auto-detail and always sit at the
+  // far end of depth maps, and the sky is a feature, not a background
+  const skyThreshold = Math.max(0.12, whiteCutoff * 0.85);
+
   const lines: FlowLine[] = [];
 
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
@@ -487,12 +516,26 @@ export function imageToPenInk(
       return spacing;
     };
 
-    const toneDrawable = importance
+    const bandedDrawable = importance
       ? (x: number, y: number): boolean => {
           const imp = importance(x, y);
           return effectiveDarkness(x, y, imp) >= threshold + (1 - imp) * 0.25;
         }
       : (x: number, y: number): boolean => baseDarkness(x, y) >= threshold;
+
+    // In sky, raw tone decides drawability (base layer only — deeper
+    // layers still add density where the value plan calls for it).
+    // Importance is deliberately left out: it lightens the stipple via
+    // wider dot spacing instead of blanking the sky
+    const skyDrawable =
+      skyEligible && layer === 0
+        ? (x: number, y: number): boolean =>
+            skyEligible(x, y) && skyDark(x, y) >= skyThreshold
+        : null;
+
+    const toneDrawable = skyDrawable
+      ? (x: number, y: number): boolean => bandedDrawable(x, y) || skyDrawable(x, y)
+      : bandedDrawable;
 
     // Cross-hatch layers accumulate in hand-sized patches separated by
     // gaps — strokes seed inside a patch and stop at its edge — instead
@@ -531,14 +574,26 @@ export function imageToPenInk(
       // Open skies and soft gradients: smooth, featureless, light-mid tone.
       // Dots render them the way illustrators do, with cloud highlights
       // left as paper by the white cutoff.
-      if (
-        skyStipple &&
-        texture < 0.25 &&
-        field.getDetail(x, y) < 0.25 &&
-        field.getFormConfidence(x, y) < 0.3 &&
-        baseDarkness(x, y) < 0.55
-      ) {
-        return { angleOffset: 0, maxArcLength: 0, dot: true };
+      if (skyEligible && texture < 0.25 && skyEligible(x, y)) {
+        // Stipple carries the sky's tone entirely on dot density, so it
+        // gets its own spacing curve, much tighter than hatch spacing;
+        // density also falls off zenith-to-horizon the way hand-stippled
+        // skies are graded. Raw tone drives the gradation — banded tone
+        // is flat across a band, which kills the grade.
+        const d = skyDark(x, y);
+        const t = Math.min(1, Math.max(0, (d - skyThreshold) / (0.62 - skyThreshold)));
+        let dotSpacing =
+          maxSpacing * 0.5 + (minSpacing * 1.1 - maxSpacing * 0.5) * Math.sqrt(t);
+        dotSpacing *= 0.8 + 0.5 * (y / height);
+        if (importance) {
+          dotSpacing *= 1 + (1 - importance(x, y)) * 1.2;
+        }
+        return {
+          angleOffset: 0,
+          maxArcLength: 0,
+          dot: true,
+          dotSpacing: Math.max(2.2, dotSpacing),
+        };
       }
       let cap = maxStrokeLength > 0 ? maxStrokeLength * (0.8 + 0.4 * random()) : Infinity;
       let rotate = 0;
@@ -690,6 +745,54 @@ export function imageToPenInk(
     }
   }
 
+  // Cloud shapes are carved out of stippled skies as deliberate negative
+  // space: the boundary of the large-scale tonal mass is traced and inked
+  // as a light outline, leaving the interior paper. The edge detector
+  // misses these soft transitions entirely; the blurred mass raster makes
+  // them big, simple, confident shapes (wobble is applied later, so the
+  // outlines pick up the same hand quality as everything else).
+  if (skyStipple) {
+    const { raster, scaleX, scaleY } = field.getMassRaster();
+    // With a value plan, carve along the paper/lightest-band boundary;
+    // otherwise just above the white cutoff
+    const iso = valueBands >= 2 ? 1 / valueBands : Math.max(whiteCutoff * 1.25, 0.1);
+    const minRun = Math.max(minLineLength * 3, 14);
+
+    for (const poly of traceIsoContours(raster, iso)) {
+      let run: Point[] = [];
+      let runLength = 0;
+
+      const flushRun = (): void => {
+        if (run.length >= 2 && runLength >= minRun) {
+          lines.push({ points: run });
+        }
+        run = [];
+        runLength = 0;
+      };
+
+      for (const rp of poly) {
+        const p = { x: rp.x / scaleX, y: rp.y / scaleY };
+        // Keep the outline only where it borders stipple-eligible sky;
+        // strong edges are already drawn by the contour pass
+        const keep =
+          field.isInBounds(p.x, p.y, margin) &&
+          field.getDetail(p.x, p.y) < 0.3 &&
+          field.getFormConfidence(p.x, p.y) < 0.35 &&
+          field.getEdgeStrength(p.x, p.y) < outlineThreshold;
+        if (!keep) {
+          flushRun();
+          continue;
+        }
+        if (run.length > 0) {
+          const prev = run[run.length - 1];
+          runLength += Math.hypot(p.x - prev.x, p.y - prev.y);
+        }
+        run.push(p);
+      }
+      flushRun();
+    }
+  }
+
   // Clean feature strokes (eyelids, brows, lip lines) drawn from landmark
   // geometry — accurate feature lines are what make a sketch read as a person
   if (options.portrait?.featureStrokes) {
@@ -767,11 +870,11 @@ function tracePass(field: ImageField, seed: number, pass: PassConfig): FlowLine[
     const params = pass.paramsFor(candidate.x, candidate.y, random);
 
     if (params.dot) {
-      const dot = placeDot(field, grid, candidate, pass, random);
+      const dot = placeDot(field, grid, candidate, pass, params, random);
       if (dot) {
         lines.push(dot);
         // Spawn neighbours so stippling propagates at the local spacing
-        const spacing = pass.spacingAt(candidate.x, candidate.y);
+        const spacing = params.dotSpacing ?? pass.spacingAt(candidate.x, candidate.y);
         const baseAngle = random() * Math.PI * 2;
         for (let k = 0; k < 4; k++) {
           const a = baseAngle + (k * Math.PI) / 2 + (random() - 0.5) * 0.6;
@@ -824,11 +927,13 @@ function placeDot(
   grid: SpatialGrid,
   at: Point,
   pass: PassConfig,
+  params: StrokeParams,
   random: () => number
 ): FlowLine | null {
   if (!field.isInBounds(at.x, at.y, pass.margin)) return null;
   if (!pass.isDrawable(at.x, at.y)) return null;
-  if (grid.hasPointWithin(at.x, at.y, pass.spacingAt(at.x, at.y) * D_SEED)) return null;
+  const spacing = params.dotSpacing ?? pass.spacingAt(at.x, at.y);
+  if (grid.hasPointWithin(at.x, at.y, spacing * D_SEED)) return null;
 
   const radius = 0.55 + random() * 0.35;
   const points: Point[] = [];

@@ -71,6 +71,10 @@ export class ImageField {
   readonly height: number;
 
   private tone: GrayscaleImage;
+  /** Tone before contrast normalization — absolute photo brightness */
+  private absTone: GrayscaleImage;
+  /** Heavily blurred darkness — large-scale tonal masses before banding */
+  private massBlur: GrayscaleImage;
   /** Blurred tone snapped to discrete value bands (darkness, 1 = black) */
   private massDarkness: GrayscaleImage | null = null;
   /** Doubled-angle orientation vectors, weighted by local coherence */
@@ -97,27 +101,37 @@ export class ImageField {
     const followTone = options.followTone ?? true;
     const normalizeContrast = options.normalizeContrast ?? true;
 
-    let working = resizeGrayscale(image, workingSize);
-    if (normalizeContrast) {
-      working = normalizeLevels(working);
-    }
+    const resized = resizeGrayscale(image, workingSize);
+    const working = normalizeContrast ? normalizeLevels(resized) : resized;
 
     this.tone = gaussianBlur(working, blurSigma);
+    // Pre-normalization tone: contrast stretching reallocates the tonal
+    // range for ink coverage, but material judgments ("is this sky grey
+    // or white?") need the photo's absolute brightness — a grey sky that
+    // happens to be the brightest region must not normalize to paper
+    this.absTone = normalizeContrast ? gaussianBlur(resized, blurSigma) : this.tone;
     this.scaleX = this.tone.width / this.width;
     this.scaleY = this.tone.height / this.height;
 
     const { width, height } = this.tone;
 
+    // Heavy blur so tonal masses come out as big simple shapes rather
+    // than per-pixel noise — feeds the value plan and cloud-edge carving
+    const massSigma = Math.max(2.5, Math.max(width, height) / 150);
+    const massTone = gaussianBlur(this.tone, massSigma);
+    const massData = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      massData[i] = 1 - massTone.data[i];
+    }
+    this.massBlur = { width, height, data: massData };
+
     const valueBands = Math.round(options.valueBands ?? 0);
     if (valueBands >= 2) {
-      // Heavy blur first so the bands come out as big simple value shapes
-      // rather than per-pixel noise; band levels are spread across the
-      // full paper-to-black range so the plan commits to real darks
-      const sigma = Math.max(2.5, Math.max(width, height) / 150);
-      const mass = gaussianBlur(this.tone, sigma);
+      // Band levels are spread across the full paper-to-black range so
+      // the plan commits to real darks
       const data = new Float32Array(width * height);
       for (let i = 0; i < width * height; i++) {
-        const d = 1 - mass.data[i];
+        const d = this.massBlur.data[i];
         const band = Math.max(0, Math.min(valueBands - 1, Math.floor(d * valueBands)));
         data[i] = band / (valueBands - 1);
       }
@@ -514,6 +528,23 @@ export class ImageField {
   /** Darkness in [0, 1] at canvas coordinates (1 = black) */
   getDarkness(x: number, y: number): number {
     return 1 - sampleBilinear(this.tone, x * this.scaleX, y * this.scaleY);
+  }
+
+  /**
+   * Absolute darkness in [0, 1] at canvas coordinates, before contrast
+   * normalization — the photo's actual brightness, for material
+   * judgments that must not depend on the rest of the frame
+   */
+  getAbsoluteDarkness(x: number, y: number): number {
+    return 1 - sampleBilinear(this.absTone, x * this.scaleX, y * this.scaleY);
+  }
+
+  /**
+   * The blurred large-scale darkness raster (pre-banding) with the
+   * raster-to-canvas scale — for tracing tonal mass boundaries
+   */
+  getMassRaster(): { raster: GrayscaleImage; scaleX: number; scaleY: number } {
+    return { raster: this.massBlur, scaleX: this.scaleX, scaleY: this.scaleY };
   }
 
   /** Whether a posterized value plan was built (valueBands >= 2) */
