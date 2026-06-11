@@ -99,6 +99,15 @@ export interface PenInkOptions {
    * (default 0.35)
    */
   hatchPatchiness?: number;
+  /**
+   * Hatch toned masses as facets: straight parallel strokes in
+   * hand-sized patches, each patch at its own constant angle (the local
+   * flow direction snapped to 30° quanta plus a per-patch twist), with
+   * strokes stopping at patch borders. Smoothly curving streamlines are
+   * the strongest remaining "computer" tell; rocks, walls, and shadow
+   * masses in real ink work are hatched facet by facet (default false)
+   */
+  facetHatch?: boolean;
 
   /** Fallback hatch angle in degrees for flat regions (default -45) */
   hatchAngle?: number;
@@ -264,6 +273,10 @@ interface StrokeParams {
    * itself, so it needs a far tighter curve than hatch line spacing
    */
   dotSpacing?: number;
+  /** Trace at this constant absolute direction instead of following the field */
+  fixedAngle?: number;
+  /** Extra per-step termination test (e.g. the stroke left its facet) */
+  stopAt?: (x: number, y: number) => boolean;
   /** Random heading drift per integration step, radians (scribble) */
   headingJitter?: number;
   /** Per-stroke random source for heading drift */
@@ -396,6 +409,7 @@ export function imageToPenInk(
   const richBlacks = options.richBlacks ?? true;
   const valueBands = Math.round(options.valueBands ?? 0);
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
+  const facetHatch = options.facetHatch ?? false;
   const crossContour = options.crossContour ?? false;
   const maxStrokeLength = options.maxStrokeLength ?? 0;
   const autoStyle = options.autoStyle ?? false;
@@ -482,6 +496,26 @@ export function imageToPenInk(
   // smooth skies always score low on auto-detail and always sit at the
   // far end of depth maps, and the sky is a feature, not a background
   const skyThreshold = Math.max(0.12, whiteCutoff * 0.85);
+
+  // Facet geometry: the flow direction snapped to 30° quanta, combined
+  // with a coarse noise-jittered cell lattice and a per-cell ±1 quantum
+  // twist. Within a facet every stroke shares one straight direction;
+  // crossing into a neighbouring facet changes the id, which terminates
+  // the stroke — parallel marks laid patch by patch, the way a hand
+  // hatches a rock face, instead of streamlines bending smoothly
+  const FACET_BIN = Math.PI / 6;
+  const facetCell = maxSpacing * 5;
+  const facetNoise = facetHatch ? createNoise(seed + 6011) : null;
+  const facetAt = (x: number, y: number): { angle: number; id: number } => {
+    const jx = facetNoise!.noise2D(x / (facetCell * 2.7), y / (facetCell * 2.7));
+    const jy = facetNoise!.noise2D(x / (facetCell * 2.7) + 31.7, y / (facetCell * 2.7) - 17.3);
+    const cx = Math.floor((x + jx * facetCell * 0.6) / facetCell);
+    const cy = Math.floor((y + jy * facetCell * 0.6) / facetCell);
+    const h = Math.sin(cx * 127.1 + cy * 311.7) * 43758.5453;
+    const twist = Math.round((h - Math.floor(h) - 0.5) * 2);
+    const bin = Math.round(field.getOrientation(x, y) / FACET_BIN) + twist;
+    return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
+  };
 
   const lines: FlowLine[] = [];
 
@@ -597,6 +631,25 @@ export function imageToPenInk(
       }
       let cap = maxStrokeLength > 0 ? maxStrokeLength * (0.8 + 0.4 * random()) : Infinity;
       let rotate = 0;
+
+      // Toned masses without strong texture or 3D form get faceted
+      // hatching: one straight direction per patch, stroke ends at the
+      // patch border (texture keeps its ticks/scribble, curved depth
+      // forms keep their wrapping cross-contour marks)
+      if (
+        facetHatch &&
+        texture < 0.35 &&
+        field.getFormConfidence(x, y) < 0.5 &&
+        baseDarkness(x, y) >= 0.25
+      ) {
+        const facet = facetAt(x, y);
+        return {
+          angleOffset: 0,
+          fixedAngle: facet.angle + layerAngle,
+          maxArcLength: Math.min(cap, maxSpacing * (5 + 3 * random())),
+          stopAt: (px: number, py: number): boolean => facetAt(px, py).id !== facet.id,
+        };
+      }
 
       if (
         autoStyle &&
@@ -995,7 +1048,8 @@ function integrate(
   let x = start.x;
   let y = start.y;
 
-  const theta0 = field.getOrientation(x, y) + params.angleOffset;
+  const theta0 =
+    params.fixedAngle ?? field.getOrientation(x, y) + params.angleOffset;
   let prevDx = Math.cos(theta0) * sign;
   let prevDy = Math.sin(theta0) * sign;
 
@@ -1003,7 +1057,8 @@ function integrate(
   const selfSkip = Math.ceil((pass.spacingAt(start.x, start.y) * 2.5) / h);
 
   for (let i = 0; i < halfSteps; i++) {
-    const theta = field.getOrientation(x, y) + params.angleOffset;
+    const theta =
+      params.fixedAngle ?? field.getOrientation(x, y) + params.angleOffset;
     let dx = Math.cos(theta);
     let dy = Math.sin(theta);
 
@@ -1018,7 +1073,8 @@ function integrate(
     const my = y + dy * h * 0.5;
     if (!field.isInBounds(mx, my, pass.margin)) break;
 
-    const thetaMid = field.getOrientation(mx, my) + params.angleOffset;
+    const thetaMid =
+      params.fixedAngle ?? field.getOrientation(mx, my) + params.angleOffset;
     let mdx = Math.cos(thetaMid);
     let mdy = Math.sin(thetaMid);
     if (mdx * dx + mdy * dy < 0) {
@@ -1046,6 +1102,9 @@ function integrate(
     // Strokes stop at depth discontinuities — hatching must not slide
     // across a silhouette onto a different surface
     if (field.getDepthEdge(nx, ny) > 0.45) break;
+
+    // Per-stroke termination, e.g. the stroke crossed its facet border
+    if (params.stopAt && params.stopAt(nx, ny)) break;
 
     // Stop instead of drawing a sharp kink (scribbles may turn harder)
     if (mdx * prevDx + mdy * prevDy < (params.headingJitter ? -0.4 : 0.2)) break;

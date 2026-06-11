@@ -65,6 +65,7 @@ export interface InkSettings {
   skyStipple: boolean;
   richBlacks: boolean;
   crossContour: boolean;
+  facetHatch: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
   formStrength: number;
@@ -148,6 +149,7 @@ const defaultInkSettings: InkSettings = {
   skyStipple: false,
   richBlacks: true,
   crossContour: false,
+  facetHatch: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
   formStrength: 0.8,
@@ -465,6 +467,7 @@ export function App() {
           textureStyle: inkSettings.textureStyle,
           skyStipple: inkSettings.skyStipple,
           crossContour: inkSettings.crossContour,
+          facetHatch: inkSettings.facetHatch,
           maxStrokeLength: inkSettings.maxStrokeLength,
           fieldSmoothing: inkSettings.fieldSmoothing,
           depthMap: depthMap ?? undefined,

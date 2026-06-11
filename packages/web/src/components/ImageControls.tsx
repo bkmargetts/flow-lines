@@ -19,6 +19,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       wobble: 0.8,
       workingSize: 600,
       crossContour: false,
+      facetHatch: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
@@ -42,6 +43,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       skinLightening: 0.6,
       whiteCutoff: 0.08,
       crossContour: false,
+      facetHatch: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
@@ -64,6 +66,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       workingSize: 800,
       whiteCutoff: 0.08,
       crossContour: false,
+      facetHatch: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
@@ -88,6 +91,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       hatchAngle: 0,
       skyStipple: true,
       crossContour: false,
+      facetHatch: true,
       maxStrokeLength: 70,
       fieldSmoothing: 5,
       textureStyle: 'ticks',
@@ -108,6 +112,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       workingSize: 600,
       whiteCutoff: 0.1,
       crossContour: false,
+      facetHatch: false,
       maxStrokeLength: 0,
       fieldSmoothing: 3,
       hatchAngle: -30,
@@ -130,6 +135,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       wobble: 0.4,
       workingSize: 800,
       crossContour: true,
+      facetHatch: true,
       maxStrokeLength: 48,
       fieldSmoothing: 8,
       hatchAngle: -45,
@@ -500,6 +506,14 @@ export function ImageControls({
                 onChange={(e) => updateSettings({ crossContour: e.target.checked })}
               />
               Cross-contour hatching (etching style)
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.facetHatch}
+                onChange={(e) => updateSettings({ facetHatch: e.target.checked })}
+              />
+              Faceted hatching (straight strokes in patches)
             </label>
             <label className="checkbox-label">
               <input
