@@ -24,6 +24,13 @@ export interface ImageFieldOptions {
   /** Auto-stretch contrast before rendering (default true) */
   normalizeContrast?: boolean;
   /**
+   * Posterize large-scale tone into this many discrete value bands —
+   * the "value plan" an artist commits to before rendering. The tone
+   * image is blurred so bands form big simple shapes, then snapped to
+   * evenly spread levels from paper to black. 0/1 disables (default 0)
+   */
+  valueBands?: number;
+  /**
    * Estimated depth map (bright = near), e.g. from a monocular depth
    * model. Drives form-following stroke orientation and silhouette edges
    */
@@ -64,6 +71,8 @@ export class ImageField {
   readonly height: number;
 
   private tone: GrayscaleImage;
+  /** Blurred tone snapped to discrete value bands (darkness, 1 = black) */
+  private massDarkness: GrayscaleImage | null = null;
   /** Doubled-angle orientation vectors, weighted by local coherence */
   private orientCos: GrayscaleImage;
   private orientSin: GrayscaleImage;
@@ -98,6 +107,22 @@ export class ImageField {
     this.scaleY = this.tone.height / this.height;
 
     const { width, height } = this.tone;
+
+    const valueBands = Math.round(options.valueBands ?? 0);
+    if (valueBands >= 2) {
+      // Heavy blur first so the bands come out as big simple value shapes
+      // rather than per-pixel noise; band levels are spread across the
+      // full paper-to-black range so the plan commits to real darks
+      const sigma = Math.max(2.5, Math.max(width, height) / 150);
+      const mass = gaussianBlur(this.tone, sigma);
+      const data = new Float32Array(width * height);
+      for (let i = 0; i < width * height; i++) {
+        const d = 1 - mass.data[i];
+        const band = Math.max(0, Math.min(valueBands - 1, Math.floor(d * valueBands)));
+        data[i] = band / (valueBands - 1);
+      }
+      this.massDarkness = { width, height, data };
+    }
     const gx = new Float32Array(width * height);
     const gy = new Float32Array(width * height);
 
@@ -489,6 +514,21 @@ export class ImageField {
   /** Darkness in [0, 1] at canvas coordinates (1 = black) */
   getDarkness(x: number, y: number): number {
     return 1 - sampleBilinear(this.tone, x * this.scaleX, y * this.scaleY);
+  }
+
+  /** Whether a posterized value plan was built (valueBands >= 2) */
+  hasMassTone(): boolean {
+    return this.massDarkness !== null;
+  }
+
+  /**
+   * Posterized large-scale darkness in [0, 1] at canvas coordinates —
+   * the committed value band for this region. Falls back to raw darkness
+   * when no value plan was requested
+   */
+  getMassDarkness(x: number, y: number): number {
+    if (!this.massDarkness) return this.getDarkness(x, y);
+    return sampleBilinear(this.massDarkness, x * this.scaleX, y * this.scaleY);
   }
 
   /** Stroke orientation in radians at canvas coordinates (pi-periodic) */

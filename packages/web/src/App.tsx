@@ -55,6 +55,8 @@ export interface InkSettings {
   focusStrength: number;
   maskStrength: number;
   toneGamma: number;
+  valueBands: number;
+  hatchPatchiness: number;
   workingSize: number;
   skinLightening: number;
   featureLines: boolean;
@@ -136,6 +138,8 @@ const defaultInkSettings: InkSettings = {
   focusStrength: 0.85,
   maskStrength: 1,
   toneGamma: 1.3,
+  valueBands: 4,
+  hatchPatchiness: 0.35,
   workingSize: 600,
   skinLightening: 0.55,
   featureLines: true,
@@ -469,6 +473,8 @@ export function App() {
           autoStyle: inkSettings.autoStyle,
           detailEmphasis: inkSettings.detailEmphasis,
           toneGamma: inkSettings.toneGamma,
+          valueBands: inkSettings.valueBands,
+          hatchPatchiness: inkSettings.hatchPatchiness,
           workingSize: Math.min(inkSettings.workingSize, cap),
           layers: lowMemory ? Math.min(2, inkSettings.layers) : inkSettings.layers,
           richBlacks: lowMemory ? false : inkSettings.richBlacks,
