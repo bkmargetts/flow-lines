@@ -67,6 +67,12 @@ pnpm monorepo:
   capped cross-contour marks wrapping curved 3D forms (`autoStyle` +
   form confidence), sky stipple for smooth light regions, flowing hatch
   otherwise. New mark strategies belong here.
+- **Sky treatment** (`skyStipple`) — stipple density carries sky tone on
+  its own curve (far tighter than hatch spacing) with a
+  zenith-to-horizon falloff; cloud shapes are carved as negative space
+  by tracing the blurred mass-tone boundary (marching squares,
+  `iso-contours.ts`) and inking it as a light outline — the edge
+  detector misses soft tonal transitions entirely.
 - **Contours** — Canny-style edge linking (NMS + hysteresis + chaining)
   produces long confident outlines; emphasized via offset single-pen
   passes with tapered ends; suppressed inside detected faces.
@@ -118,9 +124,7 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
-value: a real illustrated-sky treatment (dense graded stipple, cloud
-blobs carved out as outlined negative space, zenith-to-horizon density
-falloff), faceted hatching (quantize orientation into discrete patches
+value: faceted hatching (quantize orientation into discrete patches
 hatched at constant angles — flow-field smoothness is what still reads
 as machine), a calm-water stroke language (long broken horizontals),
 white halos outside strong contours, semantic region labels for dispatch

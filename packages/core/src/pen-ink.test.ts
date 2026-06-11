@@ -994,6 +994,75 @@ describe('art levers', () => {
     expect(skyDots).toBeGreaterThan(80);
     expect(groundDots).toBeLessThan(skyDots * 0.1);
   });
+
+  it('sky stipple density follows tone', () => {
+    // Smooth horizontal sky gradient (light left, darker right), with a
+    // textured dark ground strip so detail/edge normalization has a
+    // reference and the sky itself counts as featureless
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.7 ? 0.85 - 0.3 * u : 0.25 + 0.15 * Math.sin(u * 60) * Math.sin(v * 60)
+    );
+
+    const result = imageToPenInk(scene, {
+      width: 320, seed: 123, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 1, optimize: false, skyStipple: true,
+    });
+
+    const isDot = (l: { points: { x: number; y: number }[] }) => {
+      if (l.points.length < 6 || l.points.length > 10) return false;
+      const xs = l.points.map((p) => p.x);
+      const ys = l.points.map((p) => p.y);
+      return Math.max(...xs) - Math.min(...xs) < 4 && Math.max(...ys) - Math.min(...ys) < 4;
+    };
+
+    const sky = result.lines.filter((l) => isDot(l) && l.points[0].y < 200);
+    const lightThird = sky.filter((l) => l.points[0].x < 110).length;
+    const darkThird = sky.filter((l) => l.points[0].x > 210).length;
+
+    // Darker sky carries visibly more dots (tighter dot spacing)
+    expect(darkThird).toBeGreaterThan(lightThird * 1.5);
+  });
+
+  it('carves cloud shapes with outlines when skyStipple is on', () => {
+    // A bright cloud blob in a mid-light sky over textured ground
+    const scene = makeImage(160, 160, (u, v) => {
+      if (v >= 0.7) return 0.25 + 0.15 * Math.sin(u * 60) * Math.sin(v * 60);
+      const r = Math.hypot(u - 0.5, v - 0.35) / 0.2;
+      const blob = Math.max(0, Math.min(1, 2 - 2 * r)); // soft edge
+      return 0.7 + 0.22 * blob;
+    });
+
+    const base = {
+      width: 320, seed: 124, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 1, optimize: false,
+    };
+
+    const isDot = (l: { points: { x: number; y: number }[] }) => {
+      if (l.points.length < 6 || l.points.length > 10) return false;
+      const xs = l.points.map((p) => p.x);
+      const ys = l.points.map((p) => p.y);
+      return Math.max(...xs) - Math.min(...xs) < 4 && Math.max(...ys) - Math.min(...ys) < 4;
+    };
+
+    const on = imageToPenInk(scene, { ...base, skyStipple: true });
+
+    // Sky stipple turns every sky mark into a dot, so any long non-dot
+    // sky stroke must be a carved cloud edge — and it should hug the
+    // blob boundary
+    const edges = on.lines.filter((l) => !isDot(l) && l.points.every((p) => p.y < 200));
+    expect(edges.length).toBeGreaterThan(0);
+
+    // Cloud center in canvas coords: (0.5, 0.35) * 320 = (160, 112)
+    for (const edge of edges) {
+      for (const p of edge.points) {
+        const r = Math.hypot(p.x - 160, p.y - 112);
+        expect(r).toBeGreaterThan(25);
+        expect(r).toBeLessThan(115);
+      }
+    }
+  });
 });
 
 describe('ImageField', () => {
