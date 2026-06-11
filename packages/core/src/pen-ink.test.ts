@@ -869,6 +869,78 @@ describe('tapered outline passes', () => {
   });
 });
 
+describe('texture styles', () => {
+  // Clumpy fur-scale texture everywhere
+  const furry = makeImage(160, 160, (u, v) => 0.45 + 0.2 * Math.sin(u * 80) * Math.sin(v * 80));
+
+  const base = {
+    width: 320,
+    seed: 111,
+    wobble: 0,
+    drawOutlines: false,
+    detailEmphasis: 0,
+    normalizeContrast: false,
+    textureStrokes: 1,
+    layers: 1,
+    optimize: false,
+  };
+
+  it('renders stipple as many tiny closed dots', () => {
+    const result = imageToPenInk(furry, { ...base, textureStyle: 'stipple' });
+
+    const dots = result.lines.filter((l) => {
+      if (l.points.length < 6 || l.points.length > 10) return false;
+      const xs = l.points.map((p) => p.x);
+      const ys = l.points.map((p) => p.y);
+      return Math.max(...xs) - Math.min(...xs) < 4 && Math.max(...ys) - Math.min(...ys) < 4;
+    });
+
+    expect(dots.length).toBeGreaterThan(100);
+  });
+
+  it('renders scribble as long wandering strokes', () => {
+    const ticks = imageToPenInk(furry, { ...base, textureStyle: 'ticks' });
+    const scribble = imageToPenInk(furry, { ...base, textureStyle: 'scribble' });
+
+    const avgLen = (lines: typeof ticks.lines) => {
+      const lens = lines.map((l) => {
+        let len = 0;
+        for (let i = 1; i < l.points.length; i++) {
+          len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+        }
+        return len;
+      });
+      return lens.reduce((a, b) => a + b, 0) / lens.length;
+    };
+
+    expect(avgLen(scribble.lines)).toBeGreaterThan(avgLen(ticks.lines) * 2);
+
+    // Scribbles wander: total turning per unit length is high
+    const turning = (l: (typeof ticks.lines)[0]) => {
+      let sum = 0;
+      for (let i = 2; i < l.points.length; i++) {
+        const a1 = Math.atan2(l.points[i - 1].y - l.points[i - 2].y, l.points[i - 1].x - l.points[i - 2].x);
+        const a2 = Math.atan2(l.points[i].y - l.points[i - 1].y, l.points[i].x - l.points[i - 1].x);
+        let d = a2 - a1;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        sum += Math.abs(d);
+      }
+      return sum;
+    };
+    const longest = [...scribble.lines].sort((a, b) => b.points.length - a.points.length)[0];
+    expect(turning(longest)).toBeGreaterThan(2);
+  });
+
+  it('is deterministic for each style', () => {
+    for (const textureStyle of ['stipple', 'scribble'] as const) {
+      const a = imageToPenInk(furry, { ...base, textureStyle });
+      const b = imageToPenInk(furry, { ...base, textureStyle });
+      expect(a.lines).toEqual(b.lines);
+    }
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

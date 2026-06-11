@@ -529,6 +529,22 @@ export function ImageControls({
         </div>
 
         <div className="control-group">
+          <label>Texture Mark Style</label>
+          <select
+            value={settings.textureStyle}
+            onChange={(e) =>
+              updateSettings({
+                textureStyle: e.target.value as 'ticks' | 'stipple' | 'scribble',
+              })
+            }
+          >
+            <option value="ticks">Directional ticks</option>
+            <option value="stipple">Stipple dots</option>
+            <option value="scribble">Scribble</option>
+          </select>
+        </div>
+
+        <div className="control-group">
           <label className="checkbox-label">
             <input
               type="checkbox"

@@ -101,6 +101,15 @@ body {
   background: var(--accent-hover);
 }
 
+.control-group select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
 .control-group input[type="number"],
 .control-group input[type="text"] {
   padding: 8px 12px;
