@@ -359,6 +359,17 @@ details.adv-group .control-group {
   color: var(--accent-hover);
 }
 
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  flex: none;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

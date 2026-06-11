@@ -1,8 +1,9 @@
 import type { GrayscaleImage } from '@flow-lines/core';
 import type { DepthRequest, DepthResponse } from './depth-worker';
 
-/** The model resizes inputs to ~518px anyway — feeding more wastes memory */
-const MAX_INPUT_DIM = 640;
+/** The model resizes inputs to ~518px anyway — feeding more wastes memory;
+ * phones get a slightly smaller input to trim activation memory further */
+const MAX_INPUT_DIM = /iP(hone|ad|od)/.test(navigator.userAgent) ? 512 : 640;
 
 /** Downscale to the model's working size before encoding */
 function toInputDataURL(source: HTMLCanvasElement): string {

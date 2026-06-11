@@ -151,6 +151,8 @@ interface ImageControlsProps {
   depthError: string | null;
   estimateDepthMap: () => void;
   clearDepth: () => void;
+  lowMemory: boolean;
+  disableLowMemory: () => void;
 }
 
 export function ImageControls({
@@ -177,6 +179,8 @@ export function ImageControls({
   depthError,
   estimateDepthMap,
   clearDepth,
+  lowMemory,
+  disableLowMemory,
 }: ImageControlsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -245,6 +249,16 @@ export function ImageControls({
             <p className="paint-hint">
               Depth estimation failed
               {depthError ? `: ${depthError.slice(0, 200)}` : ' — check your connection and try again.'}
+            </p>
+          )}
+
+          {lowMemory && (
+            <p className="paint-hint">
+              ⚡ Low-memory mode: a previous session crashed on this device, so
+              renders are smaller and lighter here.{' '}
+              <button type="button" className="link-button" onClick={disableLowMemory}>
+                Turn off
+              </button>
             </p>
           )}
         </div>

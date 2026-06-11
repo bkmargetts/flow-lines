@@ -42,10 +42,29 @@ async function configureEnv(): Promise<typeof import('@huggingface/transformers'
   return transformers;
 }
 
-async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
-  const { pipeline } = await configureEnv();
+/** iOS WebKit (incl. iPadOS reporting as MacIntel) — tight memory budgets */
+function isIOSWebKit(): boolean {
+  const nav = navigator as Navigator & { platform?: string };
+  return (
+    /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (nav.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
 
-  const hasWebGPU = 'gpu' in navigator;
+async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
+  const transformers = await configureEnv();
+  const { pipeline } = transformers;
+
+  // Phones: single WASM thread, no WebGPU — every saved allocation
+  // matters when the OS kills pages over memory
+  if (isIOSWebKit()) {
+    const onnxEnv = transformers.env.backends?.onnx?.wasm as
+      | { numThreads?: number }
+      | undefined;
+    if (onnxEnv) onnxEnv.numThreads = 1;
+  }
+
+  const hasWebGPU = 'gpu' in navigator && !isIOSWebKit();
   const failures: string[] = [];
 
   for (const attempt of ATTEMPTS) {
