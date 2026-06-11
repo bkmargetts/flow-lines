@@ -11,11 +11,50 @@ import {
   grayscaleFromRGBA,
   imageToPenInk,
   toSVG,
+  type DirectionMap,
   type FlowLinesOptions,
   type GrayscaleImage,
   type PenInkOptions,
   type SVGOptions,
 } from '@flow-lines/core';
+
+/**
+ * Decode a PNG or JPEG file (detected by magic bytes) into RGBA pixels
+ */
+function loadRGBA(path: string): { data: Uint8Array; width: number; height: number } {
+  const buffer = readFileSync(path);
+
+  // PNG signature
+  if (buffer.length > 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e) {
+    const png = PNG.sync.read(buffer);
+    return { data: png.data, width: png.width, height: png.height };
+  }
+
+  // JPEG signature
+  if (buffer.length > 2 && buffer[0] === 0xff && buffer[1] === 0xd8) {
+    const jpeg = decodeJpeg(buffer, { useTArray: true, maxMemoryUsageInMB: 1024 });
+    return { data: jpeg.data, width: jpeg.width, height: jpeg.height };
+  }
+
+  throw new Error(`Unsupported image format: ${path} (only PNG and JPEG are supported)`);
+}
+
+/**
+ * Load a normal/flow map: R and G channels encode the X and Y direction
+ * components (128 = zero), as in a tangent-space normal map
+ */
+function loadDirectionMap(path: string): DirectionMap {
+  const { data, width, height } = loadRGBA(path);
+  const x = new Float32Array(width * height);
+  const y = new Float32Array(width * height);
+
+  for (let i = 0; i < width * height; i++) {
+    x[i] = (data[i * 4] / 255) * 2 - 1;
+    y[i] = (data[i * 4 + 1] / 255) * 2 - 1;
+  }
+
+  return { width, height, x, y };
+}
 
 /**
  * Decode a PNG or JPEG file (detected by magic bytes) into a grayscale image
@@ -182,6 +221,7 @@ program
   .option('--outline-threshold <number>', 'Edge strength needed for outlines (0-1)', '0.35')
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
+  .option('--texture-style <style>', 'Mark style for textured regions: ticks|stipple|scribble', 'ticks')
   .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
   .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
@@ -199,6 +239,10 @@ program
   .option('--mask <file>', 'Subject mask image (bright = subject), e.g. from an ML segmenter')
   .option('--mask-strength <number>', 'How strongly the mask suppresses the background (0-1)', '1')
   .option('--depth-image <file>', 'Depth map image (bright = near), e.g. from Depth Anything')
+  .option(
+    '--normal-image <file>',
+    'Normal/flow map: R/G channels = X/Y stroke direction (128 = neutral), e.g. from DSINE'
+  )
   .option('--form-strength <number>', 'How strongly depth steers stroke orientation (0-1)', '0.8')
   .option('--depth-isolation <number>', 'Fade far regions toward paper based on depth (0-1)', '0.5')
   .option('--working-size <number>', 'Internal analysis resolution', '600')
@@ -245,6 +289,9 @@ program
         ? loadImage(resolve(process.cwd(), options.depthImage))
         : undefined,
       formStrength: parseFloat(options.formStrength),
+      flowMap: options.normalImage
+        ? loadDirectionMap(resolve(process.cwd(), options.normalImage))
+        : undefined,
       depthIsolation: parseFloat(options.depthIsolation),
       outlinePasses: parseInt(options.outlinePasses, 10),
       optimize: options.optimize,
@@ -264,6 +311,7 @@ program
       outlineThreshold: parseFloat(options.outlineThreshold),
       wobble: parseFloat(options.wobble),
       textureStrokes: parseFloat(options.texture),
+      textureStyle: options.textureStyle as 'ticks' | 'stipple' | 'scribble',
       crossContour: options.crossContour ?? false,
       maxStrokeLength: parseFloat(options.maxStroke),
       workingSize: parseInt(options.workingSize, 10),

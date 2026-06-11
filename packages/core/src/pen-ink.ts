@@ -1,5 +1,5 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
-import { ImageField } from './image-field.js';
+import { ImageField, DirectionMap } from './image-field.js';
 import { GrayscaleImage, sampleBilinear } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import {
@@ -9,6 +9,27 @@ import {
 } from './portrait.js';
 import { traceContours } from './contours.js';
 import { optimizePlot } from './optimize.js';
+
+/** Drop a fraction of a polyline's arc length from each end */
+function trimPolyline(points: Point[], fraction: number): Point[] {
+  if (points.length < 3) return points;
+
+  const cumulative: number[] = [0];
+  for (let i = 1; i < points.length; i++) {
+    cumulative.push(
+      cumulative[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+    );
+  }
+  const total = cumulative[cumulative.length - 1];
+  const trim = Math.min(total * fraction, 12);
+
+  const start = cumulative.findIndex((c) => c >= trim);
+  let end = points.length - 1;
+  while (end > 0 && cumulative[end] > total - trim) end--;
+
+  if (start < 0 || end - start < 1) return points;
+  return points.slice(start, end + 1);
+}
 
 /** Offset a polyline perpendicular to its local direction */
 function offsetPolyline(points: Point[], distance: number): Point[] {
@@ -85,6 +106,11 @@ export interface PenInkOptions {
    * (default 0.6)
    */
   textureStrokes?: number;
+  /**
+   * Mark style for texture-dominant regions: directional ticks (default),
+   * tone-driven stipple dots, or wandering scribble strokes
+   */
+  textureStyle?: 'ticks' | 'stipple' | 'scribble';
 
   /**
    * Hatch across forms instead of along them: strokes wrap around the
@@ -142,6 +168,11 @@ export interface PenInkOptions {
   /** How strongly depth steers stroke orientation, 0-1 (default 0.8) */
   formStrength?: number;
   /**
+   * External direction field (e.g. from a surface-normal map estimated by
+   * DSINE/StableNormal); vector magnitude is the blend weight
+   */
+  flowMap?: DirectionMap;
+  /**
    * Fade far regions toward paper based on depth, 0-1. Only applies when
    * the scene has meaningful depth separation (default 0.5)
    */
@@ -194,6 +225,12 @@ interface PassConfig {
 interface StrokeParams {
   angleOffset: number;
   maxArcLength: number;
+  /** Place a stipple dot instead of tracing a stroke */
+  dot?: boolean;
+  /** Random heading drift per integration step, radians (scribble) */
+  headingJitter?: number;
+  /** Per-stroke random source for heading drift */
+  rand?: () => number;
 }
 
 /**
@@ -317,6 +354,7 @@ export function imageToPenInk(
   const drawOutlines = options.drawOutlines ?? true;
   const outlineThreshold = options.outlineThreshold ?? 0.35;
   const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
+  const textureStyle = options.textureStyle ?? 'ticks';
   const crossContour = options.crossContour ?? false;
   const maxStrokeLength = options.maxStrokeLength ?? 0;
   const autoStyle = options.autoStyle ?? false;
@@ -333,6 +371,7 @@ export function imageToPenInk(
     normalizeContrast: options.normalizeContrast,
     depthMap: options.depthMap,
     formStrength: options.formStrength,
+    flowMap: options.flowMap,
   });
 
   const baseImportance = buildImportance(field, width, height, options);
@@ -437,6 +476,19 @@ export function imageToPenInk(
       }
 
       if (texture > 0.01) {
+        if (textureStyle === 'stipple' && texture > 0.3) {
+          return { angleOffset: 0, maxArcLength: 0, dot: true };
+        }
+
+        if (textureStyle === 'scribble' && texture > 0.3) {
+          return {
+            angleOffset: layerAngle * (1 - 0.8 * texture) + rotate,
+            maxArcLength: Math.min(cap, maxSpacing * 12),
+            headingJitter: 0.35 * texture,
+            rand: random,
+          };
+        }
+
         const tick = maxSpacing * 0.9 * (0.7 + 0.6 * random());
         return {
           angleOffset:
@@ -503,9 +555,11 @@ export function imageToPenInk(
       const spread = 1.1;
       for (let pass = 1; pass < outlinePasses; pass++) {
         const offset = spread * (pass - (outlinePasses - 1) / 2);
-        const shifted = offsetPolyline(points, offset);
-        if (shifted.length >= 2) {
-          lines.push({ points: shifted, pen: 'bold' });
+        // Emphasis passes are trimmed at both ends so the built-up line
+        // tapers like a real ink stroke instead of ending in a blunt bar
+        const trimmed = trimPolyline(offsetPolyline(points, offset), 0.12);
+        if (trimmed.length >= 2) {
+          lines.push({ points: trimmed, pen: 'bold' });
         }
       }
     };
@@ -634,6 +688,24 @@ function tracePass(field: ImageField, seed: number, pass: PassConfig): FlowLine[
 
     const params = pass.paramsFor(candidate.x, candidate.y, random);
 
+    if (params.dot) {
+      const dot = placeDot(field, grid, candidate, pass, random);
+      if (dot) {
+        lines.push(dot);
+        // Spawn neighbours so stippling propagates at the local spacing
+        const spacing = pass.spacingAt(candidate.x, candidate.y);
+        const baseAngle = random() * Math.PI * 2;
+        for (let k = 0; k < 4; k++) {
+          const a = baseAngle + (k * Math.PI) / 2 + (random() - 0.5) * 0.6;
+          candidateStack.push({
+            x: candidate.x + Math.cos(a) * spacing * 1.05,
+            y: candidate.y + Math.sin(a) * spacing * 1.05,
+          });
+        }
+      }
+      continue;
+    }
+
     const line = traceStreamline(field, grid, candidate, pass, params);
     if (!line) continue;
 
@@ -663,6 +735,34 @@ function tracePass(field: ImageField, seed: number, pass: PassConfig): FlowLine[
   }
 
   return lines;
+}
+
+/**
+ * Place a stipple dot (a tiny closed loop the pen can draw in one touch)
+ * if the spot is drawable and respects local spacing
+ */
+function placeDot(
+  field: ImageField,
+  grid: SpatialGrid,
+  at: Point,
+  pass: PassConfig,
+  random: () => number
+): FlowLine | null {
+  if (!field.isInBounds(at.x, at.y, pass.margin)) return null;
+  if (!pass.isDrawable(at.x, at.y)) return null;
+  if (grid.hasPointWithin(at.x, at.y, pass.spacingAt(at.x, at.y) * D_SEED)) return null;
+
+  const radius = 0.55 + random() * 0.35;
+  const points: Point[] = [];
+  const segments = 7;
+  const phase = random() * Math.PI * 2;
+  for (let i = 0; i <= segments; i++) {
+    const t = phase + (i / segments) * Math.PI * 2;
+    points.push({ x: at.x + Math.cos(t) * radius, y: at.y + Math.sin(t) * radius });
+  }
+
+  grid.insert(at);
+  return { points };
 }
 
 function traceStreamline(
@@ -743,6 +843,16 @@ function integrate(
       mdy = -mdy;
     }
 
+    if (params.headingJitter && params.rand) {
+      const drift = (params.rand() - 0.5) * 2 * params.headingJitter;
+      const cd = Math.cos(drift);
+      const sd = Math.sin(drift);
+      const rx = mdx * cd - mdy * sd;
+      const ry = mdx * sd + mdy * cd;
+      mdx = rx;
+      mdy = ry;
+    }
+
     const nx = x + mdx * h;
     const ny = y + mdy * h;
 
@@ -754,8 +864,8 @@ function integrate(
     // across a silhouette onto a different surface
     if (field.getDepthEdge(nx, ny) > 0.45) break;
 
-    // Stop instead of drawing a sharp kink
-    if (mdx * prevDx + mdy * prevDy < 0.2) break;
+    // Stop instead of drawing a sharp kink (scribbles may turn harder)
+    if (mdx * prevDx + mdy * prevDy < (params.headingJitter ? -0.4 : 0.2)) break;
 
     // Stop if the stroke curls back onto itself
     if (i % 3 === 0 && points.length > selfSkip) {

@@ -1,8 +1,7 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   generateFlowLines,
   grayscaleFromRGBA,
-  imageToPenInk,
   toSVG,
   type FlowLinesOptions,
   type GrayscaleImage,
@@ -13,6 +12,7 @@ import {
 import { Controls } from './components/Controls';
 import { ImageControls, PRESETS } from './components/ImageControls';
 import { Preview } from './components/Preview';
+import { getRenderClient, type RenderedSVG } from './render-client';
 
 export type Mode = 'flow' | 'image';
 
@@ -59,6 +59,7 @@ export interface InkSettings {
   skinLightening: number;
   featureLines: boolean;
   textureStrokes: number;
+  textureStyle: 'ticks' | 'stipple' | 'scribble';
   crossContour: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
@@ -119,6 +120,7 @@ const defaultInkSettings: InkSettings = {
   skinLightening: 0.55,
   featureLines: true,
   textureStrokes: 0.6,
+  textureStyle: 'ticks',
   crossContour: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
@@ -187,6 +189,8 @@ export function App() {
   const [depthStatus, setDepthStatus] = useState<DepthStatus>('idle');
   const [depthError, setDepthError] = useState<string | null>(null);
   const [preset, setPreset] = useState('classic');
+  const [inkRender, setInkRender] = useState<RenderedSVG | null>(null);
+  const [isRendering, setIsRendering] = useState(false);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   // Tokens discard results of superseded async AI runs
   const segmentTokenRef = useRef(0);
@@ -373,66 +377,87 @@ export function App() {
     [updateInkSettings]
   );
 
+  // Pen-ink rendering runs in a Web Worker so sliders and AI updates
+  // never freeze the UI; the previous frame stays visible while the next
+  // one computes (latest-wins queue drops intermediate slider positions)
+  useEffect(() => {
+    if (mode !== 'image' || !sourceImage) return;
+
+    const outputHeight = Math.max(
+      1,
+      Math.round((inkSettings.width * sourceImage.height) / sourceImage.width)
+    );
+
+    setIsRendering(true);
+    getRenderClient()
+      .render(
+        sourceImage,
+        {
+          width: inkSettings.width,
+          margin: inkSettings.margin,
+          seed: inkSettings.seed,
+          layers: inkSettings.layers,
+          minSpacing: inkSettings.minSpacing,
+          maxSpacing: inkSettings.maxSpacing,
+          whiteCutoff: inkSettings.whiteCutoff,
+          hatchAngle: inkSettings.hatchAngle,
+          followTone: inkSettings.followTone,
+          drawOutlines: inkSettings.drawOutlines,
+          wobble: inkSettings.wobble,
+          textureStrokes: inkSettings.textureStrokes,
+          textureStyle: inkSettings.textureStyle,
+          crossContour: inkSettings.crossContour,
+          maxStrokeLength: inkSettings.maxStrokeLength,
+          fieldSmoothing: inkSettings.fieldSmoothing,
+          depthMap: depthMap ?? undefined,
+          formStrength: inkSettings.formStrength,
+          depthIsolation: inkSettings.depthIsolation,
+          autoStyle: inkSettings.autoStyle,
+          detailEmphasis: inkSettings.detailEmphasis,
+          toneGamma: inkSettings.toneGamma,
+          workingSize: inkSettings.workingSize,
+          focus: focusPoints.map((point) => ({
+            x: point.x * inkSettings.width,
+            y: point.y * outputHeight,
+            radius:
+              (inkSettings.focusRadiusPct / 100) * Math.min(inkSettings.width, outputHeight),
+            strength: inkSettings.focusStrength,
+          })),
+          subjectMask: subjectMask ?? undefined,
+          maskStrength: inkSettings.maskStrength,
+          portrait: portraitState
+            ? {
+                ...portraitState.portrait,
+                featureStrokes: inkSettings.featureLines
+                  ? portraitState.portrait.featureStrokes
+                  : undefined,
+                skinLightening: inkSettings.skinLightening,
+              }
+            : undefined,
+        },
+        {
+          strokeColor: inkSettings.strokeColor,
+          strokeWidth: inkSettings.strokeWidth,
+        }
+      )
+      .then((rendered) => {
+        setInkRender(rendered);
+        setIsRendering(false);
+      })
+      .catch((err: Error) => {
+        // Superseded renders are expected during rapid slider changes
+        if (err.message !== 'superseded') {
+          setIsRendering(false);
+        }
+      });
+  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap]);
+
   const generated = useMemo(() => {
     if (mode === 'image') {
-      if (!sourceImage) {
+      if (!sourceImage || !inkRender) {
         return { svg: '', width: inkSettings.width, height: inkSettings.width };
       }
-
-      const outputHeight = Math.max(
-        1,
-        Math.round((inkSettings.width * sourceImage.height) / sourceImage.width)
-      );
-
-      const result = imageToPenInk(sourceImage, {
-        width: inkSettings.width,
-        margin: inkSettings.margin,
-        seed: inkSettings.seed,
-        layers: inkSettings.layers,
-        minSpacing: inkSettings.minSpacing,
-        maxSpacing: inkSettings.maxSpacing,
-        whiteCutoff: inkSettings.whiteCutoff,
-        hatchAngle: inkSettings.hatchAngle,
-        followTone: inkSettings.followTone,
-        drawOutlines: inkSettings.drawOutlines,
-        wobble: inkSettings.wobble,
-        textureStrokes: inkSettings.textureStrokes,
-        crossContour: inkSettings.crossContour,
-        maxStrokeLength: inkSettings.maxStrokeLength,
-        fieldSmoothing: inkSettings.fieldSmoothing,
-        depthMap: depthMap ?? undefined,
-        formStrength: inkSettings.formStrength,
-        depthIsolation: inkSettings.depthIsolation,
-        autoStyle: inkSettings.autoStyle,
-        detailEmphasis: inkSettings.detailEmphasis,
-        toneGamma: inkSettings.toneGamma,
-        workingSize: inkSettings.workingSize,
-        focus: focusPoints.map((point) => ({
-          x: point.x * inkSettings.width,
-          y: point.y * outputHeight,
-          radius:
-            (inkSettings.focusRadiusPct / 100) * Math.min(inkSettings.width, outputHeight),
-          strength: inkSettings.focusStrength,
-        })),
-        subjectMask: subjectMask ?? undefined,
-        maskStrength: inkSettings.maskStrength,
-        portrait: portraitState
-          ? {
-              ...portraitState.portrait,
-              featureStrokes: inkSettings.featureLines
-                ? portraitState.portrait.featureStrokes
-                : undefined,
-              skinLightening: inkSettings.skinLightening,
-            }
-          : undefined,
-      });
-
-      const svg = toSVG(result, {
-        strokeColor: inkSettings.strokeColor,
-        strokeWidth: inkSettings.strokeWidth,
-      });
-
-      return { svg, width: result.width, height: result.height };
+      return inkRender;
     }
 
     const usePaintedPoints = state.paintMode && state.paintedPoints.length > 0;
@@ -460,7 +485,7 @@ export function App() {
 
     const result = generateFlowLines(flowOptions);
     return { svg: toSVG(result, svgOptions), width: state.width, height: state.height };
-  }, [mode, state, inkSettings, sourceImage, focusPoints, subjectMask, portraitState, depthMap]);
+  }, [mode, state, sourceImage, inkRender, inkSettings.width]);
 
   const downloadSVG = useCallback(() => {
     if (!generated.svg) return;
@@ -543,6 +568,7 @@ export function App() {
       </aside>
 
       <main className="canvas-container">
+        {mode === 'image' && isRendering && <div className="rendering-badge">Rendering…</div>}
         {mode === 'image' && !sourceImage ? (
           <div className="empty-state">
             <p>Upload an image to render it as pen-and-ink strokes.</p>
