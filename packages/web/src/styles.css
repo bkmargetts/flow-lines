@@ -325,6 +325,36 @@ details.advanced[open] > summary {
   color: var(--accent);
 }
 
+details.adv-group {
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: rgba(15, 52, 96, 0.25);
+}
+
+details.adv-group > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  padding: 10px 0;
+  user-select: none;
+}
+
+details.adv-group[open] {
+  padding-bottom: 12px;
+}
+
+details.adv-group[open] > summary {
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+details.adv-group .control-group {
+  margin-bottom: 12px;
+}
+
 .status-line {
   color: var(--accent-hover);
 }
