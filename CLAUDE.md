@@ -72,7 +72,12 @@ pnpm monorepo:
   zenith-to-horizon falloff; cloud shapes are carved as negative space
   by tracing the blurred mass-tone boundary (marching squares,
   `iso-contours.ts`) and inking it as a light outline — the edge
-  detector misses soft tonal transitions entirely.
+  detector misses soft tonal transitions entirely. Sky eligibility and
+  density are judged on **raw tone, never the banded value plan**
+  (quantization rounds grey skies to paper or a hatch band — both kill
+  the stipple), and low importance only *lightens* sky stipple (smooth
+  skies always score low on auto-detail, but the sky is a feature, not
+  a background to dissolve).
 - **Contours** — Canny-style edge linking (NMS + hysteresis + chaining)
   produces long confident outlines; emphasized via offset single-pen
   passes with tapered ends; suppressed inside detected faces.

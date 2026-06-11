@@ -1024,6 +1024,31 @@ describe('art levers', () => {
     expect(darkThird).toBeGreaterThan(lightThird * 1.5);
   });
 
+  it('stipples grey overcast skies that the value plan rounds to paper', () => {
+    // Flat light-grey sky (darkness ~0.22): valueBands snaps it to band 0
+    // (paper) and auto detail emphasis demotes it for being smooth — the
+    // combination that used to leave overcast skies completely blank
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.7 ? 0.78 : 0.25 + 0.15 * Math.sin(u * 60) * Math.sin(v * 60)
+    );
+
+    const result = imageToPenInk(scene, {
+      width: 320, seed: 125, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0.3, textureStrokes: 0, normalizeContrast: false,
+      layers: 3, optimize: false, skyStipple: true, valueBands: 4,
+    });
+
+    const isDot = (l: { points: { x: number; y: number }[] }) => {
+      if (l.points.length < 6 || l.points.length > 10) return false;
+      const xs = l.points.map((p) => p.x);
+      const ys = l.points.map((p) => p.y);
+      return Math.max(...xs) - Math.min(...xs) < 4 && Math.max(...ys) - Math.min(...ys) < 4;
+    };
+
+    const skyDots = result.lines.filter((l) => isDot(l) && l.points[0].y < 200).length;
+    expect(skyDots).toBeGreaterThan(100);
+  });
+
   it('carves cloud shapes with outlines when skyStipple is on', () => {
     // A bright cloud blob in a mid-light sky over textured ground
     const scene = makeImage(160, 160, (u, v) => {

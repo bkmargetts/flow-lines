@@ -460,6 +460,17 @@ export function imageToPenInk(
   const effectiveDarkness = (x: number, y: number, imp: number): number =>
     baseDarkness(x, y) * (0.25 + 0.75 * imp);
 
+  // Sky-stipple eligibility is judged on the photo's RAW tone, never the
+  // banded value plan: quantization rounds a grey overcast sky either
+  // down to paper or up into a hatch band, and either way the stipple
+  // window between them vanishes for exactly the skies it exists for
+  const skyEligible = skyStipple
+    ? (x: number, y: number): boolean =>
+        field.getDetail(x, y) < 0.25 &&
+        field.getFormConfidence(x, y) < 0.3 &&
+        field.getDarkness(x, y) < 0.6
+    : null;
+
   const lines: FlowLine[] = [];
 
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
@@ -493,12 +504,31 @@ export function imageToPenInk(
       return spacing;
     };
 
-    const toneDrawable = importance
+    const bandedDrawable = importance
       ? (x: number, y: number): boolean => {
           const imp = importance(x, y);
           return effectiveDarkness(x, y, imp) >= threshold + (1 - imp) * 0.25;
         }
       : (x: number, y: number): boolean => baseDarkness(x, y) >= threshold;
+
+    // In sky, raw tone decides drawability (base layer only — deeper
+    // layers still add density where the value plan calls for it). Low
+    // importance lightens the stipple instead of blanking it: smooth
+    // skies always score low on auto-detail, but in landscape work the
+    // sky is a feature, not a background to dissolve
+    const skyDrawable =
+      skyEligible && layer === 0
+        ? (x: number, y: number): boolean => {
+            if (!skyEligible(x, y)) return false;
+            const d = field.getDarkness(x, y);
+            const imp = importance ? importance(x, y) : 1;
+            return d * (0.4 + 0.6 * imp) >= threshold;
+          }
+        : null;
+
+    const toneDrawable = skyDrawable
+      ? (x: number, y: number): boolean => bandedDrawable(x, y) || skyDrawable(x, y)
+      : bandedDrawable;
 
     // Cross-hatch layers accumulate in hand-sized patches separated by
     // gaps — strokes seed inside a patch and stop at its edge — instead
@@ -537,22 +567,20 @@ export function imageToPenInk(
       // Open skies and soft gradients: smooth, featureless, light-mid tone.
       // Dots render them the way illustrators do, with cloud highlights
       // left as paper by the white cutoff.
-      if (
-        skyStipple &&
-        texture < 0.25 &&
-        field.getDetail(x, y) < 0.25 &&
-        field.getFormConfidence(x, y) < 0.3 &&
-        baseDarkness(x, y) < 0.55
-      ) {
+      if (skyEligible && texture < 0.25 && skyEligible(x, y)) {
         // Stipple carries the sky's tone entirely on dot density, so it
         // gets its own spacing curve, much tighter than hatch spacing;
         // density also falls off zenith-to-horizon the way hand-stippled
-        // skies are graded
-        const d = baseDarkness(x, y);
-        const t = Math.min(1, Math.max(0, (d - whiteCutoff) / (0.55 - whiteCutoff)));
+        // skies are graded. Raw tone drives the gradation — banded tone
+        // is flat across a band, which kills the grade.
+        const d = field.getDarkness(x, y);
+        const t = Math.min(1, Math.max(0, (d - whiteCutoff) / (0.6 - whiteCutoff)));
         let dotSpacing =
           maxSpacing * 0.5 + (minSpacing * 1.1 - maxSpacing * 0.5) * Math.sqrt(t);
         dotSpacing *= 0.8 + 0.5 * (y / height);
+        if (importance) {
+          dotSpacing *= 1 + (1 - importance(x, y)) * 0.6;
+        }
         return {
           angleOffset: 0,
           maxArcLength: 0,
