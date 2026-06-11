@@ -236,6 +236,7 @@ program
   .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
   .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
   .option('--facet-hatch', 'Hatch toned masses as straight-stroke facets with per-patch angles')
+  .option('--calm-water', 'Render calm water as long broken horizontal strokes')
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
   .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
   .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
@@ -331,6 +332,7 @@ program
       richBlacks: options.richBlacks,
       crossContour: options.crossContour ?? false,
       facetHatch: options.facetHatch ?? false,
+      calmWater: options.calmWater ?? false,
       maxStrokeLength: parseFloat(options.maxStroke),
       workingSize: parseInt(options.workingSize, 10),
     };

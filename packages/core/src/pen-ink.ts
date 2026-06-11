@@ -108,6 +108,13 @@ export interface PenInkOptions {
    * masses in real ink work are hatched facet by facet (default false)
    */
   facetHatch?: boolean;
+  /**
+   * Render calm water as long broken horizontals: ruler-flat strokes
+   * interrupted by white gaps that cluster into horizontal lenses
+   * (glints), never hatch. Water is recognized structurally — smooth,
+   * near-horizontal flow, no confident 3D form (default false)
+   */
+  calmWater?: boolean;
 
   /** Fallback hatch angle in degrees for flat regions (default -45) */
   hatchAngle?: number;
@@ -410,6 +417,7 @@ export function imageToPenInk(
   const valueBands = Math.round(options.valueBands ?? 0);
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
   const facetHatch = options.facetHatch ?? false;
+  const calmWater = options.calmWater ?? false;
   const crossContour = options.crossContour ?? false;
   const maxStrokeLength = options.maxStrokeLength ?? 0;
   const autoStyle = options.autoStyle ?? false;
@@ -503,6 +511,8 @@ export function imageToPenInk(
   // crossing into a neighbouring facet changes the id, which terminates
   // the stroke — parallel marks laid patch by patch, the way a hand
   // hatches a rock face, instead of streamlines bending smoothly
+  const waterNoise = calmWater ? createNoise(seed + 9377) : null;
+
   const FACET_BIN = Math.PI / 6;
   const facetCell = maxSpacing * 5;
   const facetNoise = facetHatch ? createNoise(seed + 6011) : null;
@@ -631,6 +641,28 @@ export function imageToPenInk(
       }
       let cap = maxStrokeLength > 0 ? maxStrokeLength * (0.8 + 0.4 * random()) : Infinity;
       let rotate = 0;
+
+      // Calm water: long ruler-flat horizontals broken by white gaps
+      // that cluster into horizontal lenses (glints) — never hatch.
+      // Recognized structurally: smooth-ish, near-horizontal flow, no
+      // confident 3D form. Lighter water breaks more often.
+      if (
+        calmWater &&
+        texture < 0.35 &&
+        field.getDetail(x, y) < 0.45 &&
+        field.getFormConfidence(x, y) < 0.4 &&
+        Math.abs(field.getOrientation(x, y)) < Math.PI / 10
+      ) {
+        const d = baseDarkness(x, y);
+        const gapCut = 0.05 + 0.55 * Math.max(0, 1 - d / 0.6);
+        return {
+          angleOffset: 0,
+          fixedAngle: 0,
+          maxArcLength: Math.min(cap, maxSpacing * (5 + 9 * random())),
+          stopAt: (px: number, py: number): boolean =>
+            waterNoise!.noise2D(px / (maxSpacing * 9), py / (maxSpacing * 1.6)) > gapCut,
+        };
+      }
 
       // Toned masses without strong texture or 3D form get faceted
       // hatching: one straight direction per patch, stroke ends at the

@@ -20,6 +20,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       workingSize: 600,
       crossContour: false,
       facetHatch: false,
+      calmWater: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
@@ -44,6 +45,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       whiteCutoff: 0.08,
       crossContour: false,
       facetHatch: false,
+      calmWater: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
@@ -67,6 +69,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       whiteCutoff: 0.08,
       crossContour: false,
       facetHatch: false,
+      calmWater: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
@@ -92,6 +95,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       skyStipple: true,
       crossContour: false,
       facetHatch: true,
+      calmWater: true,
       maxStrokeLength: 70,
       fieldSmoothing: 5,
       textureStyle: 'ticks',
@@ -113,6 +117,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       whiteCutoff: 0.1,
       crossContour: false,
       facetHatch: false,
+      calmWater: false,
       maxStrokeLength: 0,
       fieldSmoothing: 3,
       hatchAngle: -30,
@@ -136,6 +141,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       workingSize: 800,
       crossContour: true,
       facetHatch: true,
+      calmWater: false,
       maxStrokeLength: 48,
       fieldSmoothing: 8,
       hatchAngle: -45,
@@ -514,6 +520,14 @@ export function ImageControls({
                 onChange={(e) => updateSettings({ facetHatch: e.target.checked })}
               />
               Faceted hatching (straight strokes in patches)
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.calmWater}
+                onChange={(e) => updateSettings({ calmWater: e.target.checked })}
+              />
+              Calm water (long broken horizontals)
             </label>
             <label className="checkbox-label">
               <input

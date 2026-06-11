@@ -75,6 +75,11 @@ pnpm monorepo:
   strongest remaining "computer" tell; rocks, walls, and shadow masses
   in real ink work are hatched patch by patch. On for landscape/etching
   presets.
+- **Calm water** (`calmWater`) — smooth near-horizontal-flow regions
+  with no confident 3D form render as long ruler-flat horizontals
+  broken by white gaps; the gap noise is stretched horizontally so
+  breaks cluster into glint lenses. Choppy water keeps its wave
+  scribbles via the texture gate. On for the landscape preset.
 - **Sky treatment** (`skyStipple`) — stipple density carries sky tone on
   its own curve (far tighter than hatch spacing) with a
   zenith-to-horizon falloff; cloud shapes are carved as negative space
@@ -141,8 +146,7 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
-value: a calm-water stroke language (long broken horizontals),
-white halos outside strong contours, semantic region labels for dispatch
+value: white halos outside strong contours, semantic region labels for dispatch
 (no good in-browser model yet), more stroke textures (bricks, grass),
 light-direction awareness. `valueBands` covers tonal *posterization*;
 inventing value structure that isn't in the photo (composition-aware

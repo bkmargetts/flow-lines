@@ -1074,6 +1074,45 @@ describe('art levers', () => {
     expect(skyDots).toBeGreaterThan(100);
   });
 
+  it('calm water renders as broken near-horizontal strokes', () => {
+    // Top half: dark textured ground (anchors detail normalization);
+    // bottom half: smooth water with soft horizontal banding
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.5
+        ? 0.3 + 0.18 * Math.sin(u * 60) * Math.sin(v * 60)
+        : 0.55 + 0.08 * Math.sin(v * 40)
+    );
+
+    const base = {
+      width: 320, seed: 127, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 1, optimize: false,
+    };
+
+    const on = imageToPenInk(scene, { ...base, calmWater: true });
+
+    const waterStrokes = on.lines.filter(
+      (l) => l.points.length >= 4 && l.points.every((p) => p.y > 180)
+    );
+    expect(waterStrokes.length).toBeGreaterThan(20);
+
+    // The dominant mark is ruler-flat: rise is a small fraction of run
+    const horizontal = waterStrokes.filter((l) => {
+      const first = l.points[0];
+      const last = l.points[l.points.length - 1];
+      const run = Math.abs(last.x - first.x);
+      return run > 8 && Math.abs(last.y - first.y) < run * 0.15;
+    });
+    expect(horizontal.length).toBeGreaterThan(waterStrokes.length * 0.6);
+
+    // Gaps break the lines: strokes are far shorter than the canvas
+    for (const l of horizontal) {
+      const first = l.points[0];
+      const last = l.points[l.points.length - 1];
+      expect(Math.abs(last.x - first.x)).toBeLessThan(290);
+    }
+  });
+
   it('carves cloud shapes with outlines when skyStipple is on', () => {
     // A bright cloud blob in a mid-light sky over textured ground
     const scene = makeImage(160, 160, (u, v) => {
