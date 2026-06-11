@@ -612,6 +612,25 @@ describe('depth-aware rendering', () => {
     expect(Math.abs(noDepth.getOrientation(150, 100) - -Math.PI / 4)).toBeLessThan(0.1);
   });
 
+  it('keeps the along-form direction on crests where the gradient vanishes', () => {
+    // On the cylinder's centerline the depth gradient is zero, but the
+    // curvature frame still knows the axis direction
+    const field = new ImageField(flat, {
+      width: 200,
+      height: 200,
+      normalizeContrast: false,
+      depthMap: tubeDepth,
+      formStrength: 1,
+    });
+
+    const angle = field.getOrientation(100, 100); // tube centerline
+    const distFromVertical = Math.abs(Math.abs(angle) - Math.PI / 2);
+    expect(distFromVertical).toBeLessThan(0.25);
+
+    // And the dispatch signal fires there too
+    expect(field.getFormConfidence(100, 100)).toBeGreaterThan(0.5);
+  });
+
   it('terminates strokes at depth discontinuities', () => {
     // One flat depth plane in front of another, same luminance everywhere
     const stepDepth = makeImage(100, 100, (u) => (u < 0.5 ? 0.85 : 0.2));
@@ -761,7 +780,9 @@ describe('auto style dispatch', () => {
     });
 
     expect(field.getFormConfidence(150, 100)).toBeGreaterThan(0.5); // flank
-    expect(field.getFormConfidence(6, 100)).toBeLessThan(0.35); // flat background
+    // The form's smoothed skirt extends a few px past the silhouette, so
+    // probe genuinely flat background beyond it
+    expect(field.getFormConfidence(2, 100)).toBeLessThan(0.4);
   });
 });
 

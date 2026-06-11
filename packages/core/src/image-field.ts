@@ -240,6 +240,8 @@ export class ImageField {
     const energy = new Float32Array(width * height);
     const tanCos = new Float32Array(width * height);
     const tanSin = new Float32Array(width * height);
+    const dgxArr = new Float32Array(width * height);
+    const dgyArr = new Float32Array(width * height);
     let meanEnergy = 0;
 
     for (let y = 0; y < height; y++) {
@@ -257,6 +259,8 @@ export class ImageField {
         const dgy = (bl + 2 * bc + br - tl - 2 * tc - tr) / 4;
 
         const i = y * width + x;
+        dgxArr[i] = dgx;
+        dgyArr[i] = dgy;
         const e = dgx * dgx + dgy * dgy;
         energy[i] = e;
         meanEnergy += e;
@@ -270,18 +274,6 @@ export class ImageField {
       }
     }
     meanEnergy = Math.max(meanEnergy / (width * height), 1e-12);
-
-    // Blend depth-derived orientation over the luminance-derived field,
-    // keeping the raw confidence around for per-stroke style dispatch
-    const confidence = new Float32Array(width * height);
-    for (let i = 0; i < width * height; i++) {
-      const conf = energy[i] / (energy[i] + 0.1 * meanEnergy);
-      confidence[i] = conf;
-      const w = formStrength * conf;
-      this.orientCos.data[i] = w * tanCos[i] + (1 - w) * this.orientCos.data[i];
-      this.orientSin.data[i] = w * tanSin[i] + (1 - w) * this.orientSin.data[i];
-    }
-    this.formConfidence = { width, height, data: confidence };
 
     // Depth discontinuities: normalize gradient magnitude by a high
     // percentile, then fold into the edge map so contours trace silhouettes
@@ -299,6 +291,98 @@ export class ImageField {
     }
 
     this.depthEdge = { width, height, data: edgeData };
+
+    // Principal curvature frame from the depth Hessian (Hertzmann & Zorin):
+    // the gradient tangent vanishes on crests (tube centerlines, sphere
+    // tops) exactly where curvature is strongest, so the eigenvector of
+    // the dominant second derivative supplies the stable along-form
+    // direction there. A depth STEP is a discontinuity, not curvature —
+    // its gradients are zeroed before the Hessian so silhouettes cannot
+    // leak ~1000x-stronger second derivatives into the frame.
+    // Surface gradients live near the image's median magnitude; a step's
+    // skirt is orders of magnitude above it. An absolute cut at a few
+    // medians removes the discontinuity entirely without touching form.
+    const medianMag = sorted[Math.floor(sorted.length * 0.5)];
+    const gradCut = Math.max(8 * medianMag, 1e-9);
+    const maskedGx = new Float32Array(width * height);
+    const maskedGy = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      const keepIt = mag[i] <= gradCut ? 1 : 0;
+      maskedGx[i] = dgxArr[i] * keepIt;
+      maskedGy[i] = dgyArr[i] * keepIt;
+    }
+    const sgx = gaussianBlur({ width, height, data: maskedGx }, 2);
+    const sgy = gaussianBlur({ width, height, data: maskedGy }, 2);
+
+    const curvCos = new Float32Array(width * height);
+    const curvSin = new Float32Array(width * height);
+    const curvWeight = new Float32Array(width * height);
+
+    const gAt = (arr: Float32Array, x: number, y: number): number => {
+      const cx = Math.max(0, Math.min(width - 1, x));
+      const cy = Math.max(0, Math.min(height - 1, y));
+      return arr[cy * width + cx];
+    };
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        const dxx = (gAt(sgx.data, x + 1, y) - gAt(sgx.data, x - 1, y)) / 2;
+        const dxy =
+          (gAt(sgx.data, x, y + 1) - gAt(sgx.data, x, y - 1)) / 4 +
+          (gAt(sgy.data, x + 1, y) - gAt(sgy.data, x - 1, y)) / 4;
+        const dyy = (gAt(sgy.data, x, y + 1) - gAt(sgy.data, x, y - 1)) / 2;
+
+        const mean = (dxx + dyy) / 2;
+        const disc = Math.sqrt(((dxx - dyy) / 2) ** 2 + dxy * dxy);
+        const lamPlus = mean + disc;
+        const lamMinus = mean - disc;
+
+        const big = Math.abs(lamPlus) >= Math.abs(lamMinus) ? lamPlus : lamMinus;
+        const small = Math.abs(lamPlus) >= Math.abs(lamMinus) ? lamMinus : lamPlus;
+
+        // Eigenvector direction for lamPlus; the dominant-|curvature|
+        // direction runs ACROSS the form, so along-form is its normal
+        const thetaPlus = 0.5 * Math.atan2(2 * dxy, dxx - dyy);
+        const across = big === lamPlus ? thetaPlus : thetaPlus + Math.PI / 2;
+        const along = across + Math.PI / 2;
+
+        const magBig = Math.abs(big);
+        const anisotropy = (magBig - Math.abs(small)) / (magBig + Math.abs(small) + 1e-12);
+
+        curvCos[i] = Math.cos(2 * along);
+        curvSin[i] = Math.sin(2 * along);
+        // Masked-gradient discontinuities at the zeroed band still create
+        // artificial bending right next to the rim — damp it locally
+        curvWeight[i] = anisotropy * magBig * Math.max(0, 1 - 2 * edgeData[i]);
+      }
+    }
+
+    // Normalize against a high percentile of genuine surface bending
+    const curvSorted = Float32Array.from(curvWeight).sort();
+    const curvRef = Math.max(curvSorted[Math.floor(curvSorted.length * 0.9)], 1e-12);
+
+    // Blend depth-derived orientation over the luminance-derived field,
+    // combining the gradient tangent with the curvature frame; keep the
+    // combined confidence around for per-stroke style dispatch
+    const confidence = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      const wg = energy[i] / (energy[i] + 0.1 * meanEnergy);
+      const wc = Math.min(1, curvWeight[i] / (curvWeight[i] + 0.1 * curvRef));
+
+      const vx = wc * curvCos[i] + wg * tanCos[i];
+      const vy = wc * curvSin[i] + wg * tanSin[i];
+      const vmag = Math.hypot(vx, vy);
+
+      const conf = Math.min(1, Math.max(wg, wc));
+      confidence[i] = conf;
+
+      if (vmag < 1e-9) continue;
+      const w = formStrength * conf;
+      this.orientCos.data[i] = w * (vx / vmag) + (1 - w) * this.orientCos.data[i];
+      this.orientSin.data[i] = w * (vy / vmag) + (1 - w) * this.orientSin.data[i];
+    }
+    this.formConfidence = { width, height, data: confidence };
   }
 
   /** Whether a depth map is attached */
