@@ -239,6 +239,11 @@ program
   .option('--texture-style <style>', 'Mark style for textured regions: ticks|stipple|scribble', 'ticks')
   .option('--sky-stipple', 'Stipple smooth light regions (open skies) instead of hatching')
   .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
+  .option(
+    '--counterchange <number>',
+    'Darken tone where a dark mass borders a lighter one (0-1)',
+    '0.5'
+  )
   .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
   .option('--facet-hatch', 'Hatch toned masses as straight-stroke facets with per-patch angles')
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
@@ -335,6 +340,7 @@ program
       textureStyle: options.textureStyle as 'ticks' | 'stipple' | 'scribble',
       skyStipple: options.skyStipple ?? false,
       richBlacks: options.richBlacks,
+      counterchange: parseFloat(options.counterchange),
       crossContour: options.crossContour ?? false,
       facetHatch: options.facetHatch ?? false,
       maxStrokeLength: parseFloat(options.maxStroke),

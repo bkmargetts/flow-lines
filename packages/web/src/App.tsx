@@ -65,6 +65,7 @@ export interface InkSettings {
   textureStyle: 'ticks' | 'stipple' | 'scribble';
   skyStipple: boolean;
   richBlacks: boolean;
+  counterchange: number;
   crossContour: boolean;
   facetHatch: boolean;
   maxStrokeLength: number;
@@ -150,6 +151,7 @@ const defaultInkSettings: InkSettings = {
   textureStyle: 'ticks',
   skyStipple: false,
   richBlacks: true,
+  counterchange: 0.5,
   crossContour: false,
   facetHatch: false,
   maxStrokeLength: 0,
@@ -484,6 +486,7 @@ export function App() {
           workingSize: Math.min(inkSettings.workingSize, cap),
           layers: lowMemory ? Math.min(2, inkSettings.layers) : inkSettings.layers,
           richBlacks: lowMemory ? false : inkSettings.richBlacks,
+          counterchange: inkSettings.counterchange,
           focus: focusPoints.map((point) => ({
             x: point.x * jobWidth,
             y: point.y * outputHeight,

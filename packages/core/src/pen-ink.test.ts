@@ -1203,4 +1203,20 @@ describe('ImageField', () => {
     expect(field.getEdgeStrength(120, 120)).toBeGreaterThan(0.3);
     expect(field.getEdgeStrength(30, 120)).toBeLessThan(0.1);
   });
+
+  it('reports counterchange boost at the dark side of mass boundaries', () => {
+    const field = new ImageField(halfDark, {
+      width: 240,
+      height: 240,
+      normalizeContrast: false,
+    });
+
+    // Peaks on the dark side near the boundary (x = 120)...
+    const nearBoundary = field.getCounterBoost(105, 120);
+    expect(nearBoundary).toBeGreaterThan(0.05);
+    // ...fades deep inside the dark mass...
+    expect(field.getCounterBoost(15, 120)).toBeLessThan(nearBoundary * 0.5);
+    // ...and never darkens the lighter side
+    expect(field.getCounterBoost(180, 120)).toBeLessThan(0.02);
+  });
 });

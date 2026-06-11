@@ -156,6 +156,13 @@ export interface PenInkOptions {
    * gray cross-hatch (default true)
    */
   richBlacks?: boolean;
+  /**
+   * Counterchange strength, 0-1: tone darkens where a dark mass meets a
+   * lighter one and relaxes away from the boundary — the background
+   * swells behind a light subject, a shadow mass bites at its edge. The
+   * lighter side is never touched. 0 disables (default 0.5)
+   */
+  counterchange?: number;
 
   /**
    * Hatch across forms instead of along them: strokes wrap around the
@@ -546,10 +553,20 @@ export function imageToPenInk(
 
   // With a value plan, the posterized mass tone decides the band a region
   // sits in; a little raw tone keeps marks alive within each band
-  const toneAt = field.hasMassTone()
+  const bandedTone = field.hasMassTone()
     ? (x: number, y: number): number =>
         0.75 * field.getMassDarkness(x, y) + 0.25 * field.getDarkness(x, y)
     : (x: number, y: number): number => field.getDarkness(x, y);
+
+  // Counterchange: tone deepens where a dark mass borders a lighter one
+  // and relaxes in the interior, so subjects sit against a swell of
+  // background tone instead of an even wash
+  const counterchange = Math.max(0, Math.min(1, options.counterchange ?? 0.5));
+  const toneAt =
+    counterchange > 0
+      ? (x: number, y: number): number =>
+          Math.min(1, bandedTone(x, y) + counterchange * field.getCounterBoost(x, y))
+      : bandedTone;
 
   const baseDarkness = skinFactor
     ? (x: number, y: number): number => toneAt(x, y) * skinFactor(x, y)

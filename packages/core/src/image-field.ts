@@ -75,6 +75,9 @@ export class ImageField {
   private absTone: GrayscaleImage;
   /** Heavily blurred darkness — large-scale tonal masses before banding */
   private massBlur: GrayscaleImage;
+  /** One-sided mass-scale contrast: how much darker than its
+   * surroundings a region is, peaking at mass boundaries */
+  private counterBoost: GrayscaleImage;
   /** Blurred tone snapped to discrete value bands (darkness, 1 = black) */
   private massDarkness: GrayscaleImage | null = null;
   /** Doubled-angle orientation vectors, weighted by local coherence */
@@ -124,6 +127,21 @@ export class ImageField {
       massData[i] = 1 - massTone.data[i];
     }
     this.massBlur = { width, height, data: massData };
+
+    // Counterchange boost: one-sided local contrast on the mass tone. A
+    // wide blur gives the neighbourhood average; where a mass is darker
+    // than its surroundings the difference peaks at the boundary and
+    // decays inward — tone darkens right where a dark mass meets a
+    // lighter one (background swelling behind a light subject, shadow
+    // biting at its edge) and relaxes in the interior. The lighter side
+    // is left untouched.
+    const wideSigma = Math.max(6, Math.max(width, height) / 40);
+    const wide = gaussianBlur(this.massBlur, wideSigma);
+    const boostData = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      boostData[i] = Math.max(0, massData[i] - wide.data[i]);
+    }
+    this.counterBoost = { width, height, data: boostData };
 
     const valueBands = Math.round(options.valueBands ?? 0);
     if (valueBands >= 2) {
@@ -545,6 +563,16 @@ export class ImageField {
    */
   getMassRaster(): { raster: GrayscaleImage; scaleX: number; scaleY: number } {
     return { raster: this.massBlur, scaleX: this.scaleX, scaleY: this.scaleY };
+  }
+
+  /**
+   * Counterchange boost in [0, 1) at canvas coordinates: how much darker
+   * than its wide surroundings the local tonal mass is. Peaks at the
+   * dark side of mass boundaries, ~0 in mass interiors and on the
+   * lighter side
+   */
+  getCounterBoost(x: number, y: number): number {
+    return sampleBilinear(this.counterBoost, x * this.scaleX, y * this.scaleY);
   }
 
   /** Whether a posterized value plan was built (valueBands >= 2) */

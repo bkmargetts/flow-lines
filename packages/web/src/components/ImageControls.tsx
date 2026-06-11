@@ -492,6 +492,17 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
+              Counterchange <span>{settings.counterchange.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={settings.counterchange}
+              onChange={(e) => updateSettings({ counterchange: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
               Silhouette Halo{' '}
               <span>{settings.contourHalo === 0 ? 'off' : `${settings.contourHalo.toFixed(1)}px`}</span>
             </label>
