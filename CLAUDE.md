@@ -93,6 +93,14 @@ pnpm monorepo:
 - **Contours** — Canny-style edge linking (NMS + hysteresis + chaining)
   produces long confident outlines; emphasized via offset single-pen
   passes with tapered ends; suppressed inside detected faces.
+- **Silhouette halos** (`contourHalo`) — hatch and stipple stop a sliver
+  short of long contours instead of crashing into them: reserved paper
+  around a silhouette, the way ink artists hold background tone off a
+  subject. One-sided and contrast-gated — tone is probed beyond the
+  edge's gradient skirt on both sides, and only a real tonal step stamps
+  a halo, on the darker side. Edges inside an evenly-toned mass
+  (architectural detail, fur) leave no halo, so dark masses keep their
+  tone instead of going coloring-book.
 - **Portrait geometry** — face landmarks become skin-lightening ovals,
   protected feature regions, and sparse artist-style feature strokes
   (upper lid + iris dot, single brow line, inner lip line only).
@@ -141,10 +149,15 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
-value: a calm-water stroke language (long broken horizontals),
-white halos outside strong contours, semantic region labels for dispatch
-(no good in-browser model yet), more stroke textures (bricks, grass),
-light-direction awareness. `valueBands` covers tonal *posterization*;
+value: committed dark masses (most renders sit in a mid-grey wash;
+`richBlacks` rarely saturates), counterchange (darkening background
+hatch right behind a light subject — a tractable slice of
+composition-aware massing), outline-clutter control in busy scenes
+(contour `minLength` scaled by local detail so cities don't render as
+edge-detector tangles), a calm-water stroke language (long broken
+horizontals), semantic region labels for dispatch (no good in-browser
+model yet), more stroke textures (bricks, grass), light-direction
+awareness. `valueBands` covers tonal *posterization*;
 inventing value structure that isn't in the photo (composition-aware
 massing) is still open. The research review that drove the roadmap lives in the
 conversation history of the original build; its remaining items are

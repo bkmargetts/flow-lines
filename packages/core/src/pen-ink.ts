@@ -124,6 +124,15 @@ export interface PenInkOptions {
   drawOutlines?: boolean;
   /** Edge strength threshold for outlines, 0-1 (default 0.35) */
   outlineThreshold?: number;
+  /**
+   * Reserve a sliver of blank paper this wide (px) beside long confident
+   * contours: hatching and stipple stop short of the line instead of
+   * crashing into it, so subjects pop off the background the way ink
+   * artists hold background tone away from a silhouette. Applied on the
+   * darker side of the line, and only across a real tonal step — edges
+   * inside an evenly-toned mass leave no halo. 0 disables (default 2.2)
+   */
+  contourHalo?: number;
 
   /**
    * Render textured regions (fur, foliage, fabric) with short directional
@@ -281,6 +290,84 @@ interface StrokeParams {
   headingJitter?: number;
   /** Per-stroke random source for heading drift */
   rand?: () => number;
+}
+
+/**
+ * Mark grid cells in the reserved-white halo beside long contours. The
+ * halo is one-sided and contrast-gated: at each contour point the tone is
+ * sampled a little way out on both sides, and only a genuine tonal step —
+ * a silhouette against a differently-toned region — stamps a halo, on the
+ * darker side, where hatching would otherwise crash into the line. Edges
+ * inside an evenly-toned mass (architectural detail, fur, foliage) leave
+ * no halo, so the mass keeps its tone.
+ */
+function buildHaloMask(
+  contours: Point[][],
+  width: number,
+  height: number,
+  radius: number,
+  minContourLength: number,
+  darknessAt: (x: number, y: number) => number
+): (x: number, y: number) => boolean {
+  const cell = Math.max(1, radius / 2);
+  const cols = Math.max(1, Math.ceil(width / cell));
+  const rows = Math.max(1, Math.ceil(height / cell));
+  const grid = new Uint8Array(cols * rows);
+
+  // Tone probes sit beyond the halo itself so they read the masses on
+  // either side, not the edge's own gradient skirt
+  const probe = Math.max(radius * 2.5, 5);
+  const minStep = 0.12;
+
+  for (const points of contours) {
+    let length = 0;
+    for (let i = 1; i < points.length; i++) {
+      length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    }
+    // Short fragments (texture flecks, broken background edges) don't
+    // earn a halo — only lines long enough to read as silhouettes
+    if (length < minContourLength) continue;
+
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const ahead = points[Math.min(i + 1, points.length - 1)];
+      const behind = points[Math.max(i - 1, 0)];
+      const tx = ahead.x - behind.x;
+      const ty = ahead.y - behind.y;
+      const tlen = Math.hypot(tx, ty);
+      if (tlen < 1e-9) continue;
+      const nx = -ty / tlen;
+      const ny = tx / tlen;
+
+      const dA = darknessAt(p.x + nx * probe, p.y + ny * probe);
+      const dB = darknessAt(p.x - nx * probe, p.y - ny * probe);
+      if (Math.abs(dA - dB) < minStep) continue;
+
+      // Stamp a disk just off the line on the darker side — the gap
+      // shows where tone work approaches the silhouette
+      const side = dA > dB ? 1 : -1;
+      const cx0 = p.x + nx * side * radius * 0.7;
+      const cy0 = p.y + ny * side * radius * 0.7;
+
+      const c0 = Math.max(0, Math.floor((cx0 - radius) / cell));
+      const c1 = Math.min(cols - 1, Math.floor((cx0 + radius) / cell));
+      const r0 = Math.max(0, Math.floor((cy0 - radius) / cell));
+      const r1 = Math.min(rows - 1, Math.floor((cy0 + radius) / cell));
+      for (let cy = r0; cy <= r1; cy++) {
+        for (let cx = c0; cx <= c1; cx++) {
+          const dx = (cx + 0.5) * cell - cx0;
+          const dy = (cy + 0.5) * cell - cy0;
+          if (dx * dx + dy * dy <= radius * radius) grid[cy * cols + cx] = 1;
+        }
+      }
+    }
+  }
+
+  return (x: number, y: number): boolean => {
+    const cx = Math.max(0, Math.min(cols - 1, Math.floor(x / cell)));
+    const cy = Math.max(0, Math.min(rows - 1, Math.floor(y / cell)));
+    return grid[cy * cols + cx] === 1;
+  };
 }
 
 /**
@@ -497,6 +584,34 @@ export function imageToPenInk(
   // far end of depth maps, and the sky is a feature, not a background
   const skyThreshold = Math.max(0.12, whiteCutoff * 0.85);
 
+  // Contours are traced before any tone work: they are both the drawn
+  // outlines and the source of the reserved-white halos that hold
+  // hatching off the silhouettes
+  const contourHalo = Math.max(0, options.contourHalo ?? 2.2);
+  const contours =
+    drawOutlines || contourHalo > 0
+      ? traceContours(field, {
+          highThreshold: outlineThreshold,
+          lowThreshold: outlineThreshold * 0.4,
+          minLength: Math.max(minLineLength * 3, 14),
+          stepLength: Math.min(stepLength, 2),
+          margin,
+          importance,
+        })
+      : [];
+
+  const haloAt =
+    contourHalo > 0 && contours.length > 0
+      ? buildHaloMask(
+          contours,
+          width,
+          height,
+          contourHalo,
+          Math.max(36, minLineLength * 5),
+          baseDarkness
+        )
+      : null;
+
   // Facet geometry: the flow direction snapped to 30° quanta, combined
   // with a coarse noise-jittered cell lattice and a per-cell ±1 quantum
   // twist. Within a facet every stroke shares one straight direction;
@@ -579,10 +694,17 @@ export function imageToPenInk(
       layer >= 1 && hatchPatchiness > 0 ? createNoise(seed + layer * 7919 + 31337) : null;
     const patchFreq = 1 / (maxSpacing * 4);
     const patchCut = -1 + hatchPatchiness * (0.55 + 0.4 * (layer - 1));
-    const isDrawable = patchNoise
+    const patchedDrawable = patchNoise
       ? (x: number, y: number): boolean =>
           patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut && toneDrawable(x, y)
       : toneDrawable;
+
+    // Tone marks (hatch lines and stipple dots alike) stop short of long
+    // contours, leaving the reserved-white sliver; strokes that wander
+    // into a halo terminate there
+    const isDrawable = haloAt
+      ? (x: number, y: number): boolean => !haloAt(x, y) && patchedDrawable(x, y)
+      : patchedDrawable;
 
     // Busy regions (fur, foliage, fabric) read as texture, not form —
     // render them with short directional ticks instead of long streamlines
@@ -709,15 +831,6 @@ export function imageToPenInk(
   // Contour pass: link edge ridges into long, confident outline strokes —
   // the committed lines an artist draws first. Drawn with the bold pen.
   if (drawOutlines) {
-    const contours = traceContours(field, {
-      highThreshold: outlineThreshold,
-      lowThreshold: outlineThreshold * 0.4,
-      minLength: Math.max(minLineLength * 3, 14),
-      stepLength: Math.min(stepLength, 2),
-      margin,
-      importance,
-    });
-
     // Inside detected faces, interior edges (nose shadows, smile creases,
     // jaw shadows) must not become hard lines — artists leave face
     // interiors to tone. Only clearly strong edges survive there, demoted

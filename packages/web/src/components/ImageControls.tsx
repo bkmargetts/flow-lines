@@ -491,6 +491,18 @@ export function ImageControls({
           </div>
 
           <div className="control-group">
+            <label>
+              Silhouette Halo{' '}
+              <span>{settings.contourHalo === 0 ? 'off' : `${settings.contourHalo.toFixed(1)}px`}</span>
+            </label>
+            <input
+              type="range" min="0" max="6" step="0.2"
+              value={settings.contourHalo}
+              onChange={(e) => updateSettings({ contourHalo: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
             <label className="checkbox-label">
               <input
                 type="checkbox"

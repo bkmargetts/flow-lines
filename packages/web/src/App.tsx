@@ -47,6 +47,7 @@ export interface InkSettings {
   hatchAngle: number;
   followTone: boolean;
   drawOutlines: boolean;
+  contourHalo: number;
   wobble: number;
   strokeColor: string;
   strokeWidth: number;
@@ -131,6 +132,7 @@ const defaultInkSettings: InkSettings = {
   hatchAngle: -45,
   followTone: true,
   drawOutlines: true,
+  contourHalo: 2.2,
   wobble: 0.8,
   strokeColor: '#000000',
   strokeWidth: 1,
@@ -462,6 +464,7 @@ export function App() {
           hatchAngle: inkSettings.hatchAngle,
           followTone: inkSettings.followTone,
           drawOutlines: inkSettings.drawOutlines,
+          contourHalo: inkSettings.contourHalo,
           wobble: inkSettings.wobble,
           textureStrokes: inkSettings.textureStrokes,
           textureStyle: inkSettings.textureStyle,

@@ -229,6 +229,11 @@ program
   .option('--no-contrast', 'Skip automatic contrast stretching')
   .option('--no-outlines', 'Skip the edge outline pass')
   .option('--outline-threshold <number>', 'Edge strength needed for outlines (0-1)', '0.35')
+  .option(
+    '--contour-halo <number>',
+    'Reserved white sliver around long contours, px (0 = off)',
+    '2.2'
+  )
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
   .option('--texture-style <style>', 'Mark style for textured regions: ticks|stipple|scribble', 'ticks')
@@ -324,6 +329,7 @@ program
       normalizeContrast: options.contrast,
       drawOutlines: options.outlines,
       outlineThreshold: parseFloat(options.outlineThreshold),
+      contourHalo: parseFloat(options.contourHalo),
       wobble: parseFloat(options.wobble),
       textureStrokes: parseFloat(options.texture),
       textureStyle: options.textureStyle as 'ticks' | 'stipple' | 'scribble',
