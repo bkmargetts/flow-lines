@@ -656,10 +656,12 @@ export function imageToPenInk(
       let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
 
       // Deep shadows commit to near-solid black instead of plateauing at
-      // the regular minimum spacing
-      if (richBlacks && d > 0.82) {
-        const deep = Math.min(1, (d - 0.82) / 0.15);
-        spacing *= 1 - 0.55 * deep;
+      // the regular minimum spacing. The ramp starts early enough that
+      // the darkest value band actually reaches it — real ink work
+      // anchors on a few solid black masses, not a uniform dark grey
+      if (richBlacks && d > 0.72) {
+        const deep = Math.min(1, (d - 0.72) / 0.2);
+        spacing *= 1 - 0.62 * deep;
       }
 
       return spacing;
@@ -694,9 +696,13 @@ export function imageToPenInk(
       layer >= 1 && hatchPatchiness > 0 ? createNoise(seed + layer * 7919 + 31337) : null;
     const patchFreq = 1 / (maxSpacing * 4);
     const patchCut = -1 + hatchPatchiness * (0.55 + 0.4 * (layer - 1));
+    // Saturated blacks skip the patch gaps: a committed dark mass reads
+    // as solid ink, not as worked-over patches with paper showing through
     const patchedDrawable = patchNoise
       ? (x: number, y: number): boolean =>
-          patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut && toneDrawable(x, y)
+          (patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut ||
+            (richBlacks && baseDarkness(x, y) > 0.85)) &&
+          toneDrawable(x, y)
       : toneDrawable;
 
     // Tone marks (hatch lines and stipple dots alike) stop short of long
