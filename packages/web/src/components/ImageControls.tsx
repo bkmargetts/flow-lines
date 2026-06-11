@@ -12,6 +12,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxSpacing: 14,
       whiteCutoff: 0.08,
       toneGamma: 1.3,
+      valueBands: 4,
+      hatchPatchiness: 0.35,
       detailEmphasis: 0.3,
       textureStrokes: 0.6,
       wobble: 0.8,
@@ -31,6 +33,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       minSpacing: 2.5,
       maxSpacing: 14,
       toneGamma: 1.7,
+      valueBands: 0,
+      hatchPatchiness: 0.35,
       detailEmphasis: 0.35,
       textureStrokes: 0.4,
       wobble: 0.9,
@@ -52,6 +56,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       minSpacing: 2.5,
       maxSpacing: 12,
       toneGamma: 1.45,
+      valueBands: 4,
+      hatchPatchiness: 0.35,
       detailEmphasis: 0.35,
       textureStrokes: 1,
       wobble: 1,
@@ -68,15 +74,17 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
   landscape: {
     label: 'Landscape',
     settings: {
-      layers: 3,
-      minSpacing: 2.2,
+      layers: 4,
+      minSpacing: 1.8,
       maxSpacing: 16,
-      toneGamma: 1.25,
+      toneGamma: 1,
+      valueBands: 4,
+      hatchPatchiness: 0.7,
       detailEmphasis: 0.45,
       textureStrokes: 0.7,
       wobble: 0.9,
       workingSize: 800,
-      whiteCutoff: 0.1,
+      whiteCutoff: 0.14,
       hatchAngle: 0,
       skyStipple: true,
       crossContour: false,
@@ -92,6 +100,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       minSpacing: 3.2,
       maxSpacing: 24,
       toneGamma: 1.35,
+      valueBands: 3,
+      hatchPatchiness: 0.6,
       detailEmphasis: 0.4,
       textureStrokes: 0.8,
       wobble: 2.2,
@@ -113,6 +123,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxSpacing: 14,
       whiteCutoff: 0.15,
       toneGamma: 1.8,
+      valueBands: 5,
+      hatchPatchiness: 0.5,
       detailEmphasis: 0.35,
       textureStrokes: 0.15,
       wobble: 0.4,
@@ -354,6 +366,35 @@ export function ImageControls({
               onChange={(e) => updateSettings({ toneGamma: parseFloat(e.target.value) })}
             />
             <p className="paint-hint">Higher keeps midtones light, pushes ink into shadows.</p>
+          </div>
+
+          <div className="control-group">
+            <label>
+              Value Bands{' '}
+              <span>{settings.valueBands < 2 ? 'off' : settings.valueBands}</span>
+            </label>
+            <input
+              type="range" min="0" max="6" step="1"
+              value={settings.valueBands}
+              onChange={(e) => updateSettings({ valueBands: parseInt(e.target.value, 10) })}
+            />
+            <p className="paint-hint">
+              Commit tone to a few big value shapes, like an artist&apos;s value plan.
+            </p>
+          </div>
+
+          <div className="control-group">
+            <label>
+              Hatch Patchiness <span>{settings.hatchPatchiness.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={settings.hatchPatchiness}
+              onChange={(e) => updateSettings({ hatchPatchiness: parseFloat(e.target.value) })}
+            />
+            <p className="paint-hint">
+              Cross-hatch builds up in patches with gaps instead of a woven screen.
+            </p>
           </div>
 
           <div className="control-group">

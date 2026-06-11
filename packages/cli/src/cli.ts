@@ -213,6 +213,16 @@ program
   .option('--max-spacing <number>', 'Stroke spacing in lightest hatched areas (px)', '14')
   .option('--white-cutoff <number>', 'Darkness below which paper stays blank (0-1)', '0.08')
   .option('--tone-gamma <number>', 'Tone response curve; >1 favors shadows', '1')
+  .option(
+    '--value-bands <number>',
+    'Posterize tone into k value bands (artist value plan); 0 = off',
+    '0'
+  )
+  .option(
+    '--hatch-patchiness <number>',
+    'Build cross-hatch layers in patches with gaps (0-1)',
+    '0.35'
+  )
   .option('--hatch-angle <number>', 'Fallback hatch angle in degrees', '-45')
   .option('--no-follow-tone', 'Hatch at fixed angles instead of following contours')
   .option('--field-smoothing <number>', 'Direction field smoothing', '4')
@@ -305,6 +315,8 @@ program
       maxSpacing: parseFloat(options.maxSpacing),
       whiteCutoff: parseFloat(options.whiteCutoff),
       toneGamma: parseFloat(options.toneGamma),
+      valueBands: parseInt(options.valueBands, 10),
+      hatchPatchiness: parseFloat(options.hatchPatchiness),
       hatchAngle: parseFloat(options.hatchAngle),
       followTone: options.followTone,
       fieldSmoothing: parseFloat(options.fieldSmoothing),

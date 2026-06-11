@@ -9,6 +9,7 @@ import {
 } from './portrait.js';
 import { traceContours } from './contours.js';
 import { optimizePlot } from './optimize.js';
+import { createNoise } from './noise.js';
 
 /** Drop a fraction of a polyline's arc length from each end */
 function trimPolyline(points: Point[], fraction: number): Point[] {
@@ -83,6 +84,20 @@ export interface PenInkOptions {
   whiteCutoff?: number;
   /** Tone response curve; >1 pushes density into shadows (default 1) */
   toneGamma?: number;
+  /**
+   * Posterize tone into this many discrete value bands — the value plan
+   * an artist decides on before inking: big committed shapes of paper,
+   * light, mid, and dark instead of continuous photographic gradation.
+   * 3-5 reads as deliberate; 0 disables (default 0)
+   */
+  valueBands?: number;
+  /**
+   * Build cross-hatch layers up in hand-sized patches with gaps instead
+   * of continuous woven coverage, 0-1. Deeper layers get patchier —
+   * shadows read as worked over with the pen, not screen-printed
+   * (default 0.35)
+   */
+  hatchPatchiness?: number;
 
   /** Fallback hatch angle in degrees for flat regions (default -45) */
   hatchAngle?: number;
@@ -211,8 +226,13 @@ export interface PenInkOptions {
   autoStyle?: boolean;
 }
 
-/** Angle offsets (degrees) for successive hatch layers */
-const LAYER_ANGLES = [0, 75, -40, 105];
+/**
+ * Angle offsets (degrees) for successive hatch layers. Kept shallow
+ * (~30° apart, slightly irregular): near-perpendicular cross-hatch weaves
+ * into a mechanical screen, while shallow crossings read as a hand
+ * working over the same shadow
+ */
+const LAYER_ANGLES = [0, 31, -27, 62];
 
 /** A point may not be drawn closer than this fraction of local spacing to another stroke */
 const D_TEST = 0.72;
@@ -368,6 +388,8 @@ export function imageToPenInk(
   const textureStyle = options.textureStyle ?? 'ticks';
   const skyStipple = options.skyStipple ?? false;
   const richBlacks = options.richBlacks ?? true;
+  const valueBands = Math.round(options.valueBands ?? 0);
+  const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
   const crossContour = options.crossContour ?? false;
   const maxStrokeLength = options.maxStrokeLength ?? 0;
   const autoStyle = options.autoStyle ?? false;
@@ -385,6 +407,7 @@ export function imageToPenInk(
     depthMap: options.depthMap,
     formStrength: options.formStrength,
     flowMap: options.flowMap,
+    valueBands,
   });
 
   const baseImportance = buildImportance(field, width, height, options);
@@ -414,9 +437,16 @@ export function imageToPenInk(
         }
       : null;
 
-  const baseDarkness = skinFactor
-    ? (x: number, y: number): number => field.getDarkness(x, y) * skinFactor(x, y)
+  // With a value plan, the posterized mass tone decides the band a region
+  // sits in; a little raw tone keeps marks alive within each band
+  const toneAt = field.hasMassTone()
+    ? (x: number, y: number): number =>
+        0.75 * field.getMassDarkness(x, y) + 0.25 * field.getDarkness(x, y)
     : (x: number, y: number): number => field.getDarkness(x, y);
+
+  const baseDarkness = skinFactor
+    ? (x: number, y: number): number => toneAt(x, y) * skinFactor(x, y)
+    : toneAt;
 
   // Where importance drops, tone is lightened toward paper, the white
   // cutoff rises, and stroke spacing opens up — backgrounds dissolve into
@@ -457,12 +487,25 @@ export function imageToPenInk(
       return spacing;
     };
 
-    const isDrawable = importance
+    const toneDrawable = importance
       ? (x: number, y: number): boolean => {
           const imp = importance(x, y);
           return effectiveDarkness(x, y, imp) >= threshold + (1 - imp) * 0.25;
         }
       : (x: number, y: number): boolean => baseDarkness(x, y) >= threshold;
+
+    // Cross-hatch layers accumulate in hand-sized patches separated by
+    // gaps — strokes seed inside a patch and stop at its edge — instead
+    // of weaving a continuous screen. The base layer stays continuous so
+    // overall tone holds; each deeper layer gets patchier.
+    const patchNoise =
+      layer >= 1 && hatchPatchiness > 0 ? createNoise(seed + layer * 7919 + 31337) : null;
+    const patchFreq = 1 / (maxSpacing * 4);
+    const patchCut = -1 + hatchPatchiness * (0.55 + 0.4 * (layer - 1));
+    const isDrawable = patchNoise
+      ? (x: number, y: number): boolean =>
+          patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut && toneDrawable(x, y)
+      : toneDrawable;
 
     // Busy regions (fur, foliage, fabric) read as texture, not form —
     // render them with short directional ticks instead of long streamlines

@@ -50,7 +50,14 @@ pnpm monorepo:
 - **Streamline hatching** — Jobard–Lefer evenly-spaced streamlines; local
   spacing is tone (tight in shadow, blank above the white cutoff,
   near-solid below `richBlacks` threshold); up to 4 cross-hatch layers at
-  offset angles.
+  shallow offset angles (~30°, not perpendicular — a woven grid reads
+  mechanical), deeper layers gated by low-frequency noise
+  (`hatchPatchiness`) so shadows build up in hand-sized patches.
+- **Value plan** (`valueBands`) — tone is blurred and posterized into a
+  few discrete value bands spread paper-to-black before spacing is
+  computed: big committed value shapes (the artist's tonal abstraction)
+  instead of continuous photographic gradation. Off for portraits, on
+  everywhere else.
 - **Importance map** (0..1) — composed multiplicatively from auto detail,
   focal points, subject masks, and depth bands; low importance lightens
   tone, widens spacing, suppresses outlines, increases wobble. This is
@@ -111,9 +118,15 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
-value: semantic region labels for dispatch (no good in-browser model
-yet), tonal abstraction/composition (artists invent value structure that
-isn't in the photo), more stroke textures (bricks, grass), light-direction
-awareness. The research review that drove the roadmap lives in the
+value: a real illustrated-sky treatment (dense graded stipple, cloud
+blobs carved out as outlined negative space, zenith-to-horizon density
+falloff), faceted hatching (quantize orientation into discrete patches
+hatched at constant angles — flow-field smoothness is what still reads
+as machine), a calm-water stroke language (long broken horizontals),
+white halos outside strong contours, semantic region labels for dispatch
+(no good in-browser model yet), more stroke textures (bricks, grass),
+light-direction awareness. `valueBands` covers tonal *posterization*;
+inventing value structure that isn't in the photo (composition-aware
+massing) is still open. The research review that drove the roadmap lives in the
 conversation history of the original build; its remaining items are
 deliberate skips (CLIPasso-family, raster neural line drawing, SAM 2).
