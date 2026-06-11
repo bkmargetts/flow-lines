@@ -151,6 +151,13 @@ export interface PenInkOptions {
    */
   skyStipple?: boolean;
   /**
+   * Render smooth regions in the lower half of the frame as calm water:
+   * long broken horizontal strokes whose spacing carries the tone, with
+   * no cross-hatch layered over them — the classic illustrated-sea
+   * treatment (default false)
+   */
+  calmWater?: boolean;
+  /**
    * Let the darkest tones saturate toward solid black by tightening
    * spacing below minSpacing — committed dark masses instead of uniformly
    * gray cross-hatch (default true)
@@ -500,6 +507,7 @@ export function imageToPenInk(
   const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
   const textureStyle = options.textureStyle ?? 'ticks';
   const skyStipple = options.skyStipple ?? false;
+  const calmWater = options.calmWater ?? false;
   const richBlacks = options.richBlacks ?? true;
   const valueBands = Math.round(options.valueBands ?? 0);
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
@@ -600,6 +608,21 @@ export function imageToPenInk(
   // smooth skies always score low on auto-detail and always sit at the
   // far end of depth maps, and the sky is a feature, not a background
   const skyThreshold = Math.max(0.12, whiteCutoff * 0.85);
+
+  // Calm water: smooth, formless regions in the lower half of the frame.
+  // Claims its territory before the sky test — a smooth grey region
+  // below the midline is sea or lake, not overcast
+  const waterEligible = calmWater
+    ? (x: number, y: number): boolean =>
+        y > height * 0.5 &&
+        field.getDetail(x, y) < 0.28 &&
+        field.getFormConfidence(x, y) < 0.3
+    : null;
+  // Breaks in the horizontals: a noise field stretched along x so gaps
+  // arrive as runs, the way a hand lifts the pen mid-passage and resumes
+  const waterNoise = calmWater ? createNoise(seed + 9419) : null;
+  const waterBreakX = maxSpacing * 7;
+  const waterBreakY = maxSpacing * 1.6;
 
   // Contours are traced before any tone work: they are both the drawn
   // outlines and the source of the reserved-white halos that hold
@@ -728,12 +751,19 @@ export function imageToPenInk(
           toneDrawable(x, y)
       : toneDrawable;
 
+    // Calm water carries its tone entirely on layer-0 horizontals —
+    // cross-hatch over water reads as land
+    const waterFiltered =
+      waterEligible && layer >= 1
+        ? (x: number, y: number): boolean => !waterEligible(x, y) && patchedDrawable(x, y)
+        : patchedDrawable;
+
     // Tone marks (hatch lines and stipple dots alike) stop short of long
     // contours, leaving the reserved-white sliver; strokes that wander
     // into a halo terminate there
     const isDrawable = haloAt
-      ? (x: number, y: number): boolean => !haloAt(x, y) && patchedDrawable(x, y)
-      : patchedDrawable;
+      ? (x: number, y: number): boolean => !haloAt(x, y) && waterFiltered(x, y)
+      : waterFiltered;
 
     // Busy regions (fur, foliage, fabric) read as texture, not form —
     // render them with short directional ticks instead of long streamlines
@@ -755,6 +785,20 @@ export function imageToPenInk(
     //   forms (autoStyle + depth), flowing hatch lines everywhere else
     const paramsFor = (x: number, y: number, random: () => number): StrokeParams => {
       const texture = textureAmount ? textureAmount(x, y) : 0;
+
+      // Calm water: long broken horizontals, spacing carries the tone.
+      // The break noise is stretched along x so the pen lifts and
+      // resumes in runs instead of pecking
+      if (waterEligible && texture < 0.3 && waterEligible(x, y)) {
+        return {
+          angleOffset: 0,
+          fixedAngle: 0,
+          maxArcLength: maxSpacing * (5 + 8 * random()),
+          stopAt: (px: number, py: number): boolean =>
+            waterNoise!.noise2D(px / waterBreakX, py / waterBreakY) < -0.62 ||
+            !waterEligible(px, py),
+        };
+      }
 
       // Open skies and soft gradients: smooth, featureless, light-mid tone.
       // Dots render them the way illustrators do, with cloud highlights

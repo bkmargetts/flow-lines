@@ -238,6 +238,7 @@ program
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
   .option('--texture-style <style>', 'Mark style for textured regions: ticks|stipple|scribble', 'ticks')
   .option('--sky-stipple', 'Stipple smooth light regions (open skies) instead of hatching')
+  .option('--calm-water', 'Render smooth lower-frame regions as long broken horizontal strokes')
   .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
   .option(
     '--counterchange <number>',
@@ -339,6 +340,7 @@ program
       textureStrokes: parseFloat(options.texture),
       textureStyle: options.textureStyle as 'ticks' | 'stipple' | 'scribble',
       skyStipple: options.skyStipple ?? false,
+      calmWater: options.calmWater ?? false,
       richBlacks: options.richBlacks,
       counterchange: parseFloat(options.counterchange),
       crossContour: options.crossContour ?? false,

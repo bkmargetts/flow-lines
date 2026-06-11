@@ -1150,6 +1150,35 @@ describe('art levers', () => {
     const onFar = on.lines.reduce((n, l) => n + farBand(l), 0);
     expect(onFar).toBeGreaterThan(offFar * 0.7);
   });
+
+  it('renders smooth lower regions as horizontals with calmWater', () => {
+    // Textured upper half over a smooth mid-grey "sea"
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.5 ? 0.45 + 0.2 * Math.sin(u * 70) * Math.sin(v * 70) : 0.55
+    );
+
+    const result = imageToPenInk(scene, {
+      width: 320, seed: 17, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 3, optimize: false, calmWater: true, contourHalo: 0,
+      hatchAngle: -45,
+    });
+
+    // Strokes fully inside the sea (clear of the boundary and margins)
+    const seaLines = result.lines.filter((l) =>
+      l.points.every((p) => p.y > 200 && p.y < 290)
+    );
+    expect(seaLines.length).toBeGreaterThan(10);
+
+    // Each should be horizontal: tiny vertical extent, real length
+    for (const line of seaLines) {
+      const ys = line.points.map((p) => p.y);
+      const xs = line.points.map((p) => p.x);
+      const dy = Math.max(...ys) - Math.min(...ys);
+      const dx = Math.max(...xs) - Math.min(...xs);
+      expect(dy).toBeLessThan(Math.max(3, dx * 0.12));
+    }
+  });
 });
 
 describe('ImageField', () => {

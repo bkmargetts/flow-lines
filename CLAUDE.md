@@ -90,9 +90,17 @@ pnpm monorepo:
   spacing, never blanks the sky — smooth skies always score low on
   auto-detail and sit at the far end of depth maps, but the sky is a
   feature, not a background to dissolve.
+- **Calm water** (`calmWater`) — smooth, formless regions in the lower
+  half of the frame render as long broken horizontal strokes whose
+  spacing carries the tone; cross-hatch layers skip water (hatch over
+  water reads as land), and the break noise is stretched along x so the
+  pen lifts and resumes in runs. On for the landscape preset.
 - **Contours** — Canny-style edge linking (NMS + hysteresis + chaining)
   produces long confident outlines; emphasized via offset single-pen
-  passes with tapered ends; suppressed inside detected faces.
+  passes with tapered ends; suppressed inside detected faces. Busy
+  regions scale the contour length floor by local detail (no outline
+  confetti where tone should do the work) and only long contours earn
+  the multi-pass bold emphasis.
 - **Silhouette halos** (`contourHalo`) — hatch and stipple stop a sliver
   short of long contours instead of crashing into them: reserved paper
   around a silhouette, the way ink artists hold background tone off a
@@ -149,15 +157,10 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
-value: committed dark masses (most renders sit in a mid-grey wash;
-`richBlacks` rarely saturates), counterchange (darkening background
-hatch right behind a light subject — a tractable slice of
-composition-aware massing), outline-clutter control in busy scenes
-(contour `minLength` scaled by local detail so cities don't render as
-edge-detector tangles), a calm-water stroke language (long broken
-horizontals), semantic region labels for dispatch (no good in-browser
-model yet), more stroke textures (bricks, grass), light-direction
-awareness. `valueBands` covers tonal *posterization*;
+value: semantic region labels for dispatch (no good in-browser model
+yet), more stroke textures (bricks, grass), light-direction awareness,
+a smarter horizon for `calmWater` (currently a fixed mid-frame gate;
+depth or a sky/ground split would let high-horizon seas qualify). `valueBands` covers tonal *posterization*;
 inventing value structure that isn't in the photo (composition-aware
 massing) is still open. The research review that drove the roadmap lives in the
 conversation history of the original build; its remaining items are

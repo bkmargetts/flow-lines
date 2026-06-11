@@ -64,6 +64,7 @@ export interface InkSettings {
   textureStrokes: number;
   textureStyle: 'ticks' | 'stipple' | 'scribble';
   skyStipple: boolean;
+  calmWater: boolean;
   richBlacks: boolean;
   counterchange: number;
   crossContour: boolean;
@@ -150,6 +151,7 @@ const defaultInkSettings: InkSettings = {
   textureStrokes: 0.6,
   textureStyle: 'ticks',
   skyStipple: false,
+  calmWater: false,
   richBlacks: true,
   counterchange: 0.5,
   crossContour: false,
@@ -471,6 +473,7 @@ export function App() {
           textureStrokes: inkSettings.textureStrokes,
           textureStyle: inkSettings.textureStyle,
           skyStipple: inkSettings.skyStipple,
+          calmWater: inkSettings.calmWater,
           crossContour: inkSettings.crossContour,
           facetHatch: inkSettings.facetHatch,
           maxStrokeLength: inkSettings.maxStrokeLength,
