@@ -765,6 +765,89 @@ describe('auto style dispatch', () => {
   });
 });
 
+describe('external flow map', () => {
+  it('overrides stroke orientation where the flow field has magnitude', () => {
+    const flat = makeImage(60, 60, () => 0.5);
+
+    // Constant horizontal flow at full strength
+    const n = 32 * 32;
+    const flowMap = {
+      width: 32,
+      height: 32,
+      x: new Float32Array(n).fill(1),
+      y: new Float32Array(n).fill(0),
+    };
+
+    const withFlow = new ImageField(flat, {
+      width: 200,
+      height: 200,
+      normalizeContrast: false,
+      flowMap,
+    });
+    const without = new ImageField(flat, {
+      width: 200,
+      height: 200,
+      normalizeContrast: false,
+    });
+
+    // Flow forces horizontal; the flat image alone falls back to -45°
+    expect(Math.abs(withFlow.getOrientation(100, 100))).toBeLessThan(0.1);
+    expect(Math.abs(without.getOrientation(100, 100) - -Math.PI / 4)).toBeLessThan(0.1);
+  });
+
+  it('leaves orientation untouched where the flow field is zero', () => {
+    const flat = makeImage(60, 60, () => 0.5);
+    const n = 16 * 16;
+    const flowMap = {
+      width: 16,
+      height: 16,
+      x: new Float32Array(n),
+      y: new Float32Array(n),
+    };
+
+    const field = new ImageField(flat, {
+      width: 200,
+      height: 200,
+      normalizeContrast: false,
+      flowMap,
+    });
+
+    expect(Math.abs(field.getOrientation(100, 100) - -Math.PI / 4)).toBeLessThan(0.1);
+  });
+});
+
+describe('tapered outline passes', () => {
+  it('makes emphasis passes shorter than the main contour', () => {
+    const disk = makeImage(120, 120, (u, v) =>
+      Math.hypot(u - 0.5, v - 0.5) < 0.3 ? 0.2 : 1
+    );
+
+    const result = imageToPenInk(disk, {
+      width: 240,
+      seed: 51,
+      wobble: 0,
+      normalizeContrast: false,
+      outlinePasses: 2,
+      optimize: false, // keep main/emphasis passes as separate lines
+    });
+
+    const lengthOf = (points: { x: number; y: number }[]) => {
+      let len = 0;
+      for (let i = 1; i < points.length; i++) {
+        len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+      }
+      return len;
+    };
+
+    const bold = result.lines.filter((l) => l.pen === 'bold').map((l) => lengthOf(l.points));
+    expect(bold.length).toBeGreaterThanOrEqual(2);
+
+    bold.sort((a, b) => b - a);
+    // The longest (main) pass is noticeably longer than its trimmed twin
+    expect(bold[1]).toBeLessThan(bold[0] * 0.99);
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

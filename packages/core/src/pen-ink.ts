@@ -1,5 +1,5 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
-import { ImageField } from './image-field.js';
+import { ImageField, DirectionMap } from './image-field.js';
 import { GrayscaleImage, sampleBilinear } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import {
@@ -9,6 +9,27 @@ import {
 } from './portrait.js';
 import { traceContours } from './contours.js';
 import { optimizePlot } from './optimize.js';
+
+/** Drop a fraction of a polyline's arc length from each end */
+function trimPolyline(points: Point[], fraction: number): Point[] {
+  if (points.length < 3) return points;
+
+  const cumulative: number[] = [0];
+  for (let i = 1; i < points.length; i++) {
+    cumulative.push(
+      cumulative[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+    );
+  }
+  const total = cumulative[cumulative.length - 1];
+  const trim = Math.min(total * fraction, 12);
+
+  const start = cumulative.findIndex((c) => c >= trim);
+  let end = points.length - 1;
+  while (end > 0 && cumulative[end] > total - trim) end--;
+
+  if (start < 0 || end - start < 1) return points;
+  return points.slice(start, end + 1);
+}
 
 /** Offset a polyline perpendicular to its local direction */
 function offsetPolyline(points: Point[], distance: number): Point[] {
@@ -141,6 +162,11 @@ export interface PenInkOptions {
   depthMap?: GrayscaleImage;
   /** How strongly depth steers stroke orientation, 0-1 (default 0.8) */
   formStrength?: number;
+  /**
+   * External direction field (e.g. from a surface-normal map estimated by
+   * DSINE/StableNormal); vector magnitude is the blend weight
+   */
+  flowMap?: DirectionMap;
   /**
    * Fade far regions toward paper based on depth, 0-1. Only applies when
    * the scene has meaningful depth separation (default 0.5)
@@ -333,6 +359,7 @@ export function imageToPenInk(
     normalizeContrast: options.normalizeContrast,
     depthMap: options.depthMap,
     formStrength: options.formStrength,
+    flowMap: options.flowMap,
   });
 
   const baseImportance = buildImportance(field, width, height, options);
@@ -503,9 +530,11 @@ export function imageToPenInk(
       const spread = 1.1;
       for (let pass = 1; pass < outlinePasses; pass++) {
         const offset = spread * (pass - (outlinePasses - 1) / 2);
-        const shifted = offsetPolyline(points, offset);
-        if (shifted.length >= 2) {
-          lines.push({ points: shifted, pen: 'bold' });
+        // Emphasis passes are trimmed at both ends so the built-up line
+        // tapers like a real ink stroke instead of ending in a blunt bar
+        const trimmed = trimPolyline(offsetPolyline(points, offset), 0.12);
+        if (trimmed.length >= 2) {
+          lines.push({ points: trimmed, pen: 'bold' });
         }
       }
     };
