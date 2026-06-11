@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect } from 'react';
+import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import type { Point } from '@flow-lines/core';
 
 interface FocusMarker {
@@ -34,6 +34,21 @@ export function Preview({
 }: PreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPainting, setIsPainting] = useState(false);
+
+  // Display the drawing as a rasterized <img> instead of inline SVG DOM:
+  // a dense render is thousands of <path> nodes, and mobile WebKit kills
+  // pages that scroll/layout such DOMs. An image is one composited
+  // texture; the SVG string itself is only used for download.
+  const svgUrl = useMemo(() => {
+    if (!svgContent) return null;
+    return URL.createObjectURL(new Blob([svgContent], { type: 'image/svg+xml' }));
+  }, [svgContent]);
+
+  useEffect(() => {
+    return () => {
+      if (svgUrl) URL.revokeObjectURL(svgUrl);
+    };
+  }, [svgUrl]);
 
   // Calculate max dimensions to fit in viewport while maintaining aspect ratio
   const maxWidth = Math.min(width, 800);
@@ -188,7 +203,15 @@ export function Preview({
       onPointerLeave={handlePointerUp}
       onClick={handleClick}
     >
-      <div dangerouslySetInnerHTML={{ __html: svgContent }} />
+      {svgUrl && (
+        <img
+          src={svgUrl}
+          width={displayWidth}
+          height={displayHeight}
+          alt="Generated drawing"
+          draggable={false}
+        />
+      )}
       {paintDotsOverlay}
       {focusOverlay}
     </div>
