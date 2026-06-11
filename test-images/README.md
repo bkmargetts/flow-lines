@@ -15,6 +15,11 @@ change should be judged against the whole album, not a single image.
 **Privacy note:** if this repository is public, anything committed here is
 public too. Keep sensitive photos out, or keep the repo private.
 
+The bundled photo bank is sourced from Google's public sample-data
+buckets (`cloud-samples-data`, `mediapipe-assets`), which Google
+publishes as demo assets for its API documentation. They are used here
+solely as rendering test fixtures. The `test-*.png` files are synthetic.
+
 The gallery runs the CLI, so depth-based features are only exercised if a
 matching depth map exists: for `photo.jpg`, provide `photo.depth.png`
 (bright = near; exportable from depth tools or the web app). Likewise
