@@ -614,6 +614,12 @@ export function imageToPenInk(
           stepLength: Math.min(stepLength, 2),
           margin,
           importance,
+          // Busy regions demand longer commitment: a city block or a
+          // pile of croissants shatters into outline confetti if every
+          // 15px edge gets traced — real ink work draws a few long
+          // committed lines there and lets tone carry the rest
+          minLengthScale: (x: number, y: number): number =>
+            1 + 2.5 * field.getDetail(x, y),
         })
       : [];
 
@@ -869,6 +875,18 @@ export function imageToPenInk(
 
     const outlinePasses = Math.max(1, Math.min(4, Math.round(options.outlinePasses ?? 2)));
 
+    const polylineLength = (points: Point[]): number => {
+      let length = 0;
+      for (let i = 1; i < points.length; i++) {
+        length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+      }
+      return length;
+    };
+
+    // Only lines long enough to read as committed outlines earn the
+    // multi-pass emphasis; short fragments are incident lines drawn once
+    const emphasizeFrom = Math.max(48, minLineLength * 6);
+
     // Bold outlines are built from repeated single-pen passes with a
     // slight perpendicular offset, like an artist thickening a line by
     // drawing over it — every stroke stays plottable with one pen
@@ -888,7 +906,11 @@ export function imageToPenInk(
 
     for (const points of contours) {
       if (!insideFace) {
-        pushEmphasized(points);
+        if (polylineLength(points) >= emphasizeFrom) {
+          pushEmphasized(points);
+        } else {
+          lines.push({ points, pen: 'bold' });
+        }
         continue;
       }
 
@@ -902,7 +924,7 @@ export function imageToPenInk(
             length += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
           }
           if (length >= 8) {
-            if (runPen === 'bold') {
+            if (runPen === 'bold' && length >= emphasizeFrom) {
               pushEmphasized(run);
             } else {
               lines.push({ points: run, pen: runPen });
