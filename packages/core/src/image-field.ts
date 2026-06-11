@@ -71,6 +71,8 @@ export class ImageField {
   readonly height: number;
 
   private tone: GrayscaleImage;
+  /** Tone before contrast normalization — absolute photo brightness */
+  private absTone: GrayscaleImage;
   /** Heavily blurred darkness — large-scale tonal masses before banding */
   private massBlur: GrayscaleImage;
   /** Blurred tone snapped to discrete value bands (darkness, 1 = black) */
@@ -99,12 +101,15 @@ export class ImageField {
     const followTone = options.followTone ?? true;
     const normalizeContrast = options.normalizeContrast ?? true;
 
-    let working = resizeGrayscale(image, workingSize);
-    if (normalizeContrast) {
-      working = normalizeLevels(working);
-    }
+    const resized = resizeGrayscale(image, workingSize);
+    const working = normalizeContrast ? normalizeLevels(resized) : resized;
 
     this.tone = gaussianBlur(working, blurSigma);
+    // Pre-normalization tone: contrast stretching reallocates the tonal
+    // range for ink coverage, but material judgments ("is this sky grey
+    // or white?") need the photo's absolute brightness — a grey sky that
+    // happens to be the brightest region must not normalize to paper
+    this.absTone = normalizeContrast ? gaussianBlur(resized, blurSigma) : this.tone;
     this.scaleX = this.tone.width / this.width;
     this.scaleY = this.tone.height / this.height;
 
@@ -523,6 +528,15 @@ export class ImageField {
   /** Darkness in [0, 1] at canvas coordinates (1 = black) */
   getDarkness(x: number, y: number): number {
     return 1 - sampleBilinear(this.tone, x * this.scaleX, y * this.scaleY);
+  }
+
+  /**
+   * Absolute darkness in [0, 1] at canvas coordinates, before contrast
+   * normalization — the photo's actual brightness, for material
+   * judgments that must not depend on the rest of the frame
+   */
+  getAbsoluteDarkness(x: number, y: number): number {
+    return 1 - sampleBilinear(this.absTone, x * this.scaleX, y * this.scaleY);
   }
 
   /**

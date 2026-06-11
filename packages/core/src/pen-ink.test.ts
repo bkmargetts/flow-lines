@@ -1049,6 +1049,31 @@ describe('art levers', () => {
     expect(skyDots).toBeGreaterThan(100);
   });
 
+  it('stipples a grey sky even when it is the brightest region in the frame', () => {
+    // Overcast landscape photo shape: light-grey sky over dark textured
+    // ground. Contrast normalization stretches the sky to near-white —
+    // absolute pre-normalization tone must keep it stippled
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.6 ? 0.8 : 0.3 + 0.18 * Math.sin(u * 60) * Math.sin(v * 60)
+    );
+
+    const result = imageToPenInk(scene, {
+      width: 320, seed: 126, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0.45, textureStrokes: 0, normalizeContrast: true,
+      layers: 3, optimize: false, skyStipple: true, valueBands: 4,
+    });
+
+    const isDot = (l: { points: { x: number; y: number }[] }) => {
+      if (l.points.length < 6 || l.points.length > 10) return false;
+      const xs = l.points.map((p) => p.x);
+      const ys = l.points.map((p) => p.y);
+      return Math.max(...xs) - Math.min(...xs) < 4 && Math.max(...ys) - Math.min(...ys) < 4;
+    };
+
+    const skyDots = result.lines.filter((l) => isDot(l) && l.points[0].y < 170).length;
+    expect(skyDots).toBeGreaterThan(100);
+  });
+
   it('carves cloud shapes with outlines when skyStipple is on', () => {
     // A bright cloud blob in a mid-light sky over textured ground
     const scene = makeImage(160, 160, (u, v) => {

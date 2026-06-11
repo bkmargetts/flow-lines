@@ -460,16 +460,28 @@ export function imageToPenInk(
   const effectiveDarkness = (x: number, y: number, imp: number): number =>
     baseDarkness(x, y) * (0.25 + 0.75 * imp);
 
-  // Sky-stipple eligibility is judged on the photo's RAW tone, never the
-  // banded value plan: quantization rounds a grey overcast sky either
-  // down to paper or up into a hatch band, and either way the stipple
-  // window between them vanishes for exactly the skies it exists for
+  // Sky tone is judged on raw photo tone, never the banded value plan
+  // (quantization rounds a grey sky to paper or a hatch band — both kill
+  // the stipple window) — and the ABSOLUTE pre-normalization tone is
+  // folded in: an overcast sky is usually the brightest region in the
+  // frame, so contrast stretching maps it to paper, but the artist's
+  // judgment "this sky is grey, not white" doesn't depend on the rest
+  // of the photo
+  const skyDark = (x: number, y: number): number =>
+    Math.max(field.getDarkness(x, y), field.getAbsoluteDarkness(x, y));
+
   const skyEligible = skyStipple
     ? (x: number, y: number): boolean =>
         field.getDetail(x, y) < 0.25 &&
         field.getFormConfidence(x, y) < 0.3 &&
-        field.getDarkness(x, y) < 0.6
+        skyDark(x, y) < 0.62
     : null;
+
+  // A sky stipples once it is perceptibly grey; raising the white cutoff
+  // can still push it back to paper, but importance cannot blank it —
+  // smooth skies always score low on auto-detail and always sit at the
+  // far end of depth maps, and the sky is a feature, not a background
+  const skyThreshold = Math.max(0.12, whiteCutoff * 0.85);
 
   const lines: FlowLine[] = [];
 
@@ -512,18 +524,13 @@ export function imageToPenInk(
       : (x: number, y: number): boolean => baseDarkness(x, y) >= threshold;
 
     // In sky, raw tone decides drawability (base layer only — deeper
-    // layers still add density where the value plan calls for it). Low
-    // importance lightens the stipple instead of blanking it: smooth
-    // skies always score low on auto-detail, but in landscape work the
-    // sky is a feature, not a background to dissolve
+    // layers still add density where the value plan calls for it).
+    // Importance is deliberately left out: it lightens the stipple via
+    // wider dot spacing instead of blanking the sky
     const skyDrawable =
       skyEligible && layer === 0
-        ? (x: number, y: number): boolean => {
-            if (!skyEligible(x, y)) return false;
-            const d = field.getDarkness(x, y);
-            const imp = importance ? importance(x, y) : 1;
-            return d * (0.4 + 0.6 * imp) >= threshold;
-          }
+        ? (x: number, y: number): boolean =>
+            skyEligible(x, y) && skyDark(x, y) >= skyThreshold
         : null;
 
     const toneDrawable = skyDrawable
@@ -573,13 +580,13 @@ export function imageToPenInk(
         // density also falls off zenith-to-horizon the way hand-stippled
         // skies are graded. Raw tone drives the gradation — banded tone
         // is flat across a band, which kills the grade.
-        const d = field.getDarkness(x, y);
-        const t = Math.min(1, Math.max(0, (d - whiteCutoff) / (0.6 - whiteCutoff)));
+        const d = skyDark(x, y);
+        const t = Math.min(1, Math.max(0, (d - skyThreshold) / (0.62 - skyThreshold)));
         let dotSpacing =
           maxSpacing * 0.5 + (minSpacing * 1.1 - maxSpacing * 0.5) * Math.sqrt(t);
         dotSpacing *= 0.8 + 0.5 * (y / height);
         if (importance) {
-          dotSpacing *= 1 + (1 - importance(x, y)) * 0.6;
+          dotSpacing *= 1 + (1 - importance(x, y)) * 1.2;
         }
         return {
           angleOffset: 0,
