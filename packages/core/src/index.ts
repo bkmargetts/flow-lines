@@ -26,7 +26,7 @@ export type { GrayscaleImage } from './image.js';
 
 // Image-derived direction field
 export { ImageField } from './image-field.js';
-export type { ImageFieldOptions } from './image-field.js';
+export type { ImageFieldOptions, DirectionMap } from './image-field.js';
 
 // Image to pen-and-ink rendering
 export { imageToPenInk } from './pen-ink.js';

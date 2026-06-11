@@ -30,6 +30,23 @@ export interface ImageFieldOptions {
   depthMap?: GrayscaleImage;
   /** How strongly depth overrides the image-gradient orientation, 0-1 (default 0.8) */
   formStrength?: number;
+  /**
+   * External direction field (e.g. derived from a surface-normal map).
+   * Vector magnitude is the blend weight, so zero vectors leave the
+   * image-derived orientation untouched. Takes precedence over both the
+   * luminance tensor and the depth field where its magnitude is high
+   */
+  flowMap?: DirectionMap;
+}
+
+/** A per-pixel direction field; any resolution, stretched over the canvas */
+export interface DirectionMap {
+  width: number;
+  height: number;
+  /** X components, row-major */
+  x: Float32Array;
+  /** Y components, row-major (positive = down, image convention) */
+  y: Float32Array;
 }
 
 /**
@@ -205,6 +222,40 @@ export class ImageField {
 
     if (options.depthMap) {
       this.attachDepth(options.depthMap, options.formStrength ?? 0.8);
+    }
+    if (options.flowMap) {
+      this.attachFlow(options.flowMap);
+    }
+  }
+
+  /**
+   * Override orientation with an external direction field, weighted by
+   * the field's local vector magnitude (clamped to 1)
+   */
+  private attachFlow(flow: DirectionMap): void {
+    const { width, height } = this.tone;
+    const sx = flow.width / width;
+    const sy = flow.height / height;
+
+    const fx: GrayscaleImage = { width: flow.width, height: flow.height, data: flow.x };
+    const fy: GrayscaleImage = { width: flow.width, height: flow.height, data: flow.y };
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const vx = sampleBilinear(fx, x * sx, y * sy);
+        const vy = sampleBilinear(fy, x * sx, y * sy);
+        const mag = Math.hypot(vx, vy);
+        if (mag < 1e-6) continue;
+
+        const w = Math.min(1, mag);
+        // Doubled-angle vector of the direction (pi-periodic)
+        const c2 = (vx * vx - vy * vy) / (mag * mag);
+        const s2 = (2 * vx * vy) / (mag * mag);
+
+        const i = y * width + x;
+        this.orientCos.data[i] = w * c2 + (1 - w) * this.orientCos.data[i];
+        this.orientSin.data[i] = w * s2 + (1 - w) * this.orientSin.data[i];
+      }
     }
   }
 
