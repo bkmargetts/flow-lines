@@ -67,6 +67,14 @@ pnpm monorepo:
   capped cross-contour marks wrapping curved 3D forms (`autoStyle` +
   form confidence), sky stipple for smooth light regions, flowing hatch
   otherwise. New mark strategies belong here.
+- **Faceted hatching** (`facetHatch`) — toned masses without strong
+  texture or 3D form are hatched as facets: flow orientation snapped to
+  30° quanta plus a per-patch twist over a noise-jittered cell lattice;
+  every stroke in a facet is straight at the facet's angle and
+  terminates at its border. Smoothly curving streamlines are the
+  strongest remaining "computer" tell; rocks, walls, and shadow masses
+  in real ink work are hatched patch by patch. On for landscape/etching
+  presets.
 - **Sky treatment** (`skyStipple`) — stipple density carries sky tone on
   its own curve (far tighter than hatch spacing) with a
   zenith-to-horizon falloff; cloud shapes are carved as negative space
@@ -133,9 +141,7 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
-value: faceted hatching (quantize orientation into discrete patches
-hatched at constant angles — flow-field smoothness is what still reads
-as machine), a calm-water stroke language (long broken horizontals),
+value: a calm-water stroke language (long broken horizontals),
 white halos outside strong contours, semantic region labels for dispatch
 (no good in-browser model yet), more stroke textures (bricks, grass),
 light-direction awareness. `valueBands` covers tonal *posterization*;

@@ -33,7 +33,7 @@ const PRESETS = {
     '--layers', '4', '--min-spacing', '1.8', '--max-spacing', '16', '--tone-gamma', '1',
     '--texture', '0.7', '--wobble', '0.9', '--working-size', '800', '--white-cutoff', '0.14',
     '--hatch-angle', '0', '--sky-stipple', '--max-stroke', '70', '--field-smoothing', '5',
-    '--value-bands', '4', '--hatch-patchiness', '0.7',
+    '--value-bands', '4', '--hatch-patchiness', '0.7', '--facet-hatch',
   ],
   sketch: [
     '--layers', '2', '--min-spacing', '3.5', '--max-spacing', '20', '--tone-gamma', '1.4',
@@ -43,7 +43,7 @@ const PRESETS = {
     '--layers', '2', '--min-spacing', '2.8', '--white-cutoff', '0.15', '--tone-gamma', '1.8',
     '--texture', '0.15', '--wobble', '0.4', '--working-size', '800', '--cross-contour',
     '--max-stroke', '48', '--field-smoothing', '8', '--value-bands', '5',
-    '--hatch-patchiness', '0.5',
+    '--hatch-patchiness', '0.5', '--facet-hatch',
   ],
 };
 

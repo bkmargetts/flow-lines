@@ -235,6 +235,7 @@ program
   .option('--sky-stipple', 'Stipple smooth light regions (open skies) instead of hatching')
   .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
   .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
+  .option('--facet-hatch', 'Hatch toned masses as straight-stroke facets with per-patch angles')
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
   .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
   .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
@@ -329,6 +330,7 @@ program
       skyStipple: options.skyStipple ?? false,
       richBlacks: options.richBlacks,
       crossContour: options.crossContour ?? false,
+      facetHatch: options.facetHatch ?? false,
       maxStrokeLength: parseFloat(options.maxStroke),
       workingSize: parseInt(options.workingSize, 10),
     };
