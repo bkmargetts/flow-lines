@@ -32,6 +32,17 @@ export type { ImageFieldOptions, DirectionMap } from './image-field.js';
 export { imageToPenInk } from './pen-ink.js';
 export type { PenInkOptions, FocusOptions } from './pen-ink.js';
 
+// Semantic region labels
+export {
+  SemanticMap,
+  SEMANTIC_LABELS,
+  ADE20K_TO_SEMANTIC,
+  semanticId,
+  normalizeAdeName,
+  adeNameToSemantic,
+} from './semantic-map.js';
+export type { SemanticLabel, LabelImage } from './semantic-map.js';
+
 // Hand-drawn styling
 export { applyHandDrawnStyle } from './hand-drawn.js';
 export type { HandDrawnOptions } from './hand-drawn.js';
