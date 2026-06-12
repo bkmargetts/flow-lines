@@ -149,7 +149,7 @@ const defaultInkSettings: InkSettings = {
   toneGamma: 1.3,
   valueBands: 4,
   hatchPatchiness: 0.35,
-  workingSize: 600,
+  workingSize: 720,
   skinLightening: 0.55,
   featureLines: true,
   textureStrokes: 0.6,

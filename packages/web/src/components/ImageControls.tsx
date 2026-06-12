@@ -24,7 +24,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       detailEmphasis: 0.3,
       textureStrokes: 0.6,
       wobble: 0.8,
-      workingSize: 600,
+      workingSize: 720,
       crossContour: false,
       facetHatch: false,
       maxStrokeLength: 0,
@@ -87,7 +87,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
   landscape: {
     label: 'Landscape',
     settings: {
-      layers: 4,
+      layers: 5,
       minSpacing: 1.8,
       maxSpacing: 16,
       toneGamma: 1,
@@ -120,7 +120,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       detailEmphasis: 0.4,
       textureStrokes: 0.8,
       wobble: 2.2,
-      workingSize: 600,
+      workingSize: 720,
       whiteCutoff: 0.1,
       crossContour: false,
       facetHatch: false,
@@ -348,7 +348,7 @@ export function ImageControls({
               Layers <span>{settings.layers}</span>
             </label>
             <input
-              type="range" min="1" max="4" step="1"
+              type="range" min="1" max="5" step="1"
               value={settings.layers}
               onChange={(e) => updateSettings({ layers: parseInt(e.target.value, 10) })}
             />

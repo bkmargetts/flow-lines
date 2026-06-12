@@ -76,7 +76,7 @@ export interface PenInkOptions {
   /** Random seed for reproducibility */
   seed?: number;
 
-  /** Number of hatching layers, 1-4. Darker areas receive more layers (default 3) */
+  /** Number of hatching layers, 1-5. Darker areas receive more layers (default 3) */
   layers?: number;
   /** Stroke spacing in the darkest areas, px (default 2.5) */
   minSpacing?: number;
@@ -118,7 +118,7 @@ export interface PenInkOptions {
   fieldSmoothing?: number;
   /** Auto-stretch image contrast (default true) */
   normalizeContrast?: boolean;
-  /** Max dimension of the internal working raster (default 600) */
+  /** Max dimension of the internal working raster (default 720) */
   workingSize?: number;
 
   /** Trace dark edges as outlines (default true) */
@@ -281,7 +281,7 @@ export interface PenInkOptions {
  * into a mechanical screen, while shallow crossings read as a hand
  * working over the same shadow
  */
-const LAYER_ANGLES = [0, 31, -27, 62];
+const LAYER_ANGLES = [0, 31, -27, 62, -58];
 
 /** A point may not be drawn closer than this fraction of local spacing to another stroke */
 const D_TEST = 0.72;
@@ -526,7 +526,7 @@ export function imageToPenInk(
   // to its heuristic unchanged
   const semantic = options.labelMap ? new SemanticMap(options.labelMap, width, height) : null;
 
-  const layers = Math.max(1, Math.min(4, Math.round(options.layers ?? 3)));
+  const layers = Math.max(1, Math.min(5, Math.round(options.layers ?? 3)));
   const minSpacing = options.minSpacing ?? 2.5;
   const maxSpacing = Math.max(options.maxSpacing ?? 14, minSpacing + 0.1);
   const whiteCutoff = options.whiteCutoff ?? 0.08;
@@ -770,7 +770,7 @@ export function imageToPenInk(
       // anchors on a few solid black masses, not a uniform dark grey
       if (richBlacks && d > 0.72) {
         const deep = Math.min(1, (d - 0.72) / 0.2);
-        spacing *= 1 - 0.62 * deep;
+        spacing *= 1 - 0.7 * deep;
       }
 
       return spacing;
