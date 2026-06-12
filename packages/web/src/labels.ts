@@ -11,7 +11,10 @@ const ATTEMPTS: { model: string; dtype: 'q8' | 'fp32' }[] = [
   { model: 'Xenova/segformer-b0-finetuned-ade-512-512', dtype: 'fp32' },
 ];
 
-type SegmentationPipeline = (input: string) => Promise<NamedMask[]>;
+type SegmentationPipeline = (
+  input: string,
+  options?: { target_sizes?: [number, number][] }
+) => Promise<NamedMask[]>;
 
 let pipePromise: Promise<SegmentationPipeline> | null = null;
 
@@ -39,9 +42,14 @@ function isIOSWebKit(): boolean {
   );
 }
 
+function isMobile(): boolean {
+  return /iP(hone|ad|od)|Android/i.test(navigator.userAgent) || isIOSWebKit();
+}
+
 async function createPipeline(): Promise<SegmentationPipeline> {
   const transformers = await configureEnv();
   const { pipeline } = transformers;
+  const mobile = isMobile();
 
   // Phones: single WASM thread — every saved allocation matters when the
   // OS kills pages over memory (same policy as the depth pipeline)
@@ -59,7 +67,31 @@ async function createPipeline(): Promise<SegmentationPipeline> {
       const pipe = await pipeline('image-segmentation', attempt.model, {
         device: 'wasm',
         dtype: attempt.dtype,
+        // The ORT CPU arena holds inference's high-water mark forever;
+        // labels run once per upload, so on phones we trade a little
+        // speed for giving the memory back
+        ...(mobile && {
+          session_options: { enableCpuMemArena: false, enableMemPattern: false },
+        }),
       });
+
+      // The checkpoint's processor resizes everything to 512×512 before
+      // inference; encoder attention and the decoder's four-stage concat
+      // scale quadratically with that. Phones drop to 320/384 — labels
+      // gate mark dispatch through ~1%-of-frame feathered confidence, so
+      // the lost boundary precision is below what the renderer can see
+      if (mobile) {
+        const dim = isIOSWebKit() ? 320 : 384;
+        const proc = (
+          pipe as unknown as {
+            processor?: { image_processor?: { size?: { height: number; width: number } } };
+          }
+        ).processor;
+        if (proc?.image_processor?.size) {
+          proc.image_processor.size = { height: dim, width: dim };
+        }
+      }
+
       return pipe as unknown as SegmentationPipeline;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -83,12 +115,19 @@ function getPipeline(): Promise<SegmentationPipeline> {
 
 /**
  * Segment an already-downscaled input data URL into a semantic label
- * raster. Runs wherever it is called — the app calls it inside a
- * dedicated worker (see labels-worker.ts) so WASM inference never blocks
- * the page and the model memory is fully released afterwards.
+ * raster. `targetSize` ([height, width]) caps the post-processing
+ * resolution: the pipeline otherwise bilinearly upsamples the full
+ * 150-class logits tensor to the *input* size — a ~150MB allocation at
+ * 512px, which is what kills mobile tabs. Runs wherever it is called —
+ * the app calls it inside a dedicated worker (see labels-worker.ts) so
+ * WASM inference never blocks the page and the model memory is fully
+ * released afterwards.
  */
-export async function estimateLabels(input: string): Promise<LabelImage> {
+export async function estimateLabels(
+  input: string,
+  targetSize?: [number, number]
+): Promise<LabelImage> {
   const pipe = await getPipeline();
-  const results = await pipe(input);
+  const results = await pipe(input, targetSize ? { target_sizes: [targetSize] } : undefined);
   return labelsFromAdeMasks(results);
 }

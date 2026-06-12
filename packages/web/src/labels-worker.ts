@@ -4,6 +4,8 @@ import type { LabelImage } from '@flow-lines/core';
 
 export interface LabelsRequest {
   input: string;
+  /** Post-processing raster size as [height, width] */
+  targetSize?: [number, number];
 }
 
 export interface LabelsResponse {
@@ -13,7 +15,7 @@ export interface LabelsResponse {
 
 self.onmessage = async (event: MessageEvent<LabelsRequest>) => {
   try {
-    const labels = await estimateLabels(event.data.input);
+    const labels = await estimateLabels(event.data.input, event.data.targetSize);
     const response: LabelsResponse = { labels };
     self.postMessage(response);
   } catch (err) {
