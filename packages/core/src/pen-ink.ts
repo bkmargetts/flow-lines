@@ -372,6 +372,10 @@ function buildHaloMask(
       const dA = darknessAt(p.x + nx * probe, p.y + ny * probe);
       const dB = darknessAt(p.x - nx * probe, p.y - ny * probe);
       if (Math.abs(dA - dB) < minStep) continue;
+      // A halo separates a dark mass from genuinely light ground. An edge
+      // between dark and darker (fur over deep shadow) must not carve a
+      // reserved-paper vein through what should read as one black mass
+      if (Math.min(dA, dB) > 0.5) continue;
 
       // Stamp a disk just off the line on the darker side — the gap
       // shows where tone work approaches the silhouette
@@ -845,6 +849,13 @@ export function imageToPenInk(
     const crossCap = maxSpacing * 3.5;
     const layerAngle = angleOffset;
 
+    // Midtone texture commits to hand-sized patches: inside a patch the
+    // ticks land dense enough to read as deliberate texture, between
+    // patches tone is carried by coherent hatch — scattered lone ticks
+    // read as noise, and a hand never dots a wash evenly
+    const tickPatchNoise = createNoise(seed + 4243);
+    const tickPatchFreq = 1 / (maxSpacing * 4);
+
     // Per-stroke style dispatch, resolved at each seed:
     //   ticks for texture, capped cross-contour marks wrapping curved 3D
     //   forms (autoStyle + depth), flowing hatch lines everywhere else
@@ -934,10 +945,12 @@ export function imageToPenInk(
       }
 
       if (texture > 0.01) {
+        const darkHere = baseDarkness(x, y);
+
         // Dark foliage scribbles regardless of the texture style: deep
         // canopy shadow inked as wandering strokes reads as worked
         // leaf-mass, where straight ticks or hatch read as flood fill
-        if (foliage > 0.5 && texture > 0.3 && baseDarkness(x, y) >= 0.55) {
+        if (foliage > 0.5 && texture > 0.3 && darkHere >= 0.55) {
           return {
             angleOffset: layerAngle * (1 - 0.8 * texture),
             maxArcLength: Math.min(cap, maxSpacing * (5 + 4 * random())),
@@ -957,6 +970,27 @@ export function imageToPenInk(
             headingJitter: 0.35 * texture,
             rand: random,
           };
+        }
+
+        // Deep shadow defers to ordered cross-hatch: tick noise inside a
+        // near-black mass reads as mud with paper veins, where layered
+        // hatch under richBlacks commits to confident black. Explicit
+        // stipple/scribble styles (above) stay the user's call
+        if (darkHere >= 0.75 && foliage < 0.5) {
+          return { angleOffset: layerAngle + rotate, maxArcLength: cap };
+        }
+
+        // Weak-to-moderate texture commits to patches: between them the
+        // midtone yields to plain hatch (commit or leave clean) instead
+        // of sprinkling lone marks across the wash. Strong texture (real
+        // fur, dense foliage) keeps its ticks everywhere
+        if (
+          darkHere < 0.5 &&
+          texture < 0.5 &&
+          foliage < 0.5 &&
+          tickPatchNoise.noise2D(x * tickPatchFreq, y * tickPatchFreq) < 0
+        ) {
+          return { angleOffset: layerAngle + rotate, maxArcLength: cap };
         }
 
         const tick = maxSpacing * 0.9 * (0.7 + 0.6 * random());

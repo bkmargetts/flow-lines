@@ -20,6 +20,17 @@ export interface ContourOptions {
    * texture doesn't shatter into outline confetti
    */
   minLengthScale?: ((x: number, y: number) => number) | null;
+  /**
+   * Reject contours whose tonal step is spread out rather than sharp:
+   * the ratio of the tone change within ±2px of the line to the change
+   * within ±6px must average at least this much. A real edge concentrates
+   * its step at the line (ratio near 1); a soft mass boundary or water
+   * reflection spreads it (ratio near 0.3) — and outlining a soft
+   * gradient is the strongest "computer" tell in the output. Depth
+   * silhouettes are exempt: real but often tonally soft.
+   * 0 disables (default 0.5)
+   */
+  minSharpness?: number;
 }
 
 /**
@@ -38,6 +49,7 @@ export function traceContours(field: ImageField, options: ContourOptions = {}): 
   const margin = options.margin ?? 0;
   const importance = options.importance ?? null;
   const minLengthScale = options.minLengthScale ?? null;
+  const minSharpness = options.minSharpness ?? 0.5;
 
   const { width, height, magnitude, gx, gy, scaleX, scaleY } = field.getEdgeData();
 
@@ -206,6 +218,8 @@ export function traceContours(field: ImageField, options: ContourOptions = {}): 
       points = smoothPolyline(segment, 2);
       points = resamplePolyline(points, stepLength);
 
+      if (minSharpness > 0 && !isSharp(field, points, minSharpness)) continue;
+
       let length = 0;
       for (let i = 1; i < points.length; i++) {
         length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
@@ -222,6 +236,46 @@ export function traceContours(field: ImageField, options: ContourOptions = {}): 
   }
 
   return contours;
+}
+
+/**
+ * Mean edge sharpness along a contour: tone is probed across the line at
+ * ±2px and ±6px; a genuine step concentrates its change inside the narrow
+ * probe, a soft gradient keeps accumulating contrast out to the wide one.
+ * Depth silhouettes count as sharp regardless of tone.
+ */
+function isSharp(field: ImageField, points: Point[], minSharpness: number): boolean {
+  let sum = 0;
+  let count = 0;
+
+  for (let i = 0; i < points.length; i += 4) {
+    const ahead = points[Math.min(i + 1, points.length - 1)];
+    const behind = points[Math.max(i - 1, 0)];
+    let nx = -(ahead.y - behind.y);
+    let ny = ahead.x - behind.x;
+    const len = Math.hypot(nx, ny);
+    if (len < 1e-6) continue;
+    nx /= len;
+    ny /= len;
+
+    const p = points[i];
+    if (field.getDepthEdge(p.x, p.y) > 0.3) {
+      sum += 1;
+      count++;
+      continue;
+    }
+
+    const near = Math.abs(
+      field.getDarkness(p.x + nx * 2, p.y + ny * 2) - field.getDarkness(p.x - nx * 2, p.y - ny * 2)
+    );
+    const wide = Math.abs(
+      field.getDarkness(p.x + nx * 6, p.y + ny * 6) - field.getDarkness(p.x - nx * 6, p.y - ny * 6)
+    );
+    sum += Math.min(1.2, near / (wide + 0.02));
+    count++;
+  }
+
+  return count === 0 || sum / count >= minSharpness;
 }
 
 /** Iterated moving-average smoothing, keeping endpoints fixed */

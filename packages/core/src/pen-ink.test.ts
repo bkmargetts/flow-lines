@@ -452,6 +452,85 @@ describe('contour tracing', () => {
     }
   });
 
+  it('drops soft tonal boundaries that a hand would never outline', () => {
+    // A wide radial gradient: plenty of cumulative edge magnitude, but the
+    // tonal step is spread over many pixels — outlining it is the
+    // strongest "computer" tell (water reflections, blurred mass edges)
+    const soft = makeImage(160, 160, (u, v) =>
+      Math.min(1, Math.max(0.1, Math.hypot(u - 0.5, v - 0.5) * 2.2))
+    );
+    const field = new ImageField(soft, {
+      width: 320,
+      height: 320,
+      normalizeContrast: false,
+    });
+
+    // Low threshold on purpose: without the sharpness gate the gradient
+    // ring traces as a wiggly blob outline
+    const loose = traceContours(field, { minLength: 20, highThreshold: 0.12, minSharpness: 0 });
+    const gated = traceContours(field, { minLength: 20, highThreshold: 0.12 });
+
+    expect(loose.length).toBeGreaterThan(0);
+    expect(gated.length).toBe(0);
+  });
+
+  it('keeps sharp edges through the sharpness gate', () => {
+    const disk = makeImage(160, 160, (u, v) =>
+      Math.hypot(u - 0.5, v - 0.5) < 0.3 ? 0.15 : 1
+    );
+    const field = new ImageField(disk, {
+      width: 320,
+      height: 320,
+      normalizeContrast: false,
+    });
+
+    const contours = traceContours(field, { minLength: 20 });
+    const lengthOf = (points: { x: number; y: number }[]) => {
+      let len = 0;
+      for (let i = 1; i < points.length; i++) {
+        len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+      }
+      return len;
+    };
+
+    expect(Math.max(...contours.map(lengthOf))).toBeGreaterThan(2 * Math.PI * 0.3 * 320 * 0.6);
+  });
+
+  it('keeps ink density inside dark masses with internal edges (no white veins)', () => {
+    // Dark mass (0.75-0.95 darkness) full of internal structure on a light
+    // ground: halos must hug the outer silhouette only, never carve
+    // reserved-paper veins through the mass interior
+    const scene = makeImage(160, 160, (u, v) => {
+      const inside = u > 0.2 && u < 0.8 && v > 0.2 && v < 0.8;
+      if (!inside) return 0.95;
+      return 0.12 + 0.1 * (Math.sin(u * 50) > 0 ? 1 : 0);
+    });
+
+    const result = imageToPenInk(scene, {
+      width: 320, seed: 77, wobble: 0, normalizeContrast: false,
+      detailEmphasis: 0, textureStrokes: 0, optimize: false, layers: 2,
+    });
+
+    // Sample interior cells well away from the silhouette; every one
+    // should carry ink
+    const cell = 16;
+    let empty = 0;
+    let total = 0;
+    for (let cy = 110; cy <= 190; cy += cell) {
+      for (let cx = 110; cx <= 190; cx += cell) {
+        total++;
+        const hit = result.lines.some((l) =>
+          l.points.some(
+            (p) => Math.abs(p.x - cx) < cell / 2 && Math.abs(p.y - cy) < cell / 2
+          )
+        );
+        if (!hit) empty++;
+      }
+    }
+    expect(total).toBeGreaterThan(20);
+    expect(empty).toBe(0);
+  });
+
   it('marks contours as bold pen strokes in the full render', () => {
     const disk = makeImage(120, 120, (u, v) =>
       Math.hypot(u - 0.5, v - 0.5) < 0.3 ? 0.2 : 1
