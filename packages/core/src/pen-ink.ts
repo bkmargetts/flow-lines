@@ -124,6 +124,15 @@ export interface PenInkOptions {
   drawOutlines?: boolean;
   /** Edge strength threshold for outlines, 0-1 (default 0.35) */
   outlineThreshold?: number;
+  /**
+   * Reserve a sliver of blank paper this wide (px) beside long confident
+   * contours: hatching and stipple stop short of the line instead of
+   * crashing into it, so subjects pop off the background the way ink
+   * artists hold background tone away from a silhouette. Applied on the
+   * darker side of the line, and only across a real tonal step — edges
+   * inside an evenly-toned mass leave no halo. 0 disables (default 2.2)
+   */
+  contourHalo?: number;
 
   /**
    * Render textured regions (fur, foliage, fabric) with short directional
@@ -142,11 +151,25 @@ export interface PenInkOptions {
    */
   skyStipple?: boolean;
   /**
+   * Render smooth regions in the lower half of the frame as calm water:
+   * long broken horizontal strokes whose spacing carries the tone, with
+   * no cross-hatch layered over them — the classic illustrated-sea
+   * treatment (default false)
+   */
+  calmWater?: boolean;
+  /**
    * Let the darkest tones saturate toward solid black by tightening
    * spacing below minSpacing — committed dark masses instead of uniformly
    * gray cross-hatch (default true)
    */
   richBlacks?: boolean;
+  /**
+   * Counterchange strength, 0-1: tone darkens where a dark mass meets a
+   * lighter one and relaxes away from the boundary — the background
+   * swells behind a light subject, a shadow mass bites at its edge. The
+   * lighter side is never touched. 0 disables (default 0.5)
+   */
+  counterchange?: number;
 
   /**
    * Hatch across forms instead of along them: strokes wrap around the
@@ -284,6 +307,84 @@ interface StrokeParams {
 }
 
 /**
+ * Mark grid cells in the reserved-white halo beside long contours. The
+ * halo is one-sided and contrast-gated: at each contour point the tone is
+ * sampled a little way out on both sides, and only a genuine tonal step —
+ * a silhouette against a differently-toned region — stamps a halo, on the
+ * darker side, where hatching would otherwise crash into the line. Edges
+ * inside an evenly-toned mass (architectural detail, fur, foliage) leave
+ * no halo, so the mass keeps its tone.
+ */
+function buildHaloMask(
+  contours: Point[][],
+  width: number,
+  height: number,
+  radius: number,
+  minContourLength: number,
+  darknessAt: (x: number, y: number) => number
+): (x: number, y: number) => boolean {
+  const cell = Math.max(1, radius / 2);
+  const cols = Math.max(1, Math.ceil(width / cell));
+  const rows = Math.max(1, Math.ceil(height / cell));
+  const grid = new Uint8Array(cols * rows);
+
+  // Tone probes sit beyond the halo itself so they read the masses on
+  // either side, not the edge's own gradient skirt
+  const probe = Math.max(radius * 2.5, 5);
+  const minStep = 0.12;
+
+  for (const points of contours) {
+    let length = 0;
+    for (let i = 1; i < points.length; i++) {
+      length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    }
+    // Short fragments (texture flecks, broken background edges) don't
+    // earn a halo — only lines long enough to read as silhouettes
+    if (length < minContourLength) continue;
+
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      const ahead = points[Math.min(i + 1, points.length - 1)];
+      const behind = points[Math.max(i - 1, 0)];
+      const tx = ahead.x - behind.x;
+      const ty = ahead.y - behind.y;
+      const tlen = Math.hypot(tx, ty);
+      if (tlen < 1e-9) continue;
+      const nx = -ty / tlen;
+      const ny = tx / tlen;
+
+      const dA = darknessAt(p.x + nx * probe, p.y + ny * probe);
+      const dB = darknessAt(p.x - nx * probe, p.y - ny * probe);
+      if (Math.abs(dA - dB) < minStep) continue;
+
+      // Stamp a disk just off the line on the darker side — the gap
+      // shows where tone work approaches the silhouette
+      const side = dA > dB ? 1 : -1;
+      const cx0 = p.x + nx * side * radius * 0.7;
+      const cy0 = p.y + ny * side * radius * 0.7;
+
+      const c0 = Math.max(0, Math.floor((cx0 - radius) / cell));
+      const c1 = Math.min(cols - 1, Math.floor((cx0 + radius) / cell));
+      const r0 = Math.max(0, Math.floor((cy0 - radius) / cell));
+      const r1 = Math.min(rows - 1, Math.floor((cy0 + radius) / cell));
+      for (let cy = r0; cy <= r1; cy++) {
+        for (let cx = c0; cx <= c1; cx++) {
+          const dx = (cx + 0.5) * cell - cx0;
+          const dy = (cy + 0.5) * cell - cy0;
+          if (dx * dx + dy * dy <= radius * radius) grid[cy * cols + cx] = 1;
+        }
+      }
+    }
+  }
+
+  return (x: number, y: number): boolean => {
+    const cx = Math.max(0, Math.min(cols - 1, Math.floor(x / cell)));
+    const cy = Math.max(0, Math.min(rows - 1, Math.floor(y / cell)));
+    return grid[cy * cols + cx] === 1;
+  };
+}
+
+/**
  * Build the importance sampler in [0, 1]: 1 = render with full detail,
  * 0 = fade toward blank paper. Sources (auto detail, focal point, subject
  * mask) compose multiplicatively — each can only demote a region.
@@ -406,6 +507,7 @@ export function imageToPenInk(
   const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
   const textureStyle = options.textureStyle ?? 'ticks';
   const skyStipple = options.skyStipple ?? false;
+  const calmWater = options.calmWater ?? false;
   const richBlacks = options.richBlacks ?? true;
   const valueBands = Math.round(options.valueBands ?? 0);
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
@@ -459,10 +561,20 @@ export function imageToPenInk(
 
   // With a value plan, the posterized mass tone decides the band a region
   // sits in; a little raw tone keeps marks alive within each band
-  const toneAt = field.hasMassTone()
+  const bandedTone = field.hasMassTone()
     ? (x: number, y: number): number =>
         0.75 * field.getMassDarkness(x, y) + 0.25 * field.getDarkness(x, y)
     : (x: number, y: number): number => field.getDarkness(x, y);
+
+  // Counterchange: tone deepens where a dark mass borders a lighter one
+  // and relaxes in the interior, so subjects sit against a swell of
+  // background tone instead of an even wash
+  const counterchange = Math.max(0, Math.min(1, options.counterchange ?? 0.5));
+  const toneAt =
+    counterchange > 0
+      ? (x: number, y: number): number =>
+          Math.min(1, bandedTone(x, y) + counterchange * field.getCounterBoost(x, y))
+      : bandedTone;
 
   const baseDarkness = skinFactor
     ? (x: number, y: number): number => toneAt(x, y) * skinFactor(x, y)
@@ -496,6 +608,55 @@ export function imageToPenInk(
   // smooth skies always score low on auto-detail and always sit at the
   // far end of depth maps, and the sky is a feature, not a background
   const skyThreshold = Math.max(0.12, whiteCutoff * 0.85);
+
+  // Calm water: smooth, formless regions in the lower half of the frame.
+  // Claims its territory before the sky test — a smooth grey region
+  // below the midline is sea or lake, not overcast
+  const waterEligible = calmWater
+    ? (x: number, y: number): boolean =>
+        y > height * 0.5 &&
+        field.getDetail(x, y) < 0.28 &&
+        field.getFormConfidence(x, y) < 0.3
+    : null;
+  // Breaks in the horizontals: a noise field stretched along x so gaps
+  // arrive as runs, the way a hand lifts the pen mid-passage and resumes
+  const waterNoise = calmWater ? createNoise(seed + 9419) : null;
+  const waterBreakX = maxSpacing * 7;
+  const waterBreakY = maxSpacing * 1.6;
+
+  // Contours are traced before any tone work: they are both the drawn
+  // outlines and the source of the reserved-white halos that hold
+  // hatching off the silhouettes
+  const contourHalo = Math.max(0, options.contourHalo ?? 2.2);
+  const contours =
+    drawOutlines || contourHalo > 0
+      ? traceContours(field, {
+          highThreshold: outlineThreshold,
+          lowThreshold: outlineThreshold * 0.4,
+          minLength: Math.max(minLineLength * 3, 14),
+          stepLength: Math.min(stepLength, 2),
+          margin,
+          importance,
+          // Busy regions demand longer commitment: a city block or a
+          // pile of croissants shatters into outline confetti if every
+          // 15px edge gets traced — real ink work draws a few long
+          // committed lines there and lets tone carry the rest
+          minLengthScale: (x: number, y: number): number =>
+            1 + 2.5 * field.getDetail(x, y),
+        })
+      : [];
+
+  const haloAt =
+    contourHalo > 0 && contours.length > 0
+      ? buildHaloMask(
+          contours,
+          width,
+          height,
+          contourHalo,
+          Math.max(36, minLineLength * 5),
+          baseDarkness
+        )
+      : null;
 
   // Facet geometry: the flow direction snapped to 30° quanta, combined
   // with a coarse noise-jittered cell lattice and a per-cell ±1 quantum
@@ -541,10 +702,12 @@ export function imageToPenInk(
       let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
 
       // Deep shadows commit to near-solid black instead of plateauing at
-      // the regular minimum spacing
-      if (richBlacks && d > 0.82) {
-        const deep = Math.min(1, (d - 0.82) / 0.15);
-        spacing *= 1 - 0.55 * deep;
+      // the regular minimum spacing. The ramp starts early enough that
+      // the darkest value band actually reaches it — real ink work
+      // anchors on a few solid black masses, not a uniform dark grey
+      if (richBlacks && d > 0.72) {
+        const deep = Math.min(1, (d - 0.72) / 0.2);
+        spacing *= 1 - 0.62 * deep;
       }
 
       return spacing;
@@ -579,10 +742,28 @@ export function imageToPenInk(
       layer >= 1 && hatchPatchiness > 0 ? createNoise(seed + layer * 7919 + 31337) : null;
     const patchFreq = 1 / (maxSpacing * 4);
     const patchCut = -1 + hatchPatchiness * (0.55 + 0.4 * (layer - 1));
-    const isDrawable = patchNoise
+    // Saturated blacks skip the patch gaps: a committed dark mass reads
+    // as solid ink, not as worked-over patches with paper showing through
+    const patchedDrawable = patchNoise
       ? (x: number, y: number): boolean =>
-          patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut && toneDrawable(x, y)
+          (patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut ||
+            (richBlacks && baseDarkness(x, y) > 0.85)) &&
+          toneDrawable(x, y)
       : toneDrawable;
+
+    // Calm water carries its tone entirely on layer-0 horizontals —
+    // cross-hatch over water reads as land
+    const waterFiltered =
+      waterEligible && layer >= 1
+        ? (x: number, y: number): boolean => !waterEligible(x, y) && patchedDrawable(x, y)
+        : patchedDrawable;
+
+    // Tone marks (hatch lines and stipple dots alike) stop short of long
+    // contours, leaving the reserved-white sliver; strokes that wander
+    // into a halo terminate there
+    const isDrawable = haloAt
+      ? (x: number, y: number): boolean => !haloAt(x, y) && waterFiltered(x, y)
+      : waterFiltered;
 
     // Busy regions (fur, foliage, fabric) read as texture, not form —
     // render them with short directional ticks instead of long streamlines
@@ -604,6 +785,20 @@ export function imageToPenInk(
     //   forms (autoStyle + depth), flowing hatch lines everywhere else
     const paramsFor = (x: number, y: number, random: () => number): StrokeParams => {
       const texture = textureAmount ? textureAmount(x, y) : 0;
+
+      // Calm water: long broken horizontals, spacing carries the tone.
+      // The break noise is stretched along x so the pen lifts and
+      // resumes in runs instead of pecking
+      if (waterEligible && texture < 0.3 && waterEligible(x, y)) {
+        return {
+          angleOffset: 0,
+          fixedAngle: 0,
+          maxArcLength: maxSpacing * (5 + 8 * random()),
+          stopAt: (px: number, py: number): boolean =>
+            waterNoise!.noise2D(px / waterBreakX, py / waterBreakY) < -0.62 ||
+            !waterEligible(px, py),
+        };
+      }
 
       // Open skies and soft gradients: smooth, featureless, light-mid tone.
       // Dots render them the way illustrators do, with cloud highlights
@@ -709,15 +904,6 @@ export function imageToPenInk(
   // Contour pass: link edge ridges into long, confident outline strokes —
   // the committed lines an artist draws first. Drawn with the bold pen.
   if (drawOutlines) {
-    const contours = traceContours(field, {
-      highThreshold: outlineThreshold,
-      lowThreshold: outlineThreshold * 0.4,
-      minLength: Math.max(minLineLength * 3, 14),
-      stepLength: Math.min(stepLength, 2),
-      margin,
-      importance,
-    });
-
     // Inside detected faces, interior edges (nose shadows, smile creases,
     // jaw shadows) must not become hard lines — artists leave face
     // interiors to tone. Only clearly strong edges survive there, demoted
@@ -732,6 +918,18 @@ export function imageToPenInk(
         : null;
 
     const outlinePasses = Math.max(1, Math.min(4, Math.round(options.outlinePasses ?? 2)));
+
+    const polylineLength = (points: Point[]): number => {
+      let length = 0;
+      for (let i = 1; i < points.length; i++) {
+        length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+      }
+      return length;
+    };
+
+    // Only lines long enough to read as committed outlines earn the
+    // multi-pass emphasis; short fragments are incident lines drawn once
+    const emphasizeFrom = Math.max(48, minLineLength * 6);
 
     // Bold outlines are built from repeated single-pen passes with a
     // slight perpendicular offset, like an artist thickening a line by
@@ -752,7 +950,11 @@ export function imageToPenInk(
 
     for (const points of contours) {
       if (!insideFace) {
-        pushEmphasized(points);
+        if (polylineLength(points) >= emphasizeFrom) {
+          pushEmphasized(points);
+        } else {
+          lines.push({ points, pen: 'bold' });
+        }
         continue;
       }
 
@@ -766,7 +968,7 @@ export function imageToPenInk(
             length += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
           }
           if (length >= 8) {
-            if (runPen === 'bold') {
+            if (runPen === 'bold' && length >= emphasizeFrom) {
               pushEmphasized(run);
             } else {
               lines.push({ points: run, pen: runPen });

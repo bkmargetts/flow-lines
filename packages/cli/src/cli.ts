@@ -229,11 +229,22 @@ program
   .option('--no-contrast', 'Skip automatic contrast stretching')
   .option('--no-outlines', 'Skip the edge outline pass')
   .option('--outline-threshold <number>', 'Edge strength needed for outlines (0-1)', '0.35')
+  .option(
+    '--contour-halo <number>',
+    'Reserved white sliver around long contours, px (0 = off)',
+    '2.2'
+  )
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
   .option('--texture-style <style>', 'Mark style for textured regions: ticks|stipple|scribble', 'ticks')
   .option('--sky-stipple', 'Stipple smooth light regions (open skies) instead of hatching')
+  .option('--calm-water', 'Render smooth lower-frame regions as long broken horizontal strokes')
   .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
+  .option(
+    '--counterchange <number>',
+    'Darken tone where a dark mass borders a lighter one (0-1)',
+    '0.5'
+  )
   .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
   .option('--facet-hatch', 'Hatch toned masses as straight-stroke facets with per-patch angles')
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
@@ -324,11 +335,14 @@ program
       normalizeContrast: options.contrast,
       drawOutlines: options.outlines,
       outlineThreshold: parseFloat(options.outlineThreshold),
+      contourHalo: parseFloat(options.contourHalo),
       wobble: parseFloat(options.wobble),
       textureStrokes: parseFloat(options.texture),
       textureStyle: options.textureStyle as 'ticks' | 'stipple' | 'scribble',
       skyStipple: options.skyStipple ?? false,
+      calmWater: options.calmWater ?? false,
       richBlacks: options.richBlacks,
+      counterchange: parseFloat(options.counterchange),
       crossContour: options.crossContour ?? false,
       facetHatch: options.facetHatch ?? false,
       maxStrokeLength: parseFloat(options.maxStroke),

@@ -24,6 +24,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       fieldSmoothing: 4,
       hatchAngle: -45,
       skyStipple: false,
+      calmWater: false,
       textureStyle: 'ticks',
     },
   },
@@ -48,6 +49,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       fieldSmoothing: 4,
       hatchAngle: -45,
       skyStipple: false,
+      calmWater: false,
       textureStyle: 'ticks',
     },
   },
@@ -71,6 +73,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       fieldSmoothing: 4,
       hatchAngle: -45,
       skyStipple: false,
+      calmWater: false,
       textureStyle: 'ticks',
     },
   },
@@ -90,6 +93,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       whiteCutoff: 0.14,
       hatchAngle: 0,
       skyStipple: true,
+      calmWater: true,
       crossContour: false,
       facetHatch: true,
       maxStrokeLength: 70,
@@ -117,6 +121,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       fieldSmoothing: 3,
       hatchAngle: -30,
       skyStipple: false,
+      calmWater: false,
       textureStyle: 'scribble',
     },
   },
@@ -140,6 +145,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       fieldSmoothing: 8,
       hatchAngle: -45,
       skyStipple: false,
+      calmWater: false,
       textureStyle: 'ticks',
     },
   },
@@ -491,6 +497,29 @@ export function ImageControls({
           </div>
 
           <div className="control-group">
+            <label>
+              Counterchange <span>{settings.counterchange.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={settings.counterchange}
+              onChange={(e) => updateSettings({ counterchange: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>
+              Silhouette Halo{' '}
+              <span>{settings.contourHalo === 0 ? 'off' : `${settings.contourHalo.toFixed(1)}px`}</span>
+            </label>
+            <input
+              type="range" min="0" max="6" step="0.2"
+              value={settings.contourHalo}
+              onChange={(e) => updateSettings({ contourHalo: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
             <label className="checkbox-label">
               <input
                 type="checkbox"
@@ -498,6 +527,14 @@ export function ImageControls({
                 onChange={(e) => updateSettings({ skyStipple: e.target.checked })}
               />
               Stipple open skies
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.calmWater}
+                onChange={(e) => updateSettings({ calmWater: e.target.checked })}
+              />
+              Calm water (broken horizontal strokes)
             </label>
             <label className="checkbox-label">
               <input

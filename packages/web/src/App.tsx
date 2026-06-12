@@ -47,6 +47,7 @@ export interface InkSettings {
   hatchAngle: number;
   followTone: boolean;
   drawOutlines: boolean;
+  contourHalo: number;
   wobble: number;
   strokeColor: string;
   strokeWidth: number;
@@ -63,7 +64,9 @@ export interface InkSettings {
   textureStrokes: number;
   textureStyle: 'ticks' | 'stipple' | 'scribble';
   skyStipple: boolean;
+  calmWater: boolean;
   richBlacks: boolean;
+  counterchange: number;
   crossContour: boolean;
   facetHatch: boolean;
   maxStrokeLength: number;
@@ -131,6 +134,7 @@ const defaultInkSettings: InkSettings = {
   hatchAngle: -45,
   followTone: true,
   drawOutlines: true,
+  contourHalo: 2.2,
   wobble: 0.8,
   strokeColor: '#000000',
   strokeWidth: 1,
@@ -147,7 +151,9 @@ const defaultInkSettings: InkSettings = {
   textureStrokes: 0.6,
   textureStyle: 'ticks',
   skyStipple: false,
+  calmWater: false,
   richBlacks: true,
+  counterchange: 0.5,
   crossContour: false,
   facetHatch: false,
   maxStrokeLength: 0,
@@ -462,10 +468,12 @@ export function App() {
           hatchAngle: inkSettings.hatchAngle,
           followTone: inkSettings.followTone,
           drawOutlines: inkSettings.drawOutlines,
+          contourHalo: inkSettings.contourHalo,
           wobble: inkSettings.wobble,
           textureStrokes: inkSettings.textureStrokes,
           textureStyle: inkSettings.textureStyle,
           skyStipple: inkSettings.skyStipple,
+          calmWater: inkSettings.calmWater,
           crossContour: inkSettings.crossContour,
           facetHatch: inkSettings.facetHatch,
           maxStrokeLength: inkSettings.maxStrokeLength,
@@ -481,6 +489,7 @@ export function App() {
           workingSize: Math.min(inkSettings.workingSize, cap),
           layers: lowMemory ? Math.min(2, inkSettings.layers) : inkSettings.layers,
           richBlacks: lowMemory ? false : inkSettings.richBlacks,
+          counterchange: inkSettings.counterchange,
           focus: focusPoints.map((point) => ({
             x: point.x * jobWidth,
             y: point.y * outputHeight,

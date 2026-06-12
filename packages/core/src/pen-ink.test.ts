@@ -1086,7 +1086,7 @@ describe('art levers', () => {
     const base = {
       width: 320, seed: 124, wobble: 0, drawOutlines: false,
       detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
-      layers: 1, optimize: false,
+      layers: 1, optimize: false, contourHalo: 0,
     };
 
     const isDot = (l: { points: { x: number; y: number }[] }) => {
@@ -1111,6 +1111,72 @@ describe('art levers', () => {
         expect(r).toBeGreaterThan(25);
         expect(r).toBeLessThan(115);
       }
+    }
+  });
+
+  it('holds hatching off silhouettes with contourHalo', () => {
+    // A bright square subject on a mid-dark background: the silhouette is
+    // a long, strong contour with a real tonal step across it
+    const scene = makeImage(160, 160, (u, v) =>
+      u > 0.3 && u < 0.7 && v > 0.3 && v < 0.7 ? 0.95 : 0.3
+    );
+
+    const base = {
+      width: 320, seed: 31, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 2, optimize: false,
+    };
+
+    const off = imageToPenInk(scene, { ...base, contourHalo: 0 });
+    const on = imageToPenInk(scene, { ...base, contourHalo: 5 });
+
+    // Count hatch points in a band just outside the subject's left edge
+    // (x = 0.3 * 320 = 96), on the darker background side
+    const inBand = (l: { points: { x: number; y: number }[] }) =>
+      l.points.filter(
+        (p) => p.x > 96 - 8 && p.x < 96 && p.y > 96 && p.y < 224
+      ).length;
+
+    const offCount = off.lines.reduce((n, l) => n + inBand(l), 0);
+    const onCount = on.lines.reduce((n, l) => n + inBand(l), 0);
+
+    expect(offCount).toBeGreaterThan(20);
+    expect(onCount).toBeLessThan(offCount * 0.35);
+
+    // The background mass away from the silhouette keeps its tone
+    const farBand = (l: { points: { x: number; y: number }[] }) =>
+      l.points.filter((p) => p.x > 20 && p.x < 60 && p.y > 96 && p.y < 224).length;
+    const offFar = off.lines.reduce((n, l) => n + farBand(l), 0);
+    const onFar = on.lines.reduce((n, l) => n + farBand(l), 0);
+    expect(onFar).toBeGreaterThan(offFar * 0.7);
+  });
+
+  it('renders smooth lower regions as horizontals with calmWater', () => {
+    // Textured upper half over a smooth mid-grey "sea"
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.5 ? 0.45 + 0.2 * Math.sin(u * 70) * Math.sin(v * 70) : 0.55
+    );
+
+    const result = imageToPenInk(scene, {
+      width: 320, seed: 17, wobble: 0, drawOutlines: false,
+      detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+      layers: 3, optimize: false, calmWater: true, contourHalo: 0,
+      hatchAngle: -45,
+    });
+
+    // Strokes fully inside the sea (clear of the boundary and margins)
+    const seaLines = result.lines.filter((l) =>
+      l.points.every((p) => p.y > 200 && p.y < 290)
+    );
+    expect(seaLines.length).toBeGreaterThan(10);
+
+    // Each should be horizontal: tiny vertical extent, real length
+    for (const line of seaLines) {
+      const ys = line.points.map((p) => p.y);
+      const xs = line.points.map((p) => p.x);
+      const dy = Math.max(...ys) - Math.min(...ys);
+      const dx = Math.max(...xs) - Math.min(...xs);
+      expect(dy).toBeLessThan(Math.max(3, dx * 0.12));
     }
   });
 });
@@ -1165,5 +1231,21 @@ describe('ImageField', () => {
 
     expect(field.getEdgeStrength(120, 120)).toBeGreaterThan(0.3);
     expect(field.getEdgeStrength(30, 120)).toBeLessThan(0.1);
+  });
+
+  it('reports counterchange boost at the dark side of mass boundaries', () => {
+    const field = new ImageField(halfDark, {
+      width: 240,
+      height: 240,
+      normalizeContrast: false,
+    });
+
+    // Peaks on the dark side near the boundary (x = 120)...
+    const nearBoundary = field.getCounterBoost(105, 120);
+    expect(nearBoundary).toBeGreaterThan(0.05);
+    // ...fades deep inside the dark mass...
+    expect(field.getCounterBoost(15, 120)).toBeLessThan(nearBoundary * 0.5);
+    // ...and never darkens the lighter side
+    expect(field.getCounterBoost(180, 120)).toBeLessThan(0.02);
   });
 });

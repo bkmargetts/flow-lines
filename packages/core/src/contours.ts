@@ -14,6 +14,12 @@ export interface ContourOptions {
   margin?: number;
   /** Optional importance sampler; contours fade out in unimportant areas */
   importance?: ((x: number, y: number) => number) | null;
+  /**
+   * Optional per-location multiplier on minLength, sampled at each
+   * segment's midpoint — busy regions can demand longer commitment so
+   * texture doesn't shatter into outline confetti
+   */
+  minLengthScale?: ((x: number, y: number) => number) | null;
 }
 
 /**
@@ -31,6 +37,7 @@ export function traceContours(field: ImageField, options: ContourOptions = {}): 
   const stepLength = options.stepLength ?? 2;
   const margin = options.margin ?? 0;
   const importance = options.importance ?? null;
+  const minLengthScale = options.minLengthScale ?? null;
 
   const { width, height, magnitude, gx, gy, scaleX, scaleY } = field.getEdgeData();
 
@@ -204,7 +211,11 @@ export function traceContours(field: ImageField, options: ContourOptions = {}): 
         length += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
       }
 
-      if (length >= minLength && points.length >= 2) {
+      const mid = points[points.length >> 1];
+      const required =
+        minLength * (minLengthScale && mid ? Math.max(1, minLengthScale(mid.x, mid.y)) : 1);
+
+      if (length >= required && points.length >= 2) {
         contours.push(points);
       }
     }
