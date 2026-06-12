@@ -87,9 +87,10 @@ pnpm monorepo:
   calm water follows the water label at any horizon height, sky stipple
   follows the sky label (both auto-enable when unset and the material is
   in frame), cross-hatch skips labeled sky, foliage floors texture and
-  scribbles in deep shadow, building facets snap plumb/level with damped
-  ticks, person floors importance. No labels = heuristics exactly as
-  before; labels promote, never demote.
+  scribbles in deep shadow, building facets snap plumb/level, person
+  floors importance (gently — a hard floor hatches smooth clothing into
+  flat masses). No labels = heuristics exactly as before; labels
+  promote marks, never demote them.
 - **Faceted hatching** (`facetHatch`) — toned masses without strong
   texture or 3D form are hatched as facets: flow orientation snapped to
   30° quanta plus a per-patch twist over a noise-jittered cell lattice;

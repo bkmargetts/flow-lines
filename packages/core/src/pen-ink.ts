@@ -459,7 +459,10 @@ function buildImportance(
   const useDepth = !!depthRemap;
   // People are never background: a person label floors importance so the
   // other sources (depth, detail, focus) cannot dissolve a figure into
-  // loose background gestures. Labels promote, never demote.
+  // loose background gestures. The floor sits well below 1 — it guards
+  // against dissolution, not against tonal selectivity: pinning people
+  // at full importance hatches smooth clothing into flat dark masses.
+  // Labels promote, never demote.
   const personFloor = semantic?.has('person') ? semantic : null;
 
   if (!useDetail && !useFocus && !useMask && !useDepth) return null;
@@ -497,7 +500,7 @@ function buildImportance(
     }
 
     if (personFloor) {
-      importance = Math.max(importance, 0.85 * personFloor.confidence(x, y, 'person'));
+      importance = Math.max(importance, 0.6 * personFloor.confidence(x, y, 'person'));
     }
 
     return importance;
@@ -863,14 +866,14 @@ export function imageToPenInk(
       let texture = textureAmount ? textureAmount(x, y) : 0;
       let foliage = 0;
       if (semantic && textureAmount) {
-        // Buildings damp texture ticks — window grids and mouldings score
-        // high on detail but read as architecture, not fur. Foliage floors
-        // texture instead: a smooth dark canopy is still leaves, and
-        // without the floor it collapses into flat silhouette mush.
+        // Foliage floors texture: a smooth dark canopy is still leaves,
+        // and without the floor it collapses into flat silhouette mush.
+        // Labels promote marks, never demote them — buildings keep their
+        // material texture (brick, stone, shingle); scattered-tick noise
+        // is already handled by the midtone patch commitment below.
         // textureStrokes: 0 stays a hard off in both directions
-        texture *= 1 - 0.6 * semantic.confidence(x, y, 'building');
         foliage = semantic.confidence(x, y, 'foliage');
-        texture = Math.max(texture, 0.65 * foliage);
+        texture = Math.max(texture, 0.5 * foliage);
       }
 
       // Calm water: long broken horizontals, spacing carries the tone.
