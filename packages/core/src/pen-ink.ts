@@ -11,6 +11,7 @@ import { traceContours } from './contours.js';
 import { traceIsoContours } from './iso-contours.js';
 import { optimizePlot } from './optimize.js';
 import { createNoise } from './noise.js';
+import { SemanticMap, type LabelImage } from './semantic-map.js';
 
 /** Drop a fraction of a polyline's arc length from each end */
 function trimPolyline(points: Point[], fraction: number): Point[] {
@@ -147,14 +148,18 @@ export interface PenInkOptions {
   textureStyle?: 'ticks' | 'stipple' | 'scribble';
   /**
    * Stipple smooth light-mid regions (open skies, soft gradients) instead
-   * of hatching them — the classic illustrated-sky treatment (default false)
+   * of hatching them — the classic illustrated-sky treatment. Unset, it
+   * enables itself when a label map says the frame contains sky
+   * (default false without labels)
    */
   skyStipple?: boolean;
   /**
-   * Render smooth regions in the lower half of the frame as calm water:
-   * long broken horizontal strokes whose spacing carries the tone, with
-   * no cross-hatch layered over them — the classic illustrated-sea
-   * treatment (default false)
+   * Render smooth water regions as calm water: long broken horizontal
+   * strokes whose spacing carries the tone, with no cross-hatch layered
+   * over them — the classic illustrated-sea treatment. With a label map,
+   * water is wherever the labels say (any horizon height); without one, a
+   * smooth formless region in the lower half of the frame. Unset, it
+   * enables itself when labels report water (default false without labels)
    */
   calmWater?: boolean;
   /**
@@ -236,6 +241,17 @@ export interface PenInkOptions {
    * the scene has meaningful depth separation (default 0.5)
    */
   depthIsolation?: number;
+
+  /**
+   * Semantic region labels (see SEMANTIC_LABELS for the taxonomy), e.g.
+   * from an ML scene segmenter. Where a label is confident it replaces
+   * the geometric heuristics: calm water follows the water label at any
+   * horizon height, sky stipple follows the sky label, foliage keeps its
+   * texture instead of collapsing to flat masses, building facets snap to
+   * architectural verticals/horizontals, and people hold full importance.
+   * Without labels every heuristic behaves exactly as before
+   */
+  labelMap?: LabelImage;
 
   /**
    * Chain nearly-touching strokes and order them to minimize pen-up
@@ -393,7 +409,8 @@ function buildImportance(
   field: ImageField,
   width: number,
   height: number,
-  options: PenInkOptions
+  options: PenInkOptions,
+  semantic: SemanticMap | null
 ): ((x: number, y: number) => number) | null {
   const detailEmphasis = Math.max(0, Math.min(1, options.detailEmphasis ?? 0.3));
   const mask = options.subjectMask;
@@ -436,6 +453,10 @@ function buildImportance(
   const useFocus = focusList.length > 0;
   const useMask = !!mask && maskStrength > 0;
   const useDepth = !!depthRemap;
+  // People are never background: a person label floors importance so the
+  // other sources (depth, detail, focus) cannot dissolve a figure into
+  // loose background gestures. Labels promote, never demote.
+  const personFloor = semantic?.has('person') ? semantic : null;
 
   if (!useDetail && !useFocus && !useMask && !useDepth) return null;
 
@@ -471,6 +492,10 @@ function buildImportance(
       importance *= depthRemap(x, y);
     }
 
+    if (personFloor) {
+      importance = Math.max(importance, 0.85 * personFloor.confidence(x, y, 'person'));
+    }
+
     return importance;
   };
 }
@@ -492,6 +517,11 @@ export function imageToPenInk(
   const margin = options.margin ?? 20;
   const seed = options.seed ?? Math.floor(Math.random() * 1000000);
 
+  // Scene labels, when provided, replace the geometric heuristics below
+  // wherever they are confident; with no label map every gate falls back
+  // to its heuristic unchanged
+  const semantic = options.labelMap ? new SemanticMap(options.labelMap, width, height) : null;
+
   const layers = Math.max(1, Math.min(4, Math.round(options.layers ?? 3)));
   const minSpacing = options.minSpacing ?? 2.5;
   const maxSpacing = Math.max(options.maxSpacing ?? 14, minSpacing + 0.1);
@@ -506,8 +536,11 @@ export function imageToPenInk(
   const outlineThreshold = options.outlineThreshold ?? 0.35;
   const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
   const textureStyle = options.textureStyle ?? 'ticks';
-  const skyStipple = options.skyStipple ?? false;
-  const calmWater = options.calmWater ?? false;
+  // Sky and water treatments switch themselves on when the labels say the
+  // material is in frame — the artist doesn't need telling that a sky
+  // should be a sky. Explicit options still win in both directions.
+  const skyStipple = options.skyStipple ?? (semantic ? semantic.has('sky') : false);
+  const calmWater = options.calmWater ?? (semantic ? semantic.has('water') : false);
   const richBlacks = options.richBlacks ?? true;
   const valueBands = Math.round(options.valueBands ?? 0);
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
@@ -532,7 +565,7 @@ export function imageToPenInk(
     valueBands,
   });
 
-  const baseImportance = buildImportance(field, width, height, options);
+  const baseImportance = buildImportance(field, width, height, options, semantic);
   const portraitMaps = options.portrait
     ? buildPortraitMaps(options.portrait, width, height)
     : null;
@@ -596,11 +629,17 @@ export function imageToPenInk(
   const skyDark = (x: number, y: number): number =>
     Math.max(field.getDarkness(x, y), field.getAbsoluteDarkness(x, y));
 
+  // With a sky label the smoothness heuristics are unnecessary — clouds
+  // with visible texture are still sky — and the tone cap relaxes so
+  // heavier overcast still stipples instead of falling to cross-hatch
   const skyEligible = skyStipple
-    ? (x: number, y: number): boolean =>
-        field.getDetail(x, y) < 0.25 &&
-        field.getFormConfidence(x, y) < 0.3 &&
-        skyDark(x, y) < 0.62
+    ? semantic?.has('sky')
+      ? (x: number, y: number): boolean =>
+          semantic.confidence(x, y, 'sky') > 0.5 && skyDark(x, y) < 0.75
+      : (x: number, y: number): boolean =>
+          field.getDetail(x, y) < 0.25 &&
+          field.getFormConfidence(x, y) < 0.3 &&
+          skyDark(x, y) < 0.62
     : null;
 
   // A sky stipples once it is perceptibly grey; raising the white cutoff
@@ -609,14 +648,20 @@ export function imageToPenInk(
   // far end of depth maps, and the sky is a feature, not a background
   const skyThreshold = Math.max(0.12, whiteCutoff * 0.85);
 
-  // Calm water: smooth, formless regions in the lower half of the frame.
-  // Claims its territory before the sky test — a smooth grey region
-  // below the midline is sea or lake, not overcast
+  // Calm water. With a water label, water is wherever the labels say —
+  // a high-horizon sea qualifies, a smooth forest floor does not — and
+  // only the detail gate remains (choppy reflections still hatch).
+  // Without labels: smooth, formless regions in the lower half of the
+  // frame, claiming their territory before the sky test — a smooth grey
+  // region below the midline is sea or lake, not overcast
   const waterEligible = calmWater
-    ? (x: number, y: number): boolean =>
-        y > height * 0.5 &&
-        field.getDetail(x, y) < 0.28 &&
-        field.getFormConfidence(x, y) < 0.3
+    ? semantic?.has('water')
+      ? (x: number, y: number): boolean =>
+          semantic.confidence(x, y, 'water') > 0.5 && field.getDetail(x, y) < 0.45
+      : (x: number, y: number): boolean =>
+          y > height * 0.5 &&
+          field.getDetail(x, y) < 0.28 &&
+          field.getFormConfidence(x, y) < 0.3
     : null;
   // Breaks in the horizontals: a noise field stretched along x so gaps
   // arrive as runs, the way a hand lifts the pen mid-passage and resumes
@@ -640,9 +685,11 @@ export function imageToPenInk(
           // Busy regions demand longer commitment: a city block or a
           // pile of croissants shatters into outline confetti if every
           // 15px edge gets traced — real ink work draws a few long
-          // committed lines there and lets tone carry the rest
+          // committed lines there and lets tone carry the rest. Foliage
+          // raises the bar further: a canopy is texture, not outlines
           minLengthScale: (x: number, y: number): number =>
-            1 + 2.5 * field.getDetail(x, y),
+            (1 + 2.5 * field.getDetail(x, y)) *
+            (semantic ? 1 + 0.8 * semantic.confidence(x, y, 'foliage') : 1),
         })
       : [];
 
@@ -673,8 +720,20 @@ export function imageToPenInk(
     const cx = Math.floor((x + jx * facetCell * 0.6) / facetCell);
     const cy = Math.floor((y + jy * facetCell * 0.6) / facetCell);
     const h = Math.sin(cx * 127.1 + cy * 311.7) * 43758.5453;
+    // Architecture is hatched plumb and level: where the labels say
+    // building and the flow runs near a cardinal direction, the facet
+    // snaps to it and the per-cell twist is suppressed — masonry doesn't
+    // tilt patch by patch
+    const orientation = field.getOrientation(x, y);
+    if (semantic && semantic.confidence(x, y, 'building') > 0.5) {
+      const cardinal = Math.round(orientation / (Math.PI / 2)) * (Math.PI / 2);
+      if (Math.abs(orientation - cardinal) < (25 * Math.PI) / 180) {
+        const bin = Math.round(cardinal / FACET_BIN);
+        return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
+      }
+    }
     const twist = Math.round((h - Math.floor(h) - 0.5) * 2);
-    const bin = Math.round(field.getOrientation(x, y) / FACET_BIN) + twist;
+    const bin = Math.round(orientation / FACET_BIN) + twist;
     return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
   };
 
@@ -752,10 +811,16 @@ export function imageToPenInk(
       : toneDrawable;
 
     // Calm water carries its tone entirely on layer-0 horizontals —
-    // cross-hatch over water reads as land
+    // cross-hatch over water reads as land. Labeled sky is excluded the
+    // same way: its tone lives in the stipple, and hatch strokes across
+    // a sky read as weather, not tone
+    const labeledSky = semantic?.has('sky') && skyStipple ? semantic : null;
     const waterFiltered =
-      waterEligible && layer >= 1
-        ? (x: number, y: number): boolean => !waterEligible(x, y) && patchedDrawable(x, y)
+      (waterEligible || labeledSky) && layer >= 1
+        ? (x: number, y: number): boolean =>
+            !(waterEligible && waterEligible(x, y)) &&
+            !(labeledSky && labeledSky.confidence(x, y, 'sky') > 0.5) &&
+            patchedDrawable(x, y)
         : patchedDrawable;
 
     // Tone marks (hatch lines and stipple dots alike) stop short of long
@@ -784,7 +849,18 @@ export function imageToPenInk(
     //   ticks for texture, capped cross-contour marks wrapping curved 3D
     //   forms (autoStyle + depth), flowing hatch lines everywhere else
     const paramsFor = (x: number, y: number, random: () => number): StrokeParams => {
-      const texture = textureAmount ? textureAmount(x, y) : 0;
+      let texture = textureAmount ? textureAmount(x, y) : 0;
+      let foliage = 0;
+      if (semantic && textureAmount) {
+        // Buildings damp texture ticks — window grids and mouldings score
+        // high on detail but read as architecture, not fur. Foliage floors
+        // texture instead: a smooth dark canopy is still leaves, and
+        // without the floor it collapses into flat silhouette mush.
+        // textureStrokes: 0 stays a hard off in both directions
+        texture *= 1 - 0.6 * semantic.confidence(x, y, 'building');
+        foliage = semantic.confidence(x, y, 'foliage');
+        texture = Math.max(texture, 0.65 * foliage);
+      }
 
       // Calm water: long broken horizontals, spacing carries the tone.
       // The break noise is stretched along x so the pen lifts and
@@ -834,6 +910,7 @@ export function imageToPenInk(
       if (
         facetHatch &&
         texture < 0.35 &&
+        foliage < 0.5 &&
         field.getFormConfidence(x, y) < 0.5 &&
         baseDarkness(x, y) >= 0.25
       ) {
@@ -857,6 +934,18 @@ export function imageToPenInk(
       }
 
       if (texture > 0.01) {
+        // Dark foliage scribbles regardless of the texture style: deep
+        // canopy shadow inked as wandering strokes reads as worked
+        // leaf-mass, where straight ticks or hatch read as flood fill
+        if (foliage > 0.5 && texture > 0.3 && baseDarkness(x, y) >= 0.55) {
+          return {
+            angleOffset: layerAngle * (1 - 0.8 * texture),
+            maxArcLength: Math.min(cap, maxSpacing * (5 + 4 * random())),
+            headingJitter: 0.4 * texture,
+            rand: random,
+          };
+        }
+
         if (textureStyle === 'stipple' && texture > 0.3) {
           return { angleOffset: 0, maxArcLength: 0, dot: true };
         }

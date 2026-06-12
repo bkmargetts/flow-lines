@@ -1181,6 +1181,163 @@ describe('art levers', () => {
   });
 });
 
+describe('semantic labels', () => {
+  /** Label raster split horizontally: `top` id above the boundary, `bottom` below */
+  const splitLabels = (top: number, bottom: number, boundary = 0.5) => {
+    const size = 64;
+    const data = new Uint8Array(size * size);
+    for (let y = 0; y < size; y++) {
+      data.fill(y < size * boundary ? top : bottom, y * size, (y + 1) * size);
+    }
+    return { width: size, height: size, data };
+  };
+
+  const base = {
+    width: 320, seed: 31, wobble: 0, drawOutlines: false,
+    detailEmphasis: 0, textureStrokes: 0, normalizeContrast: false,
+    layers: 1, optimize: false, contourHalo: 0, hatchAngle: -45,
+  };
+
+  const isHorizontal = (l: { points: { x: number; y: number }[] }) => {
+    const ys = l.points.map((p) => p.y);
+    const xs = l.points.map((p) => p.x);
+    const dy = Math.max(...ys) - Math.min(...ys);
+    const dx = Math.max(...xs) - Math.min(...xs);
+    return dx > 10 && dy < Math.max(3, dx * 0.12);
+  };
+
+  const isDot = (l: { points: { x: number; y: number }[] }) => {
+    if (l.points.length < 6 || l.points.length > 10) return false;
+    const xs = l.points.map((p) => p.x);
+    const ys = l.points.map((p) => p.y);
+    return Math.max(...xs) - Math.min(...xs) < 4 && Math.max(...ys) - Math.min(...ys) < 4;
+  };
+
+  it('calm water follows the water label, not frame geometry', () => {
+    // Smooth mid-grey everywhere; the labels put water in the TOP half —
+    // exactly where the geometric heuristic could never find it
+    const scene = makeImage(160, 160, () => 0.55);
+    const labelMap = splitLabels(2 /* water */, 4 /* ground */);
+
+    // calmWater left unset: the water label auto-enables it
+    const result = imageToPenInk(scene, { ...base, layers: 3, labelMap });
+
+    // Judge strokes long enough to have a direction (water breaks produce
+    // some short fragments that fit entirely inside a band)
+    const span = (l: { points: { x: number; y: number }[] }) => {
+      const xs = l.points.map((p) => p.x);
+      const ys = l.points.map((p) => p.y);
+      return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    };
+    const topLines = result.lines.filter(
+      (l) => span(l) > 12 && l.points.every((p) => p.y > 30 && p.y < 130)
+    );
+    const bottomLines = result.lines.filter(
+      (l) => span(l) > 12 && l.points.every((p) => p.y > 190 && p.y < 290)
+    );
+
+    expect(topLines.length).toBeGreaterThan(10);
+    expect(bottomLines.length).toBeGreaterThan(10);
+    // Water (top) is horizontals; ground (bottom) keeps diagonal hatch
+    expect(topLines.every(isHorizontal)).toBe(true);
+    expect(bottomLines.filter(isHorizontal).length).toBeLessThan(bottomLines.length * 0.1);
+  });
+
+  it('sky label drives stipple without skyStipple being set', () => {
+    // Flat grey sky over textured dark ground
+    const scene = makeImage(160, 160, (u, v) =>
+      v < 0.5 ? 0.78 : 0.25 + 0.15 * Math.sin(u * 60) * Math.sin(v * 60)
+    );
+    const labelMap = splitLabels(1 /* sky */, 4 /* ground */);
+
+    const off = imageToPenInk(scene, base);
+    const on = imageToPenInk(scene, { ...base, labelMap });
+
+    const skyDots = (r: ReturnType<typeof imageToPenInk>) =>
+      r.lines.filter((l) => isDot(l) && l.points[0].y < 140).length;
+
+    expect(skyDots(off)).toBe(0);
+    expect(skyDots(on)).toBeGreaterThan(50);
+  });
+
+  it('floors importance over labeled people', () => {
+    // Smooth mid-grey frame, focus pinned to the top-left corner so the
+    // rest of the frame fades; a person label on the right half holds it
+    const scene = makeImage(160, 160, () => 0.5);
+    const personRight = {
+      width: 64,
+      height: 64,
+      data: new Uint8Array(64 * 64).map((_, i) => (i % 64 >= 32 ? 6 /* person */ : 0)),
+    };
+
+    const focus = { x: 30, y: 30, radius: 40, falloff: 60, strength: 0.85 };
+    const inked = (r: ReturnType<typeof imageToPenInk>) =>
+      r.lines.reduce((s, l) => {
+        if (!l.points.every((p) => p.x > 190)) return s;
+        let len = 0;
+        for (let i = 1; i < l.points.length; i++) {
+          len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+        }
+        return s + len;
+      }, 0);
+
+    const without = imageToPenInk(scene, { ...base, focus });
+    const withPerson = imageToPenInk(scene, { ...base, focus, labelMap: personRight });
+
+    expect(inked(withPerson)).toBeGreaterThan(inked(without) * 1.3);
+  });
+
+  it('gives labeled foliage texture marks instead of long streamlines', () => {
+    // Smooth dark mass in the bottom half — without labels it hatches in
+    // long streamlines; labeled foliage it breaks into short ticks
+    const scene = makeImage(160, 160, (u, v) => (v < 0.5 ? 0.9 : 0.25));
+    const labelMap = splitLabels(0, 3 /* foliage */);
+
+    const opts = { ...base, textureStrokes: 0.7 };
+    // Mean length of strokes that *start* in the dark mass — without
+    // labels the streamlines run long enough to leave any fixed band
+    const meanLen = (r: ReturnType<typeof imageToPenInk>) => {
+      const lines = r.lines.filter((l) => l.points[0].y > 190 && l.points[0].y < 290);
+      if (lines.length === 0) return 0;
+      const total = lines.reduce((s, l) => {
+        let len = 0;
+        for (let i = 1; i < l.points.length; i++) {
+          len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+        }
+        return s + len;
+      }, 0);
+      return total / lines.length;
+    };
+
+    const without = imageToPenInk(scene, opts);
+    const withFoliage = imageToPenInk(scene, { ...opts, labelMap });
+
+    expect(meanLen(withFoliage)).toBeLessThan(meanLen(without) * 0.6);
+  });
+
+  it('an all-zero label raster changes nothing', () => {
+    const scene = makeImage(160, 160, (u, v) => 0.3 + 0.4 * u + 0.1 * Math.sin(v * 40));
+    const empty = { width: 32, height: 32, data: new Uint8Array(32 * 32) };
+
+    const plain = imageToPenInk(scene, { ...base, layers: 2 });
+    const labeled = imageToPenInk(scene, { ...base, layers: 2, labelMap: empty });
+
+    expect(labeled.lines.length).toBe(plain.lines.length);
+    expect(labeled.lines[0]?.points).toEqual(plain.lines[0]?.points);
+  });
+
+  it('is deterministic per seed with labels', () => {
+    const scene = makeImage(160, 160, () => 0.55);
+    const labelMap = splitLabels(2, 4);
+
+    const a = imageToPenInk(scene, { ...base, labelMap });
+    const b = imageToPenInk(scene, { ...base, labelMap });
+
+    expect(a.lines.length).toBe(b.lines.length);
+    expect(a.lines.map((l) => l.points)).toEqual(b.lines.map((l) => l.points));
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {
