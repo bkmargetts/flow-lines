@@ -83,15 +83,18 @@ export interface InkSettings {
 const IS_MOBILE =
   typeof navigator !== 'undefined' && /iP(hone|ad|od)|Android/.test(navigator.userAgent);
 
-/** Crash breadcrumb: set while a depth result is being applied; if it is
- * still there on startup, the page died mid-apply — drop to low memory */
+/** Crash breadcrumbs: set while a depth result is being applied or scene
+ * labeling is running; if one is still there on startup, the page died
+ * mid-job — drop to low memory */
 const APPLY_FLAG = 'fl-applying-depth';
+const LABELING_FLAG = 'fl-labeling';
 const LOW_MEM_FLAG = 'fl-low-memory';
 
 function detectLowMemory(): boolean {
   if (typeof localStorage === 'undefined') return false;
-  if (localStorage.getItem(APPLY_FLAG)) {
+  if (localStorage.getItem(APPLY_FLAG) || localStorage.getItem(LABELING_FLAG)) {
     localStorage.removeItem(APPLY_FLAG);
+    localStorage.removeItem(LABELING_FLAG);
     localStorage.setItem(LOW_MEM_FLAG, '1');
   }
   return localStorage.getItem(LOW_MEM_FLAG) === '1';
@@ -358,14 +361,19 @@ export function App() {
     const token = ++labelTokenRef.current;
     setLabelStatus('loading');
     setLabelError(null);
+    // Breadcrumb: if the page dies during inference, the next visit
+    // detects it, enters low-memory mode, and stops auto-running labels
+    localStorage.setItem(LABELING_FLAG, '1');
     import('./labels-client')
       .then(({ estimateLabelsInWorker }) => estimateLabelsInWorker(canvas))
       .then((labels) => {
+        localStorage.removeItem(LABELING_FLAG);
         if (token !== labelTokenRef.current) return;
         setLabelMap(labels);
         setLabelStatus('idle');
       })
       .catch((err) => {
+        localStorage.removeItem(LABELING_FLAG);
         if (token !== labelTokenRef.current) return;
         setLabelMap(null);
         setLabelStatus('error');
@@ -436,10 +444,13 @@ export function App() {
           detectFaces();
           // 3D form needs the depth model (~25MB on first use); run it
           // automatically only where WebGPU makes it fast. Scene labels
-          // (~5MB, WASM) run everywhere, sequenced behind depth so only
-          // one model is ever resident
+          // (~5MB, WASM) run everywhere except devices that already
+          // crashed once, sequenced behind depth so only one model is
+          // ever resident
           const depthDone = 'gpu' in navigator ? estimateDepthMap() : Promise.resolve();
-          depthDone.then(() => estimateSceneLabels());
+          if (!lowMemory) {
+            depthDone.then(() => estimateSceneLabels());
+          }
         })
         .catch(() => {
           setImageName(null);
@@ -447,7 +458,7 @@ export function App() {
           sourceCanvasRef.current = null;
         });
     },
-    [detectFaces, estimateDepthMap, estimateSceneLabels]
+    [detectFaces, estimateDepthMap, estimateSceneLabels, lowMemory]
   );
 
   const handleSetFocus = useCallback(

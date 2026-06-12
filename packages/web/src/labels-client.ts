@@ -1,8 +1,14 @@
 import type { LabelImage } from '@flow-lines/core';
 import type { LabelsRequest, LabelsResponse } from './labels-worker';
 
-/** The model resizes inputs to 512px anyway — feeding more wastes memory */
-const MAX_INPUT_DIM = 512;
+/**
+ * The post-processing step upsamples the full 150-class logits tensor to
+ * the *input* size — at 512px that is a single ~157MB allocation, which
+ * iOS WebKit kills the tab over. The core SemanticMap downsamples labels
+ * to <=256 anyway, so a 256px input loses nothing and cuts that spike to
+ * ~39MB. (The model still infers at its native 512 internally.)
+ */
+const MAX_INPUT_DIM = 256;
 
 /** Downscale to the model's working size before encoding */
 function toInputDataURL(source: HTMLCanvasElement): string {

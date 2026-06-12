@@ -30,9 +30,28 @@ async function configureEnv(): Promise<typeof import('@huggingface/transformers'
   return transformers;
 }
 
+/** iOS WebKit (incl. iPadOS reporting as MacIntel) — tight memory budgets */
+function isIOSWebKit(): boolean {
+  const nav = navigator as Navigator & { platform?: string; maxTouchPoints?: number };
+  return (
+    /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (nav.platform === 'MacIntel' && (nav.maxTouchPoints ?? 0) > 1)
+  );
+}
+
 async function createPipeline(): Promise<SegmentationPipeline> {
   const transformers = await configureEnv();
   const { pipeline } = transformers;
+
+  // Phones: single WASM thread — every saved allocation matters when the
+  // OS kills pages over memory (same policy as the depth pipeline)
+  if (isIOSWebKit()) {
+    const onnxEnv = transformers.env.backends?.onnx?.wasm as
+      | { numThreads?: number }
+      | undefined;
+    if (onnxEnv) onnxEnv.numThreads = 1;
+  }
+
   const failures: string[] = [];
 
   for (const attempt of ATTEMPTS) {
