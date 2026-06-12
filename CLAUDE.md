@@ -153,8 +153,11 @@ pnpm monorepo:
   regression suite: renders the photo bank through every preset into one
   HTML contact sheet. Judge any tuning change against the whole album.
   `photo.depth.png` / `photo.normal.png` / `photo.labels.png` sidecars
-  are applied automatically (`node scripts/segment-labels.mjs` generates
-  the labels — needs huggingface.co, so run it outside the sandbox).
+  are applied automatically. `node scripts/segment-labels.mjs` generates
+  the label sidecars — it needs huggingface.co, which the sandbox blocks,
+  but the `Label Sidecars` workflow (`.github/workflows/labels.yml`) runs
+  it on every push that touches the photo bank or the script and commits
+  the results, so new test images get labeled by pushing them.
 - Web flows are verified with headless Chromium (preinstalled at
   `/opt/pw-browsers/chromium_headless_shell-*/chrome-linux/headless_shell`;
   launch with `--ignore-certificate-errors` in the sandbox).
