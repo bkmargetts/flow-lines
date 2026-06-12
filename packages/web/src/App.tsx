@@ -354,9 +354,11 @@ export function App() {
     setDepthError(null);
   }, []);
 
-  const estimateSceneLabels = useCallback(() => {
+  // Resolves when the labels worker has finished and been torn down (even
+  // on failure), so the heavier depth job can be sequenced behind it
+  const estimateSceneLabels = useCallback((): Promise<void> => {
     const canvas = sourceCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return Promise.resolve();
 
     const token = ++labelTokenRef.current;
     setLabelStatus('loading');
@@ -364,7 +366,7 @@ export function App() {
     // Breadcrumb: if the page dies during inference, the next visit
     // detects it, enters low-memory mode, and stops auto-running labels
     localStorage.setItem(LABELING_FLAG, '1');
-    import('./labels-client')
+    return import('./labels-client')
       .then(({ estimateLabelsInWorker }) => estimateLabelsInWorker(canvas))
       .then((labels) => {
         localStorage.removeItem(LABELING_FLAG);
@@ -442,15 +444,16 @@ export function App() {
           setLabelError(null);
           // Effortless portraits: look for faces as soon as a photo lands
           detectFaces();
-          // 3D form needs the depth model (~25MB on first use); run it
-          // automatically only where WebGPU makes it fast. Scene labels
-          // (~5MB, WASM) run everywhere except devices that already
-          // crashed once, sequenced behind depth so only one model is
-          // ever resident
-          const depthDone = 'gpu' in navigator ? estimateDepthMap() : Promise.resolve();
-          if (!lowMemory) {
-            depthDone.then(() => estimateSceneLabels());
-          }
+          // Scene labels (~5MB, WASM) run first, then depth (~25MB,
+          // auto only where the device reports WebGPU): smallest model
+          // first, never two model workers alive at once, and labeling
+          // never overlaps the heavy depth-applied re-render. iPhones
+          // report WebGPU but run depth on WASM — stacking SegFormer
+          // inference on top of that re-render killed the tab
+          const labelsDone = lowMemory ? Promise.resolve() : estimateSceneLabels();
+          labelsDone.then(() => {
+            if ('gpu' in navigator) estimateDepthMap();
+          });
         })
         .catch(() => {
           setImageName(null);

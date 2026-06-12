@@ -38,7 +38,7 @@ pnpm monorepo:
   memory (phones kill tabs over blocked main threads or resident models).
   In-browser ML: MediaPipe interactive segmentation + face landmarks,
   Depth Anything V2 and SegFormer-b0 scene labels via transformers.js
-  (the labels worker runs on upload, sequenced behind depth so only one
+  (the labels worker runs on upload, sequenced before depth so only one
   model is ever resident) — WASM runtimes are copied from
   node_modules into the build (`scripts/copy-mediapipe-wasm.mjs`) and
   served from our origin; model weights come from Google/HF CDNs at
