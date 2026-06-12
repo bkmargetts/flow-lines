@@ -23,11 +23,23 @@ async function configureEnv(): Promise<typeof import('@huggingface/transformers'
 
   // Never probe for local models (avoids 404s against our own origin),
   // and load the ONNX WASM runtime from our origin — bundlers don't ship
-  // it, and CDN fallbacks are exactly what broke the MediaPipe models
+  // it, and CDN fallbacks are exactly what broke the MediaPipe models.
+  // The runtime is pinned to the PLAIN build by explicit file paths:
+  // left to its own devices ort loads the asyncify build on browsers
+  // without JSPI (all of iOS) — 23.6MB vs 12.9MB, roughly double the
+  // WASM-compile memory spike and 2x slower inference, measured. This
+  // worker only ever runs the WASM EP, so the async-capable builds buy
+  // nothing here
   transformers.env.allowLocalModels = false;
-  const onnxEnv = transformers.env.backends?.onnx?.wasm as { wasmPaths?: string } | undefined;
+  const onnxEnv = transformers.env.backends?.onnx?.wasm as
+    | { wasmPaths?: string | { wasm?: string; mjs?: string } }
+    | undefined;
   if (onnxEnv) {
-    onnxEnv.wasmPaths = `${import.meta.env.BASE_URL}ort-wasm/`;
+    const base = `${import.meta.env.BASE_URL}ort-wasm/`;
+    onnxEnv.wasmPaths = {
+      wasm: `${base}ort-wasm-simd-threaded.wasm`,
+      mjs: `${base}ort-wasm-simd-threaded.mjs`,
+    };
   }
 
   return transformers;
@@ -77,11 +89,13 @@ async function createPipeline(): Promise<SegmentationPipeline> {
 
       // The checkpoint's processor resizes everything to 512×512 before
       // inference; encoder attention and the decoder's four-stage concat
-      // scale quadratically with that. Phones drop to 320/384 — labels
-      // gate mark dispatch through ~1%-of-frame feathered confidence, so
-      // the lost boundary precision is below what the renderer can see
+      // scale quadratically with that. Phones drop to 256/320 (measured:
+      // same classes detected as 512 on the test bank, ~40% lower peak)
+      // — labels gate mark dispatch through ~1%-of-frame feathered
+      // confidence, so the lost boundary precision is below what the
+      // renderer can see
       if (mobile) {
-        const dim = isIOSWebKit() ? 320 : 384;
+        const dim = isIOSWebKit() ? 256 : 320;
         const proc = (
           pipe as unknown as {
             processor?: { image_processor?: { size?: { height: number; width: number } } };

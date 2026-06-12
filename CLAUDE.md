@@ -38,8 +38,11 @@ pnpm monorepo:
   memory (phones kill tabs over blocked main threads or resident models).
   In-browser ML: MediaPipe interactive segmentation + face landmarks,
   Depth Anything V2 and SegFormer-b0 scene labels via transformers.js
-  (the labels worker runs on upload, sequenced before depth so only one
-  model is ever resident) — WASM runtimes are copied from
+  (auto-ML waits for the first render to finish, then labels, then
+  depth — instantiating the ONNX runtime costs a ~250MB transient
+  regardless of model size, so it must never share its peak with the
+  render or another model; WASM-only sessions pin the plain ort build,
+  as the asyncify build iOS would otherwise get doubles that spike) — WASM runtimes are copied from
   node_modules into the build (`scripts/copy-mediapipe-wasm.mjs`) and
   served from our origin; model weights come from Google/HF CDNs at
   runtime with graceful fallback chains (WebGPU→WASM, fp16→q8).

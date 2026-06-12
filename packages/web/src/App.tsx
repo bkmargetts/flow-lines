@@ -242,6 +242,10 @@ export function App() {
   const portraitTokenRef = useRef(0);
   const depthTokenRef = useRef(0);
   const labelTokenRef = useRef(0);
+  // Auto-ML staggering: set on upload, consumed once the first render
+  // has been seen to start and finish
+  const autoMlPendingRef = useRef(false);
+  const renderSeenRef = useRef(false);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -444,16 +448,10 @@ export function App() {
           setLabelError(null);
           // Effortless portraits: look for faces as soon as a photo lands
           detectFaces();
-          // Scene labels (~5MB, WASM) run first, then depth (~25MB,
-          // auto only where the device reports WebGPU): smallest model
-          // first, never two model workers alive at once, and labeling
-          // never overlaps the heavy depth-applied re-render. iPhones
-          // report WebGPU but run depth on WASM — stacking SegFormer
-          // inference on top of that re-render killed the tab
-          const labelsDone = lowMemory ? Promise.resolve() : estimateSceneLabels();
-          labelsDone.then(() => {
-            if ('gpu' in navigator) estimateDepthMap();
-          });
+          // Heavier ML (scene labels, then depth) is deferred until the
+          // first render completes — see the auto-ML effect below
+          autoMlPendingRef.current = true;
+          renderSeenRef.current = false;
         })
         .catch(() => {
           setImageName(null);
@@ -587,6 +585,27 @@ export function App() {
         }
       });
   }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap, labelMap, lowMemory]);
+
+  // Auto ML (scene labels ~5MB, then depth ~25MB where the device
+  // reports WebGPU) waits for the first render to finish, then runs the
+  // models strictly one after another. Instantiating the ONNX runtime
+  // costs a ~250MB+ transient regardless of model size (measured:
+  // session creation dominates, inference is the smaller term), so it
+  // must never share its peak with the pen-ink render or another model
+  // worker — on phones the sum is a tab kill where each alone fits
+  useEffect(() => {
+    if (mode !== 'image') return;
+    if (isRendering) {
+      renderSeenRef.current = true;
+      return;
+    }
+    if (!autoMlPendingRef.current || !renderSeenRef.current) return;
+    autoMlPendingRef.current = false;
+    const labelsDone = lowMemory ? Promise.resolve() : estimateSceneLabels();
+    labelsDone.then(() => {
+      if ('gpu' in navigator) estimateDepthMap();
+    });
+  }, [mode, isRendering, lowMemory, estimateSceneLabels, estimateDepthMap]);
 
   const generated = useMemo(() => {
     if (mode === 'image') {
