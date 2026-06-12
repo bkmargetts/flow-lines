@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import { decode as decodeJpeg } from 'jpeg-js';
 import { pipeline, RawImage } from '@huggingface/transformers';
-import { adeNameToSemantic, semanticId } from '../packages/core/dist/index.js';
+import { adeNameToSemantic, labelsFromAdeMasks } from '../packages/core/dist/index.js';
 
 const MODEL = 'Xenova/segformer-b0-finetuned-ade-512-512';
 const root = resolve(fileURLToPath(import.meta.url), '..', '..');
@@ -79,26 +79,7 @@ for (const file of pending) {
   // Semantic segmentation returns one binary mask per detected class,
   // disjoint, at the input resolution
   const results = await segment(image);
-
-  const { width, height } = results[0]?.mask ?? image;
-  const ids = new Uint8Array(width * height);
-  const counts = new Map();
-
-  for (const { label, mask } of results) {
-    const id = semanticId(adeNameToSemantic(label));
-    if (id === 0) continue;
-    let n = 0;
-    for (let i = 0; i < ids.length; i++) {
-      if (mask.data[i] > 127) {
-        ids[i] = id;
-        n++;
-      }
-    }
-    if (n > 0) {
-      const sem = adeNameToSemantic(label);
-      counts.set(sem, (counts.get(sem) ?? 0) + n / ids.length);
-    }
-  }
+  const { width, height, data: ids } = labelsFromAdeMasks(results);
 
   const png = new PNG({ width, height });
   for (let i = 0; i < ids.length; i++) {
@@ -109,6 +90,14 @@ for (const file of pending) {
   }
   writeFileSync(labelPath(file), PNG.sync.write(png));
 
+  const counts = new Map();
+  for (const { label, mask } of results) {
+    const sem = adeNameToSemantic(label);
+    if (sem === 'unknown') continue;
+    let n = 0;
+    for (let i = 0; i < mask.data.length; i++) if (mask.data[i] > 127) n++;
+    if (n > 0) counts.set(sem, (counts.get(sem) ?? 0) + n / ids.length);
+  }
   const summary = [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([label, frac]) => `${label} ${(frac * 100).toFixed(0)}%`)

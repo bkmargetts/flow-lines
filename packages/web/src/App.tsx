@@ -5,6 +5,7 @@ import {
   toSVG,
   type FlowLinesOptions,
   type GrayscaleImage,
+  type LabelImage,
   type PortraitOptions,
   type SVGOptions,
   type Point,
@@ -63,8 +64,10 @@ export interface InkSettings {
   featureLines: boolean;
   textureStrokes: number;
   textureStyle: 'ticks' | 'stipple' | 'scribble';
-  skyStipple: boolean;
-  calmWater: boolean;
+  /** 'auto' defers to the scene labels: stipple when a sky is in frame */
+  skyStipple: boolean | 'auto';
+  /** 'auto' defers to the scene labels: calm water when water is in frame */
+  calmWater: boolean | 'auto';
   richBlacks: boolean;
   counterchange: number;
   crossContour: boolean;
@@ -97,6 +100,7 @@ function detectLowMemory(): boolean {
 export type SegmentStatus = 'idle' | 'loading' | 'error';
 export type PortraitStatus = 'idle' | 'loading' | 'error' | 'none';
 export type DepthStatus = 'idle' | 'loading' | 'error';
+export type LabelStatus = 'idle' | 'loading' | 'error';
 
 export interface PortraitState {
   faceCount: number;
@@ -150,8 +154,8 @@ const defaultInkSettings: InkSettings = {
   featureLines: true,
   textureStrokes: 0.6,
   textureStyle: 'ticks',
-  skyStipple: false,
-  calmWater: false,
+  skyStipple: 'auto',
+  calmWater: 'auto',
   richBlacks: true,
   counterchange: 0.5,
   crossContour: false,
@@ -222,6 +226,9 @@ export function App() {
   const [depthMap, setDepthMap] = useState<GrayscaleImage | null>(null);
   const [depthStatus, setDepthStatus] = useState<DepthStatus>('idle');
   const [depthError, setDepthError] = useState<string | null>(null);
+  const [labelMap, setLabelMap] = useState<LabelImage | null>(null);
+  const [labelStatus, setLabelStatus] = useState<LabelStatus>('idle');
+  const [labelError, setLabelError] = useState<string | null>(null);
   const [preset, setPreset] = useState('classic');
   const [lowMemory, setLowMemory] = useState(detectLowMemory);
   const [inkRender, setInkRender] = useState<RenderedSVG | null>(null);
@@ -231,6 +238,7 @@ export function App() {
   const segmentTokenRef = useRef(0);
   const portraitTokenRef = useRef(0);
   const depthTokenRef = useRef(0);
+  const labelTokenRef = useRef(0);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -304,14 +312,17 @@ export function App() {
       });
   }, []);
 
-  const estimateDepthMap = useCallback(() => {
+  // Resolves when the depth worker has finished and been torn down (even
+  // on failure), so other model runs can be sequenced behind it — phones
+  // can't afford two resident models at once
+  const estimateDepthMap = useCallback((): Promise<void> => {
     const canvas = sourceCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return Promise.resolve();
 
     const token = ++depthTokenRef.current;
     setDepthStatus('loading');
     setDepthError(null);
-    import('./depth-client')
+    return import('./depth-client')
       .then(({ estimateDepthInWorker }) => estimateDepthInWorker(canvas))
       .then((depth) => {
         if (token !== depthTokenRef.current) return;
@@ -338,6 +349,35 @@ export function App() {
     setDepthMap(null);
     setDepthStatus('idle');
     setDepthError(null);
+  }, []);
+
+  const estimateSceneLabels = useCallback(() => {
+    const canvas = sourceCanvasRef.current;
+    if (!canvas) return;
+
+    const token = ++labelTokenRef.current;
+    setLabelStatus('loading');
+    setLabelError(null);
+    import('./labels-client')
+      .then(({ estimateLabelsInWorker }) => estimateLabelsInWorker(canvas))
+      .then((labels) => {
+        if (token !== labelTokenRef.current) return;
+        setLabelMap(labels);
+        setLabelStatus('idle');
+      })
+      .catch((err) => {
+        if (token !== labelTokenRef.current) return;
+        setLabelMap(null);
+        setLabelStatus('error');
+        setLabelError(err instanceof Error ? err.message : String(err));
+      });
+  }, []);
+
+  const clearLabels = useCallback(() => {
+    labelTokenRef.current++;
+    setLabelMap(null);
+    setLabelStatus('idle');
+    setLabelError(null);
   }, []);
 
   const runIsolation = useCallback((points: Point[]) => {
@@ -389,13 +429,17 @@ export function App() {
           setPortraitStatus('idle');
           setDepthMap(null);
           setDepthStatus('idle');
+          setLabelMap(null);
+          setLabelStatus('idle');
+          setLabelError(null);
           // Effortless portraits: look for faces as soon as a photo lands
           detectFaces();
           // 3D form needs the depth model (~25MB on first use); run it
-          // automatically only where WebGPU makes it fast
-          if ('gpu' in navigator) {
-            estimateDepthMap();
-          }
+          // automatically only where WebGPU makes it fast. Scene labels
+          // (~5MB, WASM) run everywhere, sequenced behind depth so only
+          // one model is ever resident
+          const depthDone = 'gpu' in navigator ? estimateDepthMap() : Promise.resolve();
+          depthDone.then(() => estimateSceneLabels());
         })
         .catch(() => {
           setImageName(null);
@@ -403,7 +447,7 @@ export function App() {
           sourceCanvasRef.current = null;
         });
     },
-    [detectFaces, estimateDepthMap]
+    [detectFaces, estimateDepthMap, estimateSceneLabels]
   );
 
   const handleSetFocus = useCallback(
@@ -472,13 +516,15 @@ export function App() {
           wobble: inkSettings.wobble,
           textureStrokes: inkSettings.textureStrokes,
           textureStyle: inkSettings.textureStyle,
-          skyStipple: inkSettings.skyStipple,
-          calmWater: inkSettings.calmWater,
+          // 'auto' leaves the option unset so the scene labels decide
+          skyStipple: inkSettings.skyStipple === 'auto' ? undefined : inkSettings.skyStipple,
+          calmWater: inkSettings.calmWater === 'auto' ? undefined : inkSettings.calmWater,
           crossContour: inkSettings.crossContour,
           facetHatch: inkSettings.facetHatch,
           maxStrokeLength: inkSettings.maxStrokeLength,
           fieldSmoothing: inkSettings.fieldSmoothing,
           depthMap: depthMap ?? undefined,
+          labelMap: labelMap ?? undefined,
           formStrength: inkSettings.formStrength,
           depthIsolation: inkSettings.depthIsolation,
           autoStyle: inkSettings.autoStyle,
@@ -526,7 +572,7 @@ export function App() {
           setIsRendering(false);
         }
       });
-  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap, lowMemory]);
+  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap, labelMap, lowMemory]);
 
   const generated = useMemo(() => {
     if (mode === 'image') {
@@ -623,6 +669,11 @@ export function App() {
             depthMap={depthMap}
             depthStatus={depthStatus}
             depthError={depthError}
+            labelMap={labelMap}
+            labelStatus={labelStatus}
+            labelError={labelError}
+            estimateSceneLabels={estimateSceneLabels}
+            clearLabels={clearLabels}
             lowMemory={lowMemory}
             disableLowMemory={() => {
               localStorage.removeItem(LOW_MEM_FLAG);

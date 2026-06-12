@@ -40,8 +40,9 @@ export {
   semanticId,
   normalizeAdeName,
   adeNameToSemantic,
+  labelsFromAdeMasks,
 } from './semantic-map.js';
-export type { SemanticLabel, LabelImage } from './semantic-map.js';
+export type { SemanticLabel, LabelImage, NamedMask } from './semantic-map.js';
 
 // Hand-drawn styling
 export { applyHandDrawnStyle } from './hand-drawn.js';

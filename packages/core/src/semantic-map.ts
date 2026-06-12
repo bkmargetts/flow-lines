@@ -113,6 +113,35 @@ export function adeNameToSemantic(name: string): SemanticLabel {
   return ADE20K_TO_SEMANTIC[normalizeAdeName(name)] ?? 'object';
 }
 
+/** One binary class mask from a segmentation pipeline, with its class name */
+export interface NamedMask {
+  label: string;
+  mask: { width: number; height: number; data: Uint8Array | Uint8ClampedArray };
+}
+
+/**
+ * Composite the per-class masks an ADE20K segmentation pipeline returns
+ * (disjoint, full input resolution) into a taxonomy id raster.
+ */
+export function labelsFromAdeMasks(masks: NamedMask[]): LabelImage {
+  if (masks.length === 0) {
+    return { width: 1, height: 1, data: new Uint8Array(1) };
+  }
+
+  const { width, height } = masks[0].mask;
+  const data = new Uint8Array(width * height);
+
+  for (const { label, mask } of masks) {
+    const id = semanticId(adeNameToSemantic(label));
+    if (id === 0) continue;
+    for (let i = 0; i < data.length; i++) {
+      if (mask.data[i] > 127) data[i] = id;
+    }
+  }
+
+  return { width, height, data };
+}
+
 // Confidence planes live at a small fixed resolution: the model runs at
 // ~512px, so nothing finer exists to preserve, and 8 planes at 256 max-dim
 // stay well under phone memory budgets.
