@@ -14,6 +14,7 @@ import {
   type DirectionMap,
   type FlowLinesOptions,
   type GrayscaleImage,
+  type LabelImage,
   type PenInkOptions,
   type SVGOptions,
 } from '@flow-lines/core';
@@ -54,6 +55,20 @@ function loadDirectionMap(path: string): DirectionMap {
   }
 
   return { width, height, x, y };
+}
+
+/**
+ * Load a semantic label raster: the red channel carries the taxonomy id
+ * directly (0 unknown, 1 sky, 2 water, 3 foliage, 4 ground, 5 building,
+ * 6 person, 7 object), e.g. from scripts/segment-labels.mjs
+ */
+function loadLabelImage(path: string): LabelImage {
+  const { data, width, height } = loadRGBA(path);
+  const labels = new Uint8Array(width * height);
+  for (let i = 0; i < width * height; i++) {
+    labels[i] = data[i * 4];
+  }
+  return { width, height, data: labels };
 }
 
 /**
@@ -237,8 +252,10 @@ program
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px (0 = ruler-straight)', '0.8')
   .option('--texture <number>', 'Render fur/foliage as short tick strokes (0-1)', '0.6')
   .option('--texture-style <style>', 'Mark style for textured regions: ticks|stipple|scribble', 'ticks')
-  .option('--sky-stipple', 'Stipple smooth light regions (open skies) instead of hatching')
-  .option('--calm-water', 'Render smooth lower-frame regions as long broken horizontal strokes')
+  .option('--sky-stipple', 'Stipple smooth light regions (open skies) instead of hatching (auto with --label-image)')
+  .option('--no-sky-stipple', 'Never stipple the sky, even when labels report one')
+  .option('--calm-water', 'Render smooth water regions as long broken horizontal strokes (auto with --label-image)')
+  .option('--no-calm-water', 'Never use the calm-water treatment, even when labels report water')
   .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
   .option(
     '--counterchange <number>',
@@ -266,6 +283,10 @@ program
   .option(
     '--normal-image <file>',
     'Normal/flow map: R/G channels = X/Y stroke direction (128 = neutral), e.g. from DSINE'
+  )
+  .option(
+    '--label-image <file>',
+    'Semantic label raster: red channel = taxonomy id (0 unknown, 1 sky, 2 water, 3 foliage, 4 ground, 5 building, 6 person, 7 object), e.g. from scripts/segment-labels.mjs'
   )
   .option('--form-strength <number>', 'How strongly depth steers stroke orientation (0-1)', '0.8')
   .option('--depth-isolation <number>', 'Fade far regions toward paper based on depth (0-1)', '0.5')
@@ -316,6 +337,9 @@ program
       flowMap: options.normalImage
         ? loadDirectionMap(resolve(process.cwd(), options.normalImage))
         : undefined,
+      labelMap: options.labelImage
+        ? loadLabelImage(resolve(process.cwd(), options.labelImage))
+        : undefined,
       depthIsolation: parseFloat(options.depthIsolation),
       outlinePasses: parseInt(options.outlinePasses, 10),
       optimize: options.optimize,
@@ -339,8 +363,10 @@ program
       wobble: parseFloat(options.wobble),
       textureStrokes: parseFloat(options.texture),
       textureStyle: options.textureStyle as 'ticks' | 'stipple' | 'scribble',
-      skyStipple: options.skyStipple ?? false,
-      calmWater: options.calmWater ?? false,
+      // Left undefined (neither --x nor --no-x), these auto-enable when
+      // the label map reports the material
+      skyStipple: options.skyStipple,
+      calmWater: options.calmWater,
       richBlacks: options.richBlacks,
       counterchange: parseFloat(options.counterchange),
       crossContour: options.crossContour ?? false,
