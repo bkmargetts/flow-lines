@@ -34,8 +34,14 @@ pnpm monorepo:
 - **`packages/web`** — React app (GitHub Pages). Heavy work stays off the
   main thread: rendering runs in a persistent worker with a latest-wins
   queue (`render-worker.ts`/`render-client.ts`); depth estimation runs in
-  a **disposable** worker terminated after each job to release model
-  memory (phones kill tabs over blocked main threads or resident models).
+  a **persistent, reused** worker that loads the model once and keeps it
+  resident across photos (`depth-worker.ts`/`depth-client.ts`). It used to
+  be disposable (terminated per job), but re-creating the ONNX runtime each
+  photo re-paid the ~250MB session-creation spike, and iOS WebKit doesn't
+  reclaim a terminated worker's WASM memory promptly — the spikes stacked
+  and OOM'd Safari after a few photos. One resident worker keeps memory
+  flat; the heavy WASM inference still stays off the UI thread, and the one
+  shared ONNX session is run serially (sessions aren't re-entrant).
   In-browser ML: MediaPipe interactive segmentation + face landmarks,
   Depth Anything V2 and SegFormer-b0 scene labels via transformers.js
   (auto-ML waits for the first render to finish, then labels, then

@@ -16,12 +16,9 @@ const ATTEMPTS: { model: string; device: 'webgpu' | 'wasm'; dtype: 'fp16' | 'q8'
 /** The model resizes inputs to ~518px anyway — feeding more wastes memory */
 export const MAX_INPUT_DIM = 640;
 
-type DepthPipeline = ((input: string) => Promise<{
+type DepthPipeline = (input: string) => Promise<{
   depth: { width: number; height: number; data: Uint8Array | Uint8ClampedArray };
-}>) & {
-  /** transformers.js Pipeline.dispose() — tears down the ONNX session */
-  dispose?: () => Promise<void>;
-};
+}>;
 
 interface ActivePipeline {
   pipe: DepthPipeline;
@@ -145,43 +142,45 @@ function toGrayscale(depth: {
   return { width: depth.width, height: depth.height, data };
 }
 
-/**
- * Estimate a relative depth map (bright = near) for an already-downscaled
- * input data URL. Runs wherever it is called — the app calls it inside a
- * dedicated worker (see depth-worker.ts) so heavy WASM inference never
- * blocks the page and its memory is fully released afterwards.
- */
-export async function estimateDepth(input: string): Promise<GrayscaleImage> {
+// Inference runs against a single cached ONNX session reused across photos
+// (see depth-worker.ts — the worker is persistent now). ONNX sessions are
+// not safe to run() concurrently, and the app can fire a new depth job
+// before the previous resolves, so serialize calls onto one chain.
+let inferenceLock: Promise<unknown> = Promise.resolve();
+
+async function runInference(input: string): Promise<GrayscaleImage> {
   let active = await getPipeline();
 
   try {
-    try {
+    const result = await active.pipe(input);
+    return toGrayscale(result.depth);
+  } catch (err) {
+    // GPU memory can also run out at inference time, not just at model
+    // load — rebuild on plain WASM and try once more
+    if (active.device === 'webgpu') {
+      pipePromise = null;
+      active = await getPipeline(true);
       const result = await active.pipe(input);
       return toGrayscale(result.depth);
-    } catch (err) {
-      // GPU memory can also run out at inference time, not just at model
-      // load — rebuild on plain WASM and try once more
-      if (active.device === 'webgpu') {
-        pipePromise = null;
-        active = await getPipeline(true);
-        const result = await active.pipe(input);
-        return toGrayscale(result.depth);
-      }
-      throw err;
     }
-  } finally {
-    // The worker that calls this is one-shot (see depth-worker.ts): tear
-    // the ONNX session down synchronously here so its WASM memory is freed
-    // before the worker is terminated, instead of relying on WebKit's lazy
-    // reclamation of dead workers — that lag is what stacks up across
-    // photos and OOMs iOS. Optional chaining keeps it a no-op if the
-    // installed transformers build lacks dispose(); best-effort, so a
-    // disposal hiccup never masks the real result or error.
-    try {
-      await active.pipe.dispose?.();
-    } catch {
-      /* ignore — disposal is cleanup only */
-    }
-    pipePromise = null;
+    throw err;
   }
+}
+
+/**
+ * Estimate a relative depth map (bright = near) for an already-downscaled
+ * input data URL. Runs wherever it is called — the app calls it inside a
+ * persistent worker (see depth-worker.ts) that loads the model once and
+ * reuses it for every photo, so the ~250MB session-creation spike is paid
+ * a single time instead of re-paid (and stacked) per photo.
+ */
+export function estimateDepth(input: string): Promise<GrayscaleImage> {
+  const run = inferenceLock.then(
+    () => runInference(input),
+    () => runInference(input)
+  );
+  // Keep the chain alive but swallow rejections so one failure doesn't
+  // wedge every later job.
+  inferenceLock = run.catch(() => {});
+  return run;
 }
