@@ -58,6 +58,8 @@ export interface InkSettings {
   maskStrength: number;
   toneGamma: number;
   valueBands: number;
+  /** Composition-aware value massing, 0..1 (needs valueBands >= 2) */
+  massing: number;
   hatchPatchiness: number;
   workingSize: number;
   skinLightening: number;
@@ -151,6 +153,7 @@ const defaultInkSettings: InkSettings = {
   maskStrength: 1,
   toneGamma: 1.3,
   valueBands: 4,
+  massing: 0.5,
   hatchPatchiness: 0.35,
   workingSize: 720,
   skinLightening: 0.55,
@@ -543,6 +546,7 @@ export function App() {
           detailEmphasis: inkSettings.detailEmphasis,
           toneGamma: inkSettings.toneGamma,
           valueBands: inkSettings.valueBands,
+          massing: inkSettings.massing,
           hatchPatchiness: inkSettings.hatchPatchiness,
           workingSize: Math.min(inkSettings.workingSize, cap),
           layers: lowMemory ? Math.min(2, inkSettings.layers) : inkSettings.layers,

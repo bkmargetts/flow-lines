@@ -581,6 +581,22 @@ export class ImageField {
   }
 
   /**
+   * Replace the posterized value plan with a composed one (see
+   * value-plan.ts). The raster must match the working-tone resolution
+   * returned by getMassRaster; everything downstream that reads
+   * getMassDarkness then sees the composed plan.
+   */
+  setMassPlan(data: Float32Array): void {
+    const { width, height } = this.tone;
+    if (data.length !== width * height) {
+      throw new Error(
+        `mass plan length ${data.length} does not match working raster ${width}x${height}`
+      );
+    }
+    this.massDarkness = { width, height, data };
+  }
+
+  /**
    * Posterized large-scale darkness in [0, 1] at canvas coordinates —
    * the committed value band for this region. Falls back to raw darkness
    * when no value plan was requested

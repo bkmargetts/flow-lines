@@ -12,6 +12,7 @@ import { traceIsoContours } from './iso-contours.js';
 import { optimizePlot } from './optimize.js';
 import { createNoise } from './noise.js';
 import { SemanticMap, type LabelImage } from './semantic-map.js';
+import { composeMassPlan } from './value-plan.js';
 
 /** Drop a fraction of a polyline's arc length from each end */
 function trimPolyline(points: Point[], fraction: number): Point[] {
@@ -93,6 +94,16 @@ export interface PenInkOptions {
    * 3-5 reads as deliberate; 0 disables (default 0)
    */
   valueBands?: number;
+  /**
+   * Composition-aware value massing, 0..1. Before the value plan is banded,
+   * tone is *redistributed by compositional role* rather than reproduced
+   * from photographic luminance: the ground around a subject swells darker
+   * to set it off (figure/ground), values are committed apart from the mid
+   * (a few decisive shapes, not a grey wash), and confident skies are held
+   * light. Needs valueBands >= 2; subject-ness comes from a subject mask,
+   * focal points, or person/object labels. 0 disables (default 0)
+   */
+  massing?: number;
   /**
    * Build cross-hatch layers up in hand-sized patches with gaps instead
    * of continuous woven coverage, 0-1. Deeper layers get patchier —
@@ -550,6 +561,7 @@ export function imageToPenInk(
   const calmWater = options.calmWater ?? (semantic ? semantic.has('water') : false);
   const richBlacks = options.richBlacks ?? true;
   const valueBands = Math.round(options.valueBands ?? 0);
+  const massing = Math.max(0, Math.min(1, options.massing ?? 0));
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
   const facetHatch = options.facetHatch ?? false;
   const crossContour = options.crossContour ?? false;
@@ -598,6 +610,51 @@ export function imageToPenInk(
           return 1 - portraitMaps.skinLightening * skin;
         }
       : null;
+
+  // Composition-aware value massing: redistribute the value plan by
+  // compositional role before it drives spacing — figure/ground swell,
+  // committed values, protected sky (see composeMassPlan). Needs a value
+  // plan to act on; subject-ness is drawn from the mask, focal points, and
+  // person/object labels (the signals that say "this is the subject").
+  if (massing > 0 && field.hasMassTone()) {
+    const mask = options.subjectMask;
+    const maskScaleX = mask ? mask.width / width : 0;
+    const maskScaleY = mask ? mask.height / height : 0;
+    const focusList = Array.isArray(options.focus)
+      ? options.focus
+      : options.focus
+        ? [options.focus]
+        : [];
+
+    const subjectAt = (x: number, y: number): number => {
+      let s = 0;
+      if (mask) s = Math.max(s, sampleBilinear(mask, x * maskScaleX, y * maskScaleY));
+      if (semantic) {
+        // A person is the subject; an object usually is (a vase, a chair, a
+        // plate) but less certainly than a person, so it counts for less
+        s = Math.max(s, semantic.confidence(x, y, 'person'), 0.85 * semantic.confidence(x, y, 'object'));
+      }
+      for (const f of focusList) {
+        const falloff = Math.max(1, f.falloff ?? f.radius);
+        const t = Math.max(0, Math.min(1, (Math.hypot(x - f.x, y - f.y) - f.radius) / falloff));
+        s = Math.max(s, 1 - t * t * (3 - 2 * t));
+      }
+      return Math.min(1, s);
+    };
+
+    const { raster, scaleX, scaleY } = field.getMassRaster();
+    const plan = composeMassPlan({
+      width: raster.width,
+      height: raster.height,
+      valueBands,
+      massing,
+      darknessAt: (rx, ry) => raster.data[ry * raster.width + rx],
+      subjectAt: (rx, ry) => subjectAt(rx / scaleX, ry / scaleY),
+      skyAt: (rx, ry) =>
+        semantic && skyStipple ? semantic.confidence(rx / scaleX, ry / scaleY, 'sky') : 0,
+    });
+    field.setMassPlan(plan);
+  }
 
   // With a value plan, the posterized mass tone decides the band a region
   // sits in; a little raw tone keeps marks alive within each band
