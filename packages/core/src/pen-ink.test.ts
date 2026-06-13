@@ -1417,6 +1417,68 @@ describe('semantic labels', () => {
   });
 });
 
+describe('composition-aware massing', () => {
+  // A light subject square (labeled object) on a flat mid-grey ground
+  const inSubject = (u: number, v: number) => u > 0.38 && u < 0.62 && v > 0.38 && v < 0.62;
+  const scene = makeImage(160, 160, (u, v) => (inSubject(u, v) ? 0.82 : 0.5));
+
+  const size = 64;
+  const objectLabels = new Uint8Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      objectLabels[y * size + x] = inSubject(x / size, y / size) ? 7 /* object */ : 0;
+    }
+  }
+  const labelMap = { width: size, height: size, data: objectLabels };
+
+  const base = {
+    width: 320, seed: 31, wobble: 0, drawOutlines: false, detailEmphasis: 0,
+    textureStrokes: 0, normalizeContrast: false, layers: 2, optimize: false,
+    contourHalo: 0, hatchAngle: -45, valueBands: 4, labelMap,
+  };
+
+  // Ground points just outside the subject's right edge (u=0.62 -> x=198)
+  const inGroundRing = (p: { x: number; y: number }) =>
+    p.x > 200 && p.x < 236 && p.y > 128 && p.y < 192;
+  const count = (lines: { points: { x: number; y: number }[] }[], pred: (p: { x: number; y: number }) => boolean) =>
+    lines.reduce((n, l) => n + l.points.filter(pred).length, 0);
+
+  it('swells ground tone behind a labeled subject', () => {
+    const off = imageToPenInk(scene, { ...base, massing: 0 });
+    const on = imageToPenInk(scene, { ...base, massing: 0.7 });
+
+    // The ground hugging the subject darkens (denser hatch) when massing is on
+    const offRing = count(off.lines, inGroundRing);
+    const onRing = count(on.lines, inGroundRing);
+    expect(offRing).toBeGreaterThan(0);
+    expect(onRing).toBeGreaterThan(offRing * 1.15);
+  });
+
+  it('leaves the light subject as clean paper either way', () => {
+    const inSubjectBand = (p: { x: number; y: number }) =>
+      p.x > 140 && p.x < 180 && p.y > 140 && p.y < 180;
+    const off = imageToPenInk(scene, { ...base, massing: 0 });
+    const on = imageToPenInk(scene, { ...base, massing: 0.7 });
+
+    // Massing darkens the ground, never the subject — it stays band-0 paper
+    expect(count(on.lines, inSubjectBand)).toBeLessThan(5);
+    expect(count(off.lines, inSubjectBand)).toBeLessThan(5);
+  });
+
+  it('is deterministic per seed', () => {
+    const a = imageToPenInk(scene, { ...base, massing: 0.6 });
+    const b = imageToPenInk(scene, { ...base, massing: 0.6 });
+    expect(a.lines.length).toBe(b.lines.length);
+  });
+
+  it('is inert without a value plan', () => {
+    const a = imageToPenInk(scene, { ...base, valueBands: 0, massing: 0 });
+    const b = imageToPenInk(scene, { ...base, valueBands: 0, massing: 0.7 });
+    // No value plan -> massing has nothing to act on -> identical output
+    expect(a.lines.length).toBe(b.lines.length);
+  });
+});
+
 describe('ImageField', () => {
   it('reports darkness from the image tone', () => {
     const field = new ImageField(halfDark, {

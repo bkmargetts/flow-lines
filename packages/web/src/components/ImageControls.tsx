@@ -20,6 +20,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       whiteCutoff: 0.08,
       toneGamma: 1.3,
       valueBands: 4,
+      massing: 0.5,
       hatchPatchiness: 0.35,
       detailEmphasis: 0.3,
       textureStrokes: 0.6,
@@ -43,6 +44,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxSpacing: 14,
       toneGamma: 1.7,
       valueBands: 0,
+      massing: 0,
       hatchPatchiness: 0.35,
       detailEmphasis: 0.35,
       textureStrokes: 0.4,
@@ -68,6 +70,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxSpacing: 12,
       toneGamma: 1.45,
       valueBands: 4,
+      massing: 0.4,
       hatchPatchiness: 0.35,
       detailEmphasis: 0.35,
       textureStrokes: 1,
@@ -92,6 +95,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxSpacing: 16,
       toneGamma: 1,
       valueBands: 4,
+      massing: 0.4,
       hatchPatchiness: 0.7,
       detailEmphasis: 0.45,
       textureStrokes: 0.7,
@@ -116,6 +120,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxSpacing: 24,
       toneGamma: 1.35,
       valueBands: 3,
+      massing: 0.5,
       hatchPatchiness: 0.6,
       detailEmphasis: 0.4,
       textureStrokes: 0.8,
@@ -141,6 +146,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       whiteCutoff: 0.15,
       toneGamma: 1.8,
       valueBands: 5,
+      massing: 0.5,
       hatchPatchiness: 0.5,
       detailEmphasis: 0.35,
       textureStrokes: 0.15,
@@ -411,6 +417,21 @@ export function ImageControls({
             />
             <p className="paint-hint">
               Commit tone to a few big value shapes, like an artist&apos;s value plan.
+            </p>
+          </div>
+
+          <div className="control-group">
+            <label>
+              Massing <span>{settings.valueBands < 2 ? 'needs value bands' : settings.massing.toFixed(2)}</span>
+            </label>
+            <input
+              type="range" min="0" max="1" step="0.05"
+              value={settings.massing}
+              disabled={settings.valueBands < 2}
+              onChange={(e) => updateSettings({ massing: parseFloat(e.target.value) })}
+            />
+            <p className="paint-hint">
+              Compose the value plan by role: swell ground behind the subject, commit lights and darks apart.
             </p>
           </div>
 

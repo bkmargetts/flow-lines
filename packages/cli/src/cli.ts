@@ -234,6 +234,11 @@ program
     '0'
   )
   .option(
+    '--massing <number>',
+    'Composition-aware value massing: redistribute tone by role (0-1, needs value bands)',
+    '0'
+  )
+  .option(
     '--hatch-patchiness <number>',
     'Build cross-hatch layers in patches with gaps (0-1)',
     '0.35'
@@ -352,6 +357,7 @@ program
       whiteCutoff: parseFloat(options.whiteCutoff),
       toneGamma: parseFloat(options.toneGamma),
       valueBands: parseInt(options.valueBands, 10),
+      massing: parseFloat(options.massing),
       hatchPatchiness: parseFloat(options.hatchPatchiness),
       hatchAngle: parseFloat(options.hatchAngle),
       followTone: options.followTone,
