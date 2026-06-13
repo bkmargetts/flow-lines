@@ -38,9 +38,10 @@ const PRESETS = {
     '--value-bands', '4', '--hatch-patchiness', '0.7', '--facet-hatch', '--massing', '0.4',
   ],
   sketch: [
-    '--layers', '2', '--min-spacing', '3.5', '--max-spacing', '20', '--tone-gamma', '1.4',
-    '--texture', '0.5', '--wobble', '1.8', '--value-bands', '3', '--hatch-patchiness', '0.6',
-    '--massing', '0.5',
+    '--layers', '1', '--min-spacing', '3.2', '--max-spacing', '24', '--tone-gamma', '1.35',
+    '--texture', '0.8', '--texture-style', 'scribble', '--wobble', '2.2', '--value-bands', '3',
+    '--hatch-patchiness', '0.6', '--detail', '0.4', '--white-cutoff', '0.1', '--hatch-angle', '-30',
+    '--field-smoothing', '3', '--massing', '0.5',
   ],
   etching: [
     '--layers', '2', '--min-spacing', '2.8', '--white-cutoff', '0.15', '--tone-gamma', '1.8',
