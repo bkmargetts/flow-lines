@@ -3,8 +3,10 @@
 //
 //   node scripts/gallery.mjs [inputDir] [outputDir]
 //
-// For photo.jpg, an optional photo.depth.png (bright = near) and
-// photo.normal.png (R/G = X/Y direction) are picked up automatically.
+// For photo.jpg, an optional photo.depth.png (bright = near),
+// photo.normal.png (R/G = X/Y direction) and photo.labels.png (semantic
+// taxonomy id in the red channel — see scripts/segment-labels.mjs) are
+// picked up automatically.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, extname, join, resolve } from 'node:path';
@@ -30,7 +32,7 @@ const PRESETS = {
     '--wobble', '1', '--working-size', '800', '--value-bands', '4',
   ],
   landscape: [
-    '--layers', '4', '--min-spacing', '1.8', '--max-spacing', '16', '--tone-gamma', '1',
+    '--layers', '5', '--min-spacing', '1.8', '--max-spacing', '16', '--tone-gamma', '1',
     '--texture', '0.7', '--wobble', '0.9', '--working-size', '800', '--white-cutoff', '0.14',
     '--hatch-angle', '0', '--sky-stipple', '--calm-water', '--max-stroke', '70', '--field-smoothing', '5',
     '--value-bands', '4', '--hatch-patchiness', '0.7', '--facet-hatch',
@@ -54,7 +56,7 @@ if (!existsSync(cli)) {
 
 const images = readdirSync(inputDir).filter(
   (f) =>
-    /\.(png|jpe?g)$/i.test(f) && !/\.(depth|normal)\.(png|jpe?g)$/i.test(f)
+    /\.(png|jpe?g)$/i.test(f) && !/\.(depth|normal|labels)\.(png|jpe?g)$/i.test(f)
 );
 
 if (images.length === 0) {
@@ -74,6 +76,7 @@ for (const image of images) {
 
   const depth = sidecar('depth');
   const normal = sidecar('normal');
+  const labels = sidecar('labels');
   const row = { image, renders: [] };
 
   for (const [preset, flags] of Object.entries(PRESETS)) {
@@ -83,11 +86,12 @@ for (const image of images) {
       '-i', join(inputDir, image),
       '-o', join(outputDir, out),
       '--seed', '42',
-      '--width', '700',
+      '--width', '900',
       ...flags,
     ];
     if (depth) args.push('--depth-image', depth, '--auto-style');
     if (normal) args.push('--normal-image', normal);
+    if (labels) args.push('--label-image', labels);
 
     process.stdout.write(`${image} × ${preset}… `);
     execFileSync(process.execPath, args, { stdio: ['ignore', 'ignore', 'inherit'] });
@@ -109,7 +113,7 @@ const html = `<!doctype html>
   figcaption { font-size: 12px; color: #555; padding-top: 6px; text-align: center; }
 </style></head><body>
 <h1>Flow Lines gallery</h1>
-<p>Seed 42, width 700. Depth/normal sidecars applied where present.</p>
+<p>Seed 42, width 900. Depth/normal sidecars applied where present.</p>
 ${cells
   .map(
     (row) => `<h2>${row.image}</h2>\n<div class="row">${row.renders

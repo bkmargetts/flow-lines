@@ -24,17 +24,25 @@ pnpm monorepo:
 - **`packages/core`** — all algorithms. Pure TypeScript, runs in Node and
   browser, **never imports ML or DOM**. ML results enter as plain data:
   grayscale rasters (`GrayscaleImage`), direction maps, normalized
-  polygons/polylines (`PortraitOptions`).
+  polygons/polylines (`PortraitOptions`), semantic label rasters
+  (`LabelImage`, taxonomy in `semantic-map.ts`).
 - **`packages/cli`** — `flow-lines image -i photo.jpg -o out.svg` plus
   flags for every core option; decodes PNG/JPEG via pngjs/jpeg-js, and
-  accepts external `--depth-image` / `--normal-image` / `--mask` rasters.
+  accepts external `--depth-image` / `--normal-image` / `--mask` /
+  `--label-image` rasters (`scripts/segment-labels.mjs` generates
+  `photo.labels.png` sidecars with SegFormer-b0/ADE20K).
 - **`packages/web`** — React app (GitHub Pages). Heavy work stays off the
   main thread: rendering runs in a persistent worker with a latest-wins
   queue (`render-worker.ts`/`render-client.ts`); depth estimation runs in
   a **disposable** worker terminated after each job to release model
   memory (phones kill tabs over blocked main threads or resident models).
   In-browser ML: MediaPipe interactive segmentation + face landmarks,
-  Depth Anything V2 via transformers.js — WASM runtimes are copied from
+  Depth Anything V2 and SegFormer-b0 scene labels via transformers.js
+  (auto-ML waits for the first render to finish, then labels, then
+  depth — instantiating the ONNX runtime costs a ~250MB transient
+  regardless of model size, so it must never share its peak with the
+  render or another model; WASM-only sessions pin the plain ort build,
+  as the asyncify build iOS would otherwise get doubles that spike) — WASM runtimes are copied from
   node_modules into the build (`scripts/copy-mediapipe-wasm.mjs`) and
   served from our origin; model weights come from Google/HF CDNs at
   runtime with graceful fallback chains (WebGPU→WASM, fp16→q8).
@@ -49,7 +57,7 @@ pnpm monorepo:
   can't poison the frame), optionally overridden by an external flow map.
 - **Streamline hatching** — Jobard–Lefer evenly-spaced streamlines; local
   spacing is tone (tight in shadow, blank above the white cutoff,
-  near-solid below `richBlacks` threshold); up to 4 cross-hatch layers at
+  near-solid below `richBlacks` threshold); up to 5 cross-hatch layers at
   shallow offset angles (~30°, not perpendicular — a woven grid reads
   mechanical), deeper layers gated by low-frequency noise
   (`hatchPatchiness`) so shadows build up in hand-sized patches.
@@ -66,7 +74,23 @@ pnpm monorepo:
   at each seed: directional ticks / stipple dots / scribble for texture,
   capped cross-contour marks wrapping curved 3D forms (`autoStyle` +
   form confidence), sky stipple for smooth light regions, flowing hatch
-  otherwise. New mark strategies belong here.
+  otherwise. Near-black regions defer tick texture to ordered cross-hatch
+  (richBlacks finishes the job — tick noise in a black mass reads as
+  mud), and weak-to-moderate midtone texture commits to hand-sized
+  patches with plain hatch between (lone scattered ticks read as noise).
+  New mark strategies belong here.
+- **Semantic labels** (`labelMap` / `SemanticMap`) — an 8-label taxonomy
+  (sky, water, foliage, ground, building, person, object, unknown) enters
+  core as a Uint8 raster; majority-downsampled with blurred per-label
+  confidence planes (~1% of frame feathering — a 512px model isn't
+  pixel-accurate). Confident labels replace the geometric heuristics:
+  calm water follows the water label at any horizon height, sky stipple
+  follows the sky label (both auto-enable when unset and the material is
+  in frame), cross-hatch skips labeled sky, foliage floors texture and
+  scribbles in deep shadow, building facets snap plumb/level, person
+  floors importance (gently — a hard floor hatches smooth clothing into
+  flat masses). No labels = heuristics exactly as before; labels
+  promote marks, never demote them.
 - **Faceted hatching** (`facetHatch`) — toned masses without strong
   texture or 3D form are hatched as facets: flow orientation snapped to
   30° quanta plus a per-patch twist over a noise-jittered cell lattice;
@@ -90,25 +114,32 @@ pnpm monorepo:
   spacing, never blanks the sky — smooth skies always score low on
   auto-detail and sit at the far end of depth maps, but the sky is a
   feature, not a background to dissolve.
-- **Calm water** (`calmWater`) — smooth, formless regions in the lower
-  half of the frame render as long broken horizontal strokes whose
-  spacing carries the tone; cross-hatch layers skip water (hatch over
-  water reads as land), and the break noise is stretched along x so the
-  pen lifts and resumes in runs. On for the landscape preset.
+- **Calm water** (`calmWater`) — labeled water regions (fallback: smooth
+  formless regions in the lower frame half) render as long broken
+  horizontal strokes whose spacing carries the tone; cross-hatch layers
+  skip water (hatch over water reads as land), and the break noise is
+  stretched along x so the pen lifts and resumes in runs. On for the
+  landscape preset, auto elsewhere when labels report water.
 - **Contours** — Canny-style edge linking (NMS + hysteresis + chaining)
   produces long confident outlines; emphasized via offset single-pen
   passes with tapered ends; suppressed inside detected faces. Busy
   regions scale the contour length floor by local detail (no outline
   confetti where tone should do the work) and only long contours earn
-  the multi-pass bold emphasis.
+  the multi-pass bold emphasis. A **sharpness gate** drops chains whose
+  tonal step is spread out (tone change within ±2px vs ±6px of the
+  line): soft mass boundaries and water reflections must not trace as
+  wiggly blob outlines — the strongest "computer" tell. Depth
+  silhouettes are exempt (real but tonally soft).
 - **Silhouette halos** (`contourHalo`) — hatch and stipple stop a sliver
   short of long contours instead of crashing into them: reserved paper
   around a silhouette, the way ink artists hold background tone off a
   subject. One-sided and contrast-gated — tone is probed beyond the
   edge's gradient skirt on both sides, and only a real tonal step stamps
-  a halo, on the darker side. Edges inside an evenly-toned mass
-  (architectural detail, fur) leave no halo, so dark masses keep their
-  tone instead of going coloring-book.
+  a halo, on the darker side, and only when the lighter side is
+  genuinely light — dark-vs-darker edges inside a black mass must not
+  carve reserved-paper veins through it. Edges inside an evenly-toned
+  mass (architectural detail, fur) leave no halo, so dark masses keep
+  their tone instead of going coloring-book.
 - **Portrait geometry** — face landmarks become skin-lightening ovals,
   protected feature regions, and sparse artist-style feature strokes
   (upper lid + iris dot, single brow line, inner lip line only).
@@ -125,8 +156,12 @@ pnpm monorepo:
 - **`test-images/` + `node scripts/gallery.mjs`** — the eyeball
   regression suite: renders the photo bank through every preset into one
   HTML contact sheet. Judge any tuning change against the whole album.
-  `photo.depth.png` / `photo.normal.png` sidecars are applied
-  automatically.
+  `photo.depth.png` / `photo.normal.png` / `photo.labels.png` sidecars
+  are applied automatically. `node scripts/segment-labels.mjs` generates
+  the label sidecars — it needs huggingface.co, which the sandbox blocks,
+  but the `Label Sidecars` workflow (`.github/workflows/labels.yml`) runs
+  it on every push that touches the photo bank or the script and commits
+  the results, so new test images get labeled by pushing them.
 - Web flows are verified with headless Chromium (preinstalled at
   `/opt/pw-browsers/chromium_headless_shell-*/chrome-linux/headless_shell`;
   launch with `--ignore-certificate-errors` in the sandbox).
@@ -157,10 +192,10 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
-value: semantic region labels for dispatch (no good in-browser model
-yet), more stroke textures (bricks, grass), light-direction awareness,
-a smarter horizon for `calmWater` (currently a fixed mid-frame gate;
-depth or a sky/ground split would let high-horizon seas qualify). `valueBands` covers tonal *posterization*;
+value: more stroke textures (bricks, grass), light-direction awareness,
+richer use of the semantic labels (per-label spacing/tone curves,
+material-specific marks — the plumbing is in, dispatch only scratches
+the surface). `valueBands` covers tonal *posterization*;
 inventing value structure that isn't in the photo (composition-aware
 massing) is still open. The research review that drove the roadmap lives in the
 conversation history of the original build; its remaining items are

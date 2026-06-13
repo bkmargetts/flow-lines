@@ -97,6 +97,15 @@ PNG or JPEG into plotter-ready strokes that mimic a pen-and-ink drawing:
   V2) makes strokes follow the actual surface geometry, stop cleanly at
   silhouettes, and fade distant backgrounds like atmospheric recession.
   The CLI accepts external depth maps via `--depth-image` (bright = near)
+- Scene understanding: semantic region labels steer mark dispatch — calm
+  water follows the water label at any horizon height, sky stipple
+  auto-enables when a sky is in frame, foliage keeps leafy texture,
+  building facets hatch plumb and level, and people never dissolve into
+  background gesture. The CLI accepts a label raster via `--label-image`
+  (taxonomy id in the red channel: 0 unknown, 1 sky, 2 water, 3 foliage,
+  4 ground, 5 building, 6 person, 7 object);
+  `node scripts/segment-labels.mjs` generates `photo.labels.png` sidecars
+  with SegFormer (ADE20K) that the gallery script picks up automatically
 
 Key options:
 

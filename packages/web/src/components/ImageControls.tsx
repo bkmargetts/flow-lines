@@ -1,6 +1,13 @@
 import { useRef } from 'react';
-import type { GrayscaleImage, Point } from '@flow-lines/core';
-import type { DepthStatus, InkSettings, PortraitState, PortraitStatus, SegmentStatus } from '../App';
+import type { GrayscaleImage, LabelImage, Point } from '@flow-lines/core';
+import type {
+  DepthStatus,
+  InkSettings,
+  LabelStatus,
+  PortraitState,
+  PortraitStatus,
+  SegmentStatus,
+} from '../App';
 
 /** Curated parameter bundles — the only decision most users need to make */
 export const PRESETS: Record<string, { label: string; settings: Partial<InkSettings> }> = {
@@ -17,14 +24,14 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       detailEmphasis: 0.3,
       textureStrokes: 0.6,
       wobble: 0.8,
-      workingSize: 600,
+      workingSize: 720,
       crossContour: false,
       facetHatch: false,
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
-      skyStipple: false,
-      calmWater: false,
+      skyStipple: 'auto',
+      calmWater: 'auto',
       textureStyle: 'ticks',
     },
   },
@@ -48,8 +55,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
-      skyStipple: false,
-      calmWater: false,
+      skyStipple: 'auto',
+      calmWater: 'auto',
       textureStyle: 'ticks',
     },
   },
@@ -72,15 +79,15 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxStrokeLength: 0,
       fieldSmoothing: 4,
       hatchAngle: -45,
-      skyStipple: false,
-      calmWater: false,
+      skyStipple: 'auto',
+      calmWater: 'auto',
       textureStyle: 'ticks',
     },
   },
   landscape: {
     label: 'Landscape',
     settings: {
-      layers: 4,
+      layers: 5,
       minSpacing: 1.8,
       maxSpacing: 16,
       toneGamma: 1,
@@ -113,15 +120,15 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       detailEmphasis: 0.4,
       textureStrokes: 0.8,
       wobble: 2.2,
-      workingSize: 600,
+      workingSize: 720,
       whiteCutoff: 0.1,
       crossContour: false,
       facetHatch: false,
       maxStrokeLength: 0,
       fieldSmoothing: 3,
       hatchAngle: -30,
-      skyStipple: false,
-      calmWater: false,
+      skyStipple: 'auto',
+      calmWater: 'auto',
       textureStyle: 'scribble',
     },
   },
@@ -144,8 +151,8 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       maxStrokeLength: 48,
       fieldSmoothing: 8,
       hatchAngle: -45,
-      skyStipple: false,
-      calmWater: false,
+      skyStipple: 'auto',
+      calmWater: 'auto',
       textureStyle: 'ticks',
     },
   },
@@ -175,6 +182,11 @@ interface ImageControlsProps {
   depthError: string | null;
   estimateDepthMap: () => void;
   clearDepth: () => void;
+  labelMap: LabelImage | null;
+  labelStatus: LabelStatus;
+  labelError: string | null;
+  estimateSceneLabels: () => void;
+  clearLabels: () => void;
   lowMemory: boolean;
   disableLowMemory: () => void;
 }
@@ -203,6 +215,11 @@ export function ImageControls({
   depthError,
   estimateDepthMap,
   clearDepth,
+  labelMap,
+  labelStatus,
+  labelError,
+  estimateSceneLabels,
+  clearLabels,
   lowMemory,
   disableLowMemory,
 }: ImageControlsProps) {
@@ -220,6 +237,8 @@ export function ImageControls({
     statusParts.push(`subject${focusPoints.length > 1 ? 's' : ''} isolated`);
   if (depthStatus === 'loading') statusParts.push('estimating depth…');
   else if (depthMap) statusParts.push('3D form applied');
+  if (labelStatus === 'loading') statusParts.push('reading the scene…');
+  else if (labelMap) statusParts.push('scene labeled');
 
   return (
     <div className="controls">
@@ -329,7 +348,7 @@ export function ImageControls({
               Layers <span>{settings.layers}</span>
             </label>
             <input
-              type="range" min="1" max="4" step="1"
+              type="range" min="1" max="5" step="1"
               value={settings.layers}
               onChange={(e) => updateSettings({ layers: parseInt(e.target.value, 10) })}
             />
@@ -520,22 +539,38 @@ export function ImageControls({
           </div>
 
           <div className="control-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={settings.skyStipple}
-                onChange={(e) => updateSettings({ skyStipple: e.target.checked })}
-              />
-              Stipple open skies
-            </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={settings.calmWater}
-                onChange={(e) => updateSettings({ calmWater: e.target.checked })}
-              />
-              Calm water (broken horizontal strokes)
-            </label>
+            <label>Stipple open skies</label>
+            <select
+              value={String(settings.skyStipple)}
+              onChange={(e) =>
+                updateSettings({
+                  skyStipple: e.target.value === 'auto' ? 'auto' : e.target.value === 'true',
+                })
+              }
+            >
+              <option value="auto">Auto (when labels find sky)</option>
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </div>
+
+          <div className="control-group">
+            <label>Calm water (broken horizontal strokes)</label>
+            <select
+              value={String(settings.calmWater)}
+              onChange={(e) =>
+                updateSettings({
+                  calmWater: e.target.value === 'auto' ? 'auto' : e.target.value === 'true',
+                })
+              }
+            >
+              <option value="auto">Auto (when labels find water)</option>
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </div>
+
+          <div className="control-group">
             <label className="checkbox-label">
               <input
                 type="checkbox"
@@ -648,6 +683,41 @@ export function ImageControls({
               )}
             </>
           )}
+        </details>
+
+        <details className="adv-group">
+          <summary>Scene Labels</summary>
+
+          <div className="control-group">
+            <p className="paint-hint">
+              A small scene model labels sky, water, foliage, buildings and
+              people so marks match the material — runs automatically on
+              upload.
+            </p>
+            <div className="paint-controls">
+              <button
+                type="button"
+                className="secondary"
+                onClick={estimateSceneLabels}
+                disabled={!imageName || labelStatus === 'loading'}
+              >
+                {labelStatus === 'loading' ? 'Reading scene…' : 'Re-read Scene (AI)'}
+              </button>
+              {labelMap && (
+                <button type="button" className="secondary" onClick={clearLabels}>
+                  Clear
+                </button>
+              )}
+            </div>
+            {labelStatus === 'error' && (
+              <p className="paint-hint">
+                Scene labeling failed
+                {labelError
+                  ? `: ${labelError.slice(0, 200)}`
+                  : ' — check your connection and try again.'}
+              </p>
+            )}
+          </div>
         </details>
 
         <details className="adv-group">

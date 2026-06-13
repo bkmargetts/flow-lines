@@ -11,7 +11,7 @@ export interface ImageFieldOptions {
   width: number;
   /** Output canvas height the field is sampled in */
   height: number;
-  /** Max dimension of the internal working raster (default 600) */
+  /** Max dimension of the internal working raster (default 720) */
   workingSize?: number;
   /** Pre-blur applied to the tone image, in working pixels (default 1) */
   blurSigma?: number;
@@ -97,7 +97,7 @@ export class ImageField {
     this.width = options.width;
     this.height = options.height;
 
-    const workingSize = options.workingSize ?? 600;
+    const workingSize = options.workingSize ?? 720;
     const blurSigma = options.blurSigma ?? 1;
     const fieldSmoothing = options.fieldSmoothing ?? 4;
     const hatchAngle = options.hatchAngle ?? -Math.PI / 4;

@@ -5,6 +5,7 @@ import {
   toSVG,
   type FlowLinesOptions,
   type GrayscaleImage,
+  type LabelImage,
   type PortraitOptions,
   type SVGOptions,
   type Point,
@@ -63,8 +64,10 @@ export interface InkSettings {
   featureLines: boolean;
   textureStrokes: number;
   textureStyle: 'ticks' | 'stipple' | 'scribble';
-  skyStipple: boolean;
-  calmWater: boolean;
+  /** 'auto' defers to the scene labels: stipple when a sky is in frame */
+  skyStipple: boolean | 'auto';
+  /** 'auto' defers to the scene labels: calm water when water is in frame */
+  calmWater: boolean | 'auto';
   richBlacks: boolean;
   counterchange: number;
   crossContour: boolean;
@@ -80,15 +83,18 @@ export interface InkSettings {
 const IS_MOBILE =
   typeof navigator !== 'undefined' && /iP(hone|ad|od)|Android/.test(navigator.userAgent);
 
-/** Crash breadcrumb: set while a depth result is being applied; if it is
- * still there on startup, the page died mid-apply — drop to low memory */
+/** Crash breadcrumbs: set while a depth result is being applied or scene
+ * labeling is running; if one is still there on startup, the page died
+ * mid-job — drop to low memory */
 const APPLY_FLAG = 'fl-applying-depth';
+const LABELING_FLAG = 'fl-labeling';
 const LOW_MEM_FLAG = 'fl-low-memory';
 
 function detectLowMemory(): boolean {
   if (typeof localStorage === 'undefined') return false;
-  if (localStorage.getItem(APPLY_FLAG)) {
+  if (localStorage.getItem(APPLY_FLAG) || localStorage.getItem(LABELING_FLAG)) {
     localStorage.removeItem(APPLY_FLAG);
+    localStorage.removeItem(LABELING_FLAG);
     localStorage.setItem(LOW_MEM_FLAG, '1');
   }
   return localStorage.getItem(LOW_MEM_FLAG) === '1';
@@ -97,6 +103,7 @@ function detectLowMemory(): boolean {
 export type SegmentStatus = 'idle' | 'loading' | 'error';
 export type PortraitStatus = 'idle' | 'loading' | 'error' | 'none';
 export type DepthStatus = 'idle' | 'loading' | 'error';
+export type LabelStatus = 'idle' | 'loading' | 'error';
 
 export interface PortraitState {
   faceCount: number;
@@ -145,13 +152,13 @@ const defaultInkSettings: InkSettings = {
   toneGamma: 1.3,
   valueBands: 4,
   hatchPatchiness: 0.35,
-  workingSize: 600,
+  workingSize: 720,
   skinLightening: 0.55,
   featureLines: true,
   textureStrokes: 0.6,
   textureStyle: 'ticks',
-  skyStipple: false,
-  calmWater: false,
+  skyStipple: 'auto',
+  calmWater: 'auto',
   richBlacks: true,
   counterchange: 0.5,
   crossContour: false,
@@ -222,6 +229,9 @@ export function App() {
   const [depthMap, setDepthMap] = useState<GrayscaleImage | null>(null);
   const [depthStatus, setDepthStatus] = useState<DepthStatus>('idle');
   const [depthError, setDepthError] = useState<string | null>(null);
+  const [labelMap, setLabelMap] = useState<LabelImage | null>(null);
+  const [labelStatus, setLabelStatus] = useState<LabelStatus>('idle');
+  const [labelError, setLabelError] = useState<string | null>(null);
   const [preset, setPreset] = useState('classic');
   const [lowMemory, setLowMemory] = useState(detectLowMemory);
   const [inkRender, setInkRender] = useState<RenderedSVG | null>(null);
@@ -231,6 +241,11 @@ export function App() {
   const segmentTokenRef = useRef(0);
   const portraitTokenRef = useRef(0);
   const depthTokenRef = useRef(0);
+  const labelTokenRef = useRef(0);
+  // Auto-ML staggering: set on upload, consumed once the first render
+  // has been seen to start and finish
+  const autoMlPendingRef = useRef(false);
+  const renderSeenRef = useRef(false);
 
   const updateState = useCallback((updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
@@ -304,14 +319,17 @@ export function App() {
       });
   }, []);
 
-  const estimateDepthMap = useCallback(() => {
+  // Resolves when the depth worker has finished and been torn down (even
+  // on failure), so other model runs can be sequenced behind it — phones
+  // can't afford two resident models at once
+  const estimateDepthMap = useCallback((): Promise<void> => {
     const canvas = sourceCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return Promise.resolve();
 
     const token = ++depthTokenRef.current;
     setDepthStatus('loading');
     setDepthError(null);
-    import('./depth-client')
+    return import('./depth-client')
       .then(({ estimateDepthInWorker }) => estimateDepthInWorker(canvas))
       .then((depth) => {
         if (token !== depthTokenRef.current) return;
@@ -338,6 +356,42 @@ export function App() {
     setDepthMap(null);
     setDepthStatus('idle');
     setDepthError(null);
+  }, []);
+
+  // Resolves when the labels worker has finished and been torn down (even
+  // on failure), so the heavier depth job can be sequenced behind it
+  const estimateSceneLabels = useCallback((): Promise<void> => {
+    const canvas = sourceCanvasRef.current;
+    if (!canvas) return Promise.resolve();
+
+    const token = ++labelTokenRef.current;
+    setLabelStatus('loading');
+    setLabelError(null);
+    // Breadcrumb: if the page dies during inference, the next visit
+    // detects it, enters low-memory mode, and stops auto-running labels
+    localStorage.setItem(LABELING_FLAG, '1');
+    return import('./labels-client')
+      .then(({ estimateLabelsInWorker }) => estimateLabelsInWorker(canvas))
+      .then((labels) => {
+        localStorage.removeItem(LABELING_FLAG);
+        if (token !== labelTokenRef.current) return;
+        setLabelMap(labels);
+        setLabelStatus('idle');
+      })
+      .catch((err) => {
+        localStorage.removeItem(LABELING_FLAG);
+        if (token !== labelTokenRef.current) return;
+        setLabelMap(null);
+        setLabelStatus('error');
+        setLabelError(err instanceof Error ? err.message : String(err));
+      });
+  }, []);
+
+  const clearLabels = useCallback(() => {
+    labelTokenRef.current++;
+    setLabelMap(null);
+    setLabelStatus('idle');
+    setLabelError(null);
   }, []);
 
   const runIsolation = useCallback((points: Point[]) => {
@@ -389,13 +443,15 @@ export function App() {
           setPortraitStatus('idle');
           setDepthMap(null);
           setDepthStatus('idle');
+          setLabelMap(null);
+          setLabelStatus('idle');
+          setLabelError(null);
           // Effortless portraits: look for faces as soon as a photo lands
           detectFaces();
-          // 3D form needs the depth model (~25MB on first use); run it
-          // automatically only where WebGPU makes it fast
-          if ('gpu' in navigator) {
-            estimateDepthMap();
-          }
+          // Heavier ML (scene labels, then depth) is deferred until the
+          // first render completes — see the auto-ML effect below
+          autoMlPendingRef.current = true;
+          renderSeenRef.current = false;
         })
         .catch(() => {
           setImageName(null);
@@ -403,7 +459,7 @@ export function App() {
           sourceCanvasRef.current = null;
         });
     },
-    [detectFaces, estimateDepthMap]
+    [detectFaces, estimateDepthMap, estimateSceneLabels, lowMemory]
   );
 
   const handleSetFocus = useCallback(
@@ -472,13 +528,15 @@ export function App() {
           wobble: inkSettings.wobble,
           textureStrokes: inkSettings.textureStrokes,
           textureStyle: inkSettings.textureStyle,
-          skyStipple: inkSettings.skyStipple,
-          calmWater: inkSettings.calmWater,
+          // 'auto' leaves the option unset so the scene labels decide
+          skyStipple: inkSettings.skyStipple === 'auto' ? undefined : inkSettings.skyStipple,
+          calmWater: inkSettings.calmWater === 'auto' ? undefined : inkSettings.calmWater,
           crossContour: inkSettings.crossContour,
           facetHatch: inkSettings.facetHatch,
           maxStrokeLength: inkSettings.maxStrokeLength,
           fieldSmoothing: inkSettings.fieldSmoothing,
           depthMap: depthMap ?? undefined,
+          labelMap: labelMap ?? undefined,
           formStrength: inkSettings.formStrength,
           depthIsolation: inkSettings.depthIsolation,
           autoStyle: inkSettings.autoStyle,
@@ -526,7 +584,28 @@ export function App() {
           setIsRendering(false);
         }
       });
-  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap, lowMemory]);
+  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap, labelMap, lowMemory]);
+
+  // Auto ML (scene labels ~5MB, then depth ~25MB where the device
+  // reports WebGPU) waits for the first render to finish, then runs the
+  // models strictly one after another. Instantiating the ONNX runtime
+  // costs a ~250MB+ transient regardless of model size (measured:
+  // session creation dominates, inference is the smaller term), so it
+  // must never share its peak with the pen-ink render or another model
+  // worker — on phones the sum is a tab kill where each alone fits
+  useEffect(() => {
+    if (mode !== 'image') return;
+    if (isRendering) {
+      renderSeenRef.current = true;
+      return;
+    }
+    if (!autoMlPendingRef.current || !renderSeenRef.current) return;
+    autoMlPendingRef.current = false;
+    const labelsDone = lowMemory ? Promise.resolve() : estimateSceneLabels();
+    labelsDone.then(() => {
+      if ('gpu' in navigator) estimateDepthMap();
+    });
+  }, [mode, isRendering, lowMemory, estimateSceneLabels, estimateDepthMap]);
 
   const generated = useMemo(() => {
     if (mode === 'image') {
@@ -623,6 +702,11 @@ export function App() {
             depthMap={depthMap}
             depthStatus={depthStatus}
             depthError={depthError}
+            labelMap={labelMap}
+            labelStatus={labelStatus}
+            labelError={labelError}
+            estimateSceneLabels={estimateSceneLabels}
+            clearLabels={clearLabels}
             lowMemory={lowMemory}
             disableLowMemory={() => {
               localStorage.removeItem(LOW_MEM_FLAG);

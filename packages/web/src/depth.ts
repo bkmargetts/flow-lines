@@ -67,6 +67,25 @@ async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
   const hasWebGPU = 'gpu' in navigator && !isIOSWebKit();
   const failures: string[] = [];
 
+  // When no WebGPU attempt will run, pin the runtime to the PLAIN wasm
+  // build: left to its own devices ort loads the asyncify build on
+  // browsers without JSPI (all of iOS) — 23.6MB vs 12.9MB, roughly
+  // double the WASM-compile memory spike and ~2x slower inference
+  // (measured on the labels pipeline). WebGPU sessions need the JSEP
+  // build, so desktop keeps the directory default
+  if (!hasWebGPU || wasmOnly) {
+    const onnxEnv = transformers.env.backends?.onnx?.wasm as
+      | { wasmPaths?: string | { wasm?: string; mjs?: string } }
+      | undefined;
+    if (onnxEnv) {
+      const base = `${import.meta.env.BASE_URL}ort-wasm/`;
+      onnxEnv.wasmPaths = {
+        wasm: `${base}ort-wasm-simd-threaded.wasm`,
+        mjs: `${base}ort-wasm-simd-threaded.mjs`,
+      };
+    }
+  }
+
   for (const attempt of ATTEMPTS) {
     if (attempt.device === 'webgpu' && (!hasWebGPU || wasmOnly)) continue;
 

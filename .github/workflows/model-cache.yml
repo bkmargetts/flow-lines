@@ -1,0 +1,41 @@
+name: Model Cache
+
+# One-off helper: download the SegFormer files transformers.js requests and
+# force-push them to the `model-cache` branch. Claude's sandbox can't reach
+# huggingface.co, but it can fetch git branches — this lets browser ML flows
+# be exercised there by intercepting model URLs with Playwright and serving
+# these files (see CLAUDE.md, sandbox network notes).
+on:
+  push:
+    paths:
+      - '.github/workflows/model-cache.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download model files
+        run: |
+          repo=Xenova/segformer-b0-finetuned-ade-512-512
+          base=https://huggingface.co/$repo/resolve/main
+          mkdir -p "cache/$repo/onnx"
+          curl -fsSL -o "cache/$repo/config.json" "$base/config.json"
+          curl -fsSL -o "cache/$repo/preprocessor_config.json" "$base/preprocessor_config.json"
+          curl -fsSL -o "cache/$repo/onnx/model_quantized.onnx" "$base/onnx/model_quantized.onnx"
+          ls -laR cache
+
+      - name: Push to model-cache branch
+        run: |
+          cd cache
+          git init -b model-cache
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Cache SegFormer files for sandbox browser testing"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" model-cache
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
