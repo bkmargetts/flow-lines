@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import type { GrayscaleImage, LabelImage, Point } from '@flow-lines/core';
+import type { GrayscaleImage, LabelImage, Point, PaperFit } from '@flow-lines/core';
 import type {
   DepthStatus,
   InkSettings,
@@ -8,6 +8,7 @@ import type {
   PortraitStatus,
   SegmentStatus,
 } from '../App';
+import { PaperControls } from './PaperControls';
 
 /** Curated parameter bundles — the only decision most users need to make */
 export const PRESETS: Record<string, { label: string; settings: Partial<InkSettings> }> = {
@@ -327,6 +328,35 @@ export function ImageControls({
             {def.label}
           </button>
         ))}
+      </div>
+
+      <h3 className="section-title">Paper</h3>
+
+      <PaperControls
+        paper={settings.paper}
+        orientation={settings.orientation}
+        resolution={settings.resolution}
+        onChange={updateSettings}
+      />
+
+      <div className="control-group">
+        <label>Fit to page</label>
+        <div className="segmented">
+          <button
+            type="button"
+            className={settings.fit === 'fit' ? 'active' : ''}
+            onClick={() => updateSettings({ fit: 'fit' as PaperFit })}
+          >
+            Fit
+          </button>
+          <button
+            type="button"
+            className={settings.fit === 'fill' ? 'active' : ''}
+            onClick={() => updateSettings({ fit: 'fill' as PaperFit })}
+          >
+            Fill
+          </button>
+        </div>
       </div>
 
       <div className="button-group">
@@ -840,23 +870,12 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Width <span>{settings.width}px</span>
+              Margin <span>{settings.marginMm}mm</span>
             </label>
             <input
-              type="range" min="200" max="1200" step="50"
-              value={settings.width}
-              onChange={(e) => updateSettings({ width: parseInt(e.target.value, 10) })}
-            />
-          </div>
-
-          <div className="control-group">
-            <label>
-              Margin <span>{settings.margin}px</span>
-            </label>
-            <input
-              type="range" min="0" max="100" step="5"
-              value={settings.margin}
-              onChange={(e) => updateSettings({ margin: parseInt(e.target.value, 10) })}
+              type="range" min="0" max="40" step="1"
+              value={settings.marginMm}
+              onChange={(e) => updateSettings({ marginMm: parseInt(e.target.value, 10) })}
             />
           </div>
 
@@ -873,12 +892,12 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Stroke Width <span>{settings.strokeWidth}px</span>
+              Pen Width <span>{settings.penWidthMm}mm</span>
             </label>
             <input
-              type="range" min="0.5" max="3" step="0.25"
-              value={settings.strokeWidth}
-              onChange={(e) => updateSettings({ strokeWidth: parseFloat(e.target.value) })}
+              type="range" min="0.1" max="1.5" step="0.05"
+              value={settings.penWidthMm}
+              onChange={(e) => updateSettings({ penWidthMm: parseFloat(e.target.value) })}
             />
           </div>
 

@@ -7,6 +7,14 @@ export interface SVGOptions {
   includeBackground?: boolean;
   precision?: number;
   optimizePaths?: boolean;
+  /**
+   * Physical SVG width/height (e.g. "210mm"). When set, the document is
+   * tagged with real-world dimensions while the `viewBox` stays in the px
+   * coordinate space — so the on-screen preview (which reads the viewBox) and
+   * the plotted output (which reads the mm) are the same drawing at true size.
+   */
+  physicalWidth?: string;
+  physicalHeight?: string;
 }
 
 /**
@@ -20,7 +28,14 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
     includeBackground = false,
     precision = 2,
     optimizePaths = true,
+    physicalWidth,
+    physicalHeight,
   } = options;
+
+  // Physical dimensions tag the page for plotting; the viewBox keeps the px
+  // coordinate space so geometry and preview are untouched. Falls back to px.
+  const svgWidth = physicalWidth ?? `${result.width}`;
+  const svgHeight = physicalHeight ?? `${result.height}`;
 
   const backgroundRect = includeBackground
     ? `  <rect width="${result.width}" height="${result.height}" fill="${backgroundColor}"/>\n`
@@ -38,7 +53,7 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${result.width}" height="${result.height}" viewBox="0 0 ${result.width} ${result.height}">
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${result.width} ${result.height}">
 ${backgroundRect}${pathElements}
 </svg>`;
 }
