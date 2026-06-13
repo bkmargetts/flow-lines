@@ -51,6 +51,11 @@ function isIOSWebKit(): boolean {
   );
 }
 
+/** Any phone/tablet — where the OS kills pages over memory (matches labels) */
+function isMobile(): boolean {
+  return /iP(hone|ad|od)|Android/i.test(navigator.userAgent) || isIOSWebKit();
+}
+
 async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
   const transformers = await configureEnv();
   const { pipeline } = transformers;
@@ -65,6 +70,7 @@ async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
   }
 
   const hasWebGPU = 'gpu' in navigator && !isIOSWebKit();
+  const mobile = isMobile();
   const failures: string[] = [];
 
   // When no WebGPU attempt will run, pin the runtime to the PLAIN wasm
@@ -93,6 +99,15 @@ async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
       const pipe = await pipeline('depth-estimation', attempt.model, {
         device: attempt.device,
         dtype: attempt.dtype,
+        // The ORT CPU arena holds inference's high-water mark forever, and
+        // on iOS WebKit a terminated worker's WASM heap isn't reclaimed
+        // promptly — so per-photo runs stack up and eventually OOM. Giving
+        // the memory back keeps each run's footprint small (same policy as
+        // the labels pipeline). WASM-only: the WebGPU EP ignores it
+        ...(mobile &&
+          attempt.device === 'wasm' && {
+            session_options: { enableCpuMemArena: false, enableMemPattern: false },
+          }),
       });
       return { pipe: pipe as unknown as DepthPipeline, device: attempt.device };
     } catch (err) {
@@ -127,14 +142,14 @@ function toGrayscale(depth: {
   return { width: depth.width, height: depth.height, data };
 }
 
-/**
- * Estimate a relative depth map (bright = near) for an already-downscaled
- * input data URL. Runs wherever it is called — the app calls it inside a
- * dedicated worker (see depth-worker.ts) so heavy WASM inference never
- * blocks the page and its memory is fully released afterwards.
- */
-export async function estimateDepth(input: string): Promise<GrayscaleImage> {
-  const active = await getPipeline();
+// Inference runs against a single cached ONNX session reused across photos
+// (see depth-worker.ts — the worker is persistent now). ONNX sessions are
+// not safe to run() concurrently, and the app can fire a new depth job
+// before the previous resolves, so serialize calls onto one chain.
+let inferenceLock: Promise<unknown> = Promise.resolve();
+
+async function runInference(input: string): Promise<GrayscaleImage> {
+  let active = await getPipeline();
 
   try {
     const result = await active.pipe(input);
@@ -144,10 +159,28 @@ export async function estimateDepth(input: string): Promise<GrayscaleImage> {
     // load — rebuild on plain WASM and try once more
     if (active.device === 'webgpu') {
       pipePromise = null;
-      const fallback = await getPipeline(true);
-      const result = await fallback.pipe(input);
+      active = await getPipeline(true);
+      const result = await active.pipe(input);
       return toGrayscale(result.depth);
     }
     throw err;
   }
+}
+
+/**
+ * Estimate a relative depth map (bright = near) for an already-downscaled
+ * input data URL. Runs wherever it is called — the app calls it inside a
+ * persistent worker (see depth-worker.ts) that loads the model once and
+ * reuses it for every photo, so the ~250MB session-creation spike is paid
+ * a single time instead of re-paid (and stacked) per photo.
+ */
+export function estimateDepth(input: string): Promise<GrayscaleImage> {
+  const run = inferenceLock.then(
+    () => runInference(input),
+    () => runInference(input)
+  );
+  // Keep the chain alive but swallow rejections so one failure doesn't
+  // wedge every later job.
+  inferenceLock = run.catch(() => {});
+  return run;
 }

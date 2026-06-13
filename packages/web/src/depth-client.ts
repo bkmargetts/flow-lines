@@ -22,39 +22,55 @@ function toInputDataURL(source: HTMLCanvasElement): string {
 }
 
 /**
- * Run depth estimation in a dedicated worker that is terminated as soon
- * as the job finishes. Phones kill pages whose main thread hangs (WASM
- * inference) or whose memory stays high (a resident 25-50MB model) —
- * isolating the model in a disposable worker fixes both. Model files stay
- * in the browser HTTP cache, so respawning is much cheaper than the
- * first run.
+ * Run depth estimation in a single persistent worker that loads the model
+ * once and reuses it for every photo. Re-creating the ONNX runtime per
+ * photo cost a ~250MB allocation spike each time, and iOS WebKit doesn't
+ * reclaim a terminated worker's WASM memory promptly — so the spikes
+ * stacked across photos and OOM'd after a few. Keeping one worker alive
+ * holds memory flat (a resident ~25-50MB model) and isolates the heavy
+ * WASM inference off the main thread. The worker is still off the UI
+ * thread, so a long inference never hangs the page.
  */
+let worker: Worker | null = null;
+let nextId = 0;
+const pending = new Map<
+  number,
+  { resolve: (depth: GrayscaleImage) => void; reject: (err: Error) => void }
+>();
+
+function getWorker(): Worker {
+  if (worker) return worker;
+  const w = new Worker(new URL('./depth-worker.ts', import.meta.url), {
+    type: 'module',
+  });
+  w.onmessage = (event: MessageEvent<DepthResponse>) => {
+    const { id, depth, error } = event.data;
+    const cb = pending.get(id);
+    if (!cb) return;
+    pending.delete(id);
+    if (depth) cb.resolve(depth);
+    else cb.reject(new Error(error ?? 'Depth estimation failed'));
+  };
+  w.onerror = (event) => {
+    // A worker-level crash kills every in-flight job; reject them all and
+    // drop the worker so the next call spawns a fresh one.
+    const err = new Error(event.message || 'Depth worker crashed');
+    for (const cb of pending.values()) cb.reject(err);
+    pending.clear();
+    w.terminate();
+    worker = null;
+  };
+  worker = w;
+  return w;
+}
+
 export function estimateDepthInWorker(source: HTMLCanvasElement): Promise<GrayscaleImage> {
   const input = toInputDataURL(source);
+  const id = ++nextId;
 
   return new Promise<GrayscaleImage>((resolve, reject) => {
-    const worker = new Worker(new URL('./depth-worker.ts', import.meta.url), {
-      type: 'module',
-    });
-
-    const finish = (fn: () => void): void => {
-      worker.terminate();
-      fn();
-    };
-
-    worker.onmessage = (event: MessageEvent<DepthResponse>) => {
-      const { depth, error } = event.data;
-      if (depth) {
-        finish(() => resolve(depth));
-      } else {
-        finish(() => reject(new Error(error ?? 'Depth estimation failed')));
-      }
-    };
-    worker.onerror = (event) => {
-      finish(() => reject(new Error(event.message || 'Depth worker crashed')));
-    };
-
-    const request: DepthRequest = { input };
-    worker.postMessage(request);
+    pending.set(id, { resolve, reject });
+    const request: DepthRequest = { id, input };
+    getWorker().postMessage(request);
   });
 }
