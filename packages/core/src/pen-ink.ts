@@ -376,7 +376,10 @@ function buildHaloMask(
   // Tone probes sit beyond the halo itself so they read the masses on
   // either side, not the edge's own gradient skirt
   const probe = Math.max(radius * 2.5, 5);
-  const minStep = 0.12;
+  // Only a strong figure/ground step earns a reserved sliver — a low bar
+  // here rings every mild tonal boundary with white and the drawing reads
+  // as a cut-out stencil instead of tone meeting tone.
+  const minStep = 0.22;
 
   for (const points of contours) {
     let length = 0;
@@ -401,10 +404,10 @@ function buildHaloMask(
       const dA = darknessAt(p.x + nx * probe, p.y + ny * probe);
       const dB = darknessAt(p.x - nx * probe, p.y - ny * probe);
       if (Math.abs(dA - dB) < minStep) continue;
-      // A halo separates a dark mass from genuinely light ground. An edge
-      // between dark and darker (fur over deep shadow) must not carve a
-      // reserved-paper vein through what should read as one black mass
-      if (Math.min(dA, dB) > 0.5) continue;
+      // A halo separates a dark mass from genuinely *light* ground. The
+      // lighter side must actually be light — a dark-vs-mid edge inside a
+      // toned region must not carve a reserved-paper vein through it.
+      if (Math.min(dA, dB) > 0.4) continue;
 
       // Stamp a disk just off the line on the darker side — the gap
       // shows where tone work approaches the silhouette
@@ -573,7 +576,7 @@ export function imageToPenInk(
 
   const drawOutlines = options.drawOutlines ?? true;
   const outlineThreshold = options.outlineThreshold ?? 0.35;
-  const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
+  const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.45));
   const textureStyle = options.textureStyle ?? 'ticks';
   // Sky and water treatments switch themselves on when the labels say the
   // material is in frame — the artist doesn't need telling that a sky
@@ -757,13 +760,13 @@ export function imageToPenInk(
   // Contours are traced before any tone work: they are both the drawn
   // outlines and the source of the reserved-white halos that hold
   // hatching off the silhouettes
-  const contourHalo = Math.max(0, (options.contourHalo ?? 2.2) * scale);
+  const contourHalo = Math.max(0, (options.contourHalo ?? 1.4) * scale);
   const contours =
     drawOutlines || contourHalo > 0
       ? traceContours(field, {
           highThreshold: outlineThreshold,
           lowThreshold: outlineThreshold * 0.4,
-          minLength: Math.max(minLineLength * 3, 14),
+          minLength: Math.max(minLineLength * 4, 22),
           stepLength: Math.min(stepLength, 2),
           margin,
           importance,
@@ -846,6 +849,16 @@ export function imageToPenInk(
 
   const lines: FlowLine[] = [];
 
+  // The densest hatch never closes up completely: shadows tighten toward
+  // this floor so a dark mass stays visibly woven, the way real ink work
+  // builds darkness from layered strokes rather than a solid flood. The
+  // floor tracks the *stacked* coverage of the cross-hatch layers: a
+  // single layer can run tight and still read dark, but 3-5 overlapping
+  // layers at that spacing fill solid — so the floor opens up the more
+  // layers pile on, and a two-layer preset (etching) keeps richer blacks
+  // than a five-layer one (landscape).
+  const darkFloor = Math.max((1.9 + 0.6 * Math.max(0, layers - 2)) * scale, minSpacing * 0.6);
+
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
   // so shadows accumulate cross-hatched coverage.
   for (let layer = 0; layer < layers; layer++) {
@@ -867,13 +880,14 @@ export function imageToPenInk(
       const t = Math.pow(u, toneGamma);
       let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
 
-      // Deep shadows commit to near-solid black instead of plateauing at
-      // the regular minimum spacing. The ramp starts early enough that
-      // the darkest value band actually reaches it — real ink work
-      // anchors on a few solid black masses, not a uniform dark grey
+      // Deep shadows tighten toward a dark *floor*, not toward zero: even
+      // the densest mass keeps a sliver of paper between lines, so it reads
+      // as worked-over cross-hatch rather than a flooded ink blob. Real ink
+      // anchors darks on dense weave; solid fill is reserved for tiny
+      // accents (handled by the saturated-black patch-skip below, gated high).
       if (richBlacks && d > 0.72) {
         const deep = Math.min(1, (d - 0.72) / 0.2);
-        spacing *= 1 - 0.7 * deep;
+        spacing = Math.max(spacing * (1 - 0.4 * deep), darkFloor);
       }
 
       return spacing;
@@ -912,12 +926,14 @@ export function imageToPenInk(
       layer >= 1 && hatchPatchiness > 0 ? createNoise(seed + layer * 7919 + 31337) : null;
     const patchFreq = 1 / (maxSpacing * 4);
     const patchCut = -1 + hatchPatchiness * (0.55 + 0.4 * (layer - 1));
-    // Saturated blacks skip the patch gaps: a committed dark mass reads
-    // as solid ink, not as worked-over patches with paper showing through
+    // Only the genuinely darkest accents skip the patch gaps to read as
+    // committed ink; everywhere else even deep shadow keeps the patchy,
+    // worked-over weave rather than flooding (threshold held high so large
+    // mid-dark masses stay as visible cross-hatch).
     const patchedDrawable = patchNoise
       ? (x: number, y: number): boolean =>
           (patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut ||
-            (richBlacks && baseDarkness(x, y) > 0.85)) &&
+            (richBlacks && baseDarkness(x, y) > 0.93)) &&
           toneDrawable(x, y)
       : toneDrawable;
 
@@ -946,8 +962,11 @@ export function imageToPenInk(
     const textureAmount =
       textureStrokes > 0
         ? (x: number, y: number): number => {
+            // Texture onsets only where detail is genuinely high — a higher
+            // floor keeps smooth-but-busy regions (masonry, piled objects)
+            // on coherent hatch instead of shattering them into tick noise.
             const d = field.getDetail(x, y);
-            const t = Math.min(1, Math.max(0, (d - 0.25) / 0.45));
+            const t = Math.min(1, Math.max(0, (d - 0.35) / 0.4));
             return t * t * (3 - 2 * t) * textureStrokes;
           }
         : null;
@@ -961,7 +980,7 @@ export function imageToPenInk(
     // patches tone is carried by coherent hatch — scattered lone ticks
     // read as noise, and a hand never dots a wash evenly
     const tickPatchNoise = createNoise(seed + 4243);
-    const tickPatchFreq = 1 / (maxSpacing * 4);
+    const tickPatchFreq = 1 / (maxSpacing * 6);
 
     // Per-stroke style dispatch, resolved at each seed:
     //   ticks for texture, capped cross-contour marks wrapping curved 3D
@@ -1096,7 +1115,7 @@ export function imageToPenInk(
         // fur, dense foliage) keeps its ticks everywhere
         if (
           darkHere < 0.5 &&
-          texture < 0.5 &&
+          texture < 0.6 &&
           foliage < 0.5 &&
           tickPatchNoise.noise2D(x * tickPatchFreq, y * tickPatchFreq) < 0
         ) {
