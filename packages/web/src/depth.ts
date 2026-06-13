@@ -16,9 +16,12 @@ const ATTEMPTS: { model: string; device: 'webgpu' | 'wasm'; dtype: 'fp16' | 'q8'
 /** The model resizes inputs to ~518px anyway — feeding more wastes memory */
 export const MAX_INPUT_DIM = 640;
 
-type DepthPipeline = (input: string) => Promise<{
+type DepthPipeline = ((input: string) => Promise<{
   depth: { width: number; height: number; data: Uint8Array | Uint8ClampedArray };
-}>;
+}>) & {
+  /** transformers.js Pipeline.dispose() — tears down the ONNX session */
+  dispose?: () => Promise<void>;
+};
 
 interface ActivePipeline {
   pipe: DepthPipeline;
@@ -51,6 +54,11 @@ function isIOSWebKit(): boolean {
   );
 }
 
+/** Any phone/tablet — where the OS kills pages over memory (matches labels) */
+function isMobile(): boolean {
+  return /iP(hone|ad|od)|Android/i.test(navigator.userAgent) || isIOSWebKit();
+}
+
 async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
   const transformers = await configureEnv();
   const { pipeline } = transformers;
@@ -65,6 +73,7 @@ async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
   }
 
   const hasWebGPU = 'gpu' in navigator && !isIOSWebKit();
+  const mobile = isMobile();
   const failures: string[] = [];
 
   // When no WebGPU attempt will run, pin the runtime to the PLAIN wasm
@@ -93,6 +102,15 @@ async function createPipeline(wasmOnly: boolean): Promise<ActivePipeline> {
       const pipe = await pipeline('depth-estimation', attempt.model, {
         device: attempt.device,
         dtype: attempt.dtype,
+        // The ORT CPU arena holds inference's high-water mark forever, and
+        // on iOS WebKit a terminated worker's WASM heap isn't reclaimed
+        // promptly — so per-photo runs stack up and eventually OOM. Giving
+        // the memory back keeps each run's footprint small (same policy as
+        // the labels pipeline). WASM-only: the WebGPU EP ignores it
+        ...(mobile &&
+          attempt.device === 'wasm' && {
+            session_options: { enableCpuMemArena: false, enableMemPattern: false },
+          }),
       });
       return { pipe: pipe as unknown as DepthPipeline, device: attempt.device };
     } catch (err) {
@@ -134,20 +152,36 @@ function toGrayscale(depth: {
  * blocks the page and its memory is fully released afterwards.
  */
 export async function estimateDepth(input: string): Promise<GrayscaleImage> {
-  const active = await getPipeline();
+  let active = await getPipeline();
 
   try {
-    const result = await active.pipe(input);
-    return toGrayscale(result.depth);
-  } catch (err) {
-    // GPU memory can also run out at inference time, not just at model
-    // load — rebuild on plain WASM and try once more
-    if (active.device === 'webgpu') {
-      pipePromise = null;
-      const fallback = await getPipeline(true);
-      const result = await fallback.pipe(input);
+    try {
+      const result = await active.pipe(input);
       return toGrayscale(result.depth);
+    } catch (err) {
+      // GPU memory can also run out at inference time, not just at model
+      // load — rebuild on plain WASM and try once more
+      if (active.device === 'webgpu') {
+        pipePromise = null;
+        active = await getPipeline(true);
+        const result = await active.pipe(input);
+        return toGrayscale(result.depth);
+      }
+      throw err;
     }
-    throw err;
+  } finally {
+    // The worker that calls this is one-shot (see depth-worker.ts): tear
+    // the ONNX session down synchronously here so its WASM memory is freed
+    // before the worker is terminated, instead of relying on WebKit's lazy
+    // reclamation of dead workers — that lag is what stacks up across
+    // photos and OOMs iOS. Optional chaining keeps it a no-op if the
+    // installed transformers build lacks dispose(); best-effort, so a
+    // disposal hiccup never masks the real result or error.
+    try {
+      await active.pipe.dispose?.();
+    } catch {
+      /* ignore — disposal is cleanup only */
+    }
+    pipePromise = null;
   }
 }
