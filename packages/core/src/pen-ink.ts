@@ -689,6 +689,12 @@ export function imageToPenInk(
           stepLength: Math.min(stepLength, 2),
           margin,
           importance,
+          // Soft tonal boundaries (mass edges, reflections, blurred
+          // transitions) traced as wiggly blob outlines are the strongest
+          // "computer" tell. Hold the sharpness bar above the contours.ts
+          // default — only edges that concentrate their tonal step at the
+          // line survive; depth silhouettes stay exempt inside isSharp.
+          minSharpness: 0.55,
           // Busy regions demand longer commitment: a city block or a
           // pile of croissants shatters into outline confetti if every
           // 15px edge gets traced — real ink work draws a few long
@@ -719,7 +725,7 @@ export function imageToPenInk(
   // the stroke — parallel marks laid patch by patch, the way a hand
   // hatches a rock face, instead of streamlines bending smoothly
   const FACET_BIN = Math.PI / 6;
-  const facetCell = maxSpacing * 5;
+  const facetCell = maxSpacing * 8;
   const facetNoise = facetHatch ? createNoise(seed + 6011) : null;
   const facetAt = (x: number, y: number): { angle: number; id: number } => {
     const jx = facetNoise!.noise2D(x / (facetCell * 2.7), y / (facetCell * 2.7));
@@ -739,10 +745,26 @@ export function imageToPenInk(
         return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
       }
     }
-    const twist = Math.round((h - Math.floor(h) - 0.5) * 2);
+    // Twist only a minority of cells off the snapped flow angle: when most
+    // facets share one direction the mass reads as a few big coherent
+    // planes; twisting nearly every cell (the old ±1 bias) crackles the
+    // mass into cellular mud
+    const r = h - Math.floor(h);
+    const twist = r > 0.82 ? 1 : r < 0.18 ? -1 : 0;
     const bin = Math.round(orientation / FACET_BIN) + twist;
     return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
   };
+
+  // Value-plan restraint: with a value plan, the lightest mass band is
+  // left as clean paper — no hatch marks at all — so big light shapes
+  // (a lit wall, a white subject) read as a committed decision instead of
+  // being veiled in stray strokes. Keyed on the posterized mass darkness,
+  // not the raw/counterchange tone: counterBoost is one-sided and ~0 on
+  // light masses, so a band-0 region that should stay white stays white,
+  // while the background swell (band 1+) behind a light subject still draws.
+  const bandFloor = field.hasMassTone() && valueBands >= 2 ? 0.5 / valueBands : 0;
+  const inLightestBand =
+    bandFloor > 0 ? (x: number, y: number): boolean => field.getMassDarkness(x, y) < bandFloor : null;
 
   const lines: FlowLine[] = [];
 
@@ -781,10 +803,14 @@ export function imageToPenInk(
 
     const bandedDrawable = importance
       ? (x: number, y: number): boolean => {
+          if (inLightestBand && inLightestBand(x, y)) return false;
           const imp = importance(x, y);
           return effectiveDarkness(x, y, imp) >= threshold + (1 - imp) * 0.25;
         }
-      : (x: number, y: number): boolean => baseDarkness(x, y) >= threshold;
+      : (x: number, y: number): boolean => {
+          if (inLightestBand && inLightestBand(x, y)) return false;
+          return baseDarkness(x, y) >= threshold;
+        };
 
     // In sky, raw tone decides drawability (base layer only — deeper
     // layers still add density where the value plan calls for it).
@@ -932,7 +958,10 @@ export function imageToPenInk(
         return {
           angleOffset: 0,
           fixedAngle: facet.angle + layerAngle,
-          maxArcLength: Math.min(cap, maxSpacing * (5 + 3 * random())),
+          // Run the full width of the (now larger) facet instead of dying
+          // mid-plane; the facet-id test still terminates at the real
+          // border, and cap (maxStrokeLength) still bounds plottability
+          maxArcLength: Math.min(cap, maxSpacing * (9 + 4 * random())),
           stopAt: (px: number, py: number): boolean => facetAt(px, py).id !== facet.id,
         };
       }
@@ -1195,9 +1224,14 @@ export function imageToPenInk(
     result = applyHandDrawnStyle(result, {
       amplitude: wobble,
       seed,
-      // Background strokes get visibly shakier than the subject
+      // Loose, shaky gestures belong only where there is structure to
+      // gesture at — a busy, unimportant background (foliage, distant
+      // clutter) loosens up, but a flat evenly-toned tone wall is exactly
+      // where a hand draws steadiest, so it stays calm. Gating the boost on
+      // local detail keeps backgrounds gestural without making clean
+      // cross-hatch fields read nervous.
       amplitudeScale: importance
-        ? (x, y) => 1 + (1 - importance(x, y)) * 0.9
+        ? (x, y) => 1 + (1 - importance(x, y)) * field.getDetail(x, y) * 0.9
         : undefined,
     });
   }
