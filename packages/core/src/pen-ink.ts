@@ -376,7 +376,10 @@ function buildHaloMask(
   // Tone probes sit beyond the halo itself so they read the masses on
   // either side, not the edge's own gradient skirt
   const probe = Math.max(radius * 2.5, 5);
-  const minStep = 0.12;
+  // Only a strong figure/ground step earns a reserved sliver — a low bar
+  // here rings every mild tonal boundary with white and the drawing reads
+  // as a cut-out stencil instead of tone meeting tone.
+  const minStep = 0.22;
 
   for (const points of contours) {
     let length = 0;
@@ -401,10 +404,10 @@ function buildHaloMask(
       const dA = darknessAt(p.x + nx * probe, p.y + ny * probe);
       const dB = darknessAt(p.x - nx * probe, p.y - ny * probe);
       if (Math.abs(dA - dB) < minStep) continue;
-      // A halo separates a dark mass from genuinely light ground. An edge
-      // between dark and darker (fur over deep shadow) must not carve a
-      // reserved-paper vein through what should read as one black mass
-      if (Math.min(dA, dB) > 0.5) continue;
+      // A halo separates a dark mass from genuinely *light* ground. The
+      // lighter side must actually be light — a dark-vs-mid edge inside a
+      // toned region must not carve a reserved-paper vein through it.
+      if (Math.min(dA, dB) > 0.4) continue;
 
       // Stamp a disk just off the line on the darker side — the gap
       // shows where tone work approaches the silhouette
@@ -573,7 +576,7 @@ export function imageToPenInk(
 
   const drawOutlines = options.drawOutlines ?? true;
   const outlineThreshold = options.outlineThreshold ?? 0.35;
-  const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.6));
+  const textureStrokes = Math.max(0, Math.min(1, options.textureStrokes ?? 0.45));
   const textureStyle = options.textureStyle ?? 'ticks';
   // Sky and water treatments switch themselves on when the labels say the
   // material is in frame — the artist doesn't need telling that a sky
@@ -757,13 +760,13 @@ export function imageToPenInk(
   // Contours are traced before any tone work: they are both the drawn
   // outlines and the source of the reserved-white halos that hold
   // hatching off the silhouettes
-  const contourHalo = Math.max(0, (options.contourHalo ?? 2.2) * scale);
+  const contourHalo = Math.max(0, (options.contourHalo ?? 1.4) * scale);
   const contours =
     drawOutlines || contourHalo > 0
       ? traceContours(field, {
           highThreshold: outlineThreshold,
           lowThreshold: outlineThreshold * 0.4,
-          minLength: Math.max(minLineLength * 3, 14),
+          minLength: Math.max(minLineLength * 4, 22),
           stepLength: Math.min(stepLength, 2),
           margin,
           importance,
@@ -796,12 +799,15 @@ export function imageToPenInk(
         )
       : null;
 
-  // Facet geometry: the flow direction snapped to 30° quanta, combined
-  // with a coarse noise-jittered cell lattice and a per-cell ±1 quantum
-  // twist. Within a facet every stroke shares one straight direction;
-  // crossing into a neighbouring facet changes the id, which terminates
-  // the stroke — parallel marks laid patch by patch, the way a hand
-  // hatches a rock face, instead of streamlines bending smoothly
+  // Facet geometry: toned masses are hatched plane by plane, each plane a
+  // patch of straight parallel marks at one snapped angle. A coarse
+  // jittered cell lattice gives each location a *stable* angle (sampled at
+  // the cell centre so it doesn't flicker pixel to pixel), but the facet
+  // *identity* is the angle bin alone — so neighbouring cells that land on
+  // the same angle merge into one plane and a stroke runs straight across
+  // them. Only a real change of facet angle breaks a stroke; the old id
+  // keyed on cell coordinates seamed every mark at the hidden grid, which
+  // read as mechanical "crazy paving".
   const FACET_BIN = Math.PI / 6;
   const facetCell = maxSpacing * 8;
   const facetNoise = facetHatch ? createNoise(seed + 6011) : null;
@@ -810,27 +816,29 @@ export function imageToPenInk(
     const jy = facetNoise!.noise2D(x / (facetCell * 2.7) + 31.7, y / (facetCell * 2.7) - 17.3);
     const cx = Math.floor((x + jx * facetCell * 0.6) / facetCell);
     const cy = Math.floor((y + jy * facetCell * 0.6) / facetCell);
-    const h = Math.sin(cx * 127.1 + cy * 311.7) * 43758.5453;
+    // One angle per cell, read at the cell centre so the whole cell shares
+    // it and the angle doesn't jitter along a stroke
+    const ox = (cx + 0.5) * facetCell;
+    const oy = (cy + 0.5) * facetCell;
+    const orientation = field.getOrientation(ox, oy);
     // Architecture is hatched plumb and level: where the labels say
     // building and the flow runs near a cardinal direction, the facet
-    // snaps to it and the per-cell twist is suppressed — masonry doesn't
-    // tilt patch by patch
-    const orientation = field.getOrientation(x, y);
-    if (semantic && semantic.confidence(x, y, 'building') > 0.5) {
+    // snaps to it — masonry doesn't tilt patch by patch
+    if (semantic && semantic.confidence(ox, oy, 'building') > 0.5) {
       const cardinal = Math.round(orientation / (Math.PI / 2)) * (Math.PI / 2);
       if (Math.abs(orientation - cardinal) < (25 * Math.PI) / 180) {
         const bin = Math.round(cardinal / FACET_BIN);
-        return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
+        return { angle: bin * FACET_BIN, id: bin };
       }
     }
-    // Twist only a minority of cells off the snapped flow angle: when most
-    // facets share one direction the mass reads as a few big coherent
-    // planes; twisting nearly every cell (the old ±1 bias) crackles the
-    // mass into cellular mud
-    const r = h - Math.floor(h);
-    const twist = r > 0.82 ? 1 : r < 0.18 ? -1 : 0;
+    // Twist whole regions off the snapped flow, not single cells: a
+    // low-frequency sign shifts the hatching direction over a patch of
+    // planes (a hand changing its stroke) instead of crackling cell by
+    // cell. Rare, so most of the mass reads as a few big coherent planes.
+    const tw = facetNoise!.noise2D(ox / (facetCell * 5), oy / (facetCell * 5) + 4.2);
+    const twist = tw > 0.55 ? 1 : tw < -0.55 ? -1 : 0;
     const bin = Math.round(orientation / FACET_BIN) + twist;
-    return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
+    return { angle: bin * FACET_BIN, id: bin };
   };
 
   // Value-plan restraint: with a value plan, the lightest mass band is
@@ -845,6 +853,16 @@ export function imageToPenInk(
     bandFloor > 0 ? (x: number, y: number): boolean => field.getMassDarkness(x, y) < bandFloor : null;
 
   const lines: FlowLine[] = [];
+
+  // The densest hatch never closes up completely: shadows tighten toward
+  // this floor so a dark mass stays visibly woven, the way real ink work
+  // builds darkness from layered strokes rather than a solid flood. The
+  // floor tracks the *stacked* coverage of the cross-hatch layers: a
+  // single layer can run tight and still read dark, but 3-5 overlapping
+  // layers at that spacing fill solid — so the floor opens up the more
+  // layers pile on, and a two-layer preset (etching) keeps richer blacks
+  // than a five-layer one (landscape).
+  const darkFloor = Math.max((1.9 + 0.6 * Math.max(0, layers - 2)) * scale, minSpacing * 0.6);
 
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
   // so shadows accumulate cross-hatched coverage.
@@ -867,13 +885,14 @@ export function imageToPenInk(
       const t = Math.pow(u, toneGamma);
       let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
 
-      // Deep shadows commit to near-solid black instead of plateauing at
-      // the regular minimum spacing. The ramp starts early enough that
-      // the darkest value band actually reaches it — real ink work
-      // anchors on a few solid black masses, not a uniform dark grey
+      // Deep shadows tighten toward a dark *floor*, not toward zero: even
+      // the densest mass keeps a sliver of paper between lines, so it reads
+      // as worked-over cross-hatch rather than a flooded ink blob. Real ink
+      // anchors darks on dense weave; solid fill is reserved for tiny
+      // accents (handled by the saturated-black patch-skip below, gated high).
       if (richBlacks && d > 0.72) {
         const deep = Math.min(1, (d - 0.72) / 0.2);
-        spacing *= 1 - 0.7 * deep;
+        spacing = Math.max(spacing * (1 - 0.4 * deep), darkFloor);
       }
 
       return spacing;
@@ -912,12 +931,14 @@ export function imageToPenInk(
       layer >= 1 && hatchPatchiness > 0 ? createNoise(seed + layer * 7919 + 31337) : null;
     const patchFreq = 1 / (maxSpacing * 4);
     const patchCut = -1 + hatchPatchiness * (0.55 + 0.4 * (layer - 1));
-    // Saturated blacks skip the patch gaps: a committed dark mass reads
-    // as solid ink, not as worked-over patches with paper showing through
+    // Only the genuinely darkest accents skip the patch gaps to read as
+    // committed ink; everywhere else even deep shadow keeps the patchy,
+    // worked-over weave rather than flooding (threshold held high so large
+    // mid-dark masses stay as visible cross-hatch).
     const patchedDrawable = patchNoise
       ? (x: number, y: number): boolean =>
           (patchNoise.noise2D(x * patchFreq, y * patchFreq) > patchCut ||
-            (richBlacks && baseDarkness(x, y) > 0.85)) &&
+            (richBlacks && baseDarkness(x, y) > 0.93)) &&
           toneDrawable(x, y)
       : toneDrawable;
 
@@ -946,8 +967,11 @@ export function imageToPenInk(
     const textureAmount =
       textureStrokes > 0
         ? (x: number, y: number): number => {
+            // Texture onsets only where detail is genuinely high — a higher
+            // floor keeps smooth-but-busy regions (masonry, piled objects)
+            // on coherent hatch instead of shattering them into tick noise.
             const d = field.getDetail(x, y);
-            const t = Math.min(1, Math.max(0, (d - 0.25) / 0.45));
+            const t = Math.min(1, Math.max(0, (d - 0.35) / 0.4));
             return t * t * (3 - 2 * t) * textureStrokes;
           }
         : null;
@@ -961,7 +985,7 @@ export function imageToPenInk(
     // patches tone is carried by coherent hatch — scattered lone ticks
     // read as noise, and a hand never dots a wash evenly
     const tickPatchNoise = createNoise(seed + 4243);
-    const tickPatchFreq = 1 / (maxSpacing * 4);
+    const tickPatchFreq = 1 / (maxSpacing * 6);
 
     // Per-stroke style dispatch, resolved at each seed:
     //   ticks for texture, capped cross-contour marks wrapping curved 3D
@@ -1096,7 +1120,7 @@ export function imageToPenInk(
         // fur, dense foliage) keeps its ticks everywhere
         if (
           darkHere < 0.5 &&
-          texture < 0.5 &&
+          texture < 0.6 &&
           foliage < 0.5 &&
           tickPatchNoise.noise2D(x * tickPatchFreq, y * tickPatchFreq) < 0
         ) {

@@ -20,7 +20,7 @@ const outputDir = resolve(process.argv[3] ?? join(root, 'gallery'));
 // Mirrors the web app's style presets (see packages/web ImageControls)
 const PRESETS = {
   classic: [
-    '--layers', '3', '--tone-gamma', '1.3', '--texture', '0.6', '--wobble', '0.8',
+    '--layers', '3', '--tone-gamma', '1.3', '--texture', '0.45', '--wobble', '0.8',
     '--value-bands', '4', '--massing', '0.5',
   ],
   portrait: [
@@ -33,13 +33,13 @@ const PRESETS = {
   ],
   landscape: [
     '--layers', '5', '--min-spacing', '1.8', '--max-spacing', '16', '--tone-gamma', '1',
-    '--texture', '0.7', '--wobble', '0.9', '--working-size', '800', '--white-cutoff', '0.14',
+    '--texture', '0.5', '--wobble', '0.9', '--working-size', '800', '--white-cutoff', '0.14',
     '--hatch-angle', '0', '--sky-stipple', '--calm-water', '--max-stroke', '70', '--field-smoothing', '5',
     '--value-bands', '4', '--hatch-patchiness', '0.7', '--facet-hatch', '--massing', '0.4',
   ],
   sketch: [
     '--layers', '1', '--min-spacing', '3.2', '--max-spacing', '24', '--tone-gamma', '1.35',
-    '--texture', '0.8', '--texture-style', 'scribble', '--wobble', '2.2', '--value-bands', '3',
+    '--texture', '0.6', '--texture-style', 'scribble', '--wobble', '2.2', '--value-bands', '3',
     '--hatch-patchiness', '0.6', '--detail', '0.4', '--white-cutoff', '0.1', '--hatch-angle', '-30',
     '--field-smoothing', '3', '--massing', '0.5',
   ],

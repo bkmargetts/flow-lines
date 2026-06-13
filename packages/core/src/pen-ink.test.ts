@@ -1232,10 +1232,21 @@ describe('art levers', () => {
 
     const on = imageToPenInk(scene, { ...base, skyStipple: true });
 
-    // Sky stipple turns every sky mark into a dot, so any long non-dot
-    // sky stroke must be a carved cloud edge — and it should hug the
-    // blob boundary
-    const edges = on.lines.filter((l) => !isDot(l) && l.points.every((p) => p.y < 200));
+    // Sky stipple turns every sky mark into a dot, so any *long* non-dot
+    // sky stroke must be a carved cloud edge — and it should hug the blob
+    // boundary. The length gate matters: a stray short hatch fragment near
+    // the soft cloud edge (tone work seeded just outside the blob) is not a
+    // carved outline and shouldn't be held to the outline's geometry.
+    const length = (l: { points: { x: number; y: number }[] }): number => {
+      let d = 0;
+      for (let i = 1; i < l.points.length; i++) {
+        d += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+      }
+      return d;
+    };
+    const edges = on.lines.filter(
+      (l) => !isDot(l) && length(l) >= 60 && l.points.every((p) => p.y < 200)
+    );
     expect(edges.length).toBeGreaterThan(0);
 
     // Cloud center in canvas coords: (0.5, 0.35) * 320 = (160, 112)

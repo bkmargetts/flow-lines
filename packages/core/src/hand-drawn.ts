@@ -43,8 +43,10 @@ export function applyHandDrawnStyle(
       return { ...line, points: line.points.map((p) => ({ ...p })) };
     }
 
-    // Bold contour lines are drawn with commitment — less shake
-    const penScale = line.pen === 'bold' ? 0.55 : 1;
+    // Bold contour lines are drawn with commitment — markedly less shake,
+    // so primary outlines read as confident strokes rather than wiggly
+    // uncertain fragments
+    const penScale = line.pen === 'bold' ? 0.4 : 1;
 
     // Per-line noise track, offset so strokes are decorrelated
     const track = lineIndex * 0.731 + 0.5;
@@ -79,8 +81,12 @@ export function applyHandDrawnStyle(
       const ty = ahead.y - behind.y;
       const len = Math.hypot(tx, ty) || 1;
 
+      // Bold outlines wobble at a longer wavelength too: a low-frequency
+      // drift reads as a confident hand, where a tight wiggle reads as a
+      // shaky one.
+      const effWavelength = line.pen === 'bold' ? wavelength * 1.8 : wavelength;
       const wobble =
-        lineAmplitude * noise.fbm(arc / wavelength, track, 2, 0.5, 2.2);
+        lineAmplitude * noise.fbm(arc / effWavelength, track, 2, 0.5, 2.2);
 
       points[i] = {
         x: p.x + offsetX + (-ty / len) * wobble,
