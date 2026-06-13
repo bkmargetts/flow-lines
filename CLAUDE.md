@@ -65,7 +65,22 @@ pnpm monorepo:
   few discrete value bands spread paper-to-black before spacing is
   computed: big committed value shapes (the artist's tonal abstraction)
   instead of continuous photographic gradation. Off for portraits, on
-  everywhere else.
+  everywhere else. The lightest band is held as clean paper (no marks at
+  all) so big light shapes read as a decision, not a veil of stray strokes.
+- **Composition-aware massing** (`massing`, `value-plan.ts`) — before the
+  plan is banded, tone is *redistributed by compositional role* rather than
+  reproduced from photographic luminance (the open frontier `valueBands`
+  couldn't reach). Ground that sits near a subject — but isn't the subject —
+  swells darker, feathered over a large radius, so the subject pops off a
+  swell of background tone even where the photo's background is light (the
+  one-sided `counterchange` boost can't invent that). Values are committed
+  apart from the mid so scenes with no single subject still read as a few
+  decisive shapes, and confident skies are never darkened. Subject-ness
+  comes from the subject mask, focal points, and person/object labels;
+  installed via `ImageField.setMassPlan` so spacing, the band-0 paper
+  restraint, and counterchange all see the composed plan. Needs
+  `valueBands >= 2`; on for the value-band presets, inert (so faithful) for
+  portraits.
 - **Importance map** (0..1) — composed multiplicatively from auto detail,
   focal points, subject masks, and depth bands; low importance lightens
   tone, widens spacing, suppresses outlines, increases wobble. This is
@@ -195,8 +210,12 @@ Implemented: everything above. The honest open gaps, in rough order of
 value: more stroke textures (bricks, grass), light-direction awareness,
 richer use of the semantic labels (per-label spacing/tone curves,
 material-specific marks — the plumbing is in, dispatch only scratches
-the surface). `valueBands` covers tonal *posterization*;
-inventing value structure that isn't in the photo (composition-aware
-massing) is still open. The research review that drove the roadmap lives in the
-conversation history of the original build; its remaining items are
-deliberate skips (CLIPasso-family, raster neural line drawing, SAM 2).
+the surface). Value structure now goes beyond posterization:
+`valueBands` commits photographic tone to bands, and `massing`
+(composition-aware redistribution — figure/ground swell + value commit)
+invents the structure that isn't in the photo. The next step there is
+massing that reasons about the whole frame (deliberate notan / negative-
+space composition), not just subject proximity. The research review that
+drove the roadmap lives in the conversation history of the original build;
+its remaining items are deliberate skips (CLIPasso-family, raster neural
+line drawing, SAM 2).
