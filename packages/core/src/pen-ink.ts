@@ -799,12 +799,15 @@ export function imageToPenInk(
         )
       : null;
 
-  // Facet geometry: the flow direction snapped to 30° quanta, combined
-  // with a coarse noise-jittered cell lattice and a per-cell ±1 quantum
-  // twist. Within a facet every stroke shares one straight direction;
-  // crossing into a neighbouring facet changes the id, which terminates
-  // the stroke — parallel marks laid patch by patch, the way a hand
-  // hatches a rock face, instead of streamlines bending smoothly
+  // Facet geometry: toned masses are hatched plane by plane, each plane a
+  // patch of straight parallel marks at one snapped angle. A coarse
+  // jittered cell lattice gives each location a *stable* angle (sampled at
+  // the cell centre so it doesn't flicker pixel to pixel), but the facet
+  // *identity* is the angle bin alone — so neighbouring cells that land on
+  // the same angle merge into one plane and a stroke runs straight across
+  // them. Only a real change of facet angle breaks a stroke; the old id
+  // keyed on cell coordinates seamed every mark at the hidden grid, which
+  // read as mechanical "crazy paving".
   const FACET_BIN = Math.PI / 6;
   const facetCell = maxSpacing * 8;
   const facetNoise = facetHatch ? createNoise(seed + 6011) : null;
@@ -813,27 +816,29 @@ export function imageToPenInk(
     const jy = facetNoise!.noise2D(x / (facetCell * 2.7) + 31.7, y / (facetCell * 2.7) - 17.3);
     const cx = Math.floor((x + jx * facetCell * 0.6) / facetCell);
     const cy = Math.floor((y + jy * facetCell * 0.6) / facetCell);
-    const h = Math.sin(cx * 127.1 + cy * 311.7) * 43758.5453;
+    // One angle per cell, read at the cell centre so the whole cell shares
+    // it and the angle doesn't jitter along a stroke
+    const ox = (cx + 0.5) * facetCell;
+    const oy = (cy + 0.5) * facetCell;
+    const orientation = field.getOrientation(ox, oy);
     // Architecture is hatched plumb and level: where the labels say
     // building and the flow runs near a cardinal direction, the facet
-    // snaps to it and the per-cell twist is suppressed — masonry doesn't
-    // tilt patch by patch
-    const orientation = field.getOrientation(x, y);
-    if (semantic && semantic.confidence(x, y, 'building') > 0.5) {
+    // snaps to it — masonry doesn't tilt patch by patch
+    if (semantic && semantic.confidence(ox, oy, 'building') > 0.5) {
       const cardinal = Math.round(orientation / (Math.PI / 2)) * (Math.PI / 2);
       if (Math.abs(orientation - cardinal) < (25 * Math.PI) / 180) {
         const bin = Math.round(cardinal / FACET_BIN);
-        return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
+        return { angle: bin * FACET_BIN, id: bin };
       }
     }
-    // Twist only a minority of cells off the snapped flow angle: when most
-    // facets share one direction the mass reads as a few big coherent
-    // planes; twisting nearly every cell (the old ±1 bias) crackles the
-    // mass into cellular mud
-    const r = h - Math.floor(h);
-    const twist = r > 0.82 ? 1 : r < 0.18 ? -1 : 0;
+    // Twist whole regions off the snapped flow, not single cells: a
+    // low-frequency sign shifts the hatching direction over a patch of
+    // planes (a hand changing its stroke) instead of crackling cell by
+    // cell. Rare, so most of the mass reads as a few big coherent planes.
+    const tw = facetNoise!.noise2D(ox / (facetCell * 5), oy / (facetCell * 5) + 4.2);
+    const twist = tw > 0.55 ? 1 : tw < -0.55 ? -1 : 0;
     const bin = Math.round(orientation / FACET_BIN) + twist;
-    return { angle: bin * FACET_BIN, id: bin * 7919 + cx * 131 + cy * 13007 };
+    return { angle: bin * FACET_BIN, id: bin };
   };
 
   // Value-plan restraint: with a value plan, the lightest mass band is
