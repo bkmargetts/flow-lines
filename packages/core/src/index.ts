@@ -32,6 +32,23 @@ export type { ImageFieldOptions, DirectionMap } from './image-field.js';
 export { imageToPenInk } from './pen-ink.js';
 export type { PenInkOptions, FocusOptions } from './pen-ink.js';
 
+// Physical paper sizes (plotter output)
+export {
+  PAPER_SIZES,
+  BASE_PX_PER_MM,
+  getPaperSize,
+  orientedDimsMm,
+  pageMetrics,
+  contentRect,
+} from './paper-sizes.js';
+export type {
+  PaperSize,
+  Orientation,
+  PaperFit,
+  PageMetrics,
+  Rect,
+} from './paper-sizes.js';
+
 // Semantic region labels
 export {
   SemanticMap,

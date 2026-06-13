@@ -77,6 +77,24 @@ export interface PenInkOptions {
   /** Random seed for reproducibility */
   seed?: number;
 
+  /**
+   * Length scale vs the reference render density (see paper-sizes
+   * `pageMetrics`). Multiplies physical lengths — stroke spacing, step length,
+   * wobble, halo — so that when the raster is sized to a sheet, *physical*
+   * spacing stays constant and line density tracks the sheet's millimetre size
+   * (a bigger sheet carries more lines at the same pen width). Default 1, which
+   * leaves the pixel-canvas behaviour exactly as before.
+   */
+  scale?: number;
+  /**
+   * Frame the drawing onto a larger page. `width`/`height` above stay the
+   * drawing's *content* size; `page` is the exported sheet. The rendered marks
+   * are translated by (`offsetX`,`offsetY`) and the canvas becomes the page —
+   * giving a letterbox border ('fit') or a centred crop ('fill', clipped to
+   * the page edge). Omit to draw straight onto the canvas as before.
+   */
+  page?: { width: number; height: number; offsetX: number; offsetY: number };
+
   /** Number of hatching layers, 1-5. Darker areas receive more layers (default 3) */
   layers?: number;
   /** Stroke spacing in the darkest areas, px (default 2.5) */
@@ -532,7 +550,10 @@ export function imageToPenInk(
 ): FlowLinesResult {
   const width = options.width ?? 800;
   const height = options.height ?? Math.max(1, Math.round((width * image.height) / image.width));
-  const margin = options.margin ?? 20;
+  // Physical-length scale: when the canvas is sized to a paper sheet, lengths
+  // expressed at the reference density are scaled so physical spacing holds.
+  const scale = Math.max(1e-3, options.scale ?? 1);
+  const margin = (options.margin ?? 20) * scale;
   const seed = options.seed ?? Math.floor(Math.random() * 1000000);
 
   // Scene labels, when provided, replace the geometric heuristics below
@@ -541,14 +562,14 @@ export function imageToPenInk(
   const semantic = options.labelMap ? new SemanticMap(options.labelMap, width, height) : null;
 
   const layers = Math.max(1, Math.min(5, Math.round(options.layers ?? 3)));
-  const minSpacing = options.minSpacing ?? 2.5;
-  const maxSpacing = Math.max(options.maxSpacing ?? 14, minSpacing + 0.1);
+  const minSpacing = (options.minSpacing ?? 2.5) * scale;
+  const maxSpacing = Math.max((options.maxSpacing ?? 14) * scale, minSpacing + 0.1);
   const whiteCutoff = options.whiteCutoff ?? 0.08;
   const toneGamma = options.toneGamma ?? 1;
 
-  const stepLength = options.stepLength ?? 1.5;
+  const stepLength = (options.stepLength ?? 1.5) * scale;
   const maxSteps = options.maxSteps ?? Math.ceil((Math.max(width, height) * 1.5) / stepLength);
-  const minLineLength = options.minLineLength ?? 4;
+  const minLineLength = (options.minLineLength ?? 4) * scale;
 
   const drawOutlines = options.drawOutlines ?? true;
   const outlineThreshold = options.outlineThreshold ?? 0.35;
@@ -565,10 +586,10 @@ export function imageToPenInk(
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
   const facetHatch = options.facetHatch ?? false;
   const crossContour = options.crossContour ?? false;
-  const maxStrokeLength = options.maxStrokeLength ?? 0;
+  const maxStrokeLength = (options.maxStrokeLength ?? 0) * scale;
   const autoStyle = options.autoStyle ?? false;
 
-  const wobble = options.wobble ?? 0.8;
+  const wobble = (options.wobble ?? 0.8) * scale;
 
   const field = new ImageField(image, {
     width,
@@ -736,7 +757,7 @@ export function imageToPenInk(
   // Contours are traced before any tone work: they are both the drawn
   // outlines and the source of the reserved-white halos that hold
   // hatching off the silhouettes
-  const contourHalo = Math.max(0, options.contourHalo ?? 2.2);
+  const contourHalo = Math.max(0, (options.contourHalo ?? 2.2) * scale);
   const contours =
     drawOutlines || contourHalo > 0
       ? traceContours(field, {
@@ -1297,7 +1318,117 @@ export function imageToPenInk(
     result = optimizePlot(result);
   }
 
+  // Frame the content onto the full sheet: translate every mark into place and
+  // make the canvas the page. 'fill' content can spill past the sheet, so clip
+  // marks to the page edge — a plotter must not draw off-paper.
+  if (options.page) {
+    result = frameOntoPage(result, width, height, options.page);
+  }
+
   return result;
+}
+
+/**
+ * Translate a content-sized result onto a larger page and reframe the canvas.
+ * Marks that fall outside the page (a 'fill' crop) are clipped to its edge.
+ */
+function frameOntoPage(
+  result: FlowLinesResult,
+  contentWidth: number,
+  contentHeight: number,
+  page: { width: number; height: number; offsetX: number; offsetY: number }
+): FlowLinesResult {
+  const { width: pageW, height: pageH, offsetX, offsetY } = page;
+  const needsClip =
+    offsetX < -0.5 ||
+    offsetY < -0.5 ||
+    offsetX + contentWidth > pageW + 0.5 ||
+    offsetY + contentHeight > pageH + 0.5;
+
+  const lines: FlowLine[] = [];
+  for (const line of result.lines) {
+    const moved = line.points.map((p) => ({ x: p.x + offsetX, y: p.y + offsetY }));
+    if (needsClip) {
+      for (const run of clipPolylineToRect(moved, pageW, pageH)) {
+        lines.push({ points: run, pen: line.pen });
+      }
+    } else {
+      lines.push({ points: moved, pen: line.pen });
+    }
+  }
+  return { lines, width: pageW, height: pageH, seed: result.seed };
+}
+
+/**
+ * Clip a polyline to the rectangle [0,width]×[0,height], returning the
+ * inside runs (Liang–Barsky per segment, stitched where consecutive segments
+ * stay inside). Points exactly on the edge are kept.
+ */
+function clipPolylineToRect(points: Point[], width: number, height: number): Point[][] {
+  const runs: Point[][] = [];
+  let current: Point[] = [];
+  const flush = (): void => {
+    if (current.length >= 2) runs.push(current);
+    current = [];
+  };
+  for (let i = 0; i < points.length - 1; i++) {
+    const seg = clipSegmentToRect(points[i], points[i + 1], width, height);
+    if (!seg) {
+      flush();
+      continue;
+    }
+    if (current.length === 0) {
+      current.push(seg.a, seg.b);
+    } else {
+      const last = current[current.length - 1];
+      if (Math.abs(last.x - seg.a.x) < 1e-6 && Math.abs(last.y - seg.a.y) < 1e-6) {
+        current.push(seg.b);
+      } else {
+        flush();
+        current.push(seg.a, seg.b);
+      }
+    }
+    if (seg.clippedEnd) flush();
+  }
+  flush();
+  return runs;
+}
+
+function clipSegmentToRect(
+  p0: Point,
+  p1: Point,
+  width: number,
+  height: number
+): { a: Point; b: Point; clippedEnd: boolean } | null {
+  const dx = p1.x - p0.x;
+  const dy = p1.y - p0.y;
+  let t0 = 0;
+  let t1 = 1;
+  const edges: [number, number][] = [
+    [-dx, p0.x],
+    [dx, width - p0.x],
+    [-dy, p0.y],
+    [dy, height - p0.y],
+  ];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return null; // parallel and outside
+    } else {
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return null;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return null;
+        if (r < t1) t1 = r;
+      }
+    }
+  }
+  return {
+    a: { x: p0.x + t0 * dx, y: p0.y + t0 * dy },
+    b: { x: p0.x + t1 * dx, y: p0.y + t1 * dy },
+    clippedEnd: t1 < 1,
+  };
 }
 
 /**

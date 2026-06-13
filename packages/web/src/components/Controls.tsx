@@ -1,4 +1,5 @@
 import type { AppState } from '../App';
+import { PaperControls } from './PaperControls';
 
 interface ControlsProps {
   state: AppState;
@@ -59,33 +60,12 @@ export function Controls({
 
       <h3 className="section-title">Canvas</h3>
 
-      <div className="control-group">
-        <label>
-          Width <span>{state.width}px</span>
-        </label>
-        <input
-          type="range"
-          min="200"
-          max="1200"
-          step="50"
-          value={state.width}
-          onChange={(e) => updateState({ width: parseInt(e.target.value, 10) })}
-        />
-      </div>
-
-      <div className="control-group">
-        <label>
-          Height <span>{state.height}px</span>
-        </label>
-        <input
-          type="range"
-          min="200"
-          max="1200"
-          step="50"
-          value={state.height}
-          onChange={(e) => updateState({ height: parseInt(e.target.value, 10) })}
-        />
-      </div>
+      <PaperControls
+        paper={state.paper}
+        orientation={state.orientation}
+        resolution={state.resolution}
+        onChange={updateState}
+      />
 
       <h3 className="section-title">Lines</h3>
 
@@ -207,15 +187,15 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Stroke Width <span>{state.strokeWidth}px</span>
+          Pen Width <span>{state.penWidthMm}mm</span>
         </label>
         <input
           type="range"
-          min="0.5"
-          max="5"
-          step="0.5"
-          value={state.strokeWidth}
-          onChange={(e) => updateState({ strokeWidth: parseFloat(e.target.value) })}
+          min="0.1"
+          max="1.5"
+          step="0.05"
+          value={state.penWidthMm}
+          onChange={(e) => updateState({ penWidthMm: parseFloat(e.target.value) })}
         />
       </div>
 

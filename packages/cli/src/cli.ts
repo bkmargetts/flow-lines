@@ -11,10 +11,15 @@ import {
   grayscaleFromRGBA,
   imageToPenInk,
   toSVG,
+  pageMetrics,
+  contentRect,
+  getPaperSize,
   type DirectionMap,
   type FlowLinesOptions,
   type GrayscaleImage,
   type LabelImage,
+  type Orientation,
+  type PaperFit,
   type PenInkOptions,
   type SVGOptions,
 } from '@flow-lines/core';
@@ -221,6 +226,15 @@ program
   .requiredOption('-i, --input <file>', 'Input image (PNG or JPEG)')
   .option('-w, --width <number>', 'Output width in pixels', '800')
   .option('-h, --height <number>', 'Output height in pixels (default: match image aspect)')
+  .option(
+    '--paper <size>',
+    'Plot to a physical sheet (a6,a5,a4,a3,letter,legal,tabloid); overrides --width/--height and exports the SVG in mm'
+  )
+  .option('--orientation <o>', 'Paper orientation: portrait or landscape', 'portrait')
+  .option('--fit <mode>', 'How the photo sits on the sheet: fit (letterbox) or fill (crop)', 'fit')
+  .option('--margin-mm <number>', 'Clear paper border in mm (with --paper)', '10')
+  .option('--pen-width-mm <number>', 'Plotted pen width in mm (with --paper)', '0.3')
+  .option('--resolution <number>', 'Render density in px per mm (with --paper)', '3')
   .option('-s, --seed <number>', 'Random seed for reproducibility')
   .option('-m, --margin <number>', 'Margin from canvas edges', '20')
   .option('--layers <number>', 'Hatching layers; shadows get cross-hatched (1-5)', '3')
@@ -308,10 +322,44 @@ program
     const image = loadImage(inputPath);
     console.log(`  Image size: ${image.width}x${image.height}`);
 
-    const outputWidth = parseInt(options.width, 10);
-    const outputHeight = options.height
-      ? parseInt(options.height, 10)
-      : Math.max(1, Math.round((outputWidth * image.height) / image.width));
+    // A physical sheet (--paper) frames the drawing onto a page sized in mm:
+    // the drawing fills its content rect, the SVG exports at true millimetre
+    // dimensions, and stroke spacing scales so density tracks the sheet size.
+    // Without --paper the original pixel behaviour is unchanged.
+    let outputWidth: number;
+    let outputHeight: number;
+    let paperFraming: Pick<PenInkOptions, 'scale' | 'page'> = {};
+    let paperSvg: Pick<SVGOptions, 'physicalWidth' | 'physicalHeight'> = {};
+    let paperStrokeWidth: number | undefined;
+
+    if (options.paper) {
+      const page = pageMetrics(
+        getPaperSize(String(options.paper).toLowerCase()),
+        options.orientation as Orientation,
+        parseFloat(options.resolution)
+      );
+      const marginPx = parseFloat(options.marginMm) * page.pxPerMm;
+      const rect = contentRect(
+        page.widthPx,
+        page.heightPx,
+        marginPx,
+        image.width / image.height,
+        options.fit as PaperFit
+      );
+      outputWidth = Math.max(1, Math.round(rect.width));
+      outputHeight = Math.max(1, Math.round(rect.height));
+      paperFraming = {
+        scale: page.scale,
+        page: { width: page.widthPx, height: page.heightPx, offsetX: rect.x, offsetY: rect.y },
+      };
+      paperSvg = { physicalWidth: `${page.widthMm}mm`, physicalHeight: `${page.heightMm}mm` };
+      paperStrokeWidth = parseFloat(options.penWidthMm) * page.pxPerMm;
+    } else {
+      outputWidth = parseInt(options.width, 10);
+      outputHeight = options.height
+        ? parseInt(options.height, 10)
+        : Math.max(1, Math.round((outputWidth * image.height) / image.width));
+    }
 
     const focus: PenInkOptions['focus'] = (options.focus as string[]).map((spec) => {
       const [fx, fy] = spec.split(',').map((v: string) => parseFloat(v));
@@ -330,7 +378,8 @@ program
 
     const penInkOptions: PenInkOptions = {
       width: outputWidth,
-      height: options.height ? parseInt(options.height, 10) : undefined,
+      height: options.paper ? outputHeight : options.height ? parseInt(options.height, 10) : undefined,
+      ...paperFraming,
       detailEmphasis: parseFloat(options.detail),
       focus,
       subjectMask: options.mask ? loadImage(resolve(process.cwd(), options.mask)) : undefined,
@@ -350,7 +399,8 @@ program
       optimize: options.optimize,
       autoStyle: options.autoStyle ?? false,
       seed: options.seed ? parseInt(options.seed, 10) : undefined,
-      margin: parseInt(options.margin, 10),
+      // With a sheet the page border is the margin; the photo fills its content rect
+      margin: options.paper ? 0 : parseInt(options.margin, 10),
       layers: parseInt(options.layers, 10),
       minSpacing: parseFloat(options.minSpacing),
       maxSpacing: parseFloat(options.maxSpacing),
@@ -383,9 +433,10 @@ program
 
     const svgOptions: SVGOptions = {
       strokeColor: options.strokeColor,
-      strokeWidth: parseFloat(options.strokeWidth),
+      strokeWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
       includeBackground: options.background ?? false,
       backgroundColor: options.backgroundColor,
+      ...paperSvg,
     };
 
     console.log('Rendering pen-and-ink strokes...');

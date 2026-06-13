@@ -22,6 +22,23 @@ describe('toSVG', () => {
     expect(svg).toContain('</svg>');
   });
 
+  it('should tag physical mm dimensions while keeping a px viewBox', () => {
+    const result = generateFlowLines({
+      width: 630,
+      height: 891,
+      lineCount: 5,
+      seed: 42,
+    });
+
+    const svg = toSVG(result, { physicalWidth: '210mm', physicalHeight: '297mm' });
+
+    // Plotter/printer reads the real sheet size...
+    expect(svg).toContain('width="210mm"');
+    expect(svg).toContain('height="297mm"');
+    // ...while geometry and preview stay in the pixel coordinate space
+    expect(svg).toContain('viewBox="0 0 630 891"');
+  });
+
   it('should use custom stroke color', () => {
     const result = generateFlowLines({
       width: 400,

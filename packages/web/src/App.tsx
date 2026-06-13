@@ -3,12 +3,18 @@ import {
   generateFlowLines,
   grayscaleFromRGBA,
   toSVG,
+  pageMetrics,
+  contentRect,
+  getPaperSize,
+  BASE_PX_PER_MM,
   type FlowLinesOptions,
   type GrayscaleImage,
   type LabelImage,
   type PortraitOptions,
   type SVGOptions,
   type Point,
+  type Orientation,
+  type PaperFit,
 } from '@flow-lines/core';
 import { Controls } from './components/Controls';
 import { ImageControls, PRESETS } from './components/ImageControls';
@@ -18,8 +24,11 @@ import { getRenderClient, type RenderedSVG } from './render-client';
 export type Mode = 'flow' | 'image';
 
 export interface AppState {
-  width: number;
-  height: number;
+  /** Paper size id (a4, a3, letter…) — the canvas is a physical sheet */
+  paper: string;
+  orientation: Orientation;
+  /** Render density in pixels per millimetre */
+  resolution: number;
   lineCount: number;
   seed: number;
   stepLength: number;
@@ -31,15 +40,23 @@ export interface AppState {
   persistence: number;
   lacunarity: number;
   strokeColor: string;
-  strokeWidth: number;
+  /** Pen width in millimetres (plotted line weight) */
+  penWidthMm: number;
   paintMode: boolean;
   paintedPoints: Point[];
   showDots: boolean;
 }
 
 export interface InkSettings {
-  width: number;
-  margin: number;
+  /** Paper size id (a4, a3, letter…) — the canvas is a physical sheet */
+  paper: string;
+  orientation: Orientation;
+  /** How the photo sits on a sheet of a different aspect */
+  fit: PaperFit;
+  /** Render density in pixels per millimetre */
+  resolution: number;
+  /** Clear paper border in millimetres */
+  marginMm: number;
   seed: number;
   layers: number;
   minSpacing: number;
@@ -51,7 +68,8 @@ export interface InkSettings {
   contourHalo: number;
   wobble: number;
   strokeColor: string;
-  strokeWidth: number;
+  /** Pen width in millimetres (plotted line weight) */
+  penWidthMm: number;
   detailEmphasis: number;
   focusRadiusPct: number;
   focusStrength: number;
@@ -113,8 +131,9 @@ export interface PortraitState {
 }
 
 const defaultState: AppState = {
-  width: 600,
-  height: 600,
+  paper: 'a4',
+  orientation: 'portrait',
+  resolution: BASE_PX_PER_MM,
   lineCount: 100,
   seed: Math.floor(Math.random() * 1000000),
   stepLength: 2,
@@ -126,15 +145,18 @@ const defaultState: AppState = {
   persistence: 0.5,
   lacunarity: 2,
   strokeColor: '#000000',
-  strokeWidth: 1,
+  penWidthMm: 0.3,
   paintMode: false,
   paintedPoints: [],
   showDots: true,
 };
 
 const defaultInkSettings: InkSettings = {
-  width: 600,
-  margin: 20,
+  paper: 'a4',
+  orientation: 'portrait',
+  fit: 'fit',
+  resolution: BASE_PX_PER_MM,
+  marginMm: 10,
   seed: Math.floor(Math.random() * 1000000),
   layers: 3,
   minSpacing: 2.5,
@@ -146,7 +168,7 @@ const defaultInkSettings: InkSettings = {
   contourHalo: 2.2,
   wobble: 0.8,
   strokeColor: '#000000',
-  strokeWidth: 1,
+  penWidthMm: 0.3,
   detailEmphasis: 0.3,
   focusRadiusPct: 25,
   focusStrength: 0.85,
@@ -498,28 +520,64 @@ export function App() {
     [updateInkSettings]
   );
 
+  // The chosen sheet resolved to a concrete pixel page plus the rectangle the
+  // photo occupies on it (letterbox 'fit' or centred 'fill'). Shared by the
+  // render effect and the focus overlay so taps land on the photo, not the
+  // paper border. The long-edge cap is the phone/low-memory budget.
+  const inkLayout = useMemo(() => {
+    if (!sourceImage) return null;
+    const capPx = lowMemory ? 420 : IS_MOBILE ? 520 : undefined;
+    const page = pageMetrics(
+      getPaperSize(inkSettings.paper),
+      inkSettings.orientation,
+      inkSettings.resolution,
+      capPx
+    );
+    const marginPx = inkSettings.marginMm * page.pxPerMm;
+    const imgAspect = sourceImage.width / sourceImage.height;
+    const rect = contentRect(page.widthPx, page.heightPx, marginPx, imgAspect, inkSettings.fit);
+    return {
+      page,
+      rect,
+      contentW: Math.max(1, Math.round(rect.width)),
+      contentH: Math.max(1, Math.round(rect.height)),
+    };
+  }, [
+    sourceImage,
+    inkSettings.paper,
+    inkSettings.orientation,
+    inkSettings.fit,
+    inkSettings.marginMm,
+    inkSettings.resolution,
+    lowMemory,
+  ]);
+
   // Pen-ink rendering runs in a Web Worker so sliders and AI updates
   // never freeze the UI; the previous frame stays visible while the next
   // one computes (latest-wins queue drops intermediate slider positions)
   useEffect(() => {
-    if (mode !== 'image' || !sourceImage) return;
+    if (mode !== 'image' || !sourceImage || !inkLayout) return;
 
-    // Memory budget: dense depth renders have killed pages on phones
-    const cap = lowMemory ? 420 : IS_MOBILE ? 520 : Infinity;
-    const jobWidth = Math.min(inkSettings.width, cap);
-
-    const outputHeight = Math.max(
-      1,
-      Math.round((jobWidth * sourceImage.height) / sourceImage.width)
-    );
+    const { page, rect, contentW, contentH } = inkLayout;
+    // Detail raster still gets the phone/low-memory cap on its own axis
+    const wsCap = lowMemory ? 420 : IS_MOBILE ? 520 : Infinity;
 
     setIsRendering(true);
     getRenderClient()
       .render(
         sourceImage,
         {
-          width: jobWidth,
-          margin: inkSettings.margin,
+          width: contentW,
+          height: contentH,
+          // The page border is the margin; the photo fills its content rect
+          margin: 0,
+          scale: page.scale,
+          page: {
+            width: page.widthPx,
+            height: page.heightPx,
+            offsetX: rect.x,
+            offsetY: rect.y,
+          },
           seed: inkSettings.seed,
           minSpacing: inkSettings.minSpacing,
           maxSpacing: inkSettings.maxSpacing,
@@ -548,15 +606,16 @@ export function App() {
           valueBands: inkSettings.valueBands,
           massing: inkSettings.massing,
           hatchPatchiness: inkSettings.hatchPatchiness,
-          workingSize: Math.min(inkSettings.workingSize, cap),
+          workingSize: Math.min(inkSettings.workingSize, wsCap),
           layers: lowMemory ? Math.min(2, inkSettings.layers) : inkSettings.layers,
           richBlacks: lowMemory ? false : inkSettings.richBlacks,
           counterchange: inkSettings.counterchange,
+          // Focus points are normalised to the photo, so they live in the
+          // content rect's coordinate space (the renderer frames it onto the page)
           focus: focusPoints.map((point) => ({
-            x: point.x * jobWidth,
-            y: point.y * outputHeight,
-            radius:
-              (inkSettings.focusRadiusPct / 100) * Math.min(jobWidth, outputHeight),
+            x: point.x * contentW,
+            y: point.y * contentH,
+            radius: (inkSettings.focusRadiusPct / 100) * Math.min(contentW, contentH),
             strength: inkSettings.focusStrength,
           })),
           subjectMask: subjectMask ?? undefined,
@@ -573,7 +632,11 @@ export function App() {
         },
         {
           strokeColor: inkSettings.strokeColor,
-          strokeWidth: inkSettings.strokeWidth,
+          // Pen width is physical: convert mm to px at the page's density so
+          // the plotted line is the real weight, and tag the SVG in mm
+          strokeWidth: inkSettings.penWidthMm * page.pxPerMm,
+          physicalWidth: `${page.widthMm}mm`,
+          physicalHeight: `${page.heightMm}mm`,
         }
       )
       .then((rendered) => {
@@ -588,7 +651,7 @@ export function App() {
           setIsRendering(false);
         }
       });
-  }, [mode, sourceImage, inkSettings, focusPoints, subjectMask, portraitState, depthMap, labelMap, lowMemory]);
+  }, [mode, sourceImage, inkLayout, inkSettings, focusPoints, subjectMask, portraitState, depthMap, labelMap, lowMemory]);
 
   // Auto ML (scene labels ~5MB, then depth ~25MB where the device
   // reports WebGPU) waits for the first render to finish, then runs the
@@ -614,16 +677,21 @@ export function App() {
   const generated = useMemo(() => {
     if (mode === 'image') {
       if (!sourceImage || !inkRender) {
-        return { svg: '', width: inkSettings.width, height: inkSettings.width };
+        const dims = inkLayout?.page ?? { widthPx: 0, heightPx: 0 };
+        return { svg: '', width: dims.widthPx, height: dims.heightPx };
       }
       return inkRender;
     }
 
     const usePaintedPoints = state.paintMode && state.paintedPoints.length > 0;
 
+    // The flow canvas is a physical sheet too: paper + orientation set the
+    // pixel dimensions and the SVG is tagged in mm for the plotter
+    const page = pageMetrics(getPaperSize(state.paper), state.orientation, state.resolution);
+
     const flowOptions: FlowLinesOptions = {
-      width: state.width,
-      height: state.height,
+      width: page.widthPx,
+      height: page.heightPx,
       lineCount: usePaintedPoints ? state.paintedPoints.length : state.lineCount,
       seed: state.seed,
       stepLength: state.stepLength,
@@ -639,12 +707,14 @@ export function App() {
 
     const svgOptions: SVGOptions = {
       strokeColor: state.strokeColor,
-      strokeWidth: state.strokeWidth,
+      strokeWidth: state.penWidthMm * page.pxPerMm,
+      physicalWidth: `${page.widthMm}mm`,
+      physicalHeight: `${page.heightMm}mm`,
     };
 
     const result = generateFlowLines(flowOptions);
-    return { svg: toSVG(result, svgOptions), width: state.width, height: state.height };
-  }, [mode, state, sourceImage, inkRender, inkSettings.width]);
+    return { svg: toSVG(result, svgOptions), width: page.widthPx, height: page.heightPx };
+  }, [mode, state, sourceImage, inkRender, inkLayout]);
 
   const downloadSVG = useCallback(() => {
     if (!generated.svg) return;
@@ -753,19 +823,25 @@ export function App() {
             onPaint={addPaintedPoint}
             focusSelectMode={mode === 'image' && !!sourceImage}
             focusMarkers={
-              mode === 'image'
+              mode === 'image' && inkLayout
                 ? focusPoints.map((point) => ({
-                    x: point.x * generated.width,
-                    y: point.y * generated.height,
+                    x: inkLayout.rect.x + point.x * inkLayout.contentW,
+                    y: inkLayout.rect.y + point.y * inkLayout.contentH,
                     radius:
                       (inkSettings.focusRadiusPct / 100) *
-                      Math.min(generated.width, generated.height),
+                      Math.min(inkLayout.contentW, inkLayout.contentH),
                   }))
                 : []
             }
-            onSetFocus={(point) =>
-              handleSetFocus({ x: point.x / generated.width, y: point.y / generated.height })
-            }
+            onSetFocus={(point) => {
+              if (!inkLayout) return;
+              // Map the page-pixel tap back to a coordinate normalised to the
+              // photo (its content rect), so border taps are ignored gracefully
+              handleSetFocus({
+                x: (point.x - inkLayout.rect.x) / inkLayout.contentW,
+                y: (point.y - inkLayout.rect.y) / inkLayout.contentH,
+              });
+            }}
           />
         )}
       </main>

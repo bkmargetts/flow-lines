@@ -39,6 +39,61 @@ describe('imageToPenInk', () => {
     expect(result.height).toBe(200);
   });
 
+  it('frames the drawing onto a larger page (letterbox), translated and in bounds', () => {
+    const image = makeImage(100, 100, () => 0.1);
+    const offsetX = 40;
+    const offsetY = 80;
+    const result = imageToPenInk(image, {
+      width: 200,
+      height: 200,
+      seed: 42,
+      wobble: 0,
+      page: { width: 300, height: 400, offsetX, offsetY },
+    });
+
+    // Canvas is now the page
+    expect(result.width).toBe(300);
+    expect(result.height).toBe(400);
+    // Marks sit inside the content rect, never on the paper border
+    let minX = Infinity;
+    let minY = Infinity;
+    for (const line of result.lines) {
+      for (const p of line.points) {
+        expect(p.x).toBeGreaterThanOrEqual(offsetX - 1);
+        expect(p.y).toBeGreaterThanOrEqual(offsetY - 1);
+        expect(p.x).toBeLessThanOrEqual(offsetX + 200 + 1);
+        expect(p.y).toBeLessThanOrEqual(offsetY + 200 + 1);
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+      }
+    }
+    // The translation actually moved the marks off the origin
+    expect(minX).toBeGreaterThan(10);
+    expect(minY).toBeGreaterThan(10);
+  });
+
+  it('clips marks to the page edge when content overflows (fill crop)', () => {
+    const image = makeImage(100, 100, () => 0.1);
+    // Content is larger than the page and centred, so it spills past every edge
+    const result = imageToPenInk(image, {
+      width: 400,
+      height: 400,
+      seed: 42,
+      wobble: 0,
+      page: { width: 200, height: 200, offsetX: -100, offsetY: -100 },
+    });
+
+    expect(result.lines.length).toBeGreaterThan(0);
+    for (const line of result.lines) {
+      for (const p of line.points) {
+        expect(p.x).toBeGreaterThanOrEqual(-0.5);
+        expect(p.y).toBeGreaterThanOrEqual(-0.5);
+        expect(p.x).toBeLessThanOrEqual(200.5);
+        expect(p.y).toBeLessThanOrEqual(200.5);
+      }
+    }
+  });
+
   it('leaves white regions blank', () => {
     const result = imageToPenInk(halfDark, {
       width: 240,
