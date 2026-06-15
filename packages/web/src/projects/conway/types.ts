@@ -92,6 +92,6 @@ export const defaultConwayState: ConwayState = {
 
   multiInk: true,
   presentColor: '#1a1a1a',
-  ghostColor: '#6b6b66',
-  trailColor: '#8a7a5c',
+  ghostColor: '#5b6e7a',
+  trailColor: '#b06a3c',
 };
