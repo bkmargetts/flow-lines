@@ -139,6 +139,12 @@ export interface ConwayExposureOptions {
   vignette?: number;
   /** Draw a plate-border line just inside the margin as plottable strokes (default = artStyle) */
   plateBorder?: boolean;
+  /**
+   * Gap between the drawing and the plate border, in grid cells (default 2).
+   * The gutter is reserved for the whole art mode, so changing it resizes the
+   * drawing area, but toggling the border on/off never does.
+   */
+  borderGap?: number;
 }
 
 interface Simulation {
@@ -761,17 +767,19 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   const offCenter = options.offCenter ?? (artStyle ? 0.6 : 0);
   const vignette = options.vignette ?? (artStyle ? 0.4 : 0);
   const plateBorder = options.plateBorder ?? artStyle;
+  const borderGap = Math.max(0.5, options.borderGap ?? 2);
 
   const cellSize = Math.max(2, options.cellSize ?? Math.round(width / 100));
   const wobble = options.wobble ?? Math.max(0.4, cellSize * 0.12);
   const haloRadius = options.haloRadius ?? cellSize * 0.6;
   const noise = createNoise(seed + 8101);
 
-  // Reserve a frame gutter for the whole art mode (not just when the border is
-  // drawn) so toggling the plate border only adds/removes the line — it must
-  // never resize the grid, which would re-run an entirely different
-  // simulation. The faithful path keeps the original full-margin grid.
-  const frameMargin = margin + (artStyle ? cellSize * 3 : 0);
+  // Reserve the border gutter (borderGap cells) for the whole art mode, not
+  // just when the border is drawn — so toggling the plate border only
+  // adds/removes the line and never resizes the grid (a different grid would
+  // re-run an entirely different simulation). Changing the gap deliberately
+  // does resize the drawing area. The faithful path keeps the full margin.
+  const frameMargin = margin + (artStyle ? borderGap * cellSize : 0);
 
   const usableW = Math.max(0, width - 2 * frameMargin);
   const usableH = Math.max(0, height - 2 * frameMargin);
@@ -1098,11 +1106,12 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   // densified loop back to corners and the SVG writer would round it to an
   // oval; the optimizer would re-chain split edges into the same loop).
   if (plateBorder) {
-    const inset = margin + cellSize;
-    const x0 = inset;
-    const y0 = inset;
-    const x1 = width - inset;
-    const y1 = height - inset;
+    // The border sits at the page margin; the drawing is already held a
+    // borderGap-cell gutter inside it (via frameMargin above).
+    const x0 = margin;
+    const y0 = margin;
+    const x1 = width - margin;
+    const y1 = height - margin;
     if (x1 - x0 > cellSize && y1 - y0 > cellSize) {
       const corners: Point[] = [
         { x: x0, y: y0 },

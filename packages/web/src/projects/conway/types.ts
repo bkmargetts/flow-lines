@@ -50,6 +50,8 @@ export interface ConwayState {
   vignette: number;
   /** Draw a plate-border line just inside the margin */
   plateBorder: boolean;
+  /** Gap between the drawing and the plate border, in grid cells */
+  borderGap: number;
 
   // ---- Presentation / inks ----
   /** Render preview & export in per-layer inks (present/ghost/trail) */
@@ -89,6 +91,7 @@ export const defaultConwayState: ConwayState = {
   offCenter: 0.6,
   vignette: 0.4,
   plateBorder: true,
+  borderGap: 2,
 
   multiInk: true,
   presentColor: '#1a1a1a',

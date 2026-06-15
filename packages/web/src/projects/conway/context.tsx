@@ -96,6 +96,7 @@ export function ConwayProvider({
       offCenter: state.offCenter,
       vignette: state.vignette,
       plateBorder: state.plateBorder,
+      borderGap: state.borderGap,
     };
 
     const result = generateConwayExposure(options);
