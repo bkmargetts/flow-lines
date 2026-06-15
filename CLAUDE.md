@@ -208,8 +208,10 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
   live site may serve a feature branch.
 - **Projects** (`packages/web/src/projects/`) — the web app is a shell over a
   code registry of independent art tools. Each project is a self-contained
-  module (`<id>/` with a context provider + `Controls`/`Canvas` + an `index`
-  exporting a `ProjectModule`) registered in `projects/registry.ts`; built-in
+  module (`<id>/` with a context provider, one or more **features** —
+  second-level tabs, each a `Controls`/`Canvas` pair sharing the project's
+  provider state — and an `index` exporting a `ProjectModule`) registered in
+  `projects/registry.ts`; built-in
   Image → Ink and Flow Field are the first two. The page frame (paper,
   orientation, resolution, margin, fit) lives in a shared `FrameContext`
   (`FrameControls`) so every project plots to the same physical sheet. New
