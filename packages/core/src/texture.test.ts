@@ -80,18 +80,34 @@ describe('generateTexture', () => {
     expect(dense.length).toBeGreaterThan(sparse.length);
   });
 
-  it('places more shapes as count rises', () => {
-    const few = generateTexture({
+  it('lays more shapes as spacing tightens', () => {
+    const wide = generateTexture({
       ...base,
       style: 'shapes',
-      shapes: { kinds: ['square'], minSize: 6, maxSize: 10, count: 20 },
+      spacingMm: 10,
+      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0 },
     });
-    const many = generateTexture({
+    const tight = generateTexture({
       ...base,
       style: 'shapes',
-      shapes: { kinds: ['square'], minSize: 6, maxSize: 10, count: 200 },
+      spacingMm: 3,
+      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0 },
     });
-    expect(many.length).toBeGreaterThan(few.length);
+    expect(tight.length).toBeGreaterThan(wide.length);
+  });
+
+  it('packs shapes closer as overlap rises (same spacing)', () => {
+    const none = generateTexture({
+      ...base,
+      style: 'shapes',
+      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0 },
+    });
+    const overlapped = generateTexture({
+      ...base,
+      style: 'shapes',
+      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0.6 },
+    });
+    expect(overlapped.length).toBeGreaterThan(none.length);
   });
 
   it('adds a perpendicular set with crossHatch', () => {

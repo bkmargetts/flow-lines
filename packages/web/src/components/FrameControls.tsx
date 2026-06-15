@@ -122,7 +122,8 @@ export function FrameControls() {
 
           {(frame.textureStyle === 'hatch' ||
             frame.textureStyle === 'grid' ||
-            frame.textureStyle === 'stipple') && (
+            frame.textureStyle === 'stipple' ||
+            frame.textureStyle === 'shapes') && (
             <div className="control-group">
               <label>
                 Spacing <span>{frame.textureSpacingMm.toFixed(1)}mm</span>
@@ -169,9 +170,7 @@ export function FrameControls() {
             </div>
           )}
 
-          {(frame.textureStyle === 'stipple' ||
-            frame.textureStyle === 'contours' ||
-            frame.textureStyle === 'shapes') && (
+          {(frame.textureStyle === 'stipple' || frame.textureStyle === 'contours') && (
             <div className="control-group">
               <label>
                 Density <span>{frame.textureDensity.toFixed(2)}</span>
@@ -187,20 +186,22 @@ export function FrameControls() {
             </div>
           )}
 
-          <div className="control-group">
-            <label>
-              {frame.textureStyle === 'contours' ? 'Scale' : 'Mark size'}{' '}
-              <span>{frame.textureScale.toFixed(2)}</span>
-            </label>
-            <input
-              type="range"
-              min="0.2"
-              max="3"
-              step="0.1"
-              value={frame.textureScale}
-              onChange={(e) => updateFrame({ textureScale: parseFloat(e.target.value) })}
-            />
-          </div>
+          {frame.textureStyle !== 'shapes' && (
+            <div className="control-group">
+              <label>
+                {frame.textureStyle === 'contours' ? 'Scale' : 'Mark size'}{' '}
+                <span>{frame.textureScale.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0.2"
+                max="3"
+                step="0.1"
+                value={frame.textureScale}
+                onChange={(e) => updateFrame({ textureScale: parseFloat(e.target.value) })}
+              />
+            </div>
+          )}
 
           {frame.textureStyle !== 'grid' && (
             <div className="control-group">
@@ -241,6 +242,43 @@ export function FrameControls() {
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {frame.textureStyle === 'shapes' && (
+            <div className="control-group">
+              <label>
+                Shape size <span>{frame.textureShapes.sizeMm.toFixed(1)}mm</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="20"
+                step="0.5"
+                value={frame.textureShapes.sizeMm}
+                onChange={(e) =>
+                  updateFrame({ textureShapes: { ...frame.textureShapes, sizeMm: parseFloat(e.target.value) } })
+                }
+              />
+            </div>
+          )}
+
+          {frame.textureStyle === 'shapes' && (
+            <div className="control-group">
+              <label>
+                Overlap <span>{frame.textureShapes.overlap.toFixed(2)}</span>
+                <InfoTip text="Compresses the lattice below the spacing so shapes overlap. 0 keeps them on the spacing grid; higher packs them together." />
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="0.9"
+                step="0.05"
+                value={frame.textureShapes.overlap}
+                onChange={(e) =>
+                  updateFrame({ textureShapes: { ...frame.textureShapes, overlap: parseFloat(e.target.value) } })
+                }
+              />
             </div>
           )}
 

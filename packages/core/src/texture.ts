@@ -16,13 +16,12 @@ import { gaussianBlur } from './image.js';
 export type TextureStyle = 'hatch' | 'stipple' | 'contours' | 'grid' | 'shapes';
 
 export interface TextureShapeOptions {
-  /** Which simple shapes to scatter */
+  /** Which simple shapes to place (cycled across the lattice) */
   kinds: Array<'square' | 'circle' | 'line'>;
-  /** Smallest / largest shape size in px (before `scale`) */
-  minSize: number;
-  maxSize: number;
-  /** How many shapes to place */
-  count: number;
+  /** Shape size in mm (consistent for every shape) */
+  sizeMm: number;
+  /** 0..1 — compresses the lattice pitch below `spacingMm` so shapes overlap */
+  overlap: number;
 }
 
 export interface TextureOptions {
@@ -380,45 +379,44 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
     return out;
   }
 
-  // style === 'shapes'
-  const sh = shapes ?? { kinds: ['square', 'circle', 'line'], minSize: 6, maxSize: 22, count: 120 };
-  const kinds = sh.kinds.length ? sh.kinds : ['square'];
-  const count = Math.min(20000, Math.max(0, Math.round(sh.count * (0.5 + density))));
-  for (let i = 0; i < count; i++) {
-    const kind = kinds[Math.floor(random() * kinds.length)];
-    const size = (sh.minSize + random() * Math.max(0, sh.maxSize - sh.minSize)) * Math.max(0.2, scale);
-    const half = size / 2;
-    const a = angle + (random() - 0.5) * jitter * Math.PI;
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
-    // Clamp the centre by the shape's circumradius so a rotated corner can't
-    // poke past the margin (a square reaches half·√2 from its centre).
-    const reach = kind === 'square' ? half * Math.SQRT2 : half;
-    const availX = x1 - x0 - 2 * reach;
-    const availY = y1 - y0 - 2 * reach;
-    if (availX <= 0 || availY <= 0) continue;
-    const cx = x0 + reach + random() * availX;
-    const cy = y0 + reach + random() * availY;
-    if (!isClear(cx, cy)) continue;
-    if (kind === 'circle') {
-      out.push(TEX(closedLoop(cx, cy, half, 16, random() * Math.PI * 2)));
-    } else if (kind === 'line') {
-      out.push(TEX([
-        { x: cx - ca * half, y: cy - sa * half },
-        { x: cx + ca * half, y: cy + sa * half },
-      ]));
-    } else {
-      // Square, rotated by `a`. Emit four straight edges rather than one closed
-      // loop: the SVG writer smooths a multi-point loop into quadratic curves,
-      // rounding the corners into a teardrop. Straight 2-point edges stay crisp.
-      const corners: Point[] = [
-        { x: -half, y: -half },
-        { x: half, y: -half },
-        { x: half, y: half },
-        { x: -half, y: half },
-      ].map((p) => ({ x: cx + p.x * ca - p.y * sa, y: cy + p.x * sa + p.y * ca }));
-      for (let e = 0; e < 4; e++) {
-        out.push(TEX([corners[e], corners[(e + 1) % 4]]));
+  // style === 'shapes' — individual shapes on a regular lattice, with
+  // consistent (customizable) size, spacing and overlap. `spacingMm` sets the
+  // centre-to-centre pitch; `overlap` compresses it so shapes overlap; each
+  // shape is the same `sizeMm`. Kinds cycle across cells so the pattern reads
+  // as distinct shapes rather than an aggregated scatter.
+  const sh = shapes ?? { kinds: ['square', 'circle', 'line'], sizeMm: 4, overlap: 0 };
+  const kinds = sh.kinds.length ? sh.kinds : (['square'] as const);
+  const size = Math.max(2, sh.sizeMm * pxPerMm * Math.max(0.2, scale));
+  const half = size / 2;
+  const reach = half * Math.SQRT2; // square circumradius — keeps every shape in bounds
+  const overlap = Math.min(0.9, Math.max(0, sh.overlap));
+  const pitch = Math.max(2, spacing * (1 - overlap));
+  let idx = 0;
+  for (let gy = y0 + reach; gy <= y1 - reach + 1e-6; gy += pitch) {
+    for (let gx = x0 + reach; gx <= x1 - reach + 1e-6; gx += pitch) {
+      const kind = kinds[idx % kinds.length];
+      idx++;
+      if (!isClear(gx, gy)) continue;
+      const a = angle + (jitter > 0 ? (random() - 0.5) * jitter * Math.PI : 0);
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      if (kind === 'circle') {
+        out.push(TEX(closedLoop(gx, gy, half, 16, 0)));
+      } else if (kind === 'line') {
+        out.push(TEX([
+          { x: gx - ca * half, y: gy - sa * half },
+          { x: gx + ca * half, y: gy + sa * half },
+        ]));
+      } else {
+        // Square as four straight edges (a closed loop would smooth into a
+        // teardrop under the SVG writer's quadratic curves).
+        const corners: Point[] = [
+          { x: -half, y: -half },
+          { x: half, y: -half },
+          { x: half, y: half },
+          { x: -half, y: half },
+        ].map((p) => ({ x: gx + p.x * ca - p.y * sa, y: gy + p.x * sa + p.y * ca }));
+        for (let e = 0; e < 4; e++) out.push(TEX([corners[e], corners[(e + 1) % 4]]));
       }
     }
   }

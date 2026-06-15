@@ -66,7 +66,7 @@ export const defaultFrame: FrameSettings = {
   textureColor: '#c9c2b4',
   textureSeed: 1,
   textureHaloMm: 1.5,
-  textureShapes: { kinds: ['square', 'circle', 'line'], minSize: 6, maxSize: 22, count: 120 },
+  textureShapes: { kinds: ['square', 'circle', 'line'], sizeMm: 4, overlap: 0 },
 };
 
 interface FrameContextValue {
