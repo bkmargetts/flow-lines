@@ -1,0 +1,40 @@
+import { type Point } from '@flow-lines/core';
+
+/**
+ * Flow-field settings. The page frame (paper, orientation, resolution,
+ * margin) lives in the shared FrameContext, not here.
+ */
+export interface FlowState {
+  lineCount: number;
+  seed: number;
+  stepLength: number;
+  maxSteps: number;
+  minLineLength: number;
+  noiseScale: number;
+  octaves: number;
+  persistence: number;
+  lacunarity: number;
+  strokeColor: string;
+  /** Pen width in millimetres (plotted line weight) */
+  penWidthMm: number;
+  paintMode: boolean;
+  paintedPoints: Point[];
+  showDots: boolean;
+}
+
+export const defaultFlowState: FlowState = {
+  lineCount: 100,
+  seed: Math.floor(Math.random() * 1000000),
+  stepLength: 2,
+  maxSteps: 500,
+  minLineLength: 10,
+  noiseScale: 0.005,
+  octaves: 4,
+  persistence: 0.5,
+  lacunarity: 2,
+  strokeColor: '#000000',
+  penWidthMm: 0.3,
+  paintMode: false,
+  paintedPoints: [],
+  showDots: true,
+};

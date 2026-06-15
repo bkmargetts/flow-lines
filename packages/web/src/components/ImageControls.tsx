@@ -1,169 +1,14 @@
 import { useRef } from 'react';
-import type { GrayscaleImage, LabelImage, Point, PaperFit } from '@flow-lines/core';
-import type {
-  DepthStatus,
-  InkSettings,
-  LabelStatus,
-  PortraitState,
-  PortraitStatus,
-  SegmentStatus,
-} from '../App';
-import { PaperControls } from './PaperControls';
-
-/** Curated parameter bundles — the only decision most users need to make */
-export const PRESETS: Record<string, { label: string; settings: Partial<InkSettings> }> = {
-  classic: {
-    label: 'Classic',
-    settings: {
-      layers: 3,
-      minSpacing: 2.5,
-      maxSpacing: 14,
-      whiteCutoff: 0.08,
-      toneGamma: 1.3,
-      valueBands: 4,
-      massing: 0.5,
-      hatchPatchiness: 0.35,
-      detailEmphasis: 0.3,
-      textureStrokes: 0.6,
-      wobble: 0.8,
-      workingSize: 720,
-      crossContour: false,
-      facetHatch: false,
-      maxStrokeLength: 0,
-      fieldSmoothing: 4,
-      hatchAngle: -45,
-      skyStipple: 'auto',
-      calmWater: 'auto',
-      textureStyle: 'ticks',
-    },
-  },
-  portrait: {
-    label: 'Portrait',
-    settings: {
-      layers: 3,
-      minSpacing: 2.5,
-      maxSpacing: 14,
-      toneGamma: 1.7,
-      valueBands: 0,
-      massing: 0,
-      hatchPatchiness: 0.35,
-      detailEmphasis: 0.35,
-      textureStrokes: 0.4,
-      wobble: 0.9,
-      workingSize: 800,
-      skinLightening: 0.6,
-      whiteCutoff: 0.08,
-      crossContour: false,
-      facetHatch: false,
-      maxStrokeLength: 0,
-      fieldSmoothing: 4,
-      hatchAngle: -45,
-      skyStipple: 'auto',
-      calmWater: 'auto',
-      textureStyle: 'ticks',
-    },
-  },
-  pet: {
-    label: 'Pet',
-    settings: {
-      layers: 2,
-      minSpacing: 2.5,
-      maxSpacing: 12,
-      toneGamma: 1.45,
-      valueBands: 4,
-      massing: 0.4,
-      hatchPatchiness: 0.35,
-      detailEmphasis: 0.35,
-      textureStrokes: 1,
-      wobble: 1,
-      workingSize: 800,
-      whiteCutoff: 0.08,
-      crossContour: false,
-      facetHatch: false,
-      maxStrokeLength: 0,
-      fieldSmoothing: 4,
-      hatchAngle: -45,
-      skyStipple: 'auto',
-      calmWater: 'auto',
-      textureStyle: 'ticks',
-    },
-  },
-  landscape: {
-    label: 'Landscape',
-    settings: {
-      layers: 5,
-      minSpacing: 1.8,
-      maxSpacing: 16,
-      toneGamma: 1,
-      valueBands: 4,
-      massing: 0.4,
-      hatchPatchiness: 0.7,
-      detailEmphasis: 0.45,
-      textureStrokes: 0.7,
-      wobble: 0.9,
-      workingSize: 800,
-      whiteCutoff: 0.14,
-      hatchAngle: 0,
-      skyStipple: true,
-      calmWater: true,
-      crossContour: false,
-      facetHatch: true,
-      maxStrokeLength: 70,
-      fieldSmoothing: 5,
-      textureStyle: 'ticks',
-    },
-  },
-  sketch: {
-    label: 'Sketch',
-    settings: {
-      layers: 1,
-      minSpacing: 3.2,
-      maxSpacing: 24,
-      toneGamma: 1.35,
-      valueBands: 3,
-      massing: 0.5,
-      hatchPatchiness: 0.6,
-      detailEmphasis: 0.4,
-      textureStrokes: 0.8,
-      wobble: 2.2,
-      workingSize: 720,
-      whiteCutoff: 0.1,
-      crossContour: false,
-      facetHatch: false,
-      maxStrokeLength: 0,
-      fieldSmoothing: 3,
-      hatchAngle: -30,
-      skyStipple: 'auto',
-      calmWater: 'auto',
-      textureStyle: 'scribble',
-    },
-  },
-  etching: {
-    label: 'Etching',
-    settings: {
-      layers: 2,
-      minSpacing: 2.8,
-      maxSpacing: 14,
-      whiteCutoff: 0.15,
-      toneGamma: 1.8,
-      valueBands: 5,
-      massing: 0.5,
-      hatchPatchiness: 0.5,
-      detailEmphasis: 0.35,
-      textureStrokes: 0.15,
-      wobble: 0.4,
-      workingSize: 800,
-      crossContour: true,
-      facetHatch: true,
-      maxStrokeLength: 48,
-      fieldSmoothing: 8,
-      hatchAngle: -45,
-      skyStipple: 'auto',
-      calmWater: 'auto',
-      textureStyle: 'ticks',
-    },
-  },
-};
+import type { GrayscaleImage, LabelImage, Point } from '@flow-lines/core';
+import {
+  PRESETS,
+  type DepthStatus,
+  type InkSettings,
+  type LabelStatus,
+  type PortraitState,
+  type PortraitStatus,
+  type SegmentStatus,
+} from '../projects/image-ink/types';
 
 interface ImageControlsProps {
   settings: InkSettings;
@@ -328,35 +173,6 @@ export function ImageControls({
             {def.label}
           </button>
         ))}
-      </div>
-
-      <h3 className="section-title">Paper</h3>
-
-      <PaperControls
-        paper={settings.paper}
-        orientation={settings.orientation}
-        resolution={settings.resolution}
-        onChange={updateSettings}
-      />
-
-      <div className="control-group">
-        <label>Fit to page</label>
-        <div className="segmented">
-          <button
-            type="button"
-            className={settings.fit === 'fit' ? 'active' : ''}
-            onClick={() => updateSettings({ fit: 'fit' as PaperFit })}
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            className={settings.fit === 'fill' ? 'active' : ''}
-            onClick={() => updateSettings({ fit: 'fill' as PaperFit })}
-          >
-            Fill
-          </button>
-        </div>
       </div>
 
       <div className="button-group">
@@ -866,18 +682,7 @@ export function ImageControls({
         </details>
 
         <details className="adv-group">
-          <summary>Canvas &amp; Output</summary>
-
-          <div className="control-group">
-            <label>
-              Margin <span>{settings.marginMm}mm</span>
-            </label>
-            <input
-              type="range" min="0" max="40" step="1"
-              value={settings.marginMm}
-              onChange={(e) => updateSettings({ marginMm: parseInt(e.target.value, 10) })}
-            />
-          </div>
+          <summary>Marks &amp; Output</summary>
 
           <div className="control-group">
             <label>

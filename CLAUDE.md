@@ -203,9 +203,23 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 - Defaults are seeded-deterministic and judged against the gallery.
 - The repo squash-merges; stacked PRs must be rebased onto `main` after
   each parent lands (`git rebase --onto origin/main <oldParentTip> <child>`).
-- GitHub Pages deploys `packages/web/dist` from pushes to `main` **and**
-  any `claude/**` branch — last push wins, so the live site may serve a
-  feature branch.
+- GitHub Pages deploys `packages/web/dist` from pushes to `main`, any
+  `claude/**` branch, **and** any `art/**` branch — last push wins, so the
+  live site may serve a feature branch.
+- **Projects** (`packages/web/src/projects/`) — the web app is a shell over a
+  code registry of independent art tools. Each project is a self-contained
+  module (`<id>/` with a context provider, one or more **features** —
+  second-level tabs, each a `Controls`/`Canvas` pair sharing the project's
+  provider state — and an `index` exporting a `ProjectModule`) registered in
+  `projects/registry.ts`; built-in
+  Image → Ink and Flow Field are the first two. The page frame (paper,
+  orientation, resolution, margin, fit) lives in a shared `FrameContext`
+  (`FrameControls`) so every project plots to the same physical sheet. New
+  projects are developed on `art/<project>/<feature>` branches; merging adds
+  them to the registry. Every project's provider stays mounted for the
+  session (told whether it's `active`) so switching projects never loses
+  in-progress work. PR close (merged or abandoned) auto-deletes the branch
+  via `delete-branch.yml`.
 - The web UI's first principle: **effortless** — upload, tap subject,
   download. Automation (face detect, depth when WebGPU, isolation on tap)
   runs without being asked; every knob lives in collapsed Advanced groups.
