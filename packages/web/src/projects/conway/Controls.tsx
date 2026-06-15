@@ -160,8 +160,26 @@ export function ConwayControls() {
       <div className="control-group">
         <label>
           <span className="label-text">
+            Starting cells
+            <InfoTip text="How many R-pentominoes detonate at the start. One sits near the centre; more are scattered across the frame, each rotated differently, so their colonies collide and interleave into a busier, more crowded exposure." />
+          </span>
+          <span>{state.seedCount}</span>
+        </label>
+        <input
+          type="range"
+          min="1"
+          max="12"
+          step="1"
+          value={state.seedCount}
+          onChange={(e) => updateState({ seedCount: parseInt(e.target.value, 10) })}
+        />
+      </div>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
             Seed
-            <InfoTip text="The Game of Life is deterministic — the seed only sets where the R-pentomino sits and how it's rotated, giving a different composition without changing the rules." />
+            <InfoTip text="The Game of Life is deterministic — the seed only sets where the starting pentominoes sit and how they're rotated, giving a different composition without changing the rules." />
           </span>
         </label>
         <div className="seed-input">

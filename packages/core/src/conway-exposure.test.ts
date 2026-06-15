@@ -92,6 +92,20 @@ describe('generateConwayExposure', () => {
     expect(r.width).toBe(600);
   });
 
+  it('detonates more starting cells as seedCount rises', () => {
+    // With no generations the final config is just the starting pentominoes,
+    // so more seeds means strictly more bold marks on the page.
+    const one = generateConwayExposure({ ...base, generations: 0, seedCount: 1 });
+    const many = generateConwayExposure({ ...base, generations: 0, seedCount: 6 });
+    expect(many.lines.length).toBeGreaterThan(one.lines.length);
+  });
+
+  it('keeps single-seed runs identical whether seedCount is omitted or 1', () => {
+    const implicit = generateConwayExposure(base);
+    const explicit = generateConwayExposure({ ...base, seedCount: 1 });
+    expect(JSON.stringify(explicit.lines)).toBe(JSON.stringify(implicit.lines));
+  });
+
   it('does not throw with zero generations (just the seed exposed)', () => {
     const r = generateConwayExposure({ ...base, generations: 0 });
     // The five R-pentomino cells are the final config; all bold.

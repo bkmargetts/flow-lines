@@ -4,6 +4,8 @@
  */
 export interface ConwayState {
   seed: number;
+  /** How many R-pentominoes to detonate at the start */
+  seedCount: number;
   /** Cell size in millimetres — sets the simulation's grid resolution */
   cellSize: number;
   /** Generations to simulate from the R-pentomino */
@@ -32,6 +34,7 @@ export interface ConwayState {
 
 export const defaultConwayState: ConwayState = {
   seed: Math.floor(Math.random() * 1000000),
+  seedCount: 1,
   cellSize: 1.8,
   generations: 400,
   decay: 0.92,

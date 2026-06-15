@@ -41,6 +41,12 @@ export interface ConwayExposureOptions {
   margin?: number;
   /** Seed: controls the R-pentomino's placement and orientation, and wobble */
   seed?: number;
+  /**
+   * How many R-pentominoes to detonate at the start (default 1). One sits
+   * near the centre; more are scattered across the central region, each with
+   * its own orientation, so their evolutions collide and interleave.
+   */
+  seedCount?: number;
   /** Pixels per cell — sets the simulation's grid resolution (default ~width/100) */
   cellSize?: number;
   /** Generations to simulate from the seed (default 180) */
@@ -140,20 +146,15 @@ function orient([x, y]: [number, number], rot: number, mirror: boolean): [number
   return [cx, cy];
 }
 
-function seedRPentomino(
+function stampPentomino(
   grid: Uint8Array,
   cols: number,
   rows: number,
-  random: () => number
+  ox: number,
+  oy: number,
+  rot: number,
+  mirror: boolean
 ): void {
-  const rot = Math.floor(random() * 4);
-  const mirror = random() < 0.5;
-  // Keep the detonation roughly centered: only a small jitter off the middle.
-  const jx = Math.round((random() - 0.5) * cols * 0.08);
-  const jy = Math.round((random() - 0.5) * rows * 0.08);
-  const ox = Math.floor(cols / 2) + jx;
-  const oy = Math.floor(rows / 2) + jy;
-
   for (const cell of R_PENTOMINO) {
     const [dx, dy] = orient(cell, rot, mirror);
     const x = ox + dx;
@@ -161,6 +162,39 @@ function seedRPentomino(
     if (x >= 0 && x < cols && y >= 0 && y < rows) {
       grid[y * cols + x] = 1;
     }
+  }
+}
+
+/**
+ * Detonate `count` R-pentominoes. A single one keeps the original near-centre
+ * placement (so existing seeds render unchanged); two or more are scattered
+ * across the central region (inset from the edges so each has room to evolve
+ * before its gliders fly out of frame), each with its own orientation.
+ */
+function seedRPentominoes(
+  grid: Uint8Array,
+  cols: number,
+  rows: number,
+  random: () => number,
+  count: number
+): void {
+  if (count <= 1) {
+    const rot = Math.floor(random() * 4);
+    const mirror = random() < 0.5;
+    // Keep the detonation roughly centered: only a small jitter off the middle.
+    const jx = Math.round((random() - 0.5) * cols * 0.08);
+    const jy = Math.round((random() - 0.5) * rows * 0.08);
+    stampPentomino(grid, cols, rows, Math.floor(cols / 2) + jx, Math.floor(rows / 2) + jy, rot, mirror);
+    return;
+  }
+
+  const inset = 0.16;
+  for (let p = 0; p < count; p++) {
+    const rot = Math.floor(random() * 4);
+    const mirror = random() < 0.5;
+    const ox = Math.round(cols * inset + random() * cols * (1 - 2 * inset));
+    const oy = Math.round(rows * inset + random() * rows * (1 - 2 * inset));
+    stampPentomino(grid, cols, rows, ox, oy, rot, mirror);
   }
 }
 
@@ -289,6 +323,7 @@ function simulate(
   generations: number,
   decay: number,
   random: () => number,
+  seedCount: number,
   track: { maxCells: number; minGenerations: number; minDisplacement: number } | null
 ): Simulation {
   const n = cols * rows;
@@ -297,7 +332,7 @@ function simulate(
   const exposure = new Float64Array(n);
   const lastAlive = new Int32Array(n).fill(-1);
 
-  seedRPentomino(curr, cols, rows, random);
+  seedRPentominoes(curr, cols, rows, random, seedCount);
 
   const accumulate = (gen: number): void => {
     for (let i = 0; i < n; i++) {
@@ -487,6 +522,7 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     height,
     margin = 0,
     seed = Math.floor(Math.random() * 1000000),
+    seedCount = 1,
     generations = 180,
     decay = 0.92,
     gamma = 0.45,
@@ -525,6 +561,7 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     Math.max(0, generations),
     decay,
     random,
+    Math.max(1, Math.round(seedCount)),
     style === 'streaks'
       ? {
           maxCells: maxClusterCells,

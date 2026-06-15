@@ -69,6 +69,7 @@ export function ConwayProvider({
       // The shared paper-border margin, in pixels at the page's density
       margin: frame.marginMm * page.pxPerMm,
       seed: state.seed,
+      seedCount: state.seedCount,
       cellSize: state.cellSize * page.pxPerMm,
       generations: state.generations,
       decay: state.decay,
