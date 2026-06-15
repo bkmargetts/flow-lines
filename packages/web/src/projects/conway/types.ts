@@ -27,7 +27,7 @@ export interface ConwayState {
 export const defaultConwayState: ConwayState = {
   seed: Math.floor(Math.random() * 1000000),
   cellSize: 1.8,
-  generations: 180,
+  generations: 400,
   decay: 0.92,
   gamma: 0.45,
   faintThreshold: 0.1,
