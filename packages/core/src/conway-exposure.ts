@@ -767,10 +767,11 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   const haloRadius = options.haloRadius ?? cellSize * 0.6;
   const noise = createNoise(seed + 8101);
 
-  // When a plate border frames the piece, pull the simulation grid inward so
-  // the drawing sits comfortably inside the border with a clear gutter instead
-  // of cells crossing the ruled line. The border itself sits at margin+cellSize.
-  const frameMargin = margin + (plateBorder ? cellSize * 3 : 0);
+  // Reserve a frame gutter for the whole art mode (not just when the border is
+  // drawn) so toggling the plate border only adds/removes the line — it must
+  // never resize the grid, which would re-run an entirely different
+  // simulation. The faithful path keeps the original full-margin grid.
+  const frameMargin = margin + (artStyle ? cellSize * 3 : 0);
 
   const usableW = Math.max(0, width - 2 * frameMargin);
   const usableH = Math.max(0, height - 2 * frameMargin);
