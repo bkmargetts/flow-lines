@@ -16,8 +16,8 @@ import { gaussianBlur } from './image.js';
 export type TextureStyle = 'hatch' | 'stipple' | 'contours' | 'grid' | 'shapes';
 
 export interface TextureShapeOptions {
-  /** Which simple shapes to place (cycled across the lattice) */
-  kinds: Array<'square' | 'circle' | 'line'>;
+  /** The single shape to tile (one kind at a time) */
+  kind: 'square' | 'circle' | 'line';
   /** Shape size in mm (consistent for every shape) */
   sizeMm: number;
   /** 0..1 — compresses the lattice pitch below `spacingMm` so shapes overlap */
@@ -379,23 +379,19 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
     return out;
   }
 
-  // style === 'shapes' — individual shapes on a regular lattice, with
-  // consistent (customizable) size, spacing and overlap. `spacingMm` sets the
-  // centre-to-centre pitch; `overlap` compresses it so shapes overlap; each
-  // shape is the same `sizeMm`. Kinds cycle across cells so the pattern reads
-  // as distinct shapes rather than an aggregated scatter.
-  const sh = shapes ?? { kinds: ['square', 'circle', 'line'], sizeMm: 4, overlap: 0 };
-  const kinds = sh.kinds.length ? sh.kinds : (['square'] as const);
+  // style === 'shapes' — one shape tiled on a regular lattice, with consistent
+  // (customizable) size, spacing and overlap. `spacingMm` sets the
+  // centre-to-centre pitch; `overlap` compresses it so shapes overlap; every
+  // shape is the same `sizeMm` and `kind`.
+  const sh = shapes ?? { kind: 'square', sizeMm: 4, overlap: 0 };
+  const kind = sh.kind;
   const size = Math.max(2, sh.sizeMm * pxPerMm * Math.max(0.2, scale));
   const half = size / 2;
   const reach = half * Math.SQRT2; // square circumradius — keeps every shape in bounds
   const overlap = Math.min(0.9, Math.max(0, sh.overlap));
   const pitch = Math.max(2, spacing * (1 - overlap));
-  let idx = 0;
   for (let gy = y0 + reach; gy <= y1 - reach + 1e-6; gy += pitch) {
     for (let gx = x0 + reach; gx <= x1 - reach + 1e-6; gx += pitch) {
-      const kind = kinds[idx % kinds.length];
-      idx++;
       if (!isClear(gx, gy)) continue;
       const a = angle + (jitter > 0 ? (random() - 0.5) * jitter * Math.PI : 0);
       const ca = Math.cos(a);

@@ -85,13 +85,13 @@ describe('generateTexture', () => {
       ...base,
       style: 'shapes',
       spacingMm: 10,
-      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0 },
+      shapes: { kind: 'circle', sizeMm: 4, overlap: 0 },
     });
     const tight = generateTexture({
       ...base,
       style: 'shapes',
       spacingMm: 3,
-      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0 },
+      shapes: { kind: 'circle', sizeMm: 4, overlap: 0 },
     });
     expect(tight.length).toBeGreaterThan(wide.length);
   });
@@ -100,12 +100,12 @@ describe('generateTexture', () => {
     const none = generateTexture({
       ...base,
       style: 'shapes',
-      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0 },
+      shapes: { kind: 'circle', sizeMm: 4, overlap: 0 },
     });
     const overlapped = generateTexture({
       ...base,
       style: 'shapes',
-      shapes: { kinds: ['circle'], sizeMm: 4, overlap: 0.6 },
+      shapes: { kind: 'circle', sizeMm: 4, overlap: 0.6 },
     });
     expect(overlapped.length).toBeGreaterThan(none.length);
   });

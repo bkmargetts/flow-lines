@@ -221,26 +221,18 @@ export function FrameControls() {
 
           {frame.textureStyle === 'shapes' && (
             <div className="control-group">
-              <label>Shape kinds</label>
+              <label>Shape</label>
               <div className="segmented">
-                {(['square', 'circle', 'line'] as const).map((k) => {
-                  const on = frame.textureShapes.kinds.includes(k);
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      className={on ? 'active' : ''}
-                      onClick={() => {
-                        const kinds = on
-                          ? frame.textureShapes.kinds.filter((x) => x !== k)
-                          : [...frame.textureShapes.kinds, k];
-                        updateFrame({ textureShapes: { ...frame.textureShapes, kinds: kinds.length ? kinds : [k] } });
-                      }}
-                    >
-                      {k}
-                    </button>
-                  );
-                })}
+                {(['square', 'circle', 'line'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className={frame.textureShapes.kind === k ? 'active' : ''}
+                    onClick={() => updateFrame({ textureShapes: { ...frame.textureShapes, kind: k } })}
+                  >
+                    {k}
+                  </button>
+                ))}
               </div>
             </div>
           )}
