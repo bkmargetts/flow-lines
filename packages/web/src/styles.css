@@ -347,6 +347,56 @@ button.secondary:hover {
   color: white;
 }
 
+/* Project switcher + feature sub-tabs */
+.project-switcher {
+  margin-bottom: 4px;
+}
+
+.project-switcher-label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+/* The project picker is the primary switch — a touch more presence than a
+   plain form select */
+.project-switcher select {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.project-switcher select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.project-switcher .feature-strip {
+  margin-top: 8px;
+}
+
+/* The shared page frame, sitting under the tabs and above per-project controls */
+.frame-controls {
+  margin-bottom: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.frame-controls .control-group {
+  margin-bottom: 12px;
+}
+
 /* Advanced settings */
 details.advanced {
   margin-top: 10px;

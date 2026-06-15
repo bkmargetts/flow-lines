@@ -1,9 +1,8 @@
-import type { AppState } from '../App';
-import { PaperControls } from './PaperControls';
+import type { FlowState } from '../projects/flow-field/types';
 
 interface ControlsProps {
-  state: AppState;
-  updateState: (updates: Partial<AppState>) => void;
+  state: FlowState;
+  updateState: (updates: Partial<FlowState>) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
   togglePaintMode: () => void;
@@ -58,15 +57,6 @@ export function Controls({
         </div>
       </div>
 
-      <h3 className="section-title">Canvas</h3>
-
-      <PaperControls
-        paper={state.paper}
-        orientation={state.orientation}
-        resolution={state.resolution}
-        onChange={updateState}
-      />
-
       <h3 className="section-title">Lines</h3>
 
       <div className="control-group">
@@ -108,20 +98,6 @@ export function Controls({
           step="50"
           value={state.maxSteps}
           onChange={(e) => updateState({ maxSteps: parseInt(e.target.value, 10) })}
-        />
-      </div>
-
-      <div className="control-group">
-        <label>
-          Margin <span>{state.margin}px</span>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          step="5"
-          value={state.margin}
-          onChange={(e) => updateState({ margin: parseInt(e.target.value, 10) })}
         />
       </div>
 

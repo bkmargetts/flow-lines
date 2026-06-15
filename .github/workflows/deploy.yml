@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - 'claude/**'
+      # Art project / feature branches deploy a preview build (last push wins),
+      # so in-progress work is accessible in the web app before it merges.
+      - 'art/**'
   workflow_dispatch:
 
 permissions:

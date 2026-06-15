@@ -1,4 +1,8 @@
-name: Delete Merged Branches
+name: Delete Closed-PR Branches
+
+# Art projects are developed on art/<project>/<feature> branches and surfaced
+# as tabs in the web app. When a PR closes — whether it merged or was
+# abandoned — delete its branch so stale work doesn't linger.
 
 on:
   pull_request:
@@ -6,14 +10,14 @@ on:
 
 jobs:
   delete-branch:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - name: Delete merged branch
+      - name: Delete branch of closed PR
         uses: actions/github-script@v7
         with:
           script: |
             const branch = context.payload.pull_request.head.ref;
+            const merged = context.payload.pull_request.merged;
 
             // Don't delete main or protected branches
             if (branch === 'main' || branch === 'master') {
@@ -27,7 +31,7 @@ jobs:
                 repo: context.repo.repo,
                 ref: `heads/${branch}`
               });
-              console.log(`Deleted branch: ${branch}`);
+              console.log(`Deleted ${merged ? 'merged' : 'closed'} branch: ${branch}`);
             } catch (error) {
               console.log(`Failed to delete branch ${branch}: ${error.message}`);
             }

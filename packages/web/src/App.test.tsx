@@ -1,4 +1,23 @@
 import { describe, it, expect } from 'vitest';
+import { PROJECTS } from './projects/registry';
+
+describe('Project registry', () => {
+  it('registers Image → Ink and Flow Field as the first two projects', () => {
+    expect(PROJECTS[0].id).toBe('image-ink');
+    expect(PROJECTS[1].id).toBe('flow-field');
+  });
+
+  it('gives every project at least one feature with Controls and Canvas', () => {
+    for (const project of PROJECTS) {
+      expect(project.id).toMatch(/^[a-z0-9-]+$/);
+      expect(project.features.length).toBeGreaterThan(0);
+      for (const feature of project.features) {
+        expect(typeof feature.Controls).toBe('function');
+        expect(typeof feature.Canvas).toBe('function');
+      }
+    }
+  });
+});
 
 // Basic sanity tests for web app module imports
 describe('Web App', () => {
