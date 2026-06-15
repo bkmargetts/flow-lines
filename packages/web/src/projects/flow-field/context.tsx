@@ -9,13 +9,17 @@ import {
 import {
   generateFlowLines,
   toSVG,
+  toSVGLayers,
   pageMetrics,
   getPaperSize,
   type FlowLinesOptions,
+  type FlowLinesResult,
   type SVGOptions,
   type Point,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
+import { buildTexture } from '../../lib/texture';
+import { zipStore } from '../../lib/zip';
 import { defaultFlowState, type FlowState } from './types';
 
 interface FlowFieldValue {
@@ -23,10 +27,12 @@ interface FlowFieldValue {
   updateState: (updates: Partial<FlowState>) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
+  downloadLayers: () => void;
+  hasLayers: boolean;
   togglePaintMode: () => void;
   clearPaintedPoints: () => void;
   addPaintedPoint: (point: Point) => void;
-  generated: { svg: string; width: number; height: number };
+  generated: { svg: string; result: FlowLinesResult | null; svgOptions: SVGOptions; width: number; height: number };
 }
 
 const FlowFieldContext = createContext<FlowFieldValue | null>(null);
@@ -65,7 +71,8 @@ export function FlowFieldProvider({
     // The flow canvas is a physical sheet too: paper + orientation set the
     // pixel dimensions and the SVG is tagged in mm for the plotter
     const page = pageMetrics(getPaperSize(frame.paper), frame.orientation, frame.resolution);
-    if (!active) return { svg: '', width: page.widthPx, height: page.heightPx };
+    const emptyOptions: SVGOptions = {};
+    if (!active) return { svg: '', result: null as FlowLinesResult | null, svgOptions: emptyOptions, width: page.widthPx, height: page.heightPx };
 
     const usePaintedPoints = state.paintMode && state.paintedPoints.length > 0;
     const flowOptions: FlowLinesOptions = {
@@ -93,8 +100,42 @@ export function FlowFieldProvider({
     };
 
     const result = generateFlowLines(flowOptions);
-    return { svg: toSVG(result, svgOptions), width: page.widthPx, height: page.heightPx };
-  }, [active, state, frame.paper, frame.orientation, frame.resolution, frame.marginMm]);
+
+    // Optional shared background texture, held a halo off the flow lines and
+    // laid behind them on its own pen layer.
+    const tex = buildTexture(frame, page, result.lines);
+    if (tex) {
+      result.lines = [...tex.lines, ...result.lines];
+      svgOptions.layerColors = { texture: tex.color };
+    }
+
+    return {
+      svg: toSVG(result, svgOptions),
+      result,
+      svgOptions,
+      width: page.widthPx,
+      height: page.heightPx,
+    };
+  }, [
+    active,
+    state,
+    frame.paper,
+    frame.orientation,
+    frame.resolution,
+    frame.marginMm,
+    frame.textureEnabled,
+    frame.textureStyle,
+    frame.textureSpacingMm,
+    frame.textureAngleDeg,
+    frame.textureScale,
+    frame.textureJitter,
+    frame.textureDensity,
+    frame.textureCrossHatch,
+    frame.textureColor,
+    frame.textureSeed,
+    frame.textureHaloMm,
+    frame.textureShapes,
+  ]);
 
   const downloadSVG = useCallback(() => {
     if (!generated.svg) return;
@@ -109,11 +150,29 @@ export function FlowFieldProvider({
     URL.revokeObjectURL(url);
   }, [generated.svg, state.seed]);
 
+  const downloadLayers = useCallback(() => {
+    if (!generated.result) return;
+    const layers = toSVGLayers(generated.result, generated.svgOptions);
+    const zip = zipStore(
+      layers.map(({ layer, svg }) => ({ name: `flow-lines-${state.seed}-${layer}.svg`, text: svg }))
+    );
+    const url = URL.createObjectURL(zip);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flow-lines-${state.seed}-layers.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [generated.result, generated.svgOptions, state.seed]);
+
   const value: FlowFieldValue = {
     state,
     updateState,
     randomizeSeed,
     downloadSVG,
+    downloadLayers,
+    hasLayers: !!generated.svgOptions.layerColors,
     togglePaintMode,
     clearPaintedPoints,
     addPaintedPoint,

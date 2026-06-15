@@ -10,8 +10,12 @@ export type { FlowFieldOptions, Vector2D } from './flow-field.js';
 export { generateFlowLines, generateFlowLinesGrid } from './flow-lines.js';
 export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point } from './flow-lines.js';
 
+// Conway's Game of Life long-exposure still
+export { generateConwayExposure } from './conway-exposure.js';
+export type { ConwayExposureOptions } from './conway-exposure.js';
+
 // SVG export
-export { toSVG, parseSVGOptions } from './svg.js';
+export { toSVG, toSVGLayers, parseSVGOptions } from './svg.js';
 export type { SVGOptions } from './svg.js';
 
 // Image utilities
@@ -74,6 +78,10 @@ export type { ContourOptions } from './contours.js';
 
 // Iso-contour tracing (tonal mass boundaries, e.g. cloud edges)
 export { traceIsoContours } from './iso-contours.js';
+
+// Plottable background texture (its own export layer, behind the drawing)
+export { generateTexture } from './texture.js';
+export type { TextureOptions, TextureStyle, TextureShapeOptions } from './texture.js';
 
 // Plot optimization
 export { optimizePlot, measurePenTravel } from './optimize.js';

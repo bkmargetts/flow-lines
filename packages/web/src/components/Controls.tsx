@@ -5,6 +5,8 @@ interface ControlsProps {
   updateState: (updates: Partial<FlowState>) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
+  downloadLayers?: () => void;
+  hasLayers?: boolean;
   togglePaintMode: () => void;
   clearPaintedPoints: () => void;
 }
@@ -14,6 +16,8 @@ export function Controls({
   updateState,
   randomizeSeed,
   downloadSVG,
+  downloadLayers,
+  hasLayers,
   togglePaintMode,
   clearPaintedPoints,
 }: ControlsProps) {
@@ -203,6 +207,16 @@ export function Controls({
         <button type="button" className="primary" onClick={downloadSVG}>
           Download SVG
         </button>
+        {hasLayers && downloadLayers && (
+          <button
+            type="button"
+            className="secondary"
+            onClick={downloadLayers}
+            title="One SVG per pen layer (texture / drawing), zipped"
+          >
+            Download layers (.zip)
+          </button>
+        )}
       </div>
     </div>
   );

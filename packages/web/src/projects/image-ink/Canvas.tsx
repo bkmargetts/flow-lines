@@ -1,10 +1,12 @@
 import { Preview } from '../../components/Preview';
+import { useFrame } from '../../FrameContext';
 import { useImageInk } from './context';
 
 /** Canvas pane for the Image → Ink project: the rendered sheet (or the
  * upload prompt), with focus-point selection wired to its context. */
 export function ImageInkCanvas() {
   const ink = useImageInk();
+  const { frame } = useFrame();
   const { generated, inkLayout, sourceImage, focusPoints, settings } = ink;
 
   if (!sourceImage) {
@@ -26,6 +28,7 @@ export function ImageInkCanvas() {
         paintedPoints={[]}
         showDots={false}
         onPaint={() => {}}
+        background={frame.paperTone}
         focusSelectMode={!!sourceImage}
         focusMarkers={
           inkLayout

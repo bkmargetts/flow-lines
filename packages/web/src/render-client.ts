@@ -1,4 +1,4 @@
-import type { GrayscaleImage, PenInkOptions, SVGOptions } from '@flow-lines/core';
+import type { GrayscaleImage, PenInkOptions, SVGOptions, TextureOptions } from '@flow-lines/core';
 import type { RenderRequest, RenderResponse } from './render-worker';
 
 export interface RenderedSVG {
@@ -7,10 +7,16 @@ export interface RenderedSVG {
   height: number;
 }
 
+export interface RenderTexture {
+  options: Omit<TextureOptions, 'avoid'>;
+  color: string;
+}
+
 type Job = {
   image: GrayscaleImage;
   options: PenInkOptions;
   svgOptions: SVGOptions;
+  texture?: RenderTexture;
   resolve: (result: RenderedSVG) => void;
   reject: (err: Error) => void;
 };
@@ -42,10 +48,11 @@ class RenderClient {
   render(
     image: GrayscaleImage,
     options: PenInkOptions,
-    svgOptions: SVGOptions
+    svgOptions: SVGOptions,
+    texture?: RenderTexture
   ): Promise<RenderedSVG> {
     return new Promise<RenderedSVG>((resolve, reject) => {
-      const job: Job = { image, options, svgOptions, resolve, reject };
+      const job: Job = { image, options, svgOptions, texture, resolve, reject };
 
       if (this.inFlight) {
         if (this.pending) {
@@ -68,6 +75,8 @@ class RenderClient {
       image: job.image,
       options: job.options,
       svgOptions: job.svgOptions,
+      texture: job.texture?.options,
+      textureColor: job.texture?.color,
     };
     this.getWorker().postMessage(request);
   }

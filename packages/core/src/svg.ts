@@ -8,6 +8,13 @@ export interface SVGOptions {
   precision?: number;
   optimizePaths?: boolean;
   /**
+   * Per-layer stroke color, keyed by `FlowLine.layer` (falling back to `pen`,
+   * then 'default'). Any layer not listed uses `strokeColor`. Lets a single
+   * drawing preview/export in two or three inks (e.g. near-black present, warm
+   * grey ghosts, faint sepia trails) while still plotting one pen per layer.
+   */
+  layerColors?: Record<string, string>;
+  /**
    * Physical SVG width/height (e.g. "210mm"). When set, the document is
    * tagged with real-world dimensions while the `viewBox` stays in the px
    * coordinate space — so the on-screen preview (which reads the viewBox) and
@@ -15,6 +22,47 @@ export interface SVGOptions {
    */
   physicalWidth?: string;
   physicalHeight?: string;
+}
+
+/**
+ * Render a set of lines into <path> elements (shared by toSVG and
+ * toSVGLayers). Everything plots with one pen at one width: emphasis (bold
+ * outlines) is built from repeated offset strokes upstream, not stroke width.
+ */
+function renderPathElements(
+  lines: FlowLine[],
+  strokeColor: string,
+  strokeWidth: number,
+  precision: number,
+  optimizePaths: boolean
+): string {
+  return lines
+    .map((line) => lineToPath(line, precision, optimizePaths))
+    .filter((d) => d.length > 0)
+    .map(
+      (d) =>
+        `  <path d="${d}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`
+    )
+    .join('\n');
+}
+
+/** Wrap rendered path elements in an SVG document at the result's dimensions */
+function wrapSvg(
+  width: number,
+  height: number,
+  physicalWidth: string | undefined,
+  physicalHeight: string | undefined,
+  backgroundRect: string,
+  body: string
+): string {
+  // Physical dimensions tag the page for plotting; the viewBox keeps the px
+  // coordinate space so geometry and preview are untouched. Falls back to px.
+  const svgWidth = physicalWidth ?? `${width}`;
+  const svgHeight = physicalHeight ?? `${height}`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${width} ${height}">
+${backgroundRect}${body}
+</svg>`;
 }
 
 /**
@@ -32,30 +80,109 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
     physicalHeight,
   } = options;
 
-  // Physical dimensions tag the page for plotting; the viewBox keeps the px
-  // coordinate space so geometry and preview are untouched. Falls back to px.
-  const svgWidth = physicalWidth ?? `${result.width}`;
-  const svgHeight = physicalHeight ?? `${result.height}`;
+  const backgroundRect = includeBackground
+    ? `  <rect width="${result.width}" height="${result.height}" fill="${backgroundColor}"/>\n`
+    : '';
+
+  // One color for everything (the common case), unless per-layer inks are
+  // given — then emit one colored block per layer so a single document can
+  // preview in two or three pens. Absent layerColors → byte-identical output.
+  const pathElements = options.layerColors
+    ? orderedLayers(result.lines)
+        .map(([layer, lines]) =>
+          renderPathElements(
+            lines,
+            options.layerColors?.[layer] ?? strokeColor,
+            strokeWidth,
+            precision,
+            optimizePaths
+          )
+        )
+        .filter((s) => s.length > 0)
+        .join('\n')
+    : renderPathElements(result.lines, strokeColor, strokeWidth, precision, optimizePaths);
+
+  return wrapSvg(
+    result.width,
+    result.height,
+    physicalWidth,
+    physicalHeight,
+    backgroundRect,
+    pathElements
+  );
+}
+
+/** The export layer a line belongs to: explicit `layer`, else its `pen`, else 'default' */
+function layerKey(line: FlowLine): string {
+  return line.layer ?? line.pen ?? 'default';
+}
+
+/** Group lines by layer in a stable order (present → ghost → trail → others). */
+function orderedLayers(lines: FlowLine[]): Array<[string, FlowLine[]]> {
+  const groups = new Map<string, FlowLine[]>();
+  for (const line of lines) {
+    const key = layerKey(line);
+    const list = groups.get(key);
+    if (list) list.push(line);
+    else groups.set(key, [line]);
+  }
+
+  const preferred = ['texture', 'present', 'ghost', 'trail'];
+  const keys = [...groups.keys()].sort((a, b) => {
+    const ia = preferred.indexOf(a);
+    const ib = preferred.indexOf(b);
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  return keys.map((k) => [k, groups.get(k) as FlowLine[]]);
+}
+
+/**
+ * Split a result into one SVG per layer for multi-pen plotting. Lines are
+ * grouped by `line.layer` (falling back to `pen`, then 'default'); each
+ * returned SVG shares the same viewBox and physical dimensions so the layers
+ * register perfectly when plotted on the same sheet with different pens.
+ * Layers are returned in a stable order (present → ghost → trail → others).
+ */
+export function toSVGLayers(
+  result: FlowLinesResult,
+  options: SVGOptions = {}
+): { layer: string; svg: string }[] {
+  const {
+    strokeColor = '#000000',
+    strokeWidth = 1,
+    backgroundColor = '#ffffff',
+    includeBackground = false,
+    precision = 2,
+    optimizePaths = true,
+    physicalWidth,
+    physicalHeight,
+  } = options;
 
   const backgroundRect = includeBackground
     ? `  <rect width="${result.width}" height="${result.height}" fill="${backgroundColor}"/>\n`
     : '';
 
-  // Everything plots with one pen at one width: emphasis (bold outlines)
-  // is built from repeated offset strokes upstream, not stroke width
-  const pathElements = result.lines
-    .map((line) => lineToPath(line, precision, optimizePaths))
-    .filter((d) => d.length > 0)
-    .map(
-      (d) =>
-        `  <path d="${d}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`
-    )
-    .join('\n');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${result.width} ${result.height}">
-${backgroundRect}${pathElements}
-</svg>`;
+  return orderedLayers(result.lines).map(([layer, lines]) => {
+    const body = renderPathElements(
+      lines,
+      options.layerColors?.[layer] ?? strokeColor,
+      strokeWidth,
+      precision,
+      optimizePaths
+    );
+    return {
+      layer,
+      svg: wrapSvg(
+        result.width,
+        result.height,
+        physicalWidth,
+        physicalHeight,
+        backgroundRect,
+        body
+      ),
+    };
+  });
 }
 
 /**

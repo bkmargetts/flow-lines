@@ -12,6 +12,12 @@ export interface FlowLine {
    * are exported as a separate SVG layer for multi-pen plotting
    */
   pen?: 'fine' | 'bold';
+  /**
+   * Optional named layer for per-pen export. When set, `toSVGLayers` groups
+   * strokes by this key so each layer can be plotted with a different pen
+   * (e.g. 'present' / 'ghost' / 'trail'). Falls back to `pen` then 'default'.
+   */
+  layer?: string;
 }
 
 export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {

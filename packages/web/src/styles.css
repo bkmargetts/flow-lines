@@ -92,6 +92,41 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* The descriptive part of a label (left side); the value span stays on the
+   right. Reset the bold/primary that .control-group label span applies. */
+.control-group label .label-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Small "ⓘ" help affordance — carries a native title tooltip (see InfoTip) */
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--bg-inset-strong);
+  color: var(--text-secondary);
+  font-size: 0.62rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.info-tip:hover,
+.info-tip:focus {
+  background: var(--accent, #2563eb);
+  color: #fff;
+  outline: none;
+}
+
 /* iOS-style sliders: thin track, large white thumb with a soft shadow */
 .control-group input[type="range"] {
   width: 100%;
@@ -280,6 +315,29 @@ button.secondary:hover {
   padding: 2px;
   background: var(--bg-inset-strong);
   border-radius: var(--radius-sm);
+}
+
+.paper-swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.paper-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.paper-swatch:hover {
+  transform: scale(1.08);
+}
+
+.paper-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--accent, #4a90d9);
 }
 
 .mode-tabs {

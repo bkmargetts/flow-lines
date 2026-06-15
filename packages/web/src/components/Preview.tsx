@@ -18,6 +18,8 @@ interface PreviewProps {
   focusSelectMode?: boolean;
   focusMarkers?: FocusMarker[];
   onSetFocus?: (point: Point) => void;
+  /** Paper colour shown behind the (transparent) drawing — preview only. */
+  background?: string;
 }
 
 export function Preview({
@@ -31,6 +33,7 @@ export function Preview({
   focusSelectMode = false,
   focusMarkers = [],
   onSetFocus,
+  background,
 }: PreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPainting, setIsPainting] = useState(false);
@@ -196,6 +199,7 @@ export function Preview({
         position: 'relative',
         cursor: paintMode || focusSelectMode ? 'crosshair' : 'default',
         touchAction: paintMode ? 'none' : 'auto',
+        ...(background ? { background } : null),
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
