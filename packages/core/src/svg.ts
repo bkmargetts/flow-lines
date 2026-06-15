@@ -8,6 +8,13 @@ export interface SVGOptions {
   precision?: number;
   optimizePaths?: boolean;
   /**
+   * Per-layer stroke color, keyed by `FlowLine.layer` (falling back to `pen`,
+   * then 'default'). Any layer not listed uses `strokeColor`. Lets a single
+   * drawing preview/export in two or three inks (e.g. near-black present, warm
+   * grey ghosts, faint sepia trails) while still plotting one pen per layer.
+   */
+  layerColors?: Record<string, string>;
+  /**
    * Physical SVG width/height (e.g. "210mm"). When set, the document is
    * tagged with real-world dimensions while the `viewBox` stays in the px
    * coordinate space — so the on-screen preview (which reads the viewBox) and
@@ -77,13 +84,23 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
     ? `  <rect width="${result.width}" height="${result.height}" fill="${backgroundColor}"/>\n`
     : '';
 
-  const pathElements = renderPathElements(
-    result.lines,
-    strokeColor,
-    strokeWidth,
-    precision,
-    optimizePaths
-  );
+  // One color for everything (the common case), unless per-layer inks are
+  // given — then emit one colored block per layer so a single document can
+  // preview in two or three pens. Absent layerColors → byte-identical output.
+  const pathElements = options.layerColors
+    ? orderedLayers(result.lines)
+        .map(([layer, lines]) =>
+          renderPathElements(
+            lines,
+            options.layerColors?.[layer] ?? strokeColor,
+            strokeWidth,
+            precision,
+            optimizePaths
+          )
+        )
+        .filter((s) => s.length > 0)
+        .join('\n')
+    : renderPathElements(result.lines, strokeColor, strokeWidth, precision, optimizePaths);
 
   return wrapSvg(
     result.width,
@@ -98,6 +115,26 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
 /** The export layer a line belongs to: explicit `layer`, else its `pen`, else 'default' */
 function layerKey(line: FlowLine): string {
   return line.layer ?? line.pen ?? 'default';
+}
+
+/** Group lines by layer in a stable order (present → ghost → trail → others). */
+function orderedLayers(lines: FlowLine[]): Array<[string, FlowLine[]]> {
+  const groups = new Map<string, FlowLine[]>();
+  for (const line of lines) {
+    const key = layerKey(line);
+    const list = groups.get(key);
+    if (list) list.push(line);
+    else groups.set(key, [line]);
+  }
+
+  const preferred = ['present', 'ghost', 'trail'];
+  const keys = [...groups.keys()].sort((a, b) => {
+    const ia = preferred.indexOf(a);
+    const ib = preferred.indexOf(b);
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  return keys.map((k) => [k, groups.get(k) as FlowLine[]]);
 }
 
 /**
@@ -122,30 +159,14 @@ export function toSVGLayers(
     physicalHeight,
   } = options;
 
-  const groups = new Map<string, FlowLine[]>();
-  for (const line of result.lines) {
-    const key = layerKey(line);
-    const list = groups.get(key);
-    if (list) list.push(line);
-    else groups.set(key, [line]);
-  }
-
-  const preferred = ['present', 'ghost', 'trail'];
-  const keys = [...groups.keys()].sort((a, b) => {
-    const ia = preferred.indexOf(a);
-    const ib = preferred.indexOf(b);
-    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    return a < b ? -1 : a > b ? 1 : 0;
-  });
-
   const backgroundRect = includeBackground
     ? `  <rect width="${result.width}" height="${result.height}" fill="${backgroundColor}"/>\n`
     : '';
 
-  return keys.map((layer) => {
+  return orderedLayers(result.lines).map(([layer, lines]) => {
     const body = renderPathElements(
-      groups.get(layer) as FlowLine[],
-      strokeColor,
+      lines,
+      options.layerColors?.[layer] ?? strokeColor,
       strokeWidth,
       precision,
       optimizePaths

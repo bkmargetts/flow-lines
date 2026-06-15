@@ -30,6 +30,38 @@ export interface ConwayState {
   strokeColor: string;
   /** Pen width in millimetres (plotted line weight) */
   penWidthMm: number;
+
+  // ---- Art style ----
+  /** Master switch for the hand-drawn art treatment */
+  artStyle: boolean;
+  /** Draw the present-core as one hatched mass instead of grid boxes */
+  massCore: boolean;
+  /** Base interior hatch angle for the core mass, degrees */
+  hatchAngle: number;
+  /** Fraction of the core mass that gets the cross-hatch layer, 0..1 */
+  crossHatchAmount: number;
+  /** Low-frequency jitter on hatch spacing/phase, 0..1 */
+  hatchJitter: number;
+  /** Committed value bands for the trails; 0 = continuous */
+  valueBands: number;
+  /** Bias a single detonation toward a rule-of-thirds point, 0..1 */
+  offCenter: number;
+  /** Hold faint marks off the frame corners, 0..1 */
+  vignette: number;
+  /** Draw a plate-border line just inside the margin */
+  plateBorder: boolean;
+
+  // ---- Presentation / inks ----
+  /** Render preview & export in per-layer inks (present/ghost/trail) */
+  multiInk: boolean;
+  /** Ink for the crisp present (and plate border) */
+  presentColor: string;
+  /** Ink for the mid-tone ghosts */
+  ghostColor: string;
+  /** Ink for the faint trails */
+  trailColor: string;
+  /** Warm paper tone shown behind the preview (not plotted) */
+  paperTone: string;
 }
 
 export const defaultConwayState: ConwayState = {
@@ -49,4 +81,20 @@ export const defaultConwayState: ConwayState = {
   contourLevels: 5,
   strokeColor: '#000000',
   penWidthMm: 0.3,
+
+  artStyle: true,
+  massCore: true,
+  hatchAngle: -32,
+  crossHatchAmount: 0.5,
+  hatchJitter: 0.5,
+  valueBands: 4,
+  offCenter: 0.6,
+  vignette: 0.4,
+  plateBorder: true,
+
+  multiInk: true,
+  presentColor: '#1a1a1a',
+  ghostColor: '#6b6b66',
+  trailColor: '#8a7a5c',
+  paperTone: '#f4efe2',
 };

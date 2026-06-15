@@ -53,9 +53,14 @@ export function ConwayProvider({
     // The piece plots to a physical sheet: paper + orientation set the pixel
     // dimensions and the SVG is tagged in mm for the plotter.
     const page = pageMetrics(getPaperSize(frame.paper), frame.orientation, frame.resolution);
+    // Multi-ink colors the preview/export per layer; otherwise a single pen.
+    const layerColors = state.multiInk
+      ? { present: state.presentColor, ghost: state.ghostColor, trail: state.trailColor }
+      : undefined;
     const svgOptions: SVGOptions = {
-      strokeColor: state.strokeColor,
+      strokeColor: state.multiInk ? state.presentColor : state.strokeColor,
       strokeWidth: state.penWidthMm * page.pxPerMm,
+      layerColors,
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,
     };
@@ -82,11 +87,27 @@ export function ConwayProvider({
       style: state.style,
       haloRadius: state.haloMm * page.pxPerMm,
       contourLevels: state.contourLevels,
+      artStyle: state.artStyle,
+      massCore: state.massCore,
+      hatchAngle: state.hatchAngle,
+      crossHatchAmount: state.crossHatchAmount,
+      hatchJitter: state.hatchJitter,
+      valueBands: state.valueBands,
+      offCenter: state.offCenter,
+      vignette: state.vignette,
+      plateBorder: state.plateBorder,
     };
 
     const result = generateConwayExposure(options);
+    // The preview shows warm paper behind the inks; export stays paper-free
+    // (a plotter draws on real stock — no painted background rect).
+    const svg = toSVG(result, {
+      ...svgOptions,
+      includeBackground: true,
+      backgroundColor: state.paperTone,
+    });
     return {
-      svg: toSVG(result, svgOptions),
+      svg,
       result,
       svgOptions,
       width: page.widthPx,

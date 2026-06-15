@@ -28,6 +28,18 @@ export function ConwayControls() {
       </div>
 
       <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={state.artStyle}
+            onChange={(e) => updateState({ artStyle: e.target.checked })}
+          />
+          Art style
+          <InfoTip text="The hand-drawn treatment: the present is drawn as one confident hatched mass instead of a grid of boxes, trails commit to a few tonal shapes, the composition sits off-centre on warm paper, and it prints in two or three inks. Turn off for the faithful, literal simulation render." />
+        </label>
+      </div>
+
+      <div className="control-group">
         <label>
           <span className="label-text">
             Trail halo
@@ -142,18 +154,90 @@ export function ConwayControls() {
       </div>
 
       <div className="control-group">
-        <label>
-          <span className="label-text">
-            Stroke Color
-            <InfoTip text="Ink colour of the preview and exported SVG. Plotting still uses a single pen — colour is just for on-screen and paper choice." />
-          </span>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={state.multiInk}
+            onChange={(e) => updateState({ multiInk: e.target.checked })}
+          />
+          Multiple inks
+          <InfoTip text="Draw the present, mid-tone ghosts and faint trails in different inks (e.g. near-black, warm grey, sepia). Each layer still plots with one pen, and the per-layer SVG export keeps them separate — so this is a genuine 2–3 pen plot, not a colour trick." />
         </label>
-        <input
-          type="text"
-          value={state.strokeColor}
-          onChange={(e) => updateState({ strokeColor: e.target.value })}
-        />
       </div>
+
+      {state.multiInk ? (
+        <>
+          <div className="control-group">
+            <label>
+              <span className="label-text">
+                Present ink
+                <InfoTip text="Ink for the crisp present mass and the plate border — the darkest, most committed marks." />
+              </span>
+            </label>
+            <input
+              type="text"
+              value={state.presentColor}
+              onChange={(e) => updateState({ presentColor: e.target.value })}
+            />
+          </div>
+          <div className="control-group">
+            <label>
+              <span className="label-text">
+                Ghost ink
+                <InfoTip text="Ink for the mid-tone ghosts — the recent history hatching." />
+              </span>
+            </label>
+            <input
+              type="text"
+              value={state.ghostColor}
+              onChange={(e) => updateState({ ghostColor: e.target.value })}
+            />
+          </div>
+          <div className="control-group">
+            <label>
+              <span className="label-text">
+                Trail ink
+                <InfoTip text="Ink for the faint comet trails — the oldest, dimmest marks." />
+              </span>
+            </label>
+            <input
+              type="text"
+              value={state.trailColor}
+              onChange={(e) => updateState({ trailColor: e.target.value })}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="control-group">
+          <label>
+            <span className="label-text">
+              Stroke Color
+              <InfoTip text="Ink colour of the preview and exported SVG. Plotting still uses a single pen — colour is just for on-screen and paper choice." />
+            </span>
+          </label>
+          <input
+            type="text"
+            value={state.strokeColor}
+            onChange={(e) => updateState({ strokeColor: e.target.value })}
+          />
+        </div>
+      )}
+
+      {state.artStyle && (
+        <div className="control-group">
+          <label>
+            <span className="label-text">
+              Paper tone
+              <InfoTip text="Warm paper colour shown behind the drawing in the preview. Not plotted — it just helps you judge the inks against the stock you'll print on." />
+            </span>
+          </label>
+          <input
+            type="text"
+            value={state.paperTone}
+            onChange={(e) => updateState({ paperTone: e.target.value })}
+          />
+        </div>
+      )}
 
       <h3 className="section-title">Seed</h3>
 
@@ -312,6 +396,144 @@ export function ConwayControls() {
             />
           </div>
         </details>
+
+        {state.artStyle && (
+          <details className="adv-group">
+            <summary>Art — mass &amp; composition</summary>
+
+            <div className="control-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.massCore}
+                  onChange={(e) => updateState({ massCore: e.target.checked })}
+                />
+                Draw core as a mass
+                <InfoTip text="Trace the turbulent present as one confident silhouette filled with angled hatching, instead of a grid of filled boxes. The single biggest step from 'computer' to 'drawn'." />
+              </label>
+            </div>
+
+            <div className="control-group">
+              <label>
+                <span className="label-text">
+                  Hatch angle
+                  <InfoTip text="Direction of the strokes filling the present mass. The cross-hatch layer sits at a shallow offset to this." />
+                </span>
+                <span>{state.hatchAngle}°</span>
+              </label>
+              <input
+                type="range"
+                min="-90"
+                max="90"
+                step="1"
+                value={state.hatchAngle}
+                onChange={(e) => updateState({ hatchAngle: parseInt(e.target.value, 10) })}
+              />
+            </div>
+
+            <div className="control-group">
+              <label>
+                <span className="label-text">
+                  Cross-hatch amount
+                  <InfoTip text="How much of the present mass gets a second layer of hatching at a shallow angle — more darkens and enriches the core; less keeps it open and linear." />
+                </span>
+                <span>{state.crossHatchAmount.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={state.crossHatchAmount}
+                onChange={(e) => updateState({ crossHatchAmount: parseFloat(e.target.value) })}
+              />
+            </div>
+
+            <div className="control-group">
+              <label>
+                <span className="label-text">
+                  Hatch jitter
+                  <InfoTip text="Low-frequency variation in hatch spacing and phase, so the fill reads as a hand laying down strokes rather than an even mechanical screen." />
+                </span>
+                <span>{state.hatchJitter.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={state.hatchJitter}
+                onChange={(e) => updateState({ hatchJitter: parseFloat(e.target.value) })}
+              />
+            </div>
+
+            <div className="control-group">
+              <label>
+                <span className="label-text">
+                  Value bands
+                  <InfoTip text="Commit the trail tones to this many decisive value shapes instead of continuous photographic gradation — the artist's tonal abstraction. 0 keeps continuous tone." />
+                </span>
+                <span>{state.valueBands === 0 ? 'Continuous' : state.valueBands}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="6"
+                step="1"
+                value={state.valueBands}
+                onChange={(e) => updateState({ valueBands: parseInt(e.target.value, 10) })}
+              />
+            </div>
+
+            <div className="control-group">
+              <label>
+                <span className="label-text">
+                  Off-centre
+                  <InfoTip text="Bias a single detonation toward a rule-of-thirds point so the composition isn't dead-centre, leaving negative space on the open side. 0 centres it. (No effect with multiple starting cells — those already scatter.)" />
+                </span>
+                <span>{state.offCenter.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={state.offCenter}
+                onChange={(e) => updateState({ offCenter: parseFloat(e.target.value) })}
+              />
+            </div>
+
+            <div className="control-group">
+              <label>
+                <span className="label-text">
+                  Corner vignette
+                  <InfoTip text="Hold faint marks off the frame corners so the negative space reads as a decision. Higher clears more; 0 lets trails run to the edges." />
+                </span>
+                <span>{state.vignette.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={state.vignette}
+                onChange={(e) => updateState({ vignette: parseFloat(e.target.value) })}
+              />
+            </div>
+
+            <div className="control-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={state.plateBorder}
+                  onChange={(e) => updateState({ plateBorder: e.target.checked })}
+                />
+                Plate border
+                <InfoTip text="A hand-drawn rule just inside the margin, framing the drawing like an etching plate." />
+              </label>
+            </div>
+          </details>
+        )}
       </details>
 
       <div className="button-group">

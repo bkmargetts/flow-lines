@@ -3,6 +3,7 @@ import { applyHandDrawnStyle } from './hand-drawn.js';
 import { optimizePlot } from './optimize.js';
 import { GrayscaleImage, gaussianBlur } from './image.js';
 import { traceIsoContours } from './iso-contours.js';
+import { createNoise, SimplexNoise } from './noise.js';
 
 /**
  * A still "long exposure" of Conway's Game of Life: one frame that holds the
@@ -93,6 +94,51 @@ export interface ConwayExposureOptions {
   minTrackDisplacement?: number;
   /** Chain strokes and order them to cut pen travel (default true) */
   optimize?: boolean;
+
+  // ---- Art style (all optional; default to the drawn look, off = faithful) --
+  /**
+   * Master switch for the hand-drawn "art" treatment (default true). Each
+   * sub-feature below defaults from this, so `artStyle: false` with nothing
+   * else set reproduces the original faithful, grid-faithful render exactly.
+   */
+  artStyle?: boolean;
+  /**
+   * Draw the turbulent present-core as one traced mass — a confident tapered
+   * silhouette filled with angled, jittered, patchy hatching — instead of a
+   * grid of axis-aligned filled boxes (default = artStyle).
+   */
+  massCore?: boolean;
+  /** Offset passes building the bold core silhouette (default 3) */
+  massOutlinePasses?: number;
+  /** Base interior hatch angle for the core mass, degrees (default -32) */
+  hatchAngle?: number;
+  /** Cross-hatch second-layer angle for the core mass, degrees (default 31) */
+  crossHatchAngle?: number;
+  /** Fraction of the core mass that gets the cross-hatch layer, 0..1 (default 0.5) */
+  crossHatchAmount?: number;
+  /** Low-frequency jitter on hatch spacing/phase, 0..1 (default 0.5) */
+  hatchJitter?: number;
+  /** Vary the faint-mark fallback angle with noise instead of a fixed 45° (default = artStyle) */
+  markAngleNoise?: boolean;
+  /**
+   * Posterize the (blurred) exposure into this many committed value bands
+   * before choosing marks, so trails read as decisive tonal shapes rather
+   * than continuous per-cell noise. 0 = continuous (default artStyle ? 4 : 0).
+   */
+  valueBands?: number;
+  /**
+   * Bias a single detonation toward a rule-of-thirds point, 0..1
+   * (default artStyle ? 0.6 : 0). 0 keeps the original centered placement.
+   * Ignored when seedCount > 1 (those already scatter).
+   */
+  offCenter?: number;
+  /**
+   * Hold faint marks off the frame corners to reserve negative space, 0..1
+   * (default artStyle ? 0.4 : 0). 0 = no vignette.
+   */
+  vignette?: number;
+  /** Draw a plate-border line just inside the margin as plottable strokes (default = artStyle) */
+  plateBorder?: boolean;
 }
 
 interface Simulation {
@@ -165,23 +211,49 @@ function stampPentomino(
   }
 }
 
+/** A seeded rule-of-thirds intersection, lerped out from centre by `bias`. */
+function thirdsOrigin(
+  cols: number,
+  rows: number,
+  random: () => number,
+  bias: number
+): { cx: number; cy: number } {
+  const fx = random() < 0.5 ? 1 / 3 : 2 / 3;
+  const fy = random() < 0.5 ? 1 / 3 : 2 / 3;
+  return {
+    cx: Math.round(cols * (0.5 + (fx - 0.5) * bias)),
+    cy: Math.round(rows * (0.5 + (fy - 0.5) * bias)),
+  };
+}
+
 /**
- * Detonate `count` R-pentominoes. A single one keeps the original near-centre
- * placement (so existing seeds render unchanged); two or more are scattered
- * across the central region (inset from the edges so each has room to evolve
- * before its gliders fly out of frame), each with its own orientation.
+ * Detonate `count` R-pentominoes. A single one sits near the centre (or, when
+ * `offCenter > 0`, biased toward a rule-of-thirds point for a more composed
+ * frame); two or more are scattered across the central region (inset from the
+ * edges so each has room to evolve before its gliders fly out of frame), each
+ * with its own orientation.
  */
 function seedRPentominoes(
   grid: Uint8Array,
   cols: number,
   rows: number,
   random: () => number,
-  count: number
+  count: number,
+  offCenter: number
 ): void {
   if (count <= 1) {
     const rot = Math.floor(random() * 4);
     const mirror = random() < 0.5;
-    // Keep the detonation roughly centered: only a small jitter off the middle.
+    if (offCenter > 0) {
+      // Compose off-centre: bias toward a thirds point, small jitter around it.
+      const o = thirdsOrigin(cols, rows, random, offCenter);
+      const jx = Math.round((random() - 0.5) * cols * 0.04);
+      const jy = Math.round((random() - 0.5) * rows * 0.04);
+      stampPentomino(grid, cols, rows, o.cx + jx, o.cy + jy, rot, mirror);
+      return;
+    }
+    // Faithful path: keep the detonation roughly centered (same random() draws
+    // as the original, so existing seeds reproduce exactly).
     const jx = Math.round((random() - 0.5) * cols * 0.08);
     const jy = Math.round((random() - 0.5) * rows * 0.08);
     stampPentomino(grid, cols, rows, Math.floor(cols / 2) + jx, Math.floor(rows / 2) + jy, rot, mirror);
@@ -324,6 +396,7 @@ function simulate(
   decay: number,
   random: () => number,
   seedCount: number,
+  offCenter: number,
   track: { maxCells: number; minGenerations: number; minDisplacement: number } | null
 ): Simulation {
   const n = cols * rows;
@@ -332,7 +405,7 @@ function simulate(
   const exposure = new Float64Array(n);
   const lastAlive = new Int32Array(n).fill(-1);
 
-  seedRPentominoes(curr, cols, rows, random, seedCount);
+  seedRPentominoes(curr, cols, rows, random, seedCount, offCenter);
 
   const accumulate = (gen: number): void => {
     for (let i = 0; i < n; i++) {
@@ -513,6 +586,142 @@ function clipPolylineByMask(points: Point[], inHalo: (p: Point) => boolean): Poi
 }
 
 /**
+ * Commit a tone to one of `bands` discrete levels spanning [lo, 1]. Anything
+ * below `lo` returns 0 (clean paper), so the faint cutoff still culls empty
+ * space — the bands only quantize the *visible* range into committed shapes.
+ */
+function posterize(t: number, bands: number, lo: number): number {
+  if (bands <= 0) return t;
+  if (t < lo) return 0;
+  const span = 1 - lo;
+  const k = Math.min(bands - 1, Math.floor(((t - lo) / span) * bands));
+  return lo + ((k + 0.5) / bands) * span;
+}
+
+/** A unit vector whose angle varies smoothly with position via fBm noise. */
+function noiseAngle(noise: SimplexNoise, x: number, y: number, freq: number): Point {
+  const theta = Math.PI * noise.fbm(x * freq, y * freq, 2, 0.5, 2.2);
+  return { x: Math.cos(theta), y: Math.sin(theta) };
+}
+
+/** Drop a fraction of a polyline's arc length from each end (local copy of the
+ * pen-ink taper helper, kept private so the two renderers stay decoupled). */
+function trimPolyline(points: Point[], fraction: number): Point[] {
+  if (points.length < 3) return points;
+  const cumulative: number[] = [0];
+  for (let i = 1; i < points.length; i++) {
+    cumulative.push(
+      cumulative[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+    );
+  }
+  const total = cumulative[cumulative.length - 1];
+  const trim = Math.min(total * fraction, 12);
+  const start = cumulative.findIndex((c) => c >= trim);
+  let end = points.length - 1;
+  while (end > 0 && cumulative[end] > total - trim) end--;
+  if (start < 0 || end - start < 1) return points;
+  return points.slice(start, end + 1);
+}
+
+/** Offset a polyline perpendicular to its local direction (local copy). */
+function offsetPolyline(points: Point[], distance: number): Point[] {
+  if (Math.abs(distance) < 1e-6) return points.map((p) => ({ ...p }));
+  const out: Point[] = new Array(points.length);
+  for (let i = 0; i < points.length; i++) {
+    const ahead = points[Math.min(i + 1, points.length - 1)];
+    const behind = points[Math.max(i - 1, 0)];
+    const tx = ahead.x - behind.x;
+    const ty = ahead.y - behind.y;
+    const len = Math.hypot(tx, ty) || 1;
+    out[i] = {
+      x: points[i].x + (-ty / len) * distance,
+      y: points[i].y + (tx / len) * distance,
+    };
+  }
+  return out;
+}
+
+/**
+ * Trace the outline of the core mass as closed loops in cell coordinates.
+ * The blocky 0/1 core raster is lightly blurred so marching squares rounds the
+ * staircase into a confident silhouette (the same cloud-carving trick the
+ * pen-ink sky treatment uses).
+ */
+function coreBoundaryPolylines(isCore: Uint8Array, cols: number, rows: number): Point[][] {
+  const data = new Float32Array(cols * rows);
+  for (let i = 0; i < data.length; i++) data[i] = isCore[i] ? 1 : 0;
+  const blurred = gaussianBlur({ width: cols, height: rows, data }, 0.8);
+  return traceIsoContours(blurred, 0.5);
+}
+
+/**
+ * Parallel hatching at `angleRad`, clipped to a region. Walks scanlines in the
+ * rotated frame; spacing and phase are jittered by low-frequency noise so the
+ * fill never reads as an arithmetic screen, and each scanline is broken into
+ * runs wherever it leaves the region — so strokes terminate at the silhouette,
+ * not on cell borders. `coverage` (0..1) gates how much of the region is filled
+ * (1 ≈ solid for the base layer; less for a partial cross-hatch). Output
+ * segments are in cell coordinates.
+ */
+function angledRegionHatch(
+  inRegion: (cx: number, cy: number) => boolean,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  angleRad: number,
+  baseSpacing: number,
+  noise: SimplexNoise,
+  jitter: number,
+  phaseOffset: number,
+  coverage: number
+): Point[][] {
+  const dx = Math.cos(angleRad);
+  const dy = Math.sin(angleRad);
+  const nx = -dy;
+  const ny = dx;
+  const corners = [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.minX, y: bounds.maxY },
+    { x: bounds.maxX, y: bounds.maxY },
+  ];
+  let uMin = Infinity;
+  let uMax = -Infinity;
+  let vMin = Infinity;
+  let vMax = -Infinity;
+  for (const c of corners) {
+    const u = c.x * nx + c.y * ny;
+    const v = c.x * dx + c.y * dy;
+    if (u < uMin) uMin = u;
+    if (u > uMax) uMax = u;
+    if (v < vMin) vMin = v;
+    if (v > vMax) vMax = v;
+  }
+  const threshold = coverage * 2 - 1;
+  const segs: Point[][] = [];
+  const vStep = 0.4;
+  let u = uMin + phaseOffset;
+  while (u <= uMax) {
+    let run: Point[] = [];
+    for (let v = vMin; v <= vMax; v += vStep) {
+      const x = nx * u + dx * v;
+      const y = ny * u + dy * v;
+      const inside =
+        inRegion(Math.floor(x), Math.floor(y)) &&
+        (coverage >= 1 || noise.noise2D(x * 0.06 + 13.1, y * 0.06 + 7.7) < threshold);
+      if (inside) {
+        run.push({ x, y });
+      } else {
+        if (run.length >= 2) segs.push(run);
+        run = [];
+      }
+    }
+    if (run.length >= 2) segs.push(run);
+    const spacing = baseSpacing * (1 + jitter * 0.5 * noise.noise2D(u * 0.15, phaseOffset));
+    u += Math.max(0.3, spacing);
+  }
+  return segs;
+}
+
+/**
  * Render a long-exposure still of an R-pentomino Game of Life run as
  * plottable single-pen strokes.
  */
@@ -538,9 +747,25 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     optimize = true,
   } = options;
 
+  // Art treatment, all gated off a single master switch so `artStyle: false`
+  // (with nothing else set) reproduces the original faithful render exactly.
+  const artStyle = options.artStyle ?? true;
+  const massCore = options.massCore ?? artStyle;
+  const massOutlinePasses = options.massOutlinePasses ?? 3;
+  const hatchAngle = ((options.hatchAngle ?? -32) * Math.PI) / 180;
+  const crossHatchAngle = ((options.crossHatchAngle ?? 31) * Math.PI) / 180;
+  const crossHatchAmount = options.crossHatchAmount ?? 0.5;
+  const hatchJitter = options.hatchJitter ?? 0.5;
+  const markAngleNoise = options.markAngleNoise ?? artStyle;
+  const valueBands = options.valueBands ?? (artStyle ? 4 : 0);
+  const offCenter = options.offCenter ?? (artStyle ? 0.6 : 0);
+  const vignette = options.vignette ?? (artStyle ? 0.4 : 0);
+  const plateBorder = options.plateBorder ?? artStyle;
+
   const cellSize = Math.max(2, options.cellSize ?? Math.round(width / 100));
   const wobble = options.wobble ?? Math.max(0.4, cellSize * 0.12);
   const haloRadius = options.haloRadius ?? cellSize * 0.6;
+  const noise = createNoise(seed + 8101);
 
   const usableW = Math.max(0, width - 2 * margin);
   const usableH = Math.max(0, height - 2 * margin);
@@ -562,6 +787,7 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     decay,
     random,
     Math.max(1, Math.round(seedCount)),
+    offCenter,
     style === 'streaks'
       ? {
           maxCells: maxClusterCells,
@@ -580,6 +806,19 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   const tone = new Float32Array(cols * rows);
   for (let i = 0; i < tone.length; i++) {
     tone[i] = Math.pow(Math.min(1, sim.exposure[i] / sim.maxExposure), gamma);
+  }
+
+  // Optionally commit the trail tone to a few value bands so history reads as
+  // decisive tonal tiers, not a continuous gradient. Quantizing only the
+  // visible range (≥ faintThreshold) keeps empty space as clean paper — and we
+  // posterize the raw tone (not a blurred copy), so the gamma-lifted skirt of
+  // near-zero cells around every trail isn't promoted into a frame-wide haze.
+  // The hand-drawn pass below still reads the raw `tone`, so wobble follows
+  // true exposure rather than the bands.
+  let markTone = tone;
+  if (valueBands > 0) {
+    markTone = new Float32Array(tone.length);
+    for (let i = 0; i < markTone.length; i++) markTone[i] = posterize(tone[i], valueBands, faintThreshold);
   }
 
   const cellCenter = (cx: number, cy: number): Point => ({
@@ -613,8 +852,28 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   }
   const inHalo = (p: Point): boolean => haloCells[cellIndexAt(p.x, p.y)] === 1;
 
+  // Map a point from cell space (raster coords) to page px, matching the
+  // cell-centre convention used by cellCenter / renderContour.
+  const cellPointToPx = (p: Point): Point => ({
+    x: originX + (p.x + 0.5) * cellSize,
+    y: originY + (p.y + 0.5) * cellSize,
+  });
+
+  // Bold line = base pass + offset/tapered passes of the same pen (no stroke
+  // width tricks), mirroring the pen-ink emphasis technique.
+  const pushBoldMass = (points: Point[]): void => {
+    lines.push({ points, pen: 'bold', layer: 'present' });
+    const spread = cellSize * 0.18;
+    for (let pass = 1; pass < massOutlinePasses; pass++) {
+      const offset = spread * (pass - (massOutlinePasses - 1) / 2);
+      const trimmed = trimPolyline(offsetPolyline(points, offset), 0.12);
+      if (trimmed.length >= 2) lines.push({ points: trimmed, pen: 'bold', layer: 'present' });
+    }
+  };
+
   // ---- The crisp present (shared by every style) -------------------------
   const renderPresent = (): void => {
+    // The faithful per-cell treatment: solid axis-aligned cross-hatch boxes.
     const fillSolid = (c: Point): void => {
       const spacing = Math.max(1, cellSize * 0.2);
       const reach = half * 0.92;
@@ -637,17 +896,69 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
         });
       }
     };
+
+    // The drawn-mass treatment: trace the whole core as one tapered silhouette
+    // and fill it with angled, jittered, patchy hatching.
+    const renderCoreMass = (): void => {
+      let minX = cols;
+      let minY = rows;
+      let maxX = -1;
+      let maxY = -1;
+      for (let cy = 0; cy < rows; cy++) {
+        for (let cx = 0; cx < cols; cx++) {
+          if (!isCore[cy * cols + cx]) continue;
+          if (cx < minX) minX = cx;
+          if (cx > maxX) maxX = cx;
+          if (cy < minY) minY = cy;
+          if (cy > maxY) maxY = cy;
+        }
+      }
+      if (maxX < 0) return; // no core cells
+
+      for (const loop of coreBoundaryPolylines(isCore, cols, rows)) {
+        if (loop.length < 3) continue;
+        pushBoldMass(smoothPolyline(loop.map(cellPointToPx), 2));
+      }
+
+      const inRegion = (cx: number, cy: number): boolean =>
+        cx >= 0 && cx < cols && cy >= 0 && cy < rows && isCore[cy * cols + cx] === 1;
+      const bounds = { minX, minY, maxX: maxX + 1, maxY: maxY + 1 };
+      const segs = [
+        ...angledRegionHatch(inRegion, bounds, hatchAngle, 0.55, noise, hatchJitter, 0, 1),
+        ...angledRegionHatch(
+          inRegion,
+          bounds,
+          crossHatchAngle,
+          0.55,
+          noise,
+          hatchJitter,
+          0.27,
+          crossHatchAmount
+        ),
+      ];
+      for (const seg of segs) {
+        if (seg.length >= 2) lines.push({ points: seg.map(cellPointToPx), pen: 'fine', layer: 'present' });
+      }
+    };
+
+    if (massCore) renderCoreMass();
+
     for (let cy = 0; cy < rows; cy++) {
       for (let cx = 0; cx < cols; cx++) {
         const i = cy * cols + cx;
         if (!sim.finalAlive[i]) continue;
         const c = cellCenter(cx, cy);
         if (isCore[i]) {
+          if (massCore) continue; // drawn as one mass above
           fillSolid(c);
           lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.06), pen: 'bold', layer: 'present' });
         } else {
+          // Residue still-lifes / glider heads: crisp hollow squares. In the
+          // art style the inner inset is noise-jittered so they aren't all
+          // pixel-identical.
+          const jit = artStyle ? noise.noise2D(cx * 0.7, cy * 0.7) * 0.06 : 0;
           lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.1), pen: 'bold', layer: 'present' });
-          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.24), pen: 'bold', layer: 'present' });
+          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * (0.24 + jit)), pen: 'bold', layer: 'present' });
         }
       }
     }
@@ -673,8 +984,11 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
       const out: FlowLine[] = [];
       const span = cellSize * 0.8;
       const spacing = cellSize / (count + 1);
+      // A touch of low-frequency jitter on the offset so bundles don't read as
+      // arithmetically even (art style only).
+      const jit = artStyle ? noise.noise2D(c.x * 0.05, c.y * 0.05) * spacing * 0.25 : 0;
       for (let k = 0; k < count; k++) {
-        const off = (k - (count - 1) / 2) * spacing;
+        const off = (k - (count - 1) / 2) * spacing + jit;
         const ox = perp.x * off;
         const oy = perp.y * off;
         out.push({
@@ -693,11 +1007,20 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
       for (let cx = 0; cx < cols; cx++) {
         const i = cy * cols + cx;
         if (sim.finalAlive[i]) continue; // present drawn separately
-        const t = tone[i];
+        // Reserve negative space in the frame corners by lightening tone there.
+        let t = markTone[i];
+        if (vignette > 0) {
+          const fx = cols > 1 ? cx / (cols - 1) : 0.5;
+          const fy = rows > 1 ? cy / (rows - 1) : 0.5;
+          const w = Math.max(0, 1 - 2 * Math.min(fx, 1 - fx)) * Math.max(0, 1 - 2 * Math.min(fy, 1 - fy));
+          t *= 1 - vignette * w;
+        }
         if (t < faintThreshold) continue;
         if (haloCells[i]) continue; // hold history off the present's halo
         const c = cellCenter(cx, cy);
-        const dir = motionDir(sim.lastAlive, cols, rows, cx, cy);
+        const dir =
+          motionDir(sim.lastAlive, cols, rows, cx, cy) ??
+          (markAngleNoise ? noiseAngle(noise, cx, cy, 0.3) : null);
         if (t < mediumThreshold) {
           lines.push(dashFor(c, dir, 0.7, 'trail'));
         } else if (t < solidThreshold) {
@@ -762,6 +1085,30 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   });
 
   if (optimize) result = optimizePlot(result);
+
+  // A crisp ruled plate border, framing the drawing like a print. Added last —
+  // after wobble and plot optimization — as four straight two-point edges, so
+  // it stays a clean rectangle (path simplification would otherwise strip a
+  // densified loop back to corners and the SVG writer would round it to an
+  // oval; the optimizer would re-chain split edges into the same loop).
+  if (plateBorder) {
+    const inset = margin + cellSize;
+    const x0 = inset;
+    const y0 = inset;
+    const x1 = width - inset;
+    const y1 = height - inset;
+    if (x1 - x0 > cellSize && y1 - y0 > cellSize) {
+      const corners: Point[] = [
+        { x: x0, y: y0 },
+        { x: x1, y: y0 },
+        { x: x1, y: y1 },
+        { x: x0, y: y1 },
+      ];
+      for (let e = 0; e < 4; e++) {
+        result.lines.push({ points: [corners[e], corners[(e + 1) % 4]], pen: 'bold', layer: 'present' });
+      }
+    }
+  }
 
   return result;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toSVGLayers } from './svg.js';
+import { toSVG, toSVGLayers } from './svg.js';
 import type { FlowLinesResult } from './flow-lines.js';
 
 const mixed: FlowLinesResult = {
@@ -57,5 +57,38 @@ describe('toSVGLayers', () => {
       expect(svg).toContain('<?xml version="1.0"');
       expect(svg.trimEnd().endsWith('</svg>')).toBe(true);
     }
+  });
+
+  it('applies per-layer colors, falling back to strokeColor', () => {
+    const layers = toSVGLayers(mixed, {
+      strokeColor: '#000000',
+      layerColors: { present: '#1a1a1a', trail: '#8a7a5c' },
+    });
+    const byLayer = Object.fromEntries(layers.map((l) => [l.layer, l.svg]));
+    expect(byLayer.present).toContain('stroke="#1a1a1a"');
+    expect(byLayer.trail).toContain('stroke="#8a7a5c"');
+    // ghost has no override → falls back to strokeColor
+    expect(byLayer.ghost).toContain('stroke="#000000"');
+  });
+});
+
+describe('toSVG per-layer colors', () => {
+  it('colors each layer when layerColors is given', () => {
+    const svg = toSVG(mixed, {
+      strokeColor: '#000000',
+      layerColors: { present: '#111111', ghost: '#666666' },
+    });
+    expect(svg).toContain('stroke="#111111"');
+    expect(svg).toContain('stroke="#666666"');
+    // trail falls back to strokeColor
+    expect(svg).toContain('stroke="#000000"');
+  });
+
+  it('is unchanged from a single-color render when layerColors is absent', () => {
+    const plain = toSVG(mixed, { strokeColor: '#222222' });
+    const explicit = toSVG(mixed, { strokeColor: '#222222', layerColors: undefined });
+    expect(explicit).toBe(plain);
+    // every stroke is the one color
+    expect((plain.match(/stroke="#222222"/g) || []).length).toBe(4);
   });
 });

@@ -94,9 +94,10 @@ describe('generateConwayExposure', () => {
 
   it('detonates more starting cells as seedCount rises', () => {
     // With no generations the final config is just the starting pentominoes,
-    // so more seeds means strictly more bold marks on the page.
-    const one = generateConwayExposure({ ...base, generations: 0, seedCount: 1 });
-    const many = generateConwayExposure({ ...base, generations: 0, seedCount: 6 });
+    // so more seeds means strictly more bold marks on the page. Pin the
+    // faithful path so the count reflects cells, not art hatching/borders.
+    const one = generateConwayExposure({ ...base, artStyle: false, generations: 0, seedCount: 1 });
+    const many = generateConwayExposure({ ...base, artStyle: false, generations: 0, seedCount: 6 });
     expect(many.lines.length).toBeGreaterThan(one.lines.length);
   });
 
@@ -107,9 +108,36 @@ describe('generateConwayExposure', () => {
   });
 
   it('does not throw with zero generations (just the seed exposed)', () => {
-    const r = generateConwayExposure({ ...base, generations: 0 });
+    const r = generateConwayExposure({ ...base, artStyle: false, generations: 0 });
     // The five R-pentomino cells are the final config; all bold.
     expect(r.lines.length).toBeGreaterThan(0);
     expect(r.lines.every((l) => l.pen === 'bold')).toBe(true);
+  });
+
+  describe('art style', () => {
+    it('is deterministic with the art treatment on', () => {
+      const a = generateConwayExposure({ ...base, artStyle: true });
+      const b = generateConwayExposure({ ...base, artStyle: true });
+      expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+      expect(a.lines.length).toBeGreaterThan(0);
+    });
+
+    it('draws the core as a hatched mass (fine present strokes) only when on', () => {
+      // A long run builds a turbulent core. With the art style the core is
+      // filled with fine hatch tagged 'present'; the faithful path uses only
+      // bold per-cell boxes.
+      const art = generateConwayExposure({ ...base, artStyle: true });
+      const faithful = generateConwayExposure({ ...base, artStyle: false });
+      const finePresent = (r: typeof art) =>
+        r.lines.filter((l) => l.layer === 'present' && l.pen === 'fine').length;
+      expect(finePresent(art)).toBeGreaterThan(0);
+      expect(finePresent(faithful)).toBe(0);
+    });
+
+    it('toggling art style changes the composition', () => {
+      const art = generateConwayExposure({ ...base, artStyle: true });
+      const faithful = generateConwayExposure({ ...base, artStyle: false });
+      expect(JSON.stringify(art.lines)).not.toBe(JSON.stringify(faithful.lines));
+    });
   });
 });
