@@ -132,12 +132,19 @@ function mergeLines(lines: FlowLine[], tolerance: number): FlowLine[] {
   const used = new Array<boolean>(lines.length).fill(false);
   const merged: FlowLine[] = [];
 
-  const findNext = (p: Point, pen: FlowLine['pen']): EndpointRef | null => {
+  // Chains only grow within the same pen AND layer, so per-pen export layers
+  // never bleed into one another.
+  const findNext = (
+    p: Point,
+    pen: FlowLine['pen'],
+    layer: FlowLine['layer']
+  ): EndpointRef | null => {
     let best: EndpointRef | null = null;
     let bestDist = tolerance;
     grid.nearby(p, tolerance, (ref) => {
       if (used[ref.lineIndex]) return;
       if ((lines[ref.lineIndex].pen ?? 'fine') !== (pen ?? 'fine')) return;
+      if (lines[ref.lineIndex].layer !== layer) return;
       const q = endpoint(lines[ref.lineIndex], ref.isStart);
       const d = Math.hypot(q.x - p.x, q.y - p.y);
       if (d <= bestDist) {
@@ -154,10 +161,11 @@ function mergeLines(lines: FlowLine[], tolerance: number): FlowLine[] {
 
     let chain = [...lines[i].points];
     const pen = lines[i].pen;
+    const layer = lines[i].layer;
 
     // Grow forward from the chain's tail
     for (;;) {
-      const next = findNext(chain[chain.length - 1], pen);
+      const next = findNext(chain[chain.length - 1], pen, layer);
       if (!next) break;
       used[next.lineIndex] = true;
       const pts = lines[next.lineIndex].points;
@@ -166,17 +174,25 @@ function mergeLines(lines: FlowLine[], tolerance: number): FlowLine[] {
 
     // Grow backward from the chain's head
     for (;;) {
-      const next = findNext(chain[0], pen);
+      const next = findNext(chain[0], pen, layer);
       if (!next) break;
       used[next.lineIndex] = true;
       const pts = lines[next.lineIndex].points;
       chain = (next.isStart ? [...pts].reverse() : pts).concat(chain);
     }
 
-    merged.push(pen ? { points: chain, pen } : { points: chain });
+    merged.push(withMeta(chain, lines[i]));
   }
 
   return merged;
+}
+
+/** Carry a line's pen/layer tags onto a rebuilt copy with new points */
+function withMeta(points: Point[], src: FlowLine): FlowLine {
+  const out: FlowLine = { points };
+  if (src.pen) out.pen = src.pen;
+  if (src.layer !== undefined) out.layer = src.layer;
+  return out;
 }
 
 /**
@@ -227,7 +243,7 @@ function sortLines(lines: FlowLine[], width: number, height: number): FlowLine[]
     used[ref.lineIndex] = true;
     const line = lines[ref.lineIndex];
     const points = ref.isStart ? line.points : [...line.points].reverse();
-    ordered.push(line.pen ? { points, pen: line.pen } : { points });
+    ordered.push(withMeta(points, line));
     position = points[points.length - 1];
   }
 

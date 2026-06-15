@@ -19,6 +19,12 @@ export interface ConwayState {
   residueMaxCells: number;
   /** Hand-drawn wobble amplitude in px */
   wobble: number;
+  /** History render style */
+  style: 'marks' | 'contour' | 'streaks';
+  /** Reserved-paper sliver around the present, in mm */
+  haloMm: number;
+  /** Nested iso levels for the contour style */
+  contourLevels: number;
   strokeColor: string;
   /** Pen width in millimetres (plotted line weight) */
   penWidthMm: number;
@@ -35,6 +41,9 @@ export const defaultConwayState: ConwayState = {
   solidThreshold: 0.62,
   residueMaxCells: 6,
   wobble: 0.8,
+  style: 'marks',
+  haloMm: 1.2,
+  contourLevels: 5,
   strokeColor: '#000000',
   penWidthMm: 0.3,
 };

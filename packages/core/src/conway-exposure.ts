@@ -1,6 +1,8 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import { optimizePlot } from './optimize.js';
+import { GrayscaleImage, gaussianBlur } from './image.js';
+import { traceIsoContours } from './iso-contours.js';
 
 /**
  * A still "long exposure" of Conway's Game of Life: one frame that holds the
@@ -19,6 +21,16 @@ import { optimizePlot } from './optimize.js';
  * as a comet tail. Because the toolbox plots a single pen at a single width,
  * that exposure is turned into ink as MARK DENSITY — sparse dashes for faint
  * ghosts, dense cross-hatch for solids — never opacity or stroke-width tricks.
+ *
+ * Three render styles share the same simulation:
+ *  - `marks`   — discrete per-cell marks (the default look).
+ *  - `contour` — nested iso-contours of the blurred light field: continuous
+ *                organic ridges, comet tracks as long tapering loops.
+ *  - `streaks` — the paths of moving clusters (gliders) traced as continuous
+ *                centre-line strokes, with the core left as soft contours.
+ *
+ * Every stroke is tagged with a `layer` ('present' / 'ghost' / 'trail') so the
+ * piece can be exported one SVG per pen.
  */
 export interface ConwayExposureOptions {
   /** Page width in px */
@@ -57,6 +69,22 @@ export interface ConwayExposureOptions {
   residueMaxCells?: number;
   /** Base hand-drawn wobble amplitude in px (default scales with cellSize) */
   wobble?: number;
+  /** Render style for the history (default 'marks') */
+  style?: 'marks' | 'contour' | 'streaks';
+  /**
+   * Reserved-paper sliver in px held around the crisp present (and, in
+   * `streaks`, around the trails): history marks/lines stop short of it so the
+   * present reads with a clean halo. (default ~cellSize * 0.6)
+   */
+  haloRadius?: number;
+  /** Number of nested iso levels for the `contour` style (default 5) */
+  contourLevels?: number;
+  /** `streaks`: largest cluster (cells) tracked as a mover (default 8) */
+  maxClusterCells?: number;
+  /** `streaks`: a track must persist this many generations to count (default 12) */
+  minTrackGenerations?: number;
+  /** `streaks`: a track must travel this many cells end-to-end to count (default 6) */
+  minTrackDisplacement?: number;
   /** Chain strokes and order them to cut pen travel (default true) */
   optimize?: boolean;
 }
@@ -72,6 +100,8 @@ interface Simulation {
   finalAlive: Uint8Array;
   /** Theoretical maximum exposure (a cell alive every generation) */
   maxExposure: number;
+  /** Tracked mover paths in cell coordinates (only when style === 'streaks') */
+  tracks: Point[][];
 }
 
 /** Deterministic LCG, matching the convention used across the toolbox */
@@ -156,12 +186,110 @@ export function stepLife(curr: Uint8Array, next: Uint8Array, cols: number, rows:
   }
 }
 
+/** Centroids (cell coords) of live clusters no larger than maxCells — the
+ * candidate movers. Uses 8-connectivity flood fill over a reusable label
+ * buffer so it can run cheaply every generation. */
+function smallComponentCentroids(
+  grid: Uint8Array,
+  cols: number,
+  rows: number,
+  maxCells: number,
+  comp: Int32Array
+): Array<{ x: number; y: number; size: number }> {
+  comp.fill(-1);
+  const out: Array<{ x: number; y: number; size: number }> = [];
+  const stack: number[] = [];
+  const members: number[] = [];
+
+  for (let start = 0; start < grid.length; start++) {
+    if (!grid[start] || comp[start] !== -1) continue;
+    members.length = 0;
+    stack.push(start);
+    comp[start] = start;
+    while (stack.length) {
+      const i = stack.pop() as number;
+      members.push(i);
+      const x = i % cols;
+      const y = (i / cols) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= rows) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const xx = x + dx;
+          if (xx < 0 || xx >= cols) continue;
+          const j = yy * cols + xx;
+          if (grid[j] && comp[j] === -1) {
+            comp[j] = start;
+            stack.push(j);
+          }
+        }
+      }
+    }
+    if (members.length <= maxCells) {
+      let sx = 0;
+      let sy = 0;
+      for (const m of members) {
+        sx += m % cols;
+        sy += (m / cols) | 0;
+      }
+      out.push({ x: sx / members.length, y: sy / members.length, size: members.length });
+    }
+  }
+  return out;
+}
+
+interface ActiveTrack {
+  pts: Point[];
+  alive: boolean;
+}
+
+/** Follow small clusters across generations, keeping only those that persist
+ * and actually travel — i.e. gliders/spaceships, not the jittery core. */
+function trackMovers(
+  prev: ActiveTrack[],
+  comps: Array<{ x: number; y: number; size: number }>,
+  matchRadius: number
+): ActiveTrack[] {
+  const used = new Uint8Array(comps.length);
+  const r2 = matchRadius * matchRadius;
+  const next: ActiveTrack[] = [];
+
+  for (const tr of prev) {
+    const last = tr.pts[tr.pts.length - 1];
+    let best = -1;
+    let bestD = r2 + 1e-9;
+    for (let ci = 0; ci < comps.length; ci++) {
+      if (used[ci]) continue;
+      const dx = comps[ci].x - last.x;
+      const dy = comps[ci].y - last.y;
+      const d = dx * dx + dy * dy;
+      if (d <= r2 && d < bestD) {
+        bestD = d;
+        best = ci;
+      }
+    }
+    if (best >= 0) {
+      used[best] = 1;
+      tr.pts.push({ x: comps[best].x, y: comps[best].y });
+      next.push(tr);
+    }
+    // Tracks that miss a generation are dropped (collected by the caller).
+  }
+
+  for (let ci = 0; ci < comps.length; ci++) {
+    if (!used[ci]) next.push({ pts: [{ x: comps[ci].x, y: comps[ci].y }], alive: true });
+  }
+  return next;
+}
+
 function simulate(
   cols: number,
   rows: number,
   generations: number,
   decay: number,
-  random: () => number
+  random: () => number,
+  track: { maxCells: number; minGenerations: number; minDisplacement: number } | null
 ): Simulation {
   const n = cols * rows;
   let curr = new Uint8Array(n);
@@ -178,20 +306,53 @@ function simulate(
     }
   };
 
+  // Mover tracking (streaks only)
+  const compScratch = track ? new Int32Array(n) : null;
+  let active: ActiveTrack[] = [];
+  const finished: Point[][] = [];
+  const harvest = (carryOver: ActiveTrack[]): void => {
+    for (const tr of carryOver) finished.push(tr.pts);
+  };
+
+  const recordTracks = (): void => {
+    if (!track || !compScratch) return;
+    const comps = smallComponentCentroids(curr, cols, rows, track.maxCells, compScratch);
+    const updated = trackMovers(active, comps, 2);
+    // Tracks present before but absent now have ended — push their points.
+    const survivingFirstPoints = new Set(updated.map((t) => t.pts[0]));
+    for (const tr of active) {
+      if (!survivingFirstPoints.has(tr.pts[0])) finished.push(tr.pts);
+    }
+    active = updated;
+  };
+
   accumulate(0);
+  recordTracks();
   for (let gen = 1; gen <= generations; gen++) {
     stepLife(curr, next, cols, rows);
     const tmp = curr;
     curr = next;
     next = tmp;
     accumulate(gen);
+    recordTracks();
+  }
+  harvest(active);
+
+  let tracks: Point[][] = [];
+  if (track) {
+    tracks = finished.filter((pts) => {
+      if (pts.length < track.minGenerations) return false;
+      const a = pts[0];
+      const b = pts[pts.length - 1];
+      return Math.hypot(b.x - a.x, b.y - a.y) >= track.minDisplacement;
+    });
   }
 
   // Σ_{k=0}^{G} decay^k — what a cell alive every generation would reach.
   const maxExposure =
     decay >= 1 ? generations + 1 : (1 - Math.pow(decay, generations + 1)) / (1 - decay);
 
-  return { cols, rows, exposure, lastAlive, finalAlive: curr, maxExposure };
+  return { cols, rows, exposure, lastAlive, finalAlive: curr, maxExposure, tracks };
 }
 
 /** Label connected components of the final config (8-connectivity); a cell is
@@ -279,6 +440,43 @@ function cellSquare(cx: number, cy: number, half: number, inset: number): Point[
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
+/** Light moving-average smoothing with fixed endpoints — turns the blocky
+ * cell-grid contours and centroid tracks into organic curves. */
+function smoothPolyline(points: Point[], iterations: number): Point[] {
+  if (points.length < 3) return points.map((p) => ({ ...p }));
+  let pts = points;
+  for (let it = 0; it < iterations; it++) {
+    const out: Point[] = new Array(pts.length);
+    out[0] = { ...pts[0] };
+    out[pts.length - 1] = { ...pts[pts.length - 1] };
+    for (let i = 1; i < pts.length - 1; i++) {
+      out[i] = {
+        x: (pts[i - 1].x + 2 * pts[i].x + pts[i + 1].x) / 4,
+        y: (pts[i - 1].y + 2 * pts[i].y + pts[i + 1].y) / 4,
+      };
+    }
+    pts = out;
+  }
+  return pts;
+}
+
+/** Split a polyline into the runs of consecutive points that fall outside the
+ * mask — used to hold trails/contours a sliver short of the haloed present. */
+function clipPolylineByMask(points: Point[], inHalo: (p: Point) => boolean): Point[][] {
+  const runs: Point[][] = [];
+  let run: Point[] = [];
+  for (const p of points) {
+    if (inHalo(p)) {
+      if (run.length >= 2) runs.push(run);
+      run = [];
+    } else {
+      run.push(p);
+    }
+  }
+  if (run.length >= 2) runs.push(run);
+  return runs;
+}
+
 /**
  * Render a long-exposure still of an R-pentomino Game of Life run as
  * plottable single-pen strokes.
@@ -296,11 +494,17 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     mediumThreshold = 0.32,
     solidThreshold = 0.62,
     residueMaxCells = 6,
+    style = 'marks',
+    contourLevels = 5,
+    maxClusterCells = 8,
+    minTrackGenerations = 12,
+    minTrackDisplacement = 6,
     optimize = true,
   } = options;
 
   const cellSize = Math.max(2, options.cellSize ?? Math.round(width / 100));
   const wobble = options.wobble ?? Math.max(0.4, cellSize * 0.12);
+  const haloRadius = options.haloRadius ?? cellSize * 0.6;
 
   const usableW = Math.max(0, width - 2 * margin);
   const usableH = Math.max(0, height - 2 * margin);
@@ -315,134 +519,209 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   const originY = margin + (usableH - rows * cellSize) / 2;
 
   const random = makeRandom(seed);
-  const sim = simulate(cols, rows, Math.max(0, generations), decay, random);
+  const sim = simulate(
+    cols,
+    rows,
+    Math.max(0, generations),
+    decay,
+    random,
+    style === 'streaks'
+      ? {
+          maxCells: maxClusterCells,
+          minGenerations: minTrackGenerations,
+          minDisplacement: minTrackDisplacement,
+        }
+      : null
+  );
   const isCore = classifyFinal(sim.finalAlive, cols, rows, residueMaxCells);
 
   const half = cellSize / 2;
   const lines: FlowLine[] = [];
 
   // Per-cell perceptual tone, kept so the hand-drawn pass can loosen faint
-  // ghosts and hold the crisp solids steady.
+  // ghosts and hold the crisp solids steady, and reused as the contour field.
   const tone = new Float32Array(cols * rows);
+  for (let i = 0; i < tone.length; i++) {
+    tone[i] = Math.pow(Math.min(1, sim.exposure[i] / sim.maxExposure), gamma);
+  }
 
   const cellCenter = (cx: number, cy: number): Point => ({
     x: originX + (cx + 0.5) * cellSize,
     y: originY + (cy + 0.5) * cellSize,
   });
-
-  // A short oriented dash through the centre — the comet track.
-  const dashFor = (c: Point, dir: Point | null, lengthFrac: number): FlowLine => {
-    const d = dir ?? { x: 0.7071, y: 0.7071 };
-    const h = (cellSize * lengthFrac) / 2;
-    return {
-      points: [
-        { x: c.x - d.x * h, y: c.y - d.y * h },
-        { x: c.x + d.x * h, y: c.y + d.y * h },
-      ],
-      pen: 'fine',
-    };
+  const cellIndexAt = (x: number, y: number): number => {
+    const cxi = Math.min(cols - 1, Math.max(0, Math.floor((x - originX) / cellSize)));
+    const cyi = Math.min(rows - 1, Math.max(0, Math.floor((y - originY) / cellSize)));
+    return cyi * cols + cxi;
   };
 
-  // A few parallel hatch lines across the cell, oriented along the track.
-  const hatchFor = (c: Point, dir: Point | null, count: number): FlowLine[] => {
-    const d = dir ?? { x: 0.7071, y: 0.7071 };
-    const perp = { x: -d.y, y: d.x };
-    const out: FlowLine[] = [];
-    const span = cellSize * 0.8;
-    const spacing = cellSize / (count + 1);
-    for (let k = 0; k < count; k++) {
-      const off = (k - (count - 1) / 2) * spacing;
-      const ox = perp.x * off;
-      const oy = perp.y * off;
-      out.push({
-        points: [
-          { x: c.x + ox - d.x * span * 0.5, y: c.y + oy - d.y * span * 0.5 },
-          { x: c.x + ox + d.x * span * 0.5, y: c.y + oy + d.y * span * 0.5 },
-        ],
-        pen: 'fine',
-      });
-    }
-    return out;
-  };
-
-  // Dense cross-hatch fill: two families of close parallel lines read as a
-  // solid mass under a single pen.
-  const fillSolid = (c: Point): FlowLine[] => {
-    const out: FlowLine[] = [];
-    const spacing = Math.max(1, cellSize * 0.2);
-    const reach = half * 0.92;
-    for (let off = -reach; off <= reach; off += spacing) {
-      out.push({
-        points: [
-          { x: c.x - reach, y: c.y + off },
-          { x: c.x + reach, y: c.y + off },
-        ],
-        pen: 'bold',
-      });
-      out.push({
-        points: [
-          { x: c.x + off, y: c.y - reach },
-          { x: c.x + off, y: c.y + reach },
-        ],
-        pen: 'bold',
-      });
-    }
-    return out;
-  };
-
-  for (let cy = 0; cy < rows; cy++) {
-    for (let cx = 0; cx < cols; cx++) {
-      const i = cy * cols + cx;
-      const norm = Math.min(1, sim.exposure[i] / sim.maxExposure);
-      const t = Math.pow(norm, gamma);
-      tone[i] = t;
-
-      const final = sim.finalAlive[i] === 1;
-      const c = cellCenter(cx, cy);
-
-      if (final) {
-        // The present moment, always crisp. Per the brief: the turbulent core
-        // fills solid; the scattered residue stays a hollow outline.
-        if (isCore[i]) {
-          lines.push(...fillSolid(c));
-          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.06), pen: 'bold' });
-        } else {
-          // Residue: clean outline plus one inset emphasis pass.
-          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.1), pen: 'bold' });
-          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.24), pen: 'bold' });
+  // Reserved-paper halo: dilate the present's cells so history holds off them.
+  const haloCells = new Uint8Array(cols * rows);
+  const haloR = Math.max(0, Math.ceil(haloRadius / cellSize));
+  if (haloR > 0) {
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        if (!sim.finalAlive[cy * cols + cx]) continue;
+        for (let dy = -haloR; dy <= haloR; dy++) {
+          const yy = cy + dy;
+          if (yy < 0 || yy >= rows) continue;
+          for (let dx = -haloR; dx <= haloR; dx++) {
+            const xx = cx + dx;
+            if (xx < 0 || xx >= cols) continue;
+            haloCells[yy * cols + xx] = 1;
+          }
         }
-        continue;
-      }
-
-      // History: density fades with exposure.
-      if (t < faintThreshold) continue;
-      const dir = motionDir(sim.lastAlive, cols, rows, cx, cy);
-      if (t < mediumThreshold) {
-        lines.push(dashFor(c, dir, 0.7));
-      } else if (t < solidThreshold) {
-        const count = 1 + Math.round(((t - mediumThreshold) / (solidThreshold - mediumThreshold)) * 2);
-        lines.push(...hatchFor(c, dir, count));
-      } else {
-        // Bright ghost that never made the final cut (e.g. a long-lived
-        // oscillator phase) — read it as a small filled mark, not a full solid.
-        lines.push(...hatchFor(c, dir, 4));
       }
     }
   }
+  const inHalo = (p: Point): boolean => haloCells[cellIndexAt(p.x, p.y)] === 1;
+
+  // ---- The crisp present (shared by every style) -------------------------
+  const renderPresent = (): void => {
+    const fillSolid = (c: Point): void => {
+      const spacing = Math.max(1, cellSize * 0.2);
+      const reach = half * 0.92;
+      for (let off = -reach; off <= reach; off += spacing) {
+        lines.push({
+          points: [
+            { x: c.x - reach, y: c.y + off },
+            { x: c.x + reach, y: c.y + off },
+          ],
+          pen: 'bold',
+          layer: 'present',
+        });
+        lines.push({
+          points: [
+            { x: c.x + off, y: c.y - reach },
+            { x: c.x + off, y: c.y + reach },
+          ],
+          pen: 'bold',
+          layer: 'present',
+        });
+      }
+    };
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        const i = cy * cols + cx;
+        if (!sim.finalAlive[i]) continue;
+        const c = cellCenter(cx, cy);
+        if (isCore[i]) {
+          fillSolid(c);
+          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.06), pen: 'bold', layer: 'present' });
+        } else {
+          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.1), pen: 'bold', layer: 'present' });
+          lines.push({ points: cellSquare(c.x, c.y, half, cellSize * 0.24), pen: 'bold', layer: 'present' });
+        }
+      }
+    }
+  };
+
+  // ---- History as discrete marks -----------------------------------------
+  const renderMarks = (): void => {
+    const dashFor = (c: Point, dir: Point | null, lengthFrac: number, layer: string): FlowLine => {
+      const d = dir ?? { x: 0.7071, y: 0.7071 };
+      const h = (cellSize * lengthFrac) / 2;
+      return {
+        points: [
+          { x: c.x - d.x * h, y: c.y - d.y * h },
+          { x: c.x + d.x * h, y: c.y + d.y * h },
+        ],
+        pen: 'fine',
+        layer,
+      };
+    };
+    const hatchFor = (c: Point, dir: Point | null, count: number, layer: string): FlowLine[] => {
+      const d = dir ?? { x: 0.7071, y: 0.7071 };
+      const perp = { x: -d.y, y: d.x };
+      const out: FlowLine[] = [];
+      const span = cellSize * 0.8;
+      const spacing = cellSize / (count + 1);
+      for (let k = 0; k < count; k++) {
+        const off = (k - (count - 1) / 2) * spacing;
+        const ox = perp.x * off;
+        const oy = perp.y * off;
+        out.push({
+          points: [
+            { x: c.x + ox - d.x * span * 0.5, y: c.y + oy - d.y * span * 0.5 },
+            { x: c.x + ox + d.x * span * 0.5, y: c.y + oy + d.y * span * 0.5 },
+          ],
+          pen: 'fine',
+          layer,
+        });
+      }
+      return out;
+    };
+
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        const i = cy * cols + cx;
+        if (sim.finalAlive[i]) continue; // present drawn separately
+        const t = tone[i];
+        if (t < faintThreshold) continue;
+        if (haloCells[i]) continue; // hold history off the present's halo
+        const c = cellCenter(cx, cy);
+        const dir = motionDir(sim.lastAlive, cols, rows, cx, cy);
+        if (t < mediumThreshold) {
+          lines.push(dashFor(c, dir, 0.7, 'trail'));
+        } else if (t < solidThreshold) {
+          const count = 1 + Math.round(((t - mediumThreshold) / (solidThreshold - mediumThreshold)) * 2);
+          lines.push(...hatchFor(c, dir, count, 'ghost'));
+        } else {
+          lines.push(...hatchFor(c, dir, 4, 'ghost'));
+        }
+      }
+    }
+  };
+
+  // ---- History as nested iso-contours ------------------------------------
+  const renderContour = (minLevelFrac: number): void => {
+    const blurred = gaussianBlur({ width: cols, height: rows, data: new Float32Array(tone) }, 1.2);
+    const span = solidThreshold - faintThreshold;
+    for (let k = 0; k < contourLevels; k++) {
+      const frac = (k + 0.5) / contourLevels;
+      if (frac < minLevelFrac) continue;
+      const iso = faintThreshold + span * frac;
+      const layer = frac < 0.5 ? 'trail' : 'ghost';
+      for (const poly of traceIsoContours(blurred, iso)) {
+        if (poly.length < 3) continue;
+        const px = poly.map((p) => ({
+          x: originX + (p.x + 0.5) * cellSize,
+          y: originY + (p.y + 0.5) * cellSize,
+        }));
+        for (const run of clipPolylineByMask(px, inHalo)) {
+          const smooth = smoothPolyline(run, 2);
+          if (smooth.length >= 2) lines.push({ points: smooth, pen: 'fine', layer });
+        }
+      }
+    }
+  };
+
+  // ---- History as tracked centre-line streaks ----------------------------
+  const renderStreaks = (): void => {
+    for (const track of sim.tracks) {
+      const px = track.map((p) => cellCenter(p.x, p.y));
+      for (const run of clipPolylineByMask(px, inHalo)) {
+        const smooth = smoothPolyline(run, 3);
+        if (smooth.length >= 2) lines.push({ points: smooth, pen: 'fine', layer: 'trail' });
+      }
+    }
+    // The chaotic core can't be tracked — render it as soft ghost contours.
+    renderContour(0.5);
+  };
+
+  renderPresent();
+  if (style === 'contour') renderContour(0);
+  else if (style === 'streaks') renderStreaks();
+  else renderMarks();
 
   let result: FlowLinesResult = { lines, width, height, seed };
 
   // Faint old marks wobble (haunted); crisp final cells stay sharp.
-  const toneAt = (x: number, y: number): number => {
-    const cxi = Math.min(cols - 1, Math.max(0, Math.floor((x - originX) / cellSize)));
-    const cyi = Math.min(rows - 1, Math.max(0, Math.floor((y - originY) / cellSize)));
-    return tone[cyi * cols + cxi];
-  };
   result = applyHandDrawnStyle(result, {
     amplitude: wobble,
     wavelength: cellSize * 8,
     seed,
-    amplitudeScale: (x, y) => lerp(1.4, 0.12, toneAt(x, y)),
+    amplitudeScale: (x, y) => lerp(1.4, 0.12, tone[cellIndexAt(x, y)]),
   });
 
   if (optimize) result = optimizePlot(result);

@@ -1,12 +1,70 @@
 import { InfoTip } from '../../components/InfoTip';
 import { useConway } from './context';
+import type { ConwayState } from './types';
 
 /** Sidebar controls for the Conway Long Exposure project. */
 export function ConwayControls() {
-  const { state, updateState, randomizeSeed, downloadSVG } = useConway();
+  const { state, updateState, randomizeSeed, downloadSVG, downloadLayers } = useConway();
 
   return (
     <div className="controls">
+      <h3 className="section-title">Render</h3>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Style
+            <InfoTip text="Marks: discrete per-cell strokes. Contour ridges: nested smooth contours of the light field — organic, topographic. Comet streaks: each glider's path traced as one continuous flowing line, the core left as soft contours." />
+          </span>
+        </label>
+        <select
+          value={state.style}
+          onChange={(e) => updateState({ style: e.target.value as ConwayState['style'] })}
+        >
+          <option value="marks">Marks (discrete)</option>
+          <option value="contour">Contour ridges (organic)</option>
+          <option value="streaks">Comet streaks (organic)</option>
+        </select>
+      </div>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Trail halo
+            <InfoTip text="A sliver of clean paper reserved around the crisp present — history marks and trails hold back from it, so the 'now' reads with a glow. 0 lets them crowd right up to it." />
+          </span>
+          <span>{state.haloMm.toFixed(1)}mm</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="4"
+          step="0.1"
+          value={state.haloMm}
+          onChange={(e) => updateState({ haloMm: parseFloat(e.target.value) })}
+        />
+      </div>
+
+      {state.style === 'contour' && (
+        <div className="control-group">
+          <label>
+            <span className="label-text">
+              Contour levels
+              <InfoTip text="How many nested iso-contours trace the light field. More levels give a finer tonal gradient (denser shading); fewer give bold, sparse rings." />
+            </span>
+            <span>{state.contourLevels}</span>
+          </label>
+          <input
+            type="range"
+            min="2"
+            max="10"
+            step="1"
+            value={state.contourLevels}
+            onChange={(e) => updateState({ contourLevels: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
+
       <h3 className="section-title">Exposure</h3>
 
       <div className="control-group">
@@ -241,6 +299,14 @@ export function ConwayControls() {
       <div className="button-group">
         <button type="button" className="primary" onClick={downloadSVG}>
           Download SVG
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={downloadLayers}
+          title="One SVG per layer (present / ghost / trail), zipped — plot each with a different pen"
+        >
+          Download layers (.zip)
         </button>
       </div>
     </div>

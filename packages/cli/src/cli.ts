@@ -12,6 +12,7 @@ import {
   grayscaleFromRGBA,
   imageToPenInk,
   toSVG,
+  toSVGLayers,
   pageMetrics,
   contentRect,
   getPaperSize,
@@ -477,6 +478,17 @@ program
   .option('--generations <number>', 'Generations to simulate', '180')
   .option('--decay <number>', 'Per-generation exposure decay (0-1); higher = longer trails', '0.92')
   .option('--gamma <number>', 'Perceptual lift on faint trails (<1 brightens)', '0.45')
+  .option(
+    '--style <style>',
+    'History render style: marks (discrete) | contour (organic ridges) | streaks (tracked comet trails)',
+    'marks'
+  )
+  .option('--halo-radius <number>', 'Reserved-paper sliver around the present in px (default ~cell*0.6)')
+  .option('--contour-levels <number>', 'Nested iso levels for the contour style', '5')
+  .option(
+    '--split-layers',
+    'Write one SVG per layer (present/ghost/trail) for multi-pen plotting, named <output>.<layer>.svg'
+  )
   .option('--faint-threshold <number>', 'Tone below this leaves blank paper (0-1)', '0.1')
   .option('--medium-threshold <number>', 'Faint→medium tone boundary (0-1)', '0.32')
   .option('--solid-threshold <number>', 'Medium→solid tone boundary (0-1)', '0.62')
@@ -526,6 +538,9 @@ program
       solidThreshold: parseFloat(options.solidThreshold),
       residueMaxCells: parseInt(options.residueMaxCells, 10),
       wobble: options.wobble ? parseFloat(options.wobble) : undefined,
+      style: options.style as 'marks' | 'contour' | 'streaks',
+      haloRadius: options.haloRadius ? parseFloat(options.haloRadius) : undefined,
+      contourLevels: parseInt(options.contourLevels, 10),
       optimize: options.optimize,
     };
 
@@ -546,11 +561,21 @@ program
       ...paperSvg,
     };
 
-    const svg = toSVG(result, svgOptions);
-    const outputPath = resolve(process.cwd(), options.output);
-
-    writeFileSync(outputPath, svg, 'utf-8');
-    console.log(`\nSaved to: ${outputPath}`);
+    if (options.splitLayers) {
+      // Strip a trailing .svg so layers land as <base>.<layer>.svg
+      const base = resolve(process.cwd(), options.output.replace(/\.svg$/i, ''));
+      const layers = toSVGLayers(result, svgOptions);
+      for (const { layer, svg } of layers) {
+        const layerPath = `${base}.${layer}.svg`;
+        writeFileSync(layerPath, svg, 'utf-8');
+        console.log(`  Saved layer '${layer}' to: ${layerPath}`);
+      }
+    } else {
+      const svg = toSVG(result, svgOptions);
+      const outputPath = resolve(process.cwd(), options.output);
+      writeFileSync(outputPath, svg, 'utf-8');
+      console.log(`\nSaved to: ${outputPath}`);
+    }
   });
 
 program.parse();

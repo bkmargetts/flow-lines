@@ -15,7 +15,7 @@ export { generateConwayExposure } from './conway-exposure.js';
 export type { ConwayExposureOptions } from './conway-exposure.js';
 
 // SVG export
-export { toSVG, parseSVGOptions } from './svg.js';
+export { toSVG, toSVGLayers, parseSVGOptions } from './svg.js';
 export type { SVGOptions } from './svg.js';
 
 // Image utilities
