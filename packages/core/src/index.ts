@@ -10,6 +10,10 @@ export type { FlowFieldOptions, Vector2D } from './flow-field.js';
 export { generateFlowLines, generateFlowLinesGrid } from './flow-lines.js';
 export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point } from './flow-lines.js';
 
+// Conway's Game of Life long-exposure still
+export { generateConwayExposure } from './conway-exposure.js';
+export type { ConwayExposureOptions } from './conway-exposure.js';
+
 // SVG export
 export { toSVG, parseSVGOptions } from './svg.js';
 export type { SVGOptions } from './svg.js';
