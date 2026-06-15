@@ -767,17 +767,22 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   const haloRadius = options.haloRadius ?? cellSize * 0.6;
   const noise = createNoise(seed + 8101);
 
-  const usableW = Math.max(0, width - 2 * margin);
-  const usableH = Math.max(0, height - 2 * margin);
+  // When a plate border frames the piece, pull the simulation grid inward so
+  // the drawing sits comfortably inside the border with a clear gutter instead
+  // of cells crossing the ruled line. The border itself sits at margin+cellSize.
+  const frameMargin = margin + (plateBorder ? cellSize * 3 : 0);
+
+  const usableW = Math.max(0, width - 2 * frameMargin);
+  const usableH = Math.max(0, height - 2 * frameMargin);
   const cols = Math.floor(usableW / cellSize);
   const rows = Math.floor(usableH / cellSize);
 
   const empty = (): FlowLinesResult => ({ lines: [], width, height, seed });
   if (cols < 3 || rows < 3) return empty();
 
-  // Center the grid within the page margin.
-  const originX = margin + (usableW - cols * cellSize) / 2;
-  const originY = margin + (usableH - rows * cellSize) / 2;
+  // Center the grid within the (framed) page margin.
+  const originX = frameMargin + (usableW - cols * cellSize) / 2;
+  const originY = frameMargin + (usableH - rows * cellSize) / 2;
 
   const random = makeRandom(seed);
   const sim = simulate(

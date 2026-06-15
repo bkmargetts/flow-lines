@@ -18,6 +18,8 @@ export interface FrameSettings {
   marginMm: number;
   /** How art of a different aspect sits on the sheet */
   fit: PaperFit;
+  /** Paper colour shown behind the drawing in the preview (not plotted) */
+  paperTone: string;
 }
 
 export const defaultFrame: FrameSettings = {
@@ -26,6 +28,7 @@ export const defaultFrame: FrameSettings = {
   resolution: BASE_PX_PER_MM,
   marginMm: 10,
   fit: 'fit',
+  paperTone: '#faf9f6',
 };
 
 interface FrameContextValue {

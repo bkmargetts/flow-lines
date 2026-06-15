@@ -99,15 +99,10 @@ export function ConwayProvider({
     };
 
     const result = generateConwayExposure(options);
-    // The preview shows warm paper behind the inks; export stays paper-free
-    // (a plotter draws on real stock — no painted background rect).
-    const svg = toSVG(result, {
-      ...svgOptions,
-      includeBackground: true,
-      backgroundColor: state.paperTone,
-    });
+    // The SVG stays paper-free (a plotter draws on real stock); the shared
+    // frame paper tone shows behind it in the preview.
     return {
-      svg,
+      svg: toSVG(result, svgOptions),
       result,
       svgOptions,
       width: page.widthPx,

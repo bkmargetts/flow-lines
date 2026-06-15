@@ -1,11 +1,13 @@
 import { Preview } from '../../components/Preview';
+import { useFrame } from '../../FrameContext';
 import { useConway } from './context';
 
-/** Canvas pane for the Conway Long Exposure project: the rendered sheet,
- * presented on warm paper with a small plate caption (both preview-only —
- * never part of the plotted SVG). */
+/** Canvas pane for the Conway Long Exposure project: the rendered sheet on the
+ * shared paper tone, with a small plate caption (preview-only — never part of
+ * the plotted SVG). */
 export function ConwayCanvas() {
   const { generated, state } = useConway();
+  const { frame } = useFrame();
 
   const subject =
     state.seedCount > 1 ? `${state.seedCount} R-pentominoes` : 'R-pentomino';
@@ -20,28 +22,16 @@ export function ConwayCanvas() {
         gap: '0.6rem',
       }}
     >
-      <div
-        style={{
-          // A faint paper grain behind the sheet — soft enough not to fight
-          // the ink, and purely cosmetic (the SVG itself carries the paper rect).
-          padding: state.artStyle ? '1.4rem' : 0,
-          background: state.artStyle
-            ? `radial-gradient(circle at 30% 25%, rgba(0,0,0,0.035), transparent 60%), ${state.paperTone}`
-            : 'transparent',
-          boxShadow: state.artStyle ? '0 2px 14px rgba(0,0,0,0.18)' : 'none',
-          borderRadius: 2,
-        }}
-      >
-        <Preview
-          svgContent={generated.svg}
-          width={generated.width}
-          height={generated.height}
-          paintMode={false}
-          paintedPoints={[]}
-          showDots={false}
-          onPaint={() => {}}
-        />
-      </div>
+      <Preview
+        svgContent={generated.svg}
+        width={generated.width}
+        height={generated.height}
+        paintMode={false}
+        paintedPoints={[]}
+        showDots={false}
+        onPaint={() => {}}
+        background={frame.paperTone}
+      />
       {state.artStyle && (
         <div
           style={{

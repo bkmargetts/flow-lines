@@ -2,6 +2,15 @@ import type { PaperFit } from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
 import { PaperControls } from './PaperControls';
 
+/** Paper-tone swatches shown behind the drawing in the preview (never plotted). */
+const PAPER_TONES: Array<{ id: string; label: string }> = [
+  { id: '#ffffff', label: 'Bright white' },
+  { id: '#faf9f6', label: 'Soft white' },
+  { id: '#f4efe2', label: 'Warm' },
+  { id: '#ece3cf', label: 'Cream' },
+  { id: '#e7e7e4', label: 'Cool grey' },
+];
+
 /**
  * The shared page frame — paper, orientation, render density, fit and the
  * paper-border margin. Mounted once in the shell so every project tab plots
@@ -52,6 +61,23 @@ export function FrameControls() {
           value={frame.marginMm}
           onChange={(e) => updateFrame({ marginMm: parseInt(e.target.value, 10) })}
         />
+      </div>
+
+      <div className="control-group">
+        <label>Paper tone</label>
+        <div className="paper-swatches">
+          {PAPER_TONES.map((tone) => (
+            <button
+              key={tone.id}
+              type="button"
+              className={`paper-swatch ${frame.paperTone === tone.id ? 'active' : ''}`}
+              title={tone.label}
+              aria-label={tone.label}
+              style={{ background: tone.id }}
+              onClick={() => updateFrame({ paperTone: tone.id })}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

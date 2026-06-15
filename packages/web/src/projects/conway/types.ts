@@ -60,8 +60,6 @@ export interface ConwayState {
   ghostColor: string;
   /** Ink for the faint trails */
   trailColor: string;
-  /** Warm paper tone shown behind the preview (not plotted) */
-  paperTone: string;
 }
 
 export const defaultConwayState: ConwayState = {
@@ -96,5 +94,4 @@ export const defaultConwayState: ConwayState = {
   presentColor: '#1a1a1a',
   ghostColor: '#6b6b66',
   trailColor: '#8a7a5c',
-  paperTone: '#f4efe2',
 };

@@ -223,21 +223,6 @@ export function ConwayControls() {
         </div>
       )}
 
-      {state.artStyle && (
-        <div className="control-group">
-          <label>
-            <span className="label-text">
-              Paper tone
-              <InfoTip text="Warm paper colour shown behind the drawing in the preview. Not plotted — it just helps you judge the inks against the stock you'll print on." />
-            </span>
-          </label>
-          <input
-            type="text"
-            value={state.paperTone}
-            onChange={(e) => updateState({ paperTone: e.target.value })}
-          />
-        </div>
-      )}
 
       <h3 className="section-title">Seed</h3>
 

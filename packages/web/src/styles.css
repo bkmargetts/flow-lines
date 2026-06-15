@@ -317,6 +317,29 @@ button.secondary:hover {
   border-radius: var(--radius-sm);
 }
 
+.paper-swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.paper-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.paper-swatch:hover {
+  transform: scale(1.08);
+}
+
+.paper-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--accent, #4a90d9);
+}
+
 .mode-tabs {
   margin-bottom: 20px;
 }
