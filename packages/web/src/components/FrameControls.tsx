@@ -1,5 +1,6 @@
-import type { PaperFit } from '@flow-lines/core';
+import type { PaperFit, TextureStyle } from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
+import { InfoTip } from './InfoTip';
 import { PaperControls } from './PaperControls';
 
 /** Paper-tone swatches shown behind the drawing in the preview (never plotted). */
@@ -9,6 +10,17 @@ const PAPER_TONES: Array<{ id: string; label: string }> = [
   { id: '#f4efe2', label: 'Warm' },
   { id: '#ece3cf', label: 'Cream' },
   { id: '#e7e7e4', label: 'Cool grey' },
+];
+
+/** Texture ink swatches (its own pen layer). */
+const TEXTURE_INKS = ['#c9c2b4', '#b06a3c', '#5b6e7a', '#9aa0a6', '#1a1a1a'];
+
+const TEXTURE_STYLES: Array<{ id: TextureStyle; label: string }> = [
+  { id: 'hatch', label: 'Hatch' },
+  { id: 'grid', label: 'Grid' },
+  { id: 'stipple', label: 'Stipple' },
+  { id: 'contours', label: 'Contours' },
+  { id: 'shapes', label: 'Shapes' },
 ];
 
 /**
@@ -79,6 +91,211 @@ export function FrameControls() {
           ))}
         </div>
       </div>
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.textureEnabled}
+            onChange={(e) => updateFrame({ textureEnabled: e.target.checked })}
+          />
+          Background texture
+          <InfoTip text="An optional field of plottable strokes laid behind the drawing on its own pen layer (exports as a separate SVG). Held a clean-paper halo off the art so it doesn't crowd it." />
+        </label>
+      </div>
+
+      {frame.textureEnabled && (
+        <details className="adv-group" open>
+          <summary>Texture</summary>
+
+          <div className="control-group">
+            <label>Style</label>
+            <select
+              value={frame.textureStyle}
+              onChange={(e) => updateFrame({ textureStyle: e.target.value as TextureStyle })}
+            >
+              {TEXTURE_STYLES.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {(frame.textureStyle === 'hatch' ||
+            frame.textureStyle === 'grid' ||
+            frame.textureStyle === 'stipple') && (
+            <div className="control-group">
+              <label>
+                Spacing <span>{frame.textureSpacingMm.toFixed(1)}mm</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="12"
+                step="0.5"
+                value={frame.textureSpacingMm}
+                onChange={(e) => updateFrame({ textureSpacingMm: parseFloat(e.target.value) })}
+              />
+            </div>
+          )}
+
+          {(frame.textureStyle === 'hatch' ||
+            frame.textureStyle === 'grid' ||
+            frame.textureStyle === 'shapes') && (
+            <div className="control-group">
+              <label>
+                Angle <span>{frame.textureAngleDeg}°</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="180"
+                step="1"
+                value={frame.textureAngleDeg}
+                onChange={(e) => updateFrame({ textureAngleDeg: parseInt(e.target.value, 10) })}
+              />
+            </div>
+          )}
+
+          {frame.textureStyle === 'hatch' && (
+            <div className="control-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={frame.textureCrossHatch}
+                  onChange={(e) => updateFrame({ textureCrossHatch: e.target.checked })}
+                />
+                Cross-hatch
+              </label>
+            </div>
+          )}
+
+          {(frame.textureStyle === 'stipple' ||
+            frame.textureStyle === 'contours' ||
+            frame.textureStyle === 'shapes') && (
+            <div className="control-group">
+              <label>
+                Density <span>{frame.textureDensity.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={frame.textureDensity}
+                onChange={(e) => updateFrame({ textureDensity: parseFloat(e.target.value) })}
+              />
+            </div>
+          )}
+
+          <div className="control-group">
+            <label>
+              {frame.textureStyle === 'contours' ? 'Scale' : 'Mark size'}{' '}
+              <span>{frame.textureScale.toFixed(2)}</span>
+            </label>
+            <input
+              type="range"
+              min="0.2"
+              max="3"
+              step="0.1"
+              value={frame.textureScale}
+              onChange={(e) => updateFrame({ textureScale: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          {frame.textureStyle !== 'grid' && (
+            <div className="control-group">
+              <label>
+                Jitter <span>{frame.textureJitter.toFixed(2)}</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={frame.textureJitter}
+                onChange={(e) => updateFrame({ textureJitter: parseFloat(e.target.value) })}
+              />
+            </div>
+          )}
+
+          {frame.textureStyle === 'shapes' && (
+            <div className="control-group">
+              <label>Shape kinds</label>
+              <div className="segmented">
+                {(['square', 'circle', 'line'] as const).map((k) => {
+                  const on = frame.textureShapes.kinds.includes(k);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      className={on ? 'active' : ''}
+                      onClick={() => {
+                        const kinds = on
+                          ? frame.textureShapes.kinds.filter((x) => x !== k)
+                          : [...frame.textureShapes.kinds, k];
+                        updateFrame({ textureShapes: { ...frame.textureShapes, kinds: kinds.length ? kinds : [k] } });
+                      }}
+                    >
+                      {k}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="control-group">
+            <label>
+              Halo <span>{frame.textureHaloMm.toFixed(1)}mm</span>
+              <InfoTip text="Clean-paper sliver reserved around the drawing where the texture holds off, so the art reads off the textured ground. 0 lets the texture run under the drawing." />
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="0.5"
+              value={frame.textureHaloMm}
+              onChange={(e) => updateFrame({ textureHaloMm: parseFloat(e.target.value) })}
+            />
+          </div>
+
+          <div className="control-group">
+            <label>Texture ink</label>
+            <div className="paper-swatches">
+              {TEXTURE_INKS.map((ink) => (
+                <button
+                  key={ink}
+                  type="button"
+                  className={`paper-swatch ${frame.textureColor === ink ? 'active' : ''}`}
+                  title={ink}
+                  aria-label={ink}
+                  style={{ background: ink }}
+                  onClick={() => updateFrame({ textureColor: ink })}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="control-group">
+            <label>Texture seed</label>
+            <div className="seed-input">
+              <input
+                type="number"
+                value={frame.textureSeed}
+                onChange={(e) => updateFrame({ textureSeed: parseInt(e.target.value, 10) || 0 })}
+              />
+              <button
+                type="button"
+                className="secondary"
+                title="New texture seed"
+                onClick={() => updateFrame({ textureSeed: Math.floor(Math.random() * 1000000) })}
+              >
+                🎲
+              </button>
+            </div>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

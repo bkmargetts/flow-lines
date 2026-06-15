@@ -17,6 +17,7 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
+import { buildTexture } from '../../lib/texture';
 import { zipStore } from '../../lib/zip';
 import { defaultConwayState, type ConwayState } from './types';
 
@@ -100,6 +101,15 @@ export function ConwayProvider({
     };
 
     const result = generateConwayExposure(options);
+
+    // Optional shared background texture, held a halo off the drawing and laid
+    // behind it on its own pen layer.
+    const tex = buildTexture(frame, page, result.lines);
+    if (tex) {
+      result.lines = [...tex.lines, ...result.lines];
+      svgOptions.layerColors = { ...(svgOptions.layerColors ?? {}), texture: tex.color };
+    }
+
     // The SVG stays paper-free (a plotter draws on real stock); the shared
     // frame paper tone shows behind it in the preview.
     return {
@@ -109,7 +119,26 @@ export function ConwayProvider({
       width: page.widthPx,
       height: page.heightPx,
     };
-  }, [active, state, frame.paper, frame.orientation, frame.resolution, frame.marginMm]);
+  }, [
+    active,
+    state,
+    frame.paper,
+    frame.orientation,
+    frame.resolution,
+    frame.marginMm,
+    frame.textureEnabled,
+    frame.textureStyle,
+    frame.textureSpacingMm,
+    frame.textureAngleDeg,
+    frame.textureScale,
+    frame.textureJitter,
+    frame.textureDensity,
+    frame.textureCrossHatch,
+    frame.textureColor,
+    frame.textureSeed,
+    frame.textureHaloMm,
+    frame.textureShapes,
+  ]);
 
   const triggerDownload = (blob: Blob, filename: string): void => {
     const url = URL.createObjectURL(blob);

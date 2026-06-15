@@ -19,6 +19,7 @@ import {
 } from '@flow-lines/core';
 import { getRenderClient, type RenderedSVG } from '../../render-client';
 import { useFrame } from '../../FrameContext';
+import { textureOptionsFor } from '../../lib/texture';
 import {
   defaultInkSettings,
   PRESETS,
@@ -530,7 +531,13 @@ export function ImageInkProvider({
           strokeWidth: settings.penWidthMm * page.pxPerMm,
           physicalWidth: `${page.widthMm}mm`,
           physicalHeight: `${page.heightMm}mm`,
-        }
+        },
+        // Optional shared background texture; the worker holds it a halo off
+        // the rendered ink and lays it behind on its own pen layer.
+        (() => {
+          const texOpts = textureOptionsFor(frame, page);
+          return texOpts ? { options: texOpts, color: frame.textureColor } : undefined;
+        })()
       )
       .then((rendered) => {
         // Survived the apply — clear the crash breadcrumb
@@ -544,7 +551,13 @@ export function ImageInkProvider({
           setIsRendering(false);
         }
       });
-  }, [active, sourceImage, inkLayout, settings, focusPoints, subjectMask, portraitState, depthMap, labelMap, lowMemory]);
+  }, [
+    active, sourceImage, inkLayout, settings, focusPoints, subjectMask, portraitState,
+    depthMap, labelMap, lowMemory,
+    frame.textureEnabled, frame.textureStyle, frame.textureSpacingMm, frame.textureAngleDeg,
+    frame.textureScale, frame.textureJitter, frame.textureDensity, frame.textureCrossHatch,
+    frame.textureColor, frame.textureSeed, frame.textureHaloMm, frame.textureShapes,
+  ]);
 
   // Auto ML (scene labels ~5MB, then depth ~25MB where the device
   // reports WebGPU) waits for the first render to finish, then runs the

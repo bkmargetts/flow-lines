@@ -127,7 +127,7 @@ function orderedLayers(lines: FlowLine[]): Array<[string, FlowLine[]]> {
     else groups.set(key, [line]);
   }
 
-  const preferred = ['present', 'ghost', 'trail'];
+  const preferred = ['texture', 'present', 'ghost', 'trail'];
   const keys = [...groups.keys()].sort((a, b) => {
     const ia = preferred.indexOf(a);
     const ib = preferred.indexOf(b);

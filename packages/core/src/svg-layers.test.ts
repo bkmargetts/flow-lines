@@ -72,6 +72,31 @@ describe('toSVGLayers', () => {
   });
 });
 
+describe('texture layer ordering', () => {
+  const withTexture: FlowLinesResult = {
+    width: 100,
+    height: 80,
+    seed: 1,
+    lines: [
+      { points: [{ x: 0, y: 0 }, { x: 50, y: 0 }], layer: 'present', pen: 'bold' },
+      { points: [{ x: 0, y: 40 }, { x: 50, y: 40 }], layer: 'texture' },
+    ],
+  };
+
+  it('renders the texture layer first (behind) in toSVG with layerColors', () => {
+    const svg = toSVG(withTexture, {
+      strokeColor: '#000000',
+      layerColors: { texture: '#cccccc', present: '#111111' },
+    });
+    expect(svg.indexOf('stroke="#cccccc"')).toBeLessThan(svg.indexOf('stroke="#111111"'));
+  });
+
+  it('orders the texture layer first in toSVGLayers', () => {
+    const layers = toSVGLayers(withTexture);
+    expect(layers[0].layer).toBe('texture');
+  });
+});
+
 describe('toSVG per-layer colors', () => {
   it('colors each layer when layerColors is given', () => {
     const svg = toSVG(mixed, {
