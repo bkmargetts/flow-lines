@@ -339,30 +339,10 @@ export function ComplexFlowControls() {
         </select>
       </div>
 
-      <div className="control-group">
-        <label>
-          <span className="label-text">
-            Ground
-            <InfoTip text="Dark bakes a deep ground into the SVG — the blog's signature look. Paper leaves the drawing transparent and shows the shared page paper tone behind it (set it in the Page section), so it plots on your chosen stock." />
-          </span>
-        </label>
-        <div className="segmented">
-          <button
-            type="button"
-            className={state.background === 'dark' ? 'active' : ''}
-            onClick={() => updateState({ background: 'dark' })}
-          >
-            Dark
-          </button>
-          <button
-            type="button"
-            className={state.background === 'paper' ? 'active' : ''}
-            onClick={() => updateState({ background: 'paper' })}
-          >
-            Paper
-          </button>
-        </div>
-      </div>
+      <p className="paint-hint">
+        Background colour is the shared <strong>Paper tone</strong> in the Page
+        section — pick a dark tone there for the blog's colours-on-black look.
+      </p>
 
       <h3 className="section-title">Style</h3>
 

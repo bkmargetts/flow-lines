@@ -38,8 +38,6 @@ interface ComplexFlowValue {
 
 const ComplexFlowContext = createContext<ComplexFlowValue | null>(null);
 
-const DARK_GROUND = '#0d0d12';
-
 export function ComplexFlowProvider({
   active,
   children,
@@ -78,15 +76,12 @@ export function ComplexFlowProvider({
     // The piece plots to a physical sheet: paper + orientation set the pixel
     // dimensions and the SVG is tagged in mm for the plotter.
     const page = pageMetrics(getPaperSize(frame.paper), frame.orientation, frame.resolution);
-    const isDark = state.background === 'dark';
     const svgOptions: SVGOptions = {
-      // Fallback ink for any band the palette doesn't cover.
-      strokeColor: isDark ? '#ffffff' : '#111111',
+      // Fallback ink for any band the palette doesn't cover (it always does).
+      // The background colour is the shared page paper tone, shown behind the
+      // (paper-free, plottable) SVG in the preview — same as every project.
+      strokeColor: '#111111',
       strokeWidth: state.penWidthMm * page.pxPerMm,
-      // A dark ground is a deliberate part of the artwork, so bake it in. 'Paper'
-      // mode leaves the SVG transparent (plottable) and shows the shared page
-      // paper tone behind it in the preview, like the other projects.
-      ...(isDark ? { includeBackground: true, backgroundColor: DARK_GROUND } : {}),
       layerColors: buildPaletteLayerColors(state.palette, state.layerCount),
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,

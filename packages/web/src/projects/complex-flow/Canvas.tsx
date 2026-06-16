@@ -23,7 +23,7 @@ export function ComplexFlowCanvas() {
           ? state.manualPoles.map((p) => ({ x: p.x, y: p.y, radius: 8 }))
           : []
       }
-      background={state.background === 'dark' ? '#0d0d12' : frame.paperTone}
+      background={frame.paperTone}
     />
   );
 }
