@@ -341,7 +341,10 @@ export function ComplexFlowControls() {
 
       <div className="control-group">
         <label>
-          <span className="label-text">Ground</span>
+          <span className="label-text">
+            Ground
+            <InfoTip text="Dark bakes a deep ground into the SVG — the blog's signature look. Paper leaves the drawing transparent and shows the shared page paper tone behind it (set it in the Page section), so it plots on your chosen stock." />
+          </span>
         </label>
         <div className="segmented">
           <button
@@ -353,10 +356,10 @@ export function ComplexFlowControls() {
           </button>
           <button
             type="button"
-            className={state.background === 'light' ? 'active' : ''}
-            onClick={() => updateState({ background: 'light' })}
+            className={state.background === 'paper' ? 'active' : ''}
+            onClick={() => updateState({ background: 'paper' })}
           >
-            Light
+            Paper
           </button>
         </div>
       </div>

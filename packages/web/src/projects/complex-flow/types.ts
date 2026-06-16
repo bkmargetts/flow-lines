@@ -37,7 +37,8 @@ export interface ComplexFlowState {
   layerCount: number;
   layerBy: LayerBy;
   palette: string;
-  background: 'dark' | 'light';
+  /** 'dark' bakes a dark ground into the SVG; 'paper' uses the shared page paper tone. */
+  background: 'dark' | 'paper';
 
   // Style
   /** Pen width in millimetres (plotted line weight) */

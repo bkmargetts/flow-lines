@@ -20,6 +20,7 @@ import {
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
 import { buildPaletteLayerColors } from '../../lib/palette';
+import { buildTexture } from '../../lib/texture';
 import { zipStore } from '../../lib/zip';
 import { defaultComplexFlowState, type ComplexFlowState } from './types';
 
@@ -38,7 +39,6 @@ interface ComplexFlowValue {
 const ComplexFlowContext = createContext<ComplexFlowValue | null>(null);
 
 const DARK_GROUND = '#0d0d12';
-const LIGHT_GROUND = '#faf9f6';
 
 export function ComplexFlowProvider({
   active,
@@ -78,14 +78,15 @@ export function ComplexFlowProvider({
     // The piece plots to a physical sheet: paper + orientation set the pixel
     // dimensions and the SVG is tagged in mm for the plotter.
     const page = pageMetrics(getPaperSize(frame.paper), frame.orientation, frame.resolution);
-    const ground = state.background === 'dark' ? DARK_GROUND : LIGHT_GROUND;
+    const isDark = state.background === 'dark';
     const svgOptions: SVGOptions = {
       // Fallback ink for any band the palette doesn't cover.
-      strokeColor: state.background === 'dark' ? '#ffffff' : '#111111',
+      strokeColor: isDark ? '#ffffff' : '#111111',
       strokeWidth: state.penWidthMm * page.pxPerMm,
-      // The dark/light ground IS the artwork, so bake it into the SVG.
-      includeBackground: true,
-      backgroundColor: ground,
+      // A dark ground is a deliberate part of the artwork, so bake it in. 'Paper'
+      // mode leaves the SVG transparent (plottable) and shows the shared page
+      // paper tone behind it in the preview, like the other projects.
+      ...(isDark ? { includeBackground: true, backgroundColor: DARK_GROUND } : {}),
       layerColors: buildPaletteLayerColors(state.palette, state.layerCount),
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,
@@ -126,6 +127,14 @@ export function ComplexFlowProvider({
       result = applyHandDrawnStyle(result, { seed: state.seed, amplitude: 0.8 });
     }
 
+    // Optional shared background texture, held a halo off the streamlines and
+    // laid behind them on its own pen layer.
+    const tex = buildTexture(frame, page, result.lines);
+    if (tex) {
+      result.lines = [...tex.lines, ...result.lines];
+      svgOptions.layerColors = { ...(svgOptions.layerColors ?? {}), texture: tex.color };
+    }
+
     return {
       svg: toSVG(result, svgOptions),
       result,
@@ -140,6 +149,18 @@ export function ComplexFlowProvider({
     frame.orientation,
     frame.resolution,
     frame.marginMm,
+    frame.textureEnabled,
+    frame.textureStyle,
+    frame.textureSpacingMm,
+    frame.textureAngleDeg,
+    frame.textureScale,
+    frame.textureJitter,
+    frame.textureDensity,
+    frame.textureCrossHatch,
+    frame.textureColor,
+    frame.textureSeed,
+    frame.textureHaloMm,
+    frame.textureShapes,
   ]);
 
   const triggerDownload = (blob: Blob, filename: string): void => {
