@@ -292,7 +292,7 @@ program
   .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
   .option(
     '--density-max-passes <number>',
-    'Pen-plotting density protection: drop strokes once paper has taken this many overlapping passes (omit = off)'
+    'Pen-plotting density protection: trim runs where lines coalesce and re-ink the same path once a patch has taken this many passes; crossings kept (omit = off, 1 = ink each path once)'
   )
   .option('--auto-style', 'Per-region mark-making: cross-contour marks wrap curved forms (needs --depth-image)')
   .option('--detail <number>', 'Emphasize detailed regions; flat areas fade (0-1)', '0.3')
@@ -457,11 +457,11 @@ program
     if (options.densityMaxPasses !== undefined) {
       const maxPasses = parseInt(options.densityMaxPasses, 10);
       const cellPx = svgOptions.strokeWidth ?? 1;
-      const before = result.lines.length;
-      const protect = limitStrokeDensity(result, { maxPasses, cellPx });
+      // Bold outlines are deliberate multi-pass emphasis, not pile-up — exempt.
+      const protect = limitStrokeDensity(result, { maxPasses, cellPx, skipLayers: ['bold'] });
       result = protect.result;
       console.log(
-        `  Density protection (max ${maxPasses} passes): dropped ${before - result.lines.length} strokes`
+        `  Density protection (max ${maxPasses} passes): trimmed ${protect.removed.length} coalesced runs`
       );
     }
 

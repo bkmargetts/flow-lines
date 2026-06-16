@@ -65,7 +65,10 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
       const cellPx = Math.max(1, svgOptions.strokeWidth ?? 1);
       const out = limitStrokeDensity(
         { ...result, lines: drawingLines },
-        { maxPasses: density.maxPasses, cellPx }
+        // Bold outlines are deliberately built from repeated offset passes that
+        // run along each other (tapered emphasis) — exempt that pen so density
+        // protection never trims the intended bold line.
+        { maxPasses: density.maxPasses, cellPx, skipLayers: ['bold'] }
       );
       drawingLines = out.result.lines;
       removed = out.removed;

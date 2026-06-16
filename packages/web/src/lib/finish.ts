@@ -55,7 +55,9 @@ export function finishPlot(
     const cellPx = Math.max(1, svgOptions.strokeWidth ?? 1);
     const out = limitStrokeDensity(
       { ...drawing, lines: drawingLines },
-      { maxPasses: frame.densityMaxPasses, cellPx }
+      // Exempt the 'bold' pen: bold lines are deliberately built from repeated
+      // offset passes that run along each other, not pile-up to trim.
+      { maxPasses: frame.densityMaxPasses, cellPx, skipLayers: ['bold'] }
     );
     drawingLines = out.result.lines;
     removed = out.removed;

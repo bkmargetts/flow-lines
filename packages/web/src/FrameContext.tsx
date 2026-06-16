@@ -70,7 +70,7 @@ export const defaultFrame: FrameSettings = {
   borderEnabled: false,
   borderInsetMm: 0,
   densityEnabled: false,
-  densityMaxPasses: 3,
+  densityMaxPasses: 1,
   textureEnabled: false,
   textureStyle: 'hatch',
   textureSpacingMm: 4,

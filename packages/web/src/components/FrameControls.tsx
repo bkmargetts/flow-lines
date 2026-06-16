@@ -114,14 +114,14 @@ export function FrameControls() {
             onChange={(e) => updateFrame({ densityEnabled: e.target.checked })}
           />
           Density protection
-          <InfoTip text="Caps how many pen passes land on the same patch of paper. A little overlap builds texture; too much inflates plot time and breaks the paper down. Removed strokes show ghosted in red in the plot window so you can see the impact. Applies to every tool." />
+          <InfoTip text="Trims runs where lines coalesce and re-ink the same path. Caps how many passes may stack on one patch before further overlap is cut — 1 keeps each path inked once (clean flow diagrams), higher allows built-up texture. Lines that merely cross at a point are left whole. Bold outlines (deliberate multi-pass) are exempt. Trimmed runs show ghosted in red in the plot window. Applies to every tool." />
         </label>
       </div>
 
       {frame.densityEnabled && (
         <div className="control-group">
           <label>
-            Max overlapping passes <span>{frame.densityMaxPasses}</span>
+            Max passes before trimming <span>{frame.densityMaxPasses}</span>
           </label>
           <input
             type="range"
