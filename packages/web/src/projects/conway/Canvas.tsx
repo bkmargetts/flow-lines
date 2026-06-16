@@ -18,7 +18,10 @@ export function ConwayCanvas() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        alignItems: 'stretch',
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
         gap: '0.6rem',
       }}
     >
@@ -35,11 +38,14 @@ export function ConwayCanvas() {
       {state.artStyle && (
         <div
           style={{
+            alignSelf: 'center',
+            flex: '0 0 auto',
+            paddingBottom: '0.4rem',
             fontFamily: 'Georgia, "Times New Roman", serif',
             fontStyle: 'italic',
             fontSize: '0.8rem',
             letterSpacing: '0.02em',
-            color: '#6b6b66',
+            color: 'var(--text-secondary)',
             opacity: 0.85,
           }}
         >

@@ -5,24 +5,35 @@
 }
 
 :root {
-  /* Light, iOS-style palette: grouped surfaces on a soft system-gray field */
-  --bg-canvas: #f2f2f7;       /* app / canvas backdrop (iOS systemGroupedBackground) */
+  /* Minimal studio palette: quiet greys, ink-black accent — the artwork is
+     the only colour on screen. */
+  --bg-canvas: #ececec;       /* app / canvas backdrop (neutral studio grey) */
   --bg-surface: #ffffff;      /* sidebar + cards */
-  --bg-inset: #f2f2f7;        /* inputs, segmented tracks */
-  --bg-inset-strong: #e9e9ee; /* hover / pressed insets */
-  --text-primary: #1c1c1e;    /* label.primary */
-  --text-secondary: #6e6e73;  /* label.secondary */
-  --text-tertiary: #8e8e93;   /* placeholder / hints */
-  --accent: #007aff;          /* iOS system blue */
-  --accent-hover: #0a84ff;
-  --accent-soft: rgba(0, 122, 255, 0.12);
-  --border: rgba(60, 60, 67, 0.16);   /* hairline separators */
-  --border-strong: rgba(60, 60, 67, 0.29);
+  --bg-inset: #f4f4f4;        /* inputs, segmented tracks */
+  --bg-inset-strong: #e7e7e7; /* hover / pressed insets */
+  --text-primary: #1a1a1a;    /* near-black ink */
+  --text-secondary: #6b6b6b;  /* secondary label */
+  --text-tertiary: #9a9a9a;   /* placeholder / hints */
+  --accent: #1a1a1a;          /* ink black — the UI's "active" colour */
+  --accent-hover: #000000;
+  --accent-soft: rgba(26, 26, 26, 0.08);
+  --border: rgba(0, 0, 0, 0.12);      /* hairline separators */
+  --border-strong: rgba(0, 0, 0, 0.24);
+  --glass: rgba(255, 255, 255, 0.85); /* floating chips (badge + zoom toolbar) */
+  --marker: #e94560;          /* the one functional hue: paint/focus markers */
+  --sheet-h: 52vh;            /* mobile controls sheet height when open */
+  --sheet-peek: 60px;         /* grab handle visible above the fold when closed */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-paper: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 28px rgba(0, 0, 0, 0.10);
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
@@ -30,26 +41,110 @@ body {
     Oxygen, Ubuntu, Cantarell, sans-serif;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
-  min-height: 100vh;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-#root {
-  min-height: 100vh;
-}
-
+/* Viewport-locked shell: the page itself never scrolls — each pane scrolls
+   internally, so a tall sidebar can't drag the frame out of view. */
 .app {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
   width: 340px;
+  height: 100%;
   background-color: var(--bg-surface);
   border-right: 1px solid var(--border);
   padding: 24px 20px 40px;
   overflow-y: auto;
   flex-shrink: 0;
+}
+
+/* Header block (title + subtitle) gets the same hairline sectioning as the
+   frame controls below it. */
+.sidebar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Collapse the controls to full-screen the art pane. */
+.sidebar-toggle {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  margin-top: 2px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.sidebar-toggle:hover {
+  background: var(--bg-inset-strong);
+  color: var(--text-primary);
+}
+
+/* When collapsed, the sidebar is removed from the flow and the canvas pane
+   fills the viewport. */
+.app.sidebar-collapsed .sidebar {
+  display: none;
+}
+
+/* Floating "show controls" button over the full-screen art pane. */
+.controls-reveal {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 11;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(12px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.controls-reveal:hover {
+  background: var(--bg-surface);
+}
+
+/* Clear the reveal button when both sit top-left. */
+.app.sidebar-collapsed .rendering-badge {
+  left: 68px;
+}
+
+/* A sticky fade at the bottom of the scrollable sidebar, hinting there's more
+   to scroll (especially the collapsed top pane on mobile). */
+.scroll-fade {
+  position: sticky;
+  bottom: -40px;
+  height: 28px;
+  margin: -28px -20px -40px;
+  background: linear-gradient(to top, var(--bg-surface), transparent);
+  pointer-events: none;
+}
+
+/* The bottom-sheet grab handle is mobile-only. */
+.sheet-handle {
+  display: none;
 }
 
 .sidebar h1 {
@@ -63,7 +158,6 @@ body {
 .sidebar .subtitle {
   font-size: 0.875rem;
   color: var(--text-secondary);
-  margin-bottom: 20px;
 }
 
 .controls {
@@ -125,6 +219,27 @@ body {
   background: var(--accent, #2563eb);
   color: #fff;
   outline: none;
+}
+
+/* Portaled tooltip bubble — fixed-positioned from the icon, so the sidebar /
+   bottom-sheet overflow never clips it. */
+.info-tip-bubble {
+  position: fixed;
+  z-index: 1000;
+  transform: translateX(-50%);
+  max-width: 240px;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--text-primary);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  box-shadow: var(--shadow-paper);
+  pointer-events: none;
 }
 
 /* iOS-style sliders: thin track, large white thumb with a soft shadow */
@@ -234,10 +349,35 @@ button.secondary:hover {
 .canvas-container {
   flex: 1;
   display: flex;
-  padding: 32px;
+  height: 100%;
+  min-width: 0;
   background: var(--bg-canvas);
-  overflow: auto;
+  overflow: hidden;
   position: relative;
+}
+
+/* Preview's root: fills the canvas pane and anchors the floating zoom toolbar
+   (which must NOT scroll with the panned sheet). */
+.preview-root {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+/* The pan scroller: when the sheet is zoomed past the viewport this scrolls;
+   when it fits, the flex centering parks it in the middle. The padding scrolls
+   with the content so the top/left edges stay reachable. */
+.canvas-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 32px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  /* Gestures (pinch-zoom + drag-pan) are handled in JS, so the browser must
+     not claim touches for native scroll/zoom. Wheel still scrolls. */
+  touch-action: none;
 }
 
 .rendering-badge {
@@ -245,7 +385,7 @@ button.secondary:hover {
   top: 16px;
   left: 16px;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--glass);
   -webkit-backdrop-filter: saturate(180%) blur(12px);
   backdrop-filter: saturate(180%) blur(12px);
   color: var(--text-secondary);
@@ -628,14 +768,99 @@ button:disabled {
     flex-direction: column;
   }
 
+  /* Controls become a bottom sheet floating over a full-height art pane: it
+     peeks above the fold (just the grab handle) and drags up to expand. The
+     default transform here is the collapsed position, so it's correct on first
+     paint before the gesture JS runs (no flash of a full-height panel). */
   .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
     width: 100%;
+    height: var(--sheet-h);
+    padding: 0 18px 40px;
     border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: 50vh;
+    border-bottom: none;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -1px 6px rgba(0, 0, 0, 0.06), 0 -12px 40px rgba(0, 0, 0, 0.16);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateY(calc(var(--sheet-h) - var(--sheet-peek)));
+    transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: transform;
   }
 
+  .sidebar.sheet-expanded {
+    transform: translateY(0);
+  }
+
+  /* While the finger is down we drive the transform inline, so kill the snap
+     transition for 1:1 tracking. */
+  .sidebar.dragging {
+    transition: none;
+  }
+
+  /* Grab handle: sticky so it stays pinned while the controls scroll. */
+  .sheet-handle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    margin: 0 -18px;
+    padding: 9px 0 8px;
+    background: var(--bg-surface);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .sheet-grip {
+    width: 36px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--border-strong);
+  }
+
+  .sheet-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    color: var(--text-tertiary);
+  }
+
+  /* On mobile the sheet handle replaces the desktop collapse/reveal buttons,
+     and the sheet is always present even if the desktop state was collapsed. */
+  .sidebar-toggle,
+  .controls-reveal {
+    display: none;
+  }
+
+  .app.sidebar-collapsed .sidebar {
+    display: block;
+  }
+
+  /* The art pane reserves the space the sheet occupies, so the drawing refits
+     into the area ABOVE the sheet and is never covered. Closed → only the peek
+     handle is reserved (art ~full screen); open → the art shrinks to fit above
+     the sheet and stays live. */
   .canvas-container {
+    flex: 1 1 0;
+    min-height: 0;
+    margin-bottom: var(--sheet-peek);
+    transition: margin-bottom 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  .sidebar.sheet-expanded ~ .canvas-container {
+    margin-bottom: var(--sheet-h);
+  }
+
+  .canvas-stage {
     padding: 16px;
   }
 }

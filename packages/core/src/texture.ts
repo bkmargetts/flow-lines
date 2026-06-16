@@ -387,11 +387,25 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
   const kind = sh.kind;
   const size = Math.max(2, sh.sizeMm * pxPerMm * Math.max(0.2, scale));
   const half = size / 2;
-  const reach = half * Math.SQRT2; // square circumradius — keeps every shape in bounds
+  // How far a mark's outline reaches from its centre, so it stays fully in
+  // bounds: a rotated square reaches its half-diagonal, a circle only its
+  // radius, a line its half-length (≤ half at any angle).
+  const reach = kind === 'square' ? half * Math.SQRT2 : half;
   const overlap = Math.min(0.9, Math.max(0, sh.overlap));
   const pitch = Math.max(2, spacing * (1 - overlap));
-  for (let gy = y0 + reach; gy <= y1 - reach + 1e-6; gy += pitch) {
-    for (let gx = x0 + reach; gx <= x1 - reach + 1e-6; gx += pitch) {
+  // Centre the lattice in the drawable rect: count how many marks fit, then
+  // distribute the leftover space evenly on both sides rather than letting it
+  // pool on the right/bottom (which left the grid flush to the top-left corner).
+  const innerW = x1 - x0 - 2 * reach;
+  const innerH = y1 - y0 - 2 * reach;
+  const cols = Math.max(1, Math.floor(innerW / pitch) + 1);
+  const rows = Math.max(1, Math.floor(innerH / pitch) + 1);
+  const startX = x0 + reach + (innerW - (cols - 1) * pitch) / 2;
+  const startY = y0 + reach + (innerH - (rows - 1) * pitch) / 2;
+  for (let r = 0; r < rows; r++) {
+    const gy = startY + r * pitch;
+    for (let c = 0; c < cols; c++) {
+      const gx = startX + c * pitch;
       if (!isClear(gx, gy)) continue;
       const a = angle + (jitter > 0 ? (random() - 0.5) * jitter * Math.PI : 0);
       const ca = Math.cos(a);
