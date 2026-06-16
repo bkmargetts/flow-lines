@@ -2,16 +2,14 @@ import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { FrameProvider } from './FrameContext';
 import { PostProcessProvider } from './PostProcessContext';
 import { OutputProvider } from './OutputContext';
-import { FrameControls } from './components/FrameControls';
-import { PostProcessingControls } from './components/PostProcessingControls';
+import { SharedControls } from './components/SharedControls';
+import { DownloadBar } from './components/DownloadBar';
 import { ProjectTabs } from './components/ProjectTabs';
 import { PROJECTS } from './projects/registry';
 import type { ProjectModule } from './projects/types';
 
-/** Badge marking a settings section as shared across every tool. */
-function UniversalBadge() {
-  return <span className="scope-badge" title="These settings apply to every tool">Applies to all tools</span>;
-}
+/** Which settings the sidebar is showing: the active tool's, or the shared ones. */
+type SettingsScope = 'tool' | 'shared';
 
 /**
  * Nest every project's Provider (in registry order, stable across renders so
@@ -38,6 +36,9 @@ const SHEET_PEEK = 60;
 export function App() {
   const [selectedProject, setSelectedProject] = useState(PROJECTS[0].id);
   const [selectedFeature, setSelectedFeature] = useState(PROJECTS[0].features[0].id);
+  // The controls split into the active tool's own settings and the shared
+  // (all-tool) page + post-processing settings; a switch flips between them.
+  const [settingsScope, setSettingsScope] = useState<SettingsScope>('tool');
   // Desktop: the controls collapse to full-screen the art pane.
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // Mobile: the controls are a bottom sheet that peeks above the art and drags
@@ -165,37 +166,37 @@ export function App() {
           onSelectFeature={setSelectedFeature}
         />
 
-        {/* Universal: the page frame, shared by every tool. */}
-        <section className="scope-group scope-universal">
-          <div className="scope-head">
-            <span className="scope-name">Page</span>
-            <UniversalBadge />
-          </div>
-          <FrameControls />
-        </section>
+        {/* Split the controls: the active tool's own settings vs the shared
+            page + post-processing settings that apply to every tool. */}
+        <div className="settings-scope segmented" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={settingsScope === 'tool'}
+            className={settingsScope === 'tool' ? 'active' : ''}
+            onClick={() => setSettingsScope('tool')}
+          >
+            {activeProject.label}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={settingsScope === 'shared'}
+            className={settingsScope === 'shared' ? 'active' : ''}
+            onClick={() => setSettingsScope('shared')}
+            title="Page, border, texture and post-processing — applies to every tool"
+          >
+            Shared
+          </button>
+        </div>
 
-        {/* Module: just the active tool's own settings. */}
-        <section className="scope-group scope-module">
-          <div className="scope-head">
-            <span className="scope-name">{activeProject.label}</span>
-            <span className="scope-badge module" title="These settings apply only to this tool">
-              This tool
-            </span>
-          </div>
-          <ActiveControls />
-        </section>
+        <div className="settings-body">
+          {settingsScope === 'tool' ? <ActiveControls /> : <SharedControls />}
+        </div>
 
-        {/* Universal: post-processing + download, shared by every tool. */}
-        <section className="scope-group scope-universal">
-          <div className="scope-head">
-            <span className="scope-name">Output &amp; post-processing</span>
-            <UniversalBadge />
-          </div>
-          <PostProcessingControls />
-        </section>
-
-        {/* Sticky fade hinting the controls scroll. */}
-        <div className="scroll-fade" aria-hidden="true" />
+        {/* Download is an action, not configuration — pinned to the bottom and
+            available whichever settings are on screen. */}
+        <DownloadBar />
       </aside>
 
       <main className="canvas-container">

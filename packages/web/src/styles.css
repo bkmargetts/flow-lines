@@ -131,17 +131,6 @@ body {
   left: 68px;
 }
 
-/* A sticky fade at the bottom of the scrollable sidebar, hinting there's more
-   to scroll (especially the collapsed top pane on mobile). */
-.scroll-fade {
-  position: sticky;
-  bottom: -40px;
-  height: 28px;
-  margin: -28px -20px -40px;
-  background: linear-gradient(to top, var(--bg-surface), transparent);
-  pointer-events: none;
-}
-
 /* The bottom-sheet grab handle is mobile-only. */
 .sheet-handle {
   display: none;
@@ -595,73 +584,50 @@ button.secondary:hover {
   margin-bottom: 12px;
 }
 
-/* Scope groups: make it obvious which settings are shared across every tool
-   (universal) and which belong only to the active tool (module). */
-.scope-group {
-  position: relative;
-  margin: 14px 0;
-  padding: 10px 0 6px 12px;
-  border-left: 2px solid transparent;
+/* Tool / Shared settings switch: flips the sidebar between the active tool's
+   own settings and the shared page + post-processing settings. Sits under the
+   project tabs; reuses the .segmented pill styling. */
+.settings-scope {
+  margin: 4px 0 16px;
 }
 
-.scope-universal {
-  border-left-color: var(--accent);
+.settings-body {
+  /* Leave room so the sticky download bar never overlaps the last control. */
+  padding-bottom: 8px;
 }
 
-.scope-module {
-  border-left-color: var(--border);
+/* A second section title within a group needs breathing room above it. */
+.section-title-spaced {
+  margin-top: 22px;
 }
 
-.scope-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.scope-name {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.scope-badge {
-  font-size: 0.62rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-  color: var(--bg-surface);
-  background: var(--accent);
-  padding: 2px 7px;
-  border-radius: 999px;
-  white-space: nowrap;
-}
-
-.scope-badge.module {
-  color: var(--text-secondary);
-  background: var(--bg-inset);
-  border: 1px solid var(--border);
-}
-
-/* Inside a scope group the page-frame separator is redundant. */
-.scope-group .frame-controls {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-/* Shared post-processing / output section */
+/* Shared post-processing settings */
 .post-controls .control-group {
   margin-bottom: 12px;
 }
 
 .post-readout {
-  margin: 4px 0 12px;
+  margin: 4px 0 4px;
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+/* Download is an action pinned to the bottom of the scrolling sidebar, so it's
+   reachable whichever settings are showing. Sticky (not fixed) keeps it inside
+   the sidebar/bottom-sheet without restructuring their scroll containers. */
+.download-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  margin: 8px -20px -40px;
+  padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+}
+
+.download-bar .primary {
+  flex: 1;
 }
 
 /* Advanced settings */

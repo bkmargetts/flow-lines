@@ -1,37 +1,19 @@
-import { toSVGLayers } from '@flow-lines/core';
 import { usePostProcess } from '../PostProcessContext';
 import { useOutput } from '../OutputContext';
-import { downloadSvgText, triggerDownload } from '../lib/download';
-import { zipStore } from '../lib/zip';
 import { InfoTip } from './InfoTip';
 
 /**
- * Shared Output / Post-processing section, mounted once in the shell so every
- * project tab gets the same finishing controls and download buttons. Density
- * protection caps how many pen passes pile onto one patch of paper; the active
- * project registers its current plot so the download buttons work uniformly.
+ * Post-processing settings shared by every tool: pen-plotting density
+ * protection. Caps how many pen passes pile onto one patch of paper. A little
+ * overlap builds texture; too much inflates plot time and breaks the paper
+ * down. The active project registers its output so the readout can report the
+ * impact; the download action itself lives in the pinned DownloadBar.
  */
 export function PostProcessingControls() {
   const { post, updateDensity } = usePostProcess();
   const { output } = useOutput();
   const density = post.density;
   const stats = output?.densityStats;
-
-  const canDownload = !!output?.exportSvg;
-
-  const downloadSVG = (): void => {
-    if (!output?.exportSvg) return;
-    downloadSvgText(output.exportSvg, `${output.baseName}-${output.seed}.svg`);
-  };
-
-  const downloadLayers = (): void => {
-    if (!output?.result) return;
-    const layers = toSVGLayers(output.result, output.svgOptions);
-    const zip = zipStore(
-      layers.map(({ layer, svg }) => ({ name: `${output.baseName}-${output.seed}-${layer}.svg`, text: svg }))
-    );
-    triggerDownload(zip, `${output.baseName}-${output.seed}-layers.zip`);
-  };
 
   return (
     <div className="post-controls">
@@ -71,22 +53,6 @@ export function PostProcessingControls() {
           </p>
         </>
       )}
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG} disabled={!canDownload}>
-          Download SVG
-        </button>
-        {output?.hasLayers && (
-          <button
-            type="button"
-            className="secondary"
-            onClick={downloadLayers}
-            title="One SVG per pen layer, zipped — plot each with a different pen"
-          >
-            Download layers (.zip)
-          </button>
-        )}
-      </div>
     </div>
   );
 }
