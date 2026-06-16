@@ -5,24 +5,33 @@
 }
 
 :root {
-  /* Light, iOS-style palette: grouped surfaces on a soft system-gray field */
-  --bg-canvas: #f2f2f7;       /* app / canvas backdrop (iOS systemGroupedBackground) */
+  /* Minimal studio palette: quiet greys, ink-black accent — the artwork is
+     the only colour on screen. */
+  --bg-canvas: #ececec;       /* app / canvas backdrop (neutral studio grey) */
   --bg-surface: #ffffff;      /* sidebar + cards */
-  --bg-inset: #f2f2f7;        /* inputs, segmented tracks */
-  --bg-inset-strong: #e9e9ee; /* hover / pressed insets */
-  --text-primary: #1c1c1e;    /* label.primary */
-  --text-secondary: #6e6e73;  /* label.secondary */
-  --text-tertiary: #8e8e93;   /* placeholder / hints */
-  --accent: #007aff;          /* iOS system blue */
-  --accent-hover: #0a84ff;
-  --accent-soft: rgba(0, 122, 255, 0.12);
-  --border: rgba(60, 60, 67, 0.16);   /* hairline separators */
-  --border-strong: rgba(60, 60, 67, 0.29);
+  --bg-inset: #f4f4f4;        /* inputs, segmented tracks */
+  --bg-inset-strong: #e7e7e7; /* hover / pressed insets */
+  --text-primary: #1a1a1a;    /* near-black ink */
+  --text-secondary: #6b6b6b;  /* secondary label */
+  --text-tertiary: #9a9a9a;   /* placeholder / hints */
+  --accent: #1a1a1a;          /* ink black — the UI's "active" colour */
+  --accent-hover: #000000;
+  --accent-soft: rgba(26, 26, 26, 0.08);
+  --border: rgba(0, 0, 0, 0.12);      /* hairline separators */
+  --border-strong: rgba(0, 0, 0, 0.24);
+  --glass: rgba(255, 255, 255, 0.85); /* floating chips (badge + zoom toolbar) */
+  --marker: #e94560;          /* the one functional hue: paint/focus markers */
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-paper: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 28px rgba(0, 0, 0, 0.10);
+}
+
+html,
+body,
+#root {
+  height: 100%;
 }
 
 body {
@@ -30,26 +39,45 @@ body {
     Oxygen, Ubuntu, Cantarell, sans-serif;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
-  min-height: 100vh;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-#root {
-  min-height: 100vh;
-}
-
+/* Viewport-locked shell: the page itself never scrolls — each pane scrolls
+   internally, so a tall sidebar can't drag the frame out of view. */
 .app {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
   width: 340px;
+  height: 100%;
   background-color: var(--bg-surface);
   border-right: 1px solid var(--border);
   padding: 24px 20px 40px;
   overflow-y: auto;
   flex-shrink: 0;
+}
+
+/* Header block (title + subtitle) gets the same hairline sectioning as the
+   frame controls below it. */
+.sidebar-header {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* A sticky fade at the bottom of the scrollable sidebar, hinting there's more
+   to scroll (especially the collapsed top pane on mobile). */
+.scroll-fade {
+  position: sticky;
+  bottom: -40px;
+  height: 28px;
+  margin: -28px -20px -40px;
+  background: linear-gradient(to top, var(--bg-surface), transparent);
+  pointer-events: none;
 }
 
 .sidebar h1 {
@@ -63,7 +91,6 @@ body {
 .sidebar .subtitle {
   font-size: 0.875rem;
   color: var(--text-secondary);
-  margin-bottom: 20px;
 }
 
 .controls {
@@ -234,10 +261,81 @@ button.secondary:hover {
 .canvas-container {
   flex: 1;
   display: flex;
-  padding: 32px;
+  height: 100%;
+  min-width: 0;
   background: var(--bg-canvas);
-  overflow: auto;
+  overflow: hidden;
   position: relative;
+}
+
+/* Preview's root: fills the canvas pane and anchors the floating zoom toolbar
+   (which must NOT scroll with the panned sheet). */
+.preview-root {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+/* The pan scroller: when the sheet is zoomed past the viewport this scrolls;
+   when it fits, the flex centering parks it in the middle. The padding scrolls
+   with the content so the top/left edges stay reachable. */
+.canvas-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 32px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.zoom-toolbar {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-card);
+}
+
+.zoom-toolbar button {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+  font-weight: 500;
+  line-height: 1;
+  transition: background 0.12s;
+}
+
+.zoom-toolbar button:hover {
+  background: var(--bg-inset-strong);
+}
+
+.zoom-toolbar .zoom-readout {
+  width: auto;
+  min-width: 46px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: transparent;
 }
 
 .rendering-badge {
@@ -245,7 +343,7 @@ button.secondary:hover {
   top: 16px;
   left: 16px;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--glass);
   -webkit-backdrop-filter: saturate(180%) blur(12px);
   backdrop-filter: saturate(180%) blur(12px);
   color: var(--text-secondary);
@@ -628,14 +726,26 @@ button:disabled {
     flex-direction: column;
   }
 
+  /* Two clearly-separate panes: a fixed-height, independently-scrolling
+     controls pane on top (with a strong divider + drop shadow so it reads as
+     its own surface), the zoomable frame filling the rest below. */
   .sidebar {
     width: 100%;
+    height: auto;
+    flex: 0 0 52vh;
+    min-height: 0;
     border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: 50vh;
+    border-bottom: 1px solid var(--border-strong);
+    box-shadow: 0 8px 10px -10px rgba(0, 0, 0, 0.25);
+    overflow-y: auto;
   }
 
   .canvas-container {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .canvas-stage {
     padding: 16px;
   }
 }

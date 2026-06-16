@@ -35,8 +35,31 @@ export function Preview({
   onSetFocus,
   background,
 }: PreviewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [isPainting, setIsPainting] = useState(false);
+
+  // Live size of the scroll stage, so the sheet fits the space actually
+  // available rather than a hardcoded box. Null until the first measure.
+  const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null);
+  // Zoom relative to the fit scale: 1 = "fits the stage". Pan is native scroll.
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0].contentRect;
+      setStageSize({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // A fresh drawing (new dimensions) resets the zoom back to fit.
+  useEffect(() => {
+    setZoom(1);
+  }, [width, height]);
 
   // Display the drawing as a rasterized <img> instead of inline SVG DOM:
   // a dense render is thousands of <path> nodes, and mobile WebKit kills
@@ -53,20 +76,50 @@ export function Preview({
     };
   }, [svgUrl]);
 
-  // Calculate max dimensions to fit in viewport while maintaining aspect ratio
-  const maxWidth = Math.min(width, 800);
-  const maxHeight = Math.min(height, 800);
-  const scale = Math.min(maxWidth / width, maxHeight / height);
-  const displayWidth = width * scale;
-  const displayHeight = height * scale;
+  // Fit the sheet to the measured stage (its content box already excludes the
+  // padding). Fall back to the previous fixed box before the first measure so
+  // the initial paint never flashes at zero size.
+  const MIN_ZOOM = 0.5;
+  const MAX_ZOOM = 8;
+  const availW = stageSize ? Math.max(1, stageSize.w) : 800;
+  const availH = stageSize ? Math.max(1, stageSize.h) : 800;
+  const fitScale = Math.min(availW / width, availH / height);
+  const effScale = fitScale * zoom;
+  const displayWidth = width * effScale;
+  const displayHeight = height * effScale;
+
+  const clampZoom = useCallback(
+    (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)),
+    []
+  );
+  const zoomIn = useCallback(() => setZoom((z) => clampZoom(z * 1.25)), [clampZoom]);
+  const zoomOut = useCallback(() => setZoom((z) => clampZoom(z / 1.25)), [clampZoom]);
+  const resetFit = useCallback(() => setZoom(1), []);
+
+  // Pinch (trackpad) and ctrl/cmd-wheel zoom. React's onWheel is passive and
+  // can't preventDefault, so bind a non-passive native listener. Plain wheel is
+  // left alone → the stage pans natively.
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom((z) => clampZoom(z * Math.exp(-e.deltaY * 0.0015)));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [clampZoom]);
 
   const getCanvasPoint = useCallback(
     (clientX: number, clientY: number): Point | null => {
-      if (!containerRef.current) return null;
+      // Measure the wrapper itself: its rect is already post-zoom and
+      // post-scroll, so taps map to canvas pixels at any zoom or pan offset.
+      if (!wrapperRef.current) return null;
 
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = (clientX - rect.left) / scale;
-      const y = (clientY - rect.top) / scale;
+      const rect = wrapperRef.current.getBoundingClientRect();
+      const x = (clientX - rect.left) / effScale;
+      const y = (clientY - rect.top) / effScale;
 
       // Check bounds
       if (x < 0 || x > width || y < 0 || y > height) {
@@ -75,7 +128,7 @@ export function Preview({
 
       return { x, y };
     },
-    [scale, width, height]
+    [effScale, width, height]
   );
 
   const handlePointerDown = useCallback(
@@ -190,34 +243,57 @@ export function Preview({
   ) : null;
 
   return (
-    <div
-      ref={containerRef}
-      className={`canvas-wrapper ${paintMode ? 'paint-mode' : ''}`}
-      style={{
-        width: displayWidth,
-        height: displayHeight,
-        position: 'relative',
-        cursor: paintMode || focusSelectMode ? 'crosshair' : 'default',
-        touchAction: paintMode ? 'none' : 'auto',
-        ...(background ? { background } : null),
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onClick={handleClick}
-    >
-      {svgUrl && (
-        <img
-          src={svgUrl}
-          width={displayWidth}
-          height={displayHeight}
-          alt="Generated drawing"
-          draggable={false}
-        />
-      )}
-      {paintDotsOverlay}
-      {focusOverlay}
+    <div className="preview-root">
+      <div ref={stageRef} className="canvas-stage">
+        <div
+          ref={wrapperRef}
+          className={`canvas-wrapper ${paintMode ? 'paint-mode' : ''}`}
+          style={{
+            width: displayWidth,
+            height: displayHeight,
+            position: 'relative',
+            cursor: paintMode || focusSelectMode ? 'crosshair' : 'default',
+            touchAction: paintMode ? 'none' : 'auto',
+            ...(background ? { background } : null),
+          }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          onClick={handleClick}
+        >
+          {svgUrl && (
+            <img
+              src={svgUrl}
+              width={displayWidth}
+              height={displayHeight}
+              alt="Generated drawing"
+              draggable={false}
+            />
+          )}
+          {paintDotsOverlay}
+          {focusOverlay}
+        </div>
+      </div>
+      <div className="zoom-toolbar">
+        <button type="button" aria-label="Zoom out" onClick={zoomOut}>
+          −
+        </button>
+        <button
+          type="button"
+          className="zoom-readout"
+          title="Reset to fit"
+          onClick={resetFit}
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button type="button" aria-label="Zoom in" onClick={zoomIn}>
+          +
+        </button>
+        <button type="button" aria-label="Fit to screen" onClick={resetFit}>
+          ⤢
+        </button>
+      </div>
     </div>
   );
 }

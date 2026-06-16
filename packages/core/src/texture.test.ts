@@ -96,6 +96,29 @@ describe('generateTexture', () => {
     expect(tight.length).toBeGreaterThan(wide.length);
   });
 
+  it('centres the shapes lattice in the drawable rect', () => {
+    const lines = generateTexture({
+      ...base,
+      style: 'shapes',
+      jitter: 0,
+      spacingMm: 7,
+      shapes: { kind: 'circle', sizeMm: 4, overlap: 0 },
+    });
+    const pts = allPoints(lines);
+    const minX = Math.min(...pts.map((p) => p.x));
+    const maxX = Math.max(...pts.map((p) => p.x));
+    const minY = Math.min(...pts.map((p) => p.y));
+    const maxY = Math.max(...pts.map((p) => p.y));
+    // The gap from the margin to the first/last mark should match on both
+    // sides: the grid is centred, not flush to the top-left corner.
+    const leftGap = minX - base.margin;
+    const rightGap = base.width - base.margin - maxX;
+    const topGap = minY - base.margin;
+    const bottomGap = base.height - base.margin - maxY;
+    expect(Math.abs(leftGap - rightGap)).toBeLessThan(1);
+    expect(Math.abs(topGap - bottomGap)).toBeLessThan(1);
+  });
+
   it('packs shapes closer as overlap rises (same spacing)', () => {
     const none = generateTexture({
       ...base,

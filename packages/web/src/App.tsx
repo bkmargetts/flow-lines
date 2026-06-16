@@ -44,8 +44,10 @@ export function App() {
   const shell = (
     <div className="app">
       <aside className="sidebar">
-        <h1>Flow Lines</h1>
-        <p className="subtitle">Generative Art for Pen Plotters</p>
+        <div className="sidebar-header">
+          <h1>Flow Lines</h1>
+          <p className="subtitle">Generative Art for Pen Plotters</p>
+        </div>
 
         <ProjectTabs
           projects={PROJECTS}
@@ -58,6 +60,10 @@ export function App() {
         <FrameControls />
 
         <ActiveControls />
+
+        {/* Sticky fade hinting the controls scroll (notably the collapsed
+            top pane on mobile). */}
+        <div className="scroll-fade" aria-hidden="true" />
       </aside>
 
       <main className="canvas-container">
