@@ -8,6 +8,7 @@ import {
 } from 'react';
 import {
   generateFlowLines,
+  generateFlowLinesEven,
   toSVG,
   toSVGLayers,
   pageMetrics,
@@ -75,6 +76,8 @@ export function FlowFieldProvider({
     if (!active) return { svg: '', result: null as FlowLinesResult | null, svgOptions: emptyOptions, width: page.widthPx, height: page.heightPx };
 
     const usePaintedPoints = state.paintMode && state.paintedPoints.length > 0;
+    // Painted seeds are explicit intent, so they win over dense-fill.
+    const useDenseFill = state.denseFill && !usePaintedPoints;
     const flowOptions: FlowLinesOptions = {
       width: page.widthPx,
       height: page.heightPx,
@@ -99,7 +102,22 @@ export function FlowFieldProvider({
       physicalHeight: `${page.heightMm}mm`,
     };
 
-    const result = generateFlowLines(flowOptions);
+    const result = useDenseFill
+      ? generateFlowLinesEven({
+          width: flowOptions.width,
+          height: flowOptions.height,
+          separation: Math.max(1, state.lineSpacingMm * page.pxPerMm),
+          seed: flowOptions.seed,
+          stepLength: flowOptions.stepLength,
+          maxSteps: flowOptions.maxSteps,
+          margin: flowOptions.margin,
+          minLineLength: flowOptions.minLineLength,
+          noiseScale: flowOptions.noiseScale,
+          octaves: flowOptions.octaves,
+          persistence: flowOptions.persistence,
+          lacunarity: flowOptions.lacunarity,
+        })
+      : generateFlowLines(flowOptions);
 
     // Optional shared background texture, held a halo off the flow lines and
     // laid behind them on its own pen layer.
