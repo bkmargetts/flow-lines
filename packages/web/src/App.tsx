@@ -107,9 +107,11 @@ export function App() {
   const ActiveCanvas = activeFeature.Canvas;
 
   const dragging = dragOffset != null;
-  const sheetTransform = isMobile
-    ? `translateY(${dragging ? dragOffset : sheetExpanded ? 0 : collapsedOffset()}px)`
-    : undefined;
+  // Only drive the transform inline while a finger is down (1:1 tracking); the
+  // snapped open/closed positions are handled in CSS (.sheet-expanded), which
+  // also reserves the matching space for the art pane so the drawing is never
+  // covered.
+  const sheetTransform = isMobile && dragging ? `translateY(${dragOffset}px)` : undefined;
 
   const shell = (
     <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
