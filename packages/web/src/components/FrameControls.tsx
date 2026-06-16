@@ -114,7 +114,7 @@ export function FrameControls() {
             onChange={(e) => updateFrame({ densityEnabled: e.target.checked })}
           />
           Density protection
-          <InfoTip text="Trims runs where lines coalesce and re-ink the same path. Caps how many passes may stack on one patch before further overlap is cut — 1 keeps each path inked once (clean flow diagrams), higher allows built-up texture. Lines that merely cross at a point are left whole. Bold outlines (deliberate multi-pass) are exempt. Trimmed runs show ghosted in red in the plot window. Applies to every tool." />
+          <InfoTip text="Trims runs where lines coalesce and re-ink the same path. Caps how many passes may stack on one patch before further overlap is cut — 1 keeps each path inked once (clean flow diagrams), higher allows built-up texture. Lines that merely cross at a point are left whole. Bold outlines (deliberate multi-pass) are exempt. The plot window shows the clean, as-plotted result so you can see the effect on the artwork. Applies to every tool." />
         </label>
       </div>
 

@@ -43,15 +43,12 @@ export interface RenderResponse {
   id: number;
   /** Clean SVG for download. */
   svg?: string;
-  /** SVG for the plot window — clean output plus ghosts of removed strokes. */
+  /** SVG for the plot window — the same clean, as-plotted output. */
   previewSvg?: string;
   width?: number;
   height?: number;
   error?: string;
 }
-
-/** Faint ink for the preview-only ghosts of density-removed strokes. */
-const REMOVED_COLOR = '#e8a0a0';
 
 self.onmessage = (event: MessageEvent<RenderRequest>) => {
   const { id, image, options, svgOptions, texture, textureColor, border, density } = event.data;
@@ -62,7 +59,6 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
     // Density protection thins the drawing only (texture/border are deliberate,
     // separate pens), before the border frames it and the texture goes behind.
     let drawingLines = result.lines;
-    let removed: FlowLine[] = [];
     if (density) {
       const cellPx = Math.max(1, svgOptions.strokeWidth ?? 1);
       const out = limitStrokeDensity(
@@ -73,7 +69,6 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
         { maxPasses: density.maxPasses, cellPx, minOverlapPx: density.minOverlapPx, skipLayers: ['bold'] }
       );
       drawingLines = out.result.lines;
-      removed = out.removed;
     }
 
     const borderLines = border
@@ -102,15 +97,9 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
     const opts = layerColors ? { ...svgOptions, layerColors } : svgOptions;
     const svg = toSVG({ ...result, lines: finalLines }, opts);
 
-    let previewSvg = svg;
-    if (removed.length > 0) {
-      const ghosts: FlowLine[] = removed.map((l) => ({ points: l.points, layer: 'removed' }));
-      const previewOpts: SVGOptions = {
-        ...opts,
-        layerColors: { ...(layerColors ?? {}), removed: REMOVED_COLOR },
-      };
-      previewSvg = toSVG({ ...result, lines: [...finalLines, ...ghosts] }, previewOpts);
-    }
+    // The plot window shows the clean, as-plotted output so the density
+    // controls' effect reads directly on the artwork.
+    const previewSvg = svg;
 
     const response: RenderResponse = {
       id,

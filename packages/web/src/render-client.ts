@@ -4,7 +4,7 @@ import type { RenderRequest, RenderResponse, RenderBorder, RenderDensity } from 
 export interface RenderedSVG {
   /** Clean SVG for download. */
   svg: string;
-  /** SVG for the plot window — clean output plus ghosts of removed strokes. */
+  /** SVG for the plot window — the same clean, as-plotted output. */
   previewSvg: string;
   width: number;
   height: number;

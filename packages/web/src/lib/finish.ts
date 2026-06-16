@@ -10,13 +10,10 @@ import type { FrameSettings } from '../FrameContext';
 import { buildBorder } from './border';
 import { buildTexture } from './texture';
 
-/** Faint ink for the preview-only ghosts of density-removed strokes. */
-const REMOVED_COLOR = '#e8a0a0';
-
 export interface FinishedPlot {
-  /** Clean SVG for download (no removed-stroke ghosts). */
+  /** Clean SVG for download. */
   exportSvg: string;
-  /** SVG for the plot window — clean output plus ghosts of removed strokes. */
+  /** SVG for the plot window — the same clean, as-plotted output. */
   previewSvg: string;
   /** Final composited result (texture + drawing + border) for per-layer export. */
   result: FlowLinesResult;
@@ -34,8 +31,8 @@ function distinctLayers(lines: FlowLine[]): number {
  * Shared finishing pipeline for the main-thread projects (flow-field, conway,
  * complex-flow). Applies the universal density protection to the drawing, frames
  * it with the universal page border, holds the background texture a halo off
- * both, and serialises a clean export plus a preview that ghosts what density
- * removed. Border and density (both from the shared page frame) are pure
+ * both, and serialises the clean, as-plotted output for both download and the
+ * plot-window preview. Border and density (both from the shared page frame) are pure
  * additions/removals on top of each project's result, so a project's output is
  * unchanged when both are off.
  */
@@ -50,7 +47,6 @@ export function finishPlot(
   // Density protection thins the drawing only — texture and border are
   // deliberate, separate pens, never the pile-up we guard against.
   let drawingLines = drawing.lines;
-  let removed: FlowLine[] = [];
   if (frame.densityEnabled) {
     const cellPx = Math.max(1, svgOptions.strokeWidth ?? 1);
     const out = limitStrokeDensity(
@@ -65,7 +61,6 @@ export function finishPlot(
       }
     );
     drawingLines = out.result.lines;
-    removed = out.removed;
   }
 
   // Texture sits behind, holding its halo off both the drawing and the border.
@@ -82,17 +77,10 @@ export function finishPlot(
   const result: FlowLinesResult = { ...drawing, lines: finalLines };
   const exportSvg = toSVG(result, opts);
 
-  // Preview ghosts the removed strokes on a non-exported 'removed' layer so the
-  // plot window shows what density protection stripped.
-  let previewSvg = exportSvg;
-  if (removed.length > 0) {
-    const ghosts: FlowLine[] = removed.map((l) => ({ points: l.points, layer: 'removed' }));
-    const previewOpts: SVGOptions = {
-      ...opts,
-      layerColors: { ...layerColors, removed: REMOVED_COLOR },
-    };
-    previewSvg = toSVG({ ...drawing, lines: [...finalLines, ...ghosts] }, previewOpts);
-  }
+  // The plot window shows exactly what will be drawn — the clean output after
+  // density trimming — so the effect of the density controls reads directly on
+  // the artwork instead of being masked by ghosts of what was removed.
+  const previewSvg = exportSvg;
 
   return {
     exportSvg,

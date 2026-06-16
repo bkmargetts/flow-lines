@@ -606,12 +606,12 @@ export function ImageInkProvider({
       const dims = inkLayout?.page ?? { widthPx: 0, heightPx: 0 };
       return { svg: '', width: dims.widthPx, height: dims.heightPx };
     }
-    // The plot window shows the preview SVG (ghosts any density-removed strokes).
+    // The plot window shows the preview SVG — the clean, as-plotted output.
     return { svg: inkRender.previewSvg, width: inkRender.width, height: inkRender.height };
   }, [sourceImage, inkRender, inkLayout]);
 
   const downloadSVG = useCallback(() => {
-    // Download the clean export SVG (no density-removed ghosts), not the preview.
+    // Download the clean export SVG (identical to the preview now).
     if (!inkRender?.svg) return;
     downloadSvgText(inkRender.svg, `pen-ink-${settings.seed}.svg`);
   }, [inkRender, settings.seed]);
