@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import { useRef, useCallback, useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import type { Point } from '@flow-lines/core';
 
 interface FocusMarker {
@@ -94,6 +94,39 @@ export function Preview({
   );
   const resetFit = useCallback(() => setZoom(1), []);
 
+  // Keep the point under the pinch midpoint / cursor fixed while zooming (zoom
+  // to focal point, not to the top-left corner). Capture the drawing-space
+  // point under the focal client position; after the size updates, correct the
+  // stage scroll so that same point lands back under the focal point.
+  const anchorRef = useRef<{ cx: number; cy: number; fx: number; fy: number } | null>(null);
+  const captureAnchor = useCallback(
+    (fx: number, fy: number) => {
+      const w = wrapperRef.current;
+      if (!w) return;
+      const r = w.getBoundingClientRect();
+      anchorRef.current = {
+        cx: ((fx - r.left) / r.width) * width,
+        cy: ((fy - r.top) / r.height) * height,
+        fx,
+        fy,
+      };
+    },
+    [width, height]
+  );
+
+  useLayoutEffect(() => {
+    const a = anchorRef.current;
+    const stage = stageRef.current;
+    const w = wrapperRef.current;
+    if (!a || !stage || !w) return;
+    anchorRef.current = null;
+    const r = w.getBoundingClientRect();
+    const curX = r.left + (a.cx / width) * r.width;
+    const curY = r.top + (a.cy / height) * r.height;
+    stage.scrollLeft += curX - a.fx;
+    stage.scrollTop += curY - a.fy;
+  }, [zoom, width, height]);
+
   // ctrl/cmd-wheel zoom — desktop trackpad pinch arrives as a ctrl+wheel event.
   // React's onWheel is passive and can't preventDefault, so bind natively. Plain
   // wheel is left alone → the stage pans (scrolls) natively.
@@ -103,11 +136,12 @@ export function Preview({
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
+      captureAnchor(e.clientX, e.clientY);
       setZoom((z) => clampZoom(z * Math.exp(-e.deltaY * 0.0015)));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  }, [clampZoom]);
+  }, [clampZoom, captureAnchor]);
 
   // Touch pinch-zoom + drag-pan, handled directly so the art pane zooms and
   // pans independently of the page. Track every active pointer on the stage:
@@ -116,7 +150,7 @@ export function Preview({
   // any in-progress paint stroke. `movedRef` lets a pan suppress the focus tap.
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const panRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(null);
-  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const pinchRef = useRef<{ dist: number; zoom: number; cx: number; cy: number } | null>(null);
   const movedRef = useRef(false);
 
   const handleStagePointerDown = useCallback(
@@ -126,7 +160,20 @@ export function Preview({
       if (pts.size === 1) movedRef.current = false;
       if (pts.size === 2) {
         const [a, b] = [...pts.values()];
-        pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), zoom };
+        // Lock the drawing-space point under the initial midpoint; the whole
+        // pinch anchors to it (re-deriving it each step would bake in drift
+        // accumulated while the sheet still fits and can't scroll).
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        let cx = 0;
+        let cy = 0;
+        const w = wrapperRef.current;
+        if (w) {
+          const r = w.getBoundingClientRect();
+          cx = ((mx - r.left) / r.width) * width;
+          cy = ((my - r.top) / r.height) * height;
+        }
+        pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), zoom, cx, cy };
         panRef.current = null;
         setIsPainting(false);
       } else if (pts.size === 1 && !paintMode) {
@@ -136,7 +183,7 @@ export function Preview({
         }
       }
     },
-    [zoom, paintMode]
+    [zoom, paintMode, width, height]
   );
 
   useEffect(() => {
@@ -150,6 +197,13 @@ export function Preview({
       if (pts.size >= 2 && pinchRef.current) {
         const [a, b] = [...pts.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
+        // Keep the locked focal point under the current finger midpoint.
+        anchorRef.current = {
+          cx: pinchRef.current.cx,
+          cy: pinchRef.current.cy,
+          fx: (a.x + b.x) / 2,
+          fy: (a.y + b.y) / 2,
+        };
         setZoom(clampZoom(pinchRef.current.zoom * (d / pinchRef.current.dist)));
         movedRef.current = true;
         e.preventDefault();
@@ -176,7 +230,7 @@ export function Preview({
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
-  }, [clampZoom]);
+  }, [clampZoom, captureAnchor]);
 
   const getCanvasPoint = useCallback(
     (clientX: number, clientY: number): Point | null => {
