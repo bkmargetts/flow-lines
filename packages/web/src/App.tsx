@@ -26,6 +26,7 @@ function composeProviders(
 export function App() {
   const [selectedProject, setSelectedProject] = useState(PROJECTS[0].id);
   const [selectedFeature, setSelectedFeature] = useState(PROJECTS[0].features[0].id);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const activeProject =
     PROJECTS.find((p) => p.id === selectedProject) ?? PROJECTS[0];
@@ -42,11 +43,22 @@ export function App() {
   const ActiveCanvas = activeFeature.Canvas;
 
   const shell = (
-    <div className="app">
+    <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1>Flow Lines</h1>
-          <p className="subtitle">Generative Art for Pen Plotters</p>
+          <div>
+            <h1>Flow Lines</h1>
+            <p className="subtitle">Generative Art for Pen Plotters</p>
+          </div>
+          <button
+            type="button"
+            className="sidebar-toggle"
+            aria-label="Hide controls"
+            title="Hide controls"
+            onClick={() => setSidebarOpen(false)}
+          >
+            ⟨
+          </button>
         </div>
 
         <ProjectTabs
@@ -67,6 +79,17 @@ export function App() {
       </aside>
 
       <main className="canvas-container">
+        {!sidebarOpen && (
+          <button
+            type="button"
+            className="controls-reveal"
+            aria-label="Show controls"
+            title="Show controls"
+            onClick={() => setSidebarOpen(true)}
+          >
+            ☰
+          </button>
+        )}
         <ActiveCanvas />
       </main>
     </div>

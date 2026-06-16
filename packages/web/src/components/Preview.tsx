@@ -92,13 +92,11 @@ export function Preview({
     (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)),
     []
   );
-  const zoomIn = useCallback(() => setZoom((z) => clampZoom(z * 1.25)), [clampZoom]);
-  const zoomOut = useCallback(() => setZoom((z) => clampZoom(z / 1.25)), [clampZoom]);
   const resetFit = useCallback(() => setZoom(1), []);
 
-  // Pinch (trackpad) and ctrl/cmd-wheel zoom. React's onWheel is passive and
-  // can't preventDefault, so bind a non-passive native listener. Plain wheel is
-  // left alone → the stage pans natively.
+  // ctrl/cmd-wheel zoom — desktop trackpad pinch arrives as a ctrl+wheel event.
+  // React's onWheel is passive and can't preventDefault, so bind natively. Plain
+  // wheel is left alone → the stage pans (scrolls) natively.
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -109,6 +107,75 @@ export function Preview({
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
+  }, [clampZoom]);
+
+  // Touch pinch-zoom + drag-pan, handled directly so the art pane zooms and
+  // pans independently of the page. Track every active pointer on the stage:
+  // two pointers = pinch (zoom by the change in finger distance); one pointer =
+  // drag-pan (scroll the stage) when not painting. A second finger always ends
+  // any in-progress paint stroke. `movedRef` lets a pan suppress the focus tap.
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const panRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(null);
+  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
+  const movedRef = useRef(false);
+
+  const handleStagePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      const pts = pointersRef.current;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) movedRef.current = false;
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        pinchRef.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), zoom };
+        panRef.current = null;
+        setIsPainting(false);
+      } else if (pts.size === 1 && !paintMode) {
+        const stage = stageRef.current;
+        if (stage) {
+          panRef.current = { x: e.clientX, y: e.clientY, sl: stage.scrollLeft, st: stage.scrollTop };
+        }
+      }
+    },
+    [zoom, paintMode]
+  );
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onMove = (e: PointerEvent) => {
+      const pts = pointersRef.current;
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pts.size >= 2 && pinchRef.current) {
+        const [a, b] = [...pts.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        setZoom(clampZoom(pinchRef.current.zoom * (d / pinchRef.current.dist)));
+        movedRef.current = true;
+        e.preventDefault();
+      } else if (panRef.current) {
+        const dx = e.clientX - panRef.current.x;
+        const dy = e.clientY - panRef.current.y;
+        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) movedRef.current = true;
+        stage.scrollLeft = panRef.current.sl - dx;
+        stage.scrollTop = panRef.current.st - dy;
+        e.preventDefault();
+      }
+    };
+    const onUp = (e: PointerEvent) => {
+      const pts = pointersRef.current;
+      pts.delete(e.pointerId);
+      if (pts.size < 2) pinchRef.current = null;
+      if (pts.size === 0) panRef.current = null;
+    };
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
   }, [clampZoom]);
 
   const getCanvasPoint = useCallback(
@@ -146,12 +213,12 @@ export function Preview({
     [paintMode, getCanvasPoint, onPaint]
   );
 
-  // Focus uses click, not pointerdown: browsers don't fire click after a
-  // scroll/pan gesture, so touch scrolling over the preview keeps working
-  // and only deliberate taps place focus points
+  // Focus uses click, not pointerdown, so only deliberate taps place focus
+  // points. A pan gesture sets movedRef, which we honour here so dragging the
+  // sheet around never drops a focus point.
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
-      if (!focusSelectMode || !onSetFocus) return;
+      if (!focusSelectMode || !onSetFocus || movedRef.current) return;
 
       const point = getCanvasPoint(e.clientX, e.clientY);
       if (point) {
@@ -242,9 +309,18 @@ export function Preview({
     </svg>
   ) : null;
 
+  // Cursor hint: crosshair while painting/picking focus, otherwise a grab hand
+  // for drag-pan.
+  const cursor = paintMode || focusSelectMode ? 'crosshair' : 'grab';
+
   return (
     <div className="preview-root">
-      <div ref={stageRef} className="canvas-stage">
+      <div
+        ref={stageRef}
+        className="canvas-stage"
+        onPointerDown={handleStagePointerDown}
+        onDoubleClick={resetFit}
+      >
         <div
           ref={wrapperRef}
           className={`canvas-wrapper ${paintMode ? 'paint-mode' : ''}`}
@@ -252,8 +328,10 @@ export function Preview({
             width: displayWidth,
             height: displayHeight,
             position: 'relative',
-            cursor: paintMode || focusSelectMode ? 'crosshair' : 'default',
-            touchAction: paintMode ? 'none' : 'auto',
+            cursor,
+            // Gestures are handled in JS (pinch-zoom + drag-pan), so the
+            // browser must not claim touches for native scroll/zoom.
+            touchAction: 'none',
             ...(background ? { background } : null),
           }}
           onPointerDown={handlePointerDown}
@@ -274,25 +352,6 @@ export function Preview({
           {paintDotsOverlay}
           {focusOverlay}
         </div>
-      </div>
-      <div className="zoom-toolbar">
-        <button type="button" aria-label="Zoom out" onClick={zoomOut}>
-          −
-        </button>
-        <button
-          type="button"
-          className="zoom-readout"
-          title="Reset to fit"
-          onClick={resetFit}
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button type="button" aria-label="Zoom in" onClick={zoomIn}>
-          +
-        </button>
-        <button type="button" aria-label="Fit to screen" onClick={resetFit}>
-          ⤢
-        </button>
       </div>
     </div>
   );
