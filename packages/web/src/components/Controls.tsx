@@ -64,18 +64,50 @@ export function Controls({
       <h3 className="section-title">Lines</h3>
 
       <div className="control-group">
-        <label>
-          Line Count <span>{state.lineCount}</span>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={state.denseFill}
+            onChange={(e) => updateState({ denseFill: e.target.checked })}
+          />
+          Dense fill (evenly spaced)
         </label>
-        <input
-          type="range"
-          min="10"
-          max="500"
-          step="10"
-          value={state.lineCount}
-          onChange={(e) => updateState({ lineCount: parseInt(e.target.value, 10) })}
-        />
+        <p className="paint-hint">
+          {state.denseFill
+            ? 'Lines pack the page evenly at the spacing below — no clumps or gaps.'
+            : 'Scatter a fixed number of random lines.'}
+        </p>
       </div>
+
+      {state.denseFill ? (
+        <div className="control-group">
+          <label>
+            Line Spacing <span>{state.lineSpacingMm.toFixed(1)}mm</span>
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="10"
+            step="0.5"
+            value={state.lineSpacingMm}
+            onChange={(e) => updateState({ lineSpacingMm: parseFloat(e.target.value) })}
+          />
+        </div>
+      ) : (
+        <div className="control-group">
+          <label>
+            Line Count <span>{state.lineCount}</span>
+          </label>
+          <input
+            type="range"
+            min="10"
+            max="3000"
+            step="10"
+            value={state.lineCount}
+            onChange={(e) => updateState({ lineCount: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
 
       <div className="control-group">
         <label>

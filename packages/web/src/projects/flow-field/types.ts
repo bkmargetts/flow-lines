@@ -6,6 +6,14 @@ import { type Point } from '@flow-lines/core';
  */
 export interface FlowState {
   lineCount: number;
+  /**
+   * Pack streamlines evenly to fill the page instead of scattering `lineCount`
+   * random seeds. Density is set by `lineSpacingMm` rather than a count, so the
+   * field can be made significantly — and uniformly — denser.
+   */
+  denseFill: boolean;
+  /** Target gap between neighbouring lines in dense-fill mode, mm */
+  lineSpacingMm: number;
   seed: number;
   stepLength: number;
   maxSteps: number;
@@ -24,6 +32,8 @@ export interface FlowState {
 
 export const defaultFlowState: FlowState = {
   lineCount: 100,
+  denseFill: false,
+  lineSpacingMm: 3,
   seed: Math.floor(Math.random() * 1000000),
   stepLength: 2,
   maxSteps: 500,

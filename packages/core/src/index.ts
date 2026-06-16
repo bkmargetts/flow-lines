@@ -7,8 +7,8 @@ export { FlowField } from './flow-field.js';
 export type { FlowFieldOptions, Vector2D } from './flow-field.js';
 
 // Flow lines generation
-export { generateFlowLines, generateFlowLinesGrid } from './flow-lines.js';
-export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point } from './flow-lines.js';
+export { generateFlowLines, generateFlowLinesGrid, generateFlowLinesEven } from './flow-lines.js';
+export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point, EvenFlowLinesOptions } from './flow-lines.js';
 
 // Conway's Game of Life long-exposure still
 export { generateConwayExposure } from './conway-exposure.js';

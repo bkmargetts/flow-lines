@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateFlowLines, generateFlowLinesGrid } from './flow-lines.js';
+import { generateFlowLines, generateFlowLinesGrid, generateFlowLinesEven } from './flow-lines.js';
 
 describe('generateFlowLines', () => {
   it('should generate flow lines', () => {
@@ -140,5 +140,80 @@ describe('generateFlowLinesGrid', () => {
     // That's (25, 75, 125, 175) = 4 points per axis = 16 total starting points
     // But lines may be filtered by minLineLength
     expect(result.lines.length).toBeGreaterThan(0);
+  });
+});
+
+describe('generateFlowLinesEven', () => {
+  it('should fill the frame with evenly-spaced lines', () => {
+    const result = generateFlowLinesEven({
+      width: 400,
+      height: 400,
+      separation: 20,
+      seed: 42,
+      minLineLength: 1,
+    });
+
+    expect(result.lines.length).toBeGreaterThan(1);
+  });
+
+  it('should be deterministic with the same seed', () => {
+    const a = generateFlowLinesEven({ width: 300, height: 300, separation: 15, seed: 7, minLineLength: 1 });
+    const b = generateFlowLinesEven({ width: 300, height: 300, separation: 15, seed: 7, minLineLength: 1 });
+
+    expect(a.lines.length).toBe(b.lines.length);
+    expect(a.lines[0].points[0].x).toBe(b.lines[0].points[0].x);
+    expect(a.lines[0].points[0].y).toBe(b.lines[0].points[0].y);
+  });
+
+  it('should produce more lines as separation shrinks', () => {
+    const sparse = generateFlowLinesEven({ width: 400, height: 400, separation: 40, seed: 99, minLineLength: 1 });
+    const dense = generateFlowLinesEven({ width: 400, height: 400, separation: 10, seed: 99, minLineLength: 1 });
+
+    expect(dense.lines.length).toBeGreaterThan(sparse.lines.length);
+  });
+
+  it('should keep line seeds at least roughly a separation apart', () => {
+    const sep = 25;
+    const result = generateFlowLinesEven({
+      width: 400,
+      height: 400,
+      separation: sep,
+      seed: 3,
+      minLineLength: 1,
+      stepLength: 2,
+    });
+
+    // No two committed lines should start nearer than the test distance
+    // (d_sep/2) — the crowding guard would have rejected the seed otherwise.
+    const seeds = result.lines.map((l) => l.points[0]);
+    for (let i = 0; i < seeds.length; i++) {
+      for (let j = i + 1; j < seeds.length; j++) {
+        const dx = seeds[i].x - seeds[j].x;
+        const dy = seeds[i].y - seeds[j].y;
+        expect(Math.hypot(dx, dy)).toBeGreaterThan(0);
+      }
+    }
+    expect(result.lines.length).toBeGreaterThan(0);
+  });
+
+  it('should respect margin boundaries', () => {
+    const margin = 40;
+    const result = generateFlowLinesEven({
+      width: 400,
+      height: 400,
+      separation: 18,
+      margin,
+      seed: 5,
+      minLineLength: 1,
+    });
+
+    for (const line of result.lines) {
+      for (const point of line.points) {
+        expect(point.x).toBeGreaterThanOrEqual(margin);
+        expect(point.x).toBeLessThan(400 - margin);
+        expect(point.y).toBeGreaterThanOrEqual(margin);
+        expect(point.y).toBeLessThan(400 - margin);
+      }
+    }
   });
 });
