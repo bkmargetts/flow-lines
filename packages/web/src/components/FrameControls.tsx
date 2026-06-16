@@ -10,6 +10,8 @@ const PAPER_TONES: Array<{ id: string; label: string }> = [
   { id: '#f4efe2', label: 'Warm' },
   { id: '#ece3cf', label: 'Cream' },
   { id: '#e7e7e4', label: 'Cool grey' },
+  { id: '#1c2230', label: 'Slate (dark)' },
+  { id: '#0d0d12', label: 'Ink black' },
 ];
 
 /** Texture ink swatches (its own pen layer). */

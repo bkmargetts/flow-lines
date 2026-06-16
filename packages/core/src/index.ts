@@ -14,6 +14,15 @@ export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point, EvenFlowLinesO
 export { generateConwayExposure } from './conway-exposure.js';
 export type { ConwayExposureOptions } from './conway-exposure.js';
 
+// Complex-valued rational-function flow field (Savva-style poles & zeros)
+export { generateComplexFlow } from './complex-flow.js';
+export type {
+  ComplexFlowOptions,
+  SingularityLayout,
+  SeedLayout,
+  LayerBy,
+} from './complex-flow.js';
+
 // SVG export
 export { toSVG, toSVGLayers, parseSVGOptions } from './svg.js';
 export type { SVGOptions } from './svg.js';
