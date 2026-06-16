@@ -57,7 +57,12 @@ export function finishPlot(
       { ...drawing, lines: drawingLines },
       // Exempt the 'bold' pen: bold lines are deliberately built from repeated
       // offset passes that run along each other, not pile-up to trim.
-      { maxPasses: frame.densityMaxPasses, cellPx, skipLayers: ['bold'] }
+      {
+        maxPasses: frame.densityMaxPasses,
+        cellPx,
+        minOverlapPx: frame.densityMinOverlapMm * page.pxPerMm,
+        skipLayers: ['bold'],
+      }
     );
     drawingLines = out.result.lines;
     removed = out.removed;

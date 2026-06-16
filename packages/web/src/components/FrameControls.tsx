@@ -131,6 +131,18 @@ export function FrameControls() {
             value={frame.densityMaxPasses}
             onChange={(e) => updateFrame({ densityMaxPasses: parseInt(e.target.value, 10) })}
           />
+          <label>
+            Min overlap to trim <span>{frame.densityMinOverlapMm.toFixed(1)} mm</span>
+            <InfoTip text="How far two lines must run together before the shared run is cut. Below this they're treated as a crossing and kept whole. Lower it to thin the dense convergence right at flow singularities (where many lines genuinely meet); raise it to trim only long parallel duplication and preserve detail at the poles." />
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="8"
+            step="0.5"
+            value={frame.densityMinOverlapMm}
+            onChange={(e) => updateFrame({ densityMinOverlapMm: parseFloat(e.target.value) })}
+          />
         </div>
       )}
 

@@ -21,6 +21,8 @@ export interface RenderBorder {
 /** Density protection options from the shared page frame. */
 export interface RenderDensity {
   maxPasses: number;
+  /** Minimum sustained-overlap run length (px) before a run is trimmed. */
+  minOverlapPx?: number;
 }
 
 export interface RenderRequest {
@@ -68,7 +70,7 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
         // Bold outlines are deliberately built from repeated offset passes that
         // run along each other (tapered emphasis) — exempt that pen so density
         // protection never trims the intended bold line.
-        { maxPasses: density.maxPasses, cellPx, skipLayers: ['bold'] }
+        { maxPasses: density.maxPasses, cellPx, minOverlapPx: density.minOverlapPx, skipLayers: ['bold'] }
       );
       drawingLines = out.result.lines;
       removed = out.removed;

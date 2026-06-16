@@ -550,7 +550,12 @@ export function ImageInkProvider({
                 insetPx: Math.max(frame.borderInsetMm, -frame.marginMm) * page.pxPerMm,
               }
             : undefined,
-          density: frame.densityEnabled ? { maxPasses: frame.densityMaxPasses } : undefined,
+          density: frame.densityEnabled
+            ? {
+                maxPasses: frame.densityMaxPasses,
+                minOverlapPx: frame.densityMinOverlapMm * page.pxPerMm,
+              }
+            : undefined,
         }
       )
       .then((rendered) => {
@@ -569,6 +574,7 @@ export function ImageInkProvider({
     active, sourceImage, inkLayout, settings, focusPoints, subjectMask, portraitState,
     depthMap, labelMap, lowMemory,
     frame.borderEnabled, frame.borderInsetMm, frame.densityEnabled, frame.densityMaxPasses,
+    frame.densityMinOverlapMm,
     frame.textureEnabled, frame.textureStyle, frame.textureSpacingMm, frame.textureAngleDeg,
     frame.textureScale, frame.textureJitter, frame.textureDensity, frame.textureCrossHatch,
     frame.textureColor, frame.textureSeed, frame.textureHaloMm, frame.textureShapes,

@@ -38,6 +38,14 @@ export interface FrameSettings {
   densityEnabled: boolean;
   /** Max overlapping pen passes a patch may take before further strokes drop. */
   densityMaxPasses: number;
+  /**
+   * Minimum length (mm) a sustained overlap run must reach before it's trimmed.
+   * Lines that merely cross share a point or two (below this — kept whole);
+   * lines that coalesce and run together for longer get the shared run cut.
+   * Smaller = trims even short converging runs near singularities; larger =
+   * only long parallel duplication.
+   */
+  densityMinOverlapMm: number;
 
   // ---- Optional plottable background texture (its own 'texture' pen layer) ----
   /** Off → no texture lines, output unchanged */
@@ -71,6 +79,7 @@ export const defaultFrame: FrameSettings = {
   borderInsetMm: 0,
   densityEnabled: false,
   densityMaxPasses: 1,
+  densityMinOverlapMm: 2.5,
   textureEnabled: false,
   textureStyle: 'hatch',
   textureSpacingMm: 4,
