@@ -112,18 +112,26 @@ function endpoint(line: FlowLine, isStart: boolean): Point {
 export interface DensityProtectOptions {
   /**
    * Max pen passes allowed to overlap one coverage cell. Once a cell has been
-   * inked this many times, further strokes that fall mostly on saturated cells
-   * are dropped. A little overlap is welcome (texture); this caps the pile-up
-   * that inflates plot time and breaks down the paper.
+   * inked this many times, a stroke running *along* it (a sustained overlap
+   * run) has that run trimmed out. A little overlap is welcome (texture); this
+   * caps the pile-up that inflates plot time and breaks down the paper.
    */
   maxPasses: number;
   /** Coverage cell size in px — derive from the pen width so a "pass" ≈ one nib. */
   cellPx: number;
   /**
-   * A stroke is dropped when at least this fraction of its length already sits
-   * on saturated cells (default 0.6). Lower = more aggressive thinning.
+   * Minimum length (px) of a sustained overlap run before it's trimmed. This is
+   * the crossing/coalescence distinction: streamlines that merely *cross* a
+   * previous line share a cell or two — well under this — and are left whole;
+   * lines that *coalesce* and run along a previous path for longer than this get
+   * the shared run cut out. Defaults to `cellPx * 8`.
    */
-  dropFraction?: number;
+  minOverlapPx?: number;
+  /**
+   * Kept fragments shorter than this (px) are discarded rather than plotted as
+   * dust after a trim. Defaults to `cellPx * 3`.
+   */
+  minKeepPx?: number;
   /**
    * Layers left untouched and not counted toward density (e.g. 'texture',
    * 'border' — they're a different pen / deliberate, not drawing pile-up).
@@ -168,10 +176,10 @@ class CoverageGrid {
   }
 }
 
-/** Walk a polyline at ~half-cell steps, visiting one sample per step. */
-function walkSamples(points: Point[], step: number, visit: (x: number, y: number) => void): void {
-  if (points.length === 0) return;
-  visit(points[0].x, points[0].y);
+/** Resample a polyline to ~`step`-spaced points (endpoints kept). */
+function densify(points: Point[], step: number): Point[] {
+  if (points.length === 0) return [];
+  const out: Point[] = [{ x: points[0].x, y: points[0].y }];
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1];
     const b = points[i];
@@ -179,9 +187,10 @@ function walkSamples(points: Point[], step: number, visit: (x: number, y: number
     const n = Math.max(1, Math.ceil(segLen / step));
     for (let s = 1; s <= n; s++) {
       const t = s / n;
-      visit(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
     }
   }
+  return out;
 }
 
 function lineLength(points: Point[]): number {
@@ -193,12 +202,18 @@ function lineLength(points: Point[]): number {
 }
 
 /**
- * Pen-plotting density protection. Strokes are walked in order; each builds up
- * a per-layer coverage grid. A stroke whose footprint is mostly over cells that
- * have already taken `maxPasses` passes is dropped — too many repeated strokes
- * over identical paper waste plot time and break the surface down, while the
- * first few passes still build the intended texture. Deterministic for a given
- * input order. Skipped layers (texture/border) pass through untouched.
+ * Pen-plotting density protection. Strokes are processed in order, each building
+ * up a per-layer coverage grid. The metric is *local sustained overlap*, not
+ * total path overlap: a stroke is sampled along its length, and a maximal run of
+ * samples sitting on cells that have already taken `maxPasses` passes is trimmed
+ * out only when that run is longer than `minOverlapPx`. This draws the
+ * crossing/coalescence distinction that matters for flow diagrams — streamlines
+ * that merely *cross* an existing line share a cell or two (a short run, kept
+ * whole), while lines that *coalesce* and run along a shared path get the
+ * duplicated run cut out, keeping each line's unique upstream portion. The first
+ * `maxPasses` coincident passes still build the intended texture. Deterministic
+ * for a given input order. Skipped layers (texture/border) pass through
+ * untouched.
  */
 export function limitStrokeDensity(
   result: FlowLinesResult,
@@ -206,7 +221,8 @@ export function limitStrokeDensity(
 ): DensityProtectResult {
   const cellPx = Math.max(0.5, options.cellPx);
   const maxPasses = Math.max(1, Math.floor(options.maxPasses));
-  const dropFraction = options.dropFraction ?? 0.6;
+  const minOverlapPx = options.minOverlapPx ?? cellPx * 8;
+  const minKeepPx = options.minKeepPx ?? cellPx * 3;
   const skip = new Set(options.skipLayers ?? []);
   const step = cellPx * 0.5;
 
@@ -226,6 +242,25 @@ export function limitStrokeDensity(
   const removed: FlowLine[] = [];
   let removedTravel = 0;
 
+  // Record a drawn polyline's footprint so later strokes see the ink.
+  const stamp = (grid: CoverageGrid, points: Point[]): void => {
+    const cells = new Set<number>();
+    for (let i = 0; i < points.length; i++) {
+      if (i === 0) {
+        cells.add(grid.index(points[0].x, points[0].y));
+        continue;
+      }
+      const a = points[i - 1];
+      const b = points[i];
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step));
+      for (let s = 1; s <= n; s++) {
+        const t = s / n;
+        cells.add(grid.index(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+      }
+    }
+    for (const cell of cells) grid.add(cell);
+  };
+
   for (const line of result.lines) {
     const layerKey = line.layer ?? line.pen ?? 'default';
     if (line.points.length < 2 || skip.has(layerKey)) {
@@ -234,25 +269,76 @@ export function limitStrokeDensity(
     }
 
     const grid = gridFor(layerKey);
-    // Distinct cells this stroke touches, so a single stroke counts as one pass
-    // over each cell (not once per sample) when measuring and recording.
-    const cells = new Set<number>();
-    walkSamples(line.points, step, (x, y) => cells.add(grid.index(x, y)));
+    const samples = densify(line.points, step);
 
-    let saturated = 0;
-    for (const cell of cells) {
-      if (grid.countAt(cell) >= maxPasses) saturated++;
+    // Flag each sample sitting on an already-saturated cell.
+    const onSaturated = samples.map((p) => grid.countAt(grid.index(p.x, p.y)) >= maxPasses);
+
+    // A saturated *run* is only cut when it's a sustained overlap (longer than
+    // minOverlapPx). Short runs are crossings/touches — left intact.
+    const cut = onSaturated.slice();
+    let i = 0;
+    while (i < samples.length) {
+      if (!onSaturated[i]) {
+        i++;
+        continue;
+      }
+      let j = i;
+      let runLen = 0;
+      while (j + 1 < samples.length && onSaturated[j + 1]) {
+        runLen += Math.hypot(samples[j + 1].x - samples[j].x, samples[j + 1].y - samples[j].y);
+        j++;
+      }
+      if (runLen < minOverlapPx) {
+        for (let k = i; k <= j; k++) cut[k] = false; // crossing — keep
+      }
+      i = j + 1;
     }
 
-    if (cells.size > 0 && saturated / cells.size >= dropFraction) {
-      removed.push(line);
-      removedTravel += lineLength(line.points);
+    // No sustained overlap — keep the original stroke untouched (exact geometry,
+    // no resampling bloat), and record its footprint.
+    if (!cut.some(Boolean)) {
+      stamp(grid, line.points);
+      kept.push(line);
       continue;
     }
 
-    // Kept — record its footprint so later strokes see it.
-    for (const cell of cells) grid.add(cell);
-    kept.push(line);
+    // Split into kept (fresh) and trimmed (overlapping) runs.
+    const keptSegs: Point[][] = [];
+    const dropSegs: Point[][] = [];
+    let curKeep: Point[] = [];
+    let curDrop: Point[] = [];
+    for (let k = 0; k < samples.length; k++) {
+      if (cut[k]) {
+        if (curKeep.length) {
+          keptSegs.push(curKeep);
+          curKeep = [];
+        }
+        curDrop.push(samples[k]);
+      } else {
+        if (curDrop.length) {
+          dropSegs.push(curDrop);
+          curDrop = [];
+        }
+        curKeep.push(samples[k]);
+      }
+    }
+    if (curKeep.length) keptSegs.push(curKeep);
+    if (curDrop.length) dropSegs.push(curDrop);
+
+    for (const seg of keptSegs) {
+      // Drop dust left by trimming; only plot fragments worth a pen-down.
+      if (seg.length >= 2 && lineLength(seg) >= minKeepPx) {
+        stamp(grid, seg);
+        kept.push({ ...line, points: seg });
+      }
+    }
+    for (const seg of dropSegs) {
+      if (seg.length >= 2) {
+        removed.push({ ...line, points: seg });
+        removedTravel += lineLength(seg);
+      }
+    }
   }
 
   return { result: { ...result, lines: kept }, removed, removedTravel };

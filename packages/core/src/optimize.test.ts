@@ -166,4 +166,47 @@ describe('limitStrokeDensity', () => {
     expect(a.result.lines.length).toBe(b.result.lines.length);
     expect(a.removed.length).toBe(b.removed.length);
   });
+
+  it('keeps lines that merely cross at a point (not a sustained overlap)', () => {
+    // A horizontal and a vertical line share a single cell where they cross —
+    // the bread-and-butter of a flow diagram. Neither should be trimmed.
+    const input = result([
+      line([
+        [10, 50],
+        [90, 50],
+      ]),
+      line([
+        [50, 10],
+        [50, 90],
+      ]),
+    ]);
+    const out = limitStrokeDensity(input, { maxPasses: 1, cellPx: 2 });
+    expect(out.removed.length).toBe(0);
+    expect(out.result.lines.length).toBe(2);
+  });
+
+  it('trims only the coalesced run where branches run together', () => {
+    // Line B diverges from A for its first half, then coalesces and runs along A
+    // for a long shared stretch. The unique upstream half must survive; only the
+    // duplicated run is cut — not the whole stroke, and not the crossing.
+    const a = line([
+      [10, 50],
+      [90, 50],
+    ]);
+    const b = line([
+      [10, 10], // unique diagonal approach
+      [50, 50], // ...meets A here...
+      [90, 50], // ...and runs along it (the coalesced overlap)
+    ]);
+    const out = limitStrokeDensity(result([a, b]), { maxPasses: 1, cellPx: 2 });
+
+    // B is split, not dropped: A + B's surviving diagonal remain.
+    expect(out.result.lines.length).toBe(2);
+    // One trimmed run (the shared tail), roughly the length of the overlap.
+    expect(out.removed.length).toBe(1);
+    expect(out.removed[0].points.length).toBeGreaterThanOrEqual(2);
+    // The surviving B fragment is shorter than the original stroke.
+    const survivingB = out.result.lines.find((l) => l !== a && l.points[0].y < 50);
+    expect(survivingB).toBeDefined();
+  });
 });
