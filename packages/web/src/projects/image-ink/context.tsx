@@ -545,7 +545,9 @@ export function ImageInkProvider({
           border: frame.borderEnabled
             ? {
                 marginPx: frame.marginMm * page.pxPerMm,
-                insetPx: frame.borderInsetMm * page.pxPerMm,
+                // Negative inset opens a gap (rule outward into the margin);
+                // clamp to the sheet edge so it never plots off-page.
+                insetPx: Math.max(frame.borderInsetMm, -frame.marginMm) * page.pxPerMm,
               }
             : undefined,
           density: frame.densityEnabled ? { maxPasses: frame.densityMaxPasses } : undefined,

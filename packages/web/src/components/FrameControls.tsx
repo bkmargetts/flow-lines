@@ -93,11 +93,11 @@ export function FrameControls() {
         <div className="control-group">
           <label>
             Border inset <span>{frame.borderInsetMm}mm</span>
-            <InfoTip text="Pushes the rule further inside the margin. 0 sits the border right at the margin." />
+            <InfoTip text="Where the rule sits relative to the margin. 0 sits it right at the margin (touching the art). Negative pushes it outward toward the paper edge, opening a clear gap between the art and the border. Positive pushes it inward, into the art." />
           </label>
           <input
             type="range"
-            min="0"
+            min={-frame.marginMm}
             max="20"
             step="1"
             value={frame.borderInsetMm}
