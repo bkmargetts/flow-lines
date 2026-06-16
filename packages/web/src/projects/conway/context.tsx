@@ -8,7 +8,6 @@ import {
 } from 'react';
 import {
   generateConwayExposure,
-  toSVG,
   toSVGLayers,
   pageMetrics,
   getPaperSize,
@@ -17,7 +16,8 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
-import { buildTexture } from '../../lib/texture';
+import { finishPlot } from '../../lib/finish';
+import { downloadSvgText, triggerDownload } from '../../lib/download';
 import { zipStore } from '../../lib/zip';
 import { defaultConwayState, type ConwayState } from './types';
 
@@ -65,9 +65,15 @@ export function ConwayProvider({
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,
     };
-    if (!active) {
-      return { svg: '', result: null as FlowLinesResult | null, svgOptions, width: page.widthPx, height: page.heightPx };
-    }
+    const empty = {
+      svg: '',
+      exportSvg: '',
+      result: null as FlowLinesResult | null,
+      svgOptions,
+      width: page.widthPx,
+      height: page.heightPx,
+    };
+    if (!active) return empty;
 
     const options: ConwayExposureOptions = {
       width: page.widthPx,
@@ -96,26 +102,20 @@ export function ConwayProvider({
       valueBands: state.valueBands,
       offCenter: state.offCenter,
       vignette: state.vignette,
-      plateBorder: state.plateBorder,
-      borderGap: state.borderGap,
     };
 
     const result = generateConwayExposure(options);
 
-    // Optional shared background texture, held a halo off the drawing and laid
-    // behind it on its own pen layer.
-    const tex = buildTexture(frame, page, result.lines);
-    if (tex) {
-      result.lines = [...tex.lines, ...result.lines];
-      svgOptions.layerColors = { ...(svgOptions.layerColors ?? {}), texture: tex.color };
-    }
+    // Shared finishing: density protection, universal border, background
+    // texture, and the clean/preview SVGs. The SVG stays paper-free (a plotter
+    // draws on real stock); the shared frame paper tone shows behind it.
+    const finished = finishPlot(frame, page, result, svgOptions);
 
-    // The SVG stays paper-free (a plotter draws on real stock); the shared
-    // frame paper tone shows behind it in the preview.
     return {
-      svg: toSVG(result, svgOptions),
-      result,
-      svgOptions,
+      svg: finished.previewSvg,
+      exportSvg: finished.exportSvg,
+      result: finished.result,
+      svgOptions: finished.svgOptions,
       width: page.widthPx,
       height: page.heightPx,
     };
@@ -126,6 +126,10 @@ export function ConwayProvider({
     frame.orientation,
     frame.resolution,
     frame.marginMm,
+    frame.borderEnabled,
+    frame.borderInsetMm,
+    frame.densityEnabled,
+    frame.densityMaxPasses,
     frame.textureEnabled,
     frame.textureStyle,
     frame.textureSpacingMm,
@@ -140,24 +144,10 @@ export function ConwayProvider({
     frame.textureShapes,
   ]);
 
-  const triggerDownload = (blob: Blob, filename: string): void => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const downloadSVG = useCallback(() => {
-    if (!generated.svg) return;
-    triggerDownload(
-      new Blob([generated.svg], { type: 'image/svg+xml' }),
-      `conway-exposure-${state.seed}.svg`
-    );
-  }, [generated.svg, state.seed]);
+    if (!generated.exportSvg) return;
+    downloadSvgText(generated.exportSvg, `conway-exposure-${state.seed}.svg`);
+  }, [generated.exportSvg, state.seed]);
 
   const downloadLayers = useCallback(() => {
     if (!generated.result) return;

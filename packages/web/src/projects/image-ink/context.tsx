@@ -20,6 +20,7 @@ import {
 import { getRenderClient, type RenderedSVG } from '../../render-client';
 import { useFrame } from '../../FrameContext';
 import { textureOptionsFor } from '../../lib/texture';
+import { downloadSvgText } from '../../lib/download';
 import {
   defaultInkSettings,
   PRESETS,
@@ -537,7 +538,25 @@ export function ImageInkProvider({
         (() => {
           const texOpts = textureOptionsFor(frame, page);
           return texOpts ? { options: texOpts, color: frame.textureColor } : undefined;
-        })()
+        })(),
+        // Universal finishing from the shared page frame: page border + density
+        // protection (both off by default, so output is unchanged until set).
+        {
+          border: frame.borderEnabled
+            ? {
+                marginPx: frame.marginMm * page.pxPerMm,
+                // Negative inset opens a gap (rule outward into the margin);
+                // clamp to the sheet edge so it never plots off-page.
+                insetPx: Math.max(frame.borderInsetMm, -frame.marginMm) * page.pxPerMm,
+              }
+            : undefined,
+          density: frame.densityEnabled
+            ? {
+                maxPasses: frame.densityMaxPasses,
+                minOverlapPx: frame.densityMinOverlapMm * page.pxPerMm,
+              }
+            : undefined,
+        }
       )
       .then((rendered) => {
         // Survived the apply — clear the crash breadcrumb
@@ -554,6 +573,8 @@ export function ImageInkProvider({
   }, [
     active, sourceImage, inkLayout, settings, focusPoints, subjectMask, portraitState,
     depthMap, labelMap, lowMemory,
+    frame.borderEnabled, frame.borderInsetMm, frame.densityEnabled, frame.densityMaxPasses,
+    frame.densityMinOverlapMm,
     frame.textureEnabled, frame.textureStyle, frame.textureSpacingMm, frame.textureAngleDeg,
     frame.textureScale, frame.textureJitter, frame.textureDensity, frame.textureCrossHatch,
     frame.textureColor, frame.textureSeed, frame.textureHaloMm, frame.textureShapes,
@@ -585,21 +606,15 @@ export function ImageInkProvider({
       const dims = inkLayout?.page ?? { widthPx: 0, heightPx: 0 };
       return { svg: '', width: dims.widthPx, height: dims.heightPx };
     }
-    return inkRender;
+    // The plot window shows the preview SVG — the clean, as-plotted output.
+    return { svg: inkRender.previewSvg, width: inkRender.width, height: inkRender.height };
   }, [sourceImage, inkRender, inkLayout]);
 
   const downloadSVG = useCallback(() => {
-    if (!generated.svg) return;
-    const blob = new Blob([generated.svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pen-ink-${settings.seed}.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [generated.svg, settings.seed]);
+    // Download the clean export SVG (identical to the preview now).
+    if (!inkRender?.svg) return;
+    downloadSvgText(inkRender.svg, `pen-ink-${settings.seed}.svg`);
+  }, [inkRender, settings.seed]);
 
   const value: ImageInkValue = {
     settings,

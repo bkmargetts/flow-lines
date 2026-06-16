@@ -131,17 +131,6 @@ body {
   left: 68px;
 }
 
-/* A sticky fade at the bottom of the scrollable sidebar, hinting there's more
-   to scroll (especially the collapsed top pane on mobile). */
-.scroll-fade {
-  position: sticky;
-  bottom: -40px;
-  height: 28px;
-  margin: -28px -20px -40px;
-  background: linear-gradient(to top, var(--bg-surface), transparent);
-  pointer-events: none;
-}
-
 /* The bottom-sheet grab handle is mobile-only. */
 .sheet-handle {
   display: none;
@@ -593,6 +582,17 @@ button.secondary:hover {
 
 .frame-controls .control-group {
   margin-bottom: 12px;
+}
+
+/* A sticky fade at the bottom of the scrollable sidebar, hinting there's more
+   to scroll (especially the collapsed top pane on mobile). */
+.scroll-fade {
+  position: sticky;
+  bottom: -40px;
+  height: 28px;
+  margin: -28px -20px -40px;
+  background: linear-gradient(to top, var(--bg-surface), transparent);
+  pointer-events: none;
 }
 
 /* Advanced settings */

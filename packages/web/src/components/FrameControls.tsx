@@ -78,6 +78,75 @@ export function FrameControls() {
       </div>
 
       <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.borderEnabled}
+            onChange={(e) => updateFrame({ borderEnabled: e.target.checked })}
+          />
+          Page border
+          <InfoTip text="A ruled rectangle framing the page on its own pen layer, like a print plate. A pure overlay — it never moves the drawing, so the rest of the output is unchanged. The background texture holds its halo off it too." />
+        </label>
+      </div>
+
+      {frame.borderEnabled && (
+        <div className="control-group">
+          <label>
+            Border inset <span>{frame.borderInsetMm}mm</span>
+            <InfoTip text="Where the rule sits relative to the margin. 0 sits it right at the margin (touching the art). Negative pushes it outward toward the paper edge, opening a clear gap between the art and the border. Positive pushes it inward, into the art." />
+          </label>
+          <input
+            type="range"
+            min={-frame.marginMm}
+            max="20"
+            step="1"
+            value={frame.borderInsetMm}
+            onChange={(e) => updateFrame({ borderInsetMm: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.densityEnabled}
+            onChange={(e) => updateFrame({ densityEnabled: e.target.checked })}
+          />
+          Density protection
+          <InfoTip text="Trims runs where lines coalesce and re-ink the same path. Caps how many passes may stack on one patch before further overlap is cut — 1 keeps each path inked once (clean flow diagrams), higher allows built-up texture. Lines that merely cross at a point are left whole. Bold outlines (deliberate multi-pass) are exempt. The plot window shows the clean, as-plotted result so you can see the effect on the artwork. Applies to every tool." />
+        </label>
+      </div>
+
+      {frame.densityEnabled && (
+        <div className="control-group">
+          <label>
+            Max passes before trimming <span>{frame.densityMaxPasses}</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="8"
+            step="1"
+            value={frame.densityMaxPasses}
+            onChange={(e) => updateFrame({ densityMaxPasses: parseInt(e.target.value, 10) })}
+          />
+          <label>
+            Min overlap to trim <span>{frame.densityMinOverlapMm.toFixed(1)} mm</span>
+            <InfoTip text="How far two lines must run together before the shared run is cut. Below this they're treated as a crossing and kept whole. Lower it to thin the dense convergence right at flow singularities (where many lines genuinely meet); raise it to trim only long parallel duplication and preserve detail at the poles." />
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="8"
+            step="0.5"
+            value={frame.densityMinOverlapMm}
+            onChange={(e) => updateFrame({ densityMinOverlapMm: parseFloat(e.target.value) })}
+          />
+        </div>
+      )}
+
+      <div className="control-group">
         <label>Paper tone</label>
         <div className="paper-swatches">
           {PAPER_TONES.map((tone) => (

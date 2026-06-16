@@ -27,6 +27,26 @@ export interface FrameSettings {
   /** Paper colour shown behind the drawing in the preview (not plotted) */
   paperTone: string;
 
+  // ---- Optional plottable page border (its own 'border' pen layer) ----
+  /** Draw a ruled rectangle framing the page (pure overlay, never reshapes art) */
+  borderEnabled: boolean;
+  /** Extra inset of the rule from the margin, in mm (0 = sits at the margin) */
+  borderInsetMm: number;
+
+  // ---- Pen-plotting density protection (applies to every tool) ----
+  /** Off → output untouched. On → drop strokes off over-inked paper. */
+  densityEnabled: boolean;
+  /** Max overlapping pen passes a patch may take before further strokes drop. */
+  densityMaxPasses: number;
+  /**
+   * Minimum length (mm) a sustained overlap run must reach before it's trimmed.
+   * Lines that merely cross share a point or two (below this — kept whole);
+   * lines that coalesce and run together for longer get the shared run cut.
+   * Smaller = trims even short converging runs near singularities; larger =
+   * only long parallel duplication.
+   */
+  densityMinOverlapMm: number;
+
   // ---- Optional plottable background texture (its own 'texture' pen layer) ----
   /** Off → no texture lines, output unchanged */
   textureEnabled: boolean;
@@ -55,6 +75,11 @@ export const defaultFrame: FrameSettings = {
   marginMm: 10,
   fit: 'fit',
   paperTone: '#faf9f6',
+  borderEnabled: false,
+  borderInsetMm: 0,
+  densityEnabled: false,
+  densityMaxPasses: 1,
+  densityMinOverlapMm: 2.5,
   textureEnabled: false,
   textureStyle: 'hatch',
   textureSpacingMm: 4,

@@ -137,12 +137,11 @@ export interface ConwayExposureOptions {
    * (default artStyle ? 0.4 : 0). 0 = no vignette.
    */
   vignette?: number;
-  /** Draw a plate-border line just inside the margin as plottable strokes (default = artStyle) */
-  plateBorder?: boolean;
   /**
-   * Gap between the drawing and the plate border, in grid cells (default 2).
-   * The gutter is reserved for the whole art mode, so changing it resizes the
-   * drawing area, but toggling the border on/off never does.
+   * Gutter reserved around the drawing in art mode, in grid cells (default 2).
+   * Keeps the drawing clear of the page edge so the shared page border (drawn
+   * by the frame, not here) frames it. Reserving it for the whole art mode
+   * means the value is part of the simulation's footprint.
    */
   borderGap?: number;
 }
@@ -766,7 +765,6 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   const valueBands = options.valueBands ?? (artStyle ? 4 : 0);
   const offCenter = options.offCenter ?? (artStyle ? 0.6 : 0);
   const vignette = options.vignette ?? (artStyle ? 0.4 : 0);
-  const plateBorder = options.plateBorder ?? artStyle;
   const borderGap = Math.max(0.5, options.borderGap ?? 2);
 
   const cellSize = Math.max(2, options.cellSize ?? Math.round(width / 100));
@@ -1100,30 +1098,10 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
 
   if (optimize) result = optimizePlot(result);
 
-  // A crisp ruled plate border, framing the drawing like a print. Added last —
-  // after wobble and plot optimization — as four straight two-point edges, so
-  // it stays a clean rectangle (path simplification would otherwise strip a
-  // densified loop back to corners and the SVG writer would round it to an
-  // oval; the optimizer would re-chain split edges into the same loop).
-  if (plateBorder) {
-    // The border sits at the page margin; the drawing is already held a
-    // borderGap-cell gutter inside it (via frameMargin above).
-    const x0 = margin;
-    const y0 = margin;
-    const x1 = width - margin;
-    const y1 = height - margin;
-    if (x1 - x0 > cellSize && y1 - y0 > cellSize) {
-      const corners: Point[] = [
-        { x: x0, y: y0 },
-        { x: x1, y: y0 },
-        { x: x1, y: y1 },
-        { x: x0, y: y1 },
-      ];
-      for (let e = 0; e < 4; e++) {
-        result.lines.push({ points: [corners[e], corners[(e + 1) % 4]], pen: 'bold', layer: 'present' });
-      }
-    }
-  }
+  // The framing rule is no longer drawn here — the shared page border (see the
+  // frame/page controls) draws it for every module. Conway still reserves the
+  // art-mode gutter above (frameMargin) so the drawing sits clear of that rule,
+  // keeping its output identical to when the border lived here.
 
   return result;
 }

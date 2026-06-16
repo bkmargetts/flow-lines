@@ -9,7 +9,6 @@ import {
 import {
   generateFlowLines,
   generateFlowLinesEven,
-  toSVG,
   toSVGLayers,
   pageMetrics,
   getPaperSize,
@@ -19,7 +18,8 @@ import {
   type Point,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
-import { buildTexture } from '../../lib/texture';
+import { finishPlot } from '../../lib/finish';
+import { downloadSvgText, triggerDownload } from '../../lib/download';
 import { zipStore } from '../../lib/zip';
 import { defaultFlowState, type FlowState } from './types';
 
@@ -73,7 +73,17 @@ export function FlowFieldProvider({
     // pixel dimensions and the SVG is tagged in mm for the plotter
     const page = pageMetrics(getPaperSize(frame.paper), frame.orientation, frame.resolution);
     const emptyOptions: SVGOptions = {};
-    if (!active) return { svg: '', result: null as FlowLinesResult | null, svgOptions: emptyOptions, width: page.widthPx, height: page.heightPx };
+    if (!active) {
+      return {
+        svg: '',
+        exportSvg: '',
+        result: null as FlowLinesResult | null,
+        svgOptions: emptyOptions,
+        hasLayers: false,
+        width: page.widthPx,
+        height: page.heightPx,
+      };
+    }
 
     const usePaintedPoints = state.paintMode && state.paintedPoints.length > 0;
     // Painted seeds are explicit intent, so they win over dense-fill.
@@ -119,18 +129,16 @@ export function FlowFieldProvider({
         })
       : generateFlowLines(flowOptions);
 
-    // Optional shared background texture, held a halo off the flow lines and
-    // laid behind them on its own pen layer.
-    const tex = buildTexture(frame, page, result.lines);
-    if (tex) {
-      result.lines = [...tex.lines, ...result.lines];
-      svgOptions.layerColors = { texture: tex.color };
-    }
+    // Shared finishing: density protection, universal border, background
+    // texture, and the clean/preview SVGs.
+    const finished = finishPlot(frame, page, result, svgOptions);
 
     return {
-      svg: toSVG(result, svgOptions),
-      result,
-      svgOptions,
+      svg: finished.previewSvg,
+      exportSvg: finished.exportSvg,
+      result: finished.result,
+      svgOptions: finished.svgOptions,
+      hasLayers: finished.hasLayers,
       width: page.widthPx,
       height: page.heightPx,
     };
@@ -141,6 +149,10 @@ export function FlowFieldProvider({
     frame.orientation,
     frame.resolution,
     frame.marginMm,
+    frame.borderEnabled,
+    frame.borderInsetMm,
+    frame.densityEnabled,
+    frame.densityMaxPasses,
     frame.textureEnabled,
     frame.textureStyle,
     frame.textureSpacingMm,
@@ -156,17 +168,9 @@ export function FlowFieldProvider({
   ]);
 
   const downloadSVG = useCallback(() => {
-    if (!generated.svg) return;
-    const blob = new Blob([generated.svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `flow-lines-${state.seed}.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [generated.svg, state.seed]);
+    if (!generated.exportSvg) return;
+    downloadSvgText(generated.exportSvg, `flow-lines-${state.seed}.svg`);
+  }, [generated.exportSvg, state.seed]);
 
   const downloadLayers = useCallback(() => {
     if (!generated.result) return;
@@ -174,14 +178,7 @@ export function FlowFieldProvider({
     const zip = zipStore(
       layers.map(({ layer, svg }) => ({ name: `flow-lines-${state.seed}-${layer}.svg`, text: svg }))
     );
-    const url = URL.createObjectURL(zip);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `flow-lines-${state.seed}-layers.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    triggerDownload(zip, `flow-lines-${state.seed}-layers.zip`);
   }, [generated.result, generated.svgOptions, state.seed]);
 
   const value: FlowFieldValue = {
@@ -190,7 +187,7 @@ export function FlowFieldProvider({
     randomizeSeed,
     downloadSVG,
     downloadLayers,
-    hasLayers: !!generated.svgOptions.layerColors,
+    hasLayers: generated.hasLayers,
     togglePaintMode,
     clearPaintedPoints,
     addPaintedPoint,
