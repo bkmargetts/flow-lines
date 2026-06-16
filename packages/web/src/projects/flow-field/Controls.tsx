@@ -9,6 +9,9 @@ export function FlowFieldControls() {
       state={flow.state}
       updateState={flow.updateState}
       randomizeSeed={flow.randomizeSeed}
+      downloadSVG={flow.downloadSVG}
+      downloadLayers={flow.downloadLayers}
+      hasLayers={flow.hasLayers}
       togglePaintMode={flow.togglePaintMode}
       clearPaintedPoints={flow.clearPaintedPoints}
     />

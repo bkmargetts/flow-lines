@@ -7,8 +7,6 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import type { FrameSettings } from '../FrameContext';
-import type { DensitySettings } from '../PostProcessContext';
-import type { DensityStats } from '../OutputContext';
 import { buildBorder } from './border';
 import { buildTexture } from './texture';
 
@@ -24,7 +22,6 @@ export interface FinishedPlot {
   result: FlowLinesResult;
   svgOptions: SVGOptions;
   hasLayers: boolean;
-  densityStats: DensityStats;
 }
 
 function distinctLayers(lines: FlowLine[]): number {
@@ -35,19 +32,18 @@ function distinctLayers(lines: FlowLine[]): number {
 
 /**
  * Shared finishing pipeline for the main-thread projects (flow-field, conway,
- * complex-flow). Applies universal density protection to the drawing, frames it
- * with the universal page border, holds the background texture a halo off both,
- * and serialises a clean export plus a preview that ghosts what density removed.
- *
- * Border and density are pure additions/removals layered on top of each
- * project's own result, so a project's output is unchanged when both are off.
+ * complex-flow). Applies the universal density protection to the drawing, frames
+ * it with the universal page border, holds the background texture a halo off
+ * both, and serialises a clean export plus a preview that ghosts what density
+ * removed. Border and density (both from the shared page frame) are pure
+ * additions/removals on top of each project's result, so a project's output is
+ * unchanged when both are off.
  */
 export function finishPlot(
   frame: FrameSettings,
   page: PageMetrics,
   drawing: FlowLinesResult,
-  svgOptions: SVGOptions,
-  density: DensitySettings
+  svgOptions: SVGOptions
 ): FinishedPlot {
   const border = buildBorder(frame, page);
 
@@ -55,30 +51,20 @@ export function finishPlot(
   // deliberate, separate pens, never the pile-up we guard against.
   let drawingLines = drawing.lines;
   let removed: FlowLine[] = [];
-  let densityStats: DensityStats = { enabled: false, removedCount: 0, removedTravelMm: 0 };
-  if (density.enabled) {
+  if (frame.densityEnabled) {
     const cellPx = Math.max(1, svgOptions.strokeWidth ?? 1);
     const out = limitStrokeDensity(
       { ...drawing, lines: drawingLines },
-      { maxPasses: density.maxPasses, cellPx }
+      { maxPasses: frame.densityMaxPasses, cellPx }
     );
     drawingLines = out.result.lines;
     removed = out.removed;
-    densityStats = {
-      enabled: true,
-      removedCount: removed.length,
-      removedTravelMm: out.removedTravel / page.pxPerMm,
-    };
   }
 
   // Texture sits behind, holding its halo off both the drawing and the border.
   const tex = buildTexture(frame, page, border.length ? [...drawingLines, ...border] : drawingLines);
 
-  const finalLines: FlowLine[] = [
-    ...(tex ? tex.lines : []),
-    ...drawingLines,
-    ...border,
-  ];
+  const finalLines: FlowLine[] = [...(tex ? tex.lines : []), ...drawingLines, ...border];
 
   const layerColors: Record<string, string> = { ...(svgOptions.layerColors ?? {}) };
   if (tex) layerColors.texture = tex.color;
@@ -107,6 +93,5 @@ export function finishPlot(
     result,
     svgOptions: opts,
     hasLayers: distinctLayers(finalLines) > 1,
-    densityStats,
   };
 }

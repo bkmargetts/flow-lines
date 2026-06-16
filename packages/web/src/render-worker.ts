@@ -18,15 +18,9 @@ export interface RenderBorder {
   insetPx: number;
 }
 
-/** Density protection options forwarded from the shared post-processing section. */
+/** Density protection options from the shared page frame. */
 export interface RenderDensity {
   maxPasses: number;
-}
-
-export interface RenderDensityStats {
-  enabled: boolean;
-  removedCount: number;
-  removedTravelMm: number;
 }
 
 export interface RenderRequest {
@@ -41,8 +35,6 @@ export interface RenderRequest {
   border?: RenderBorder;
   /** Optional density protection (drops strokes off saturated paper). */
   density?: RenderDensity;
-  /** Pixels per mm, so removed pen travel can be reported in mm. */
-  pxPerMm?: number;
 }
 
 export interface RenderResponse {
@@ -53,7 +45,6 @@ export interface RenderResponse {
   previewSvg?: string;
   width?: number;
   height?: number;
-  densityStats?: RenderDensityStats;
   error?: string;
 }
 
@@ -61,8 +52,7 @@ export interface RenderResponse {
 const REMOVED_COLOR = '#e8a0a0';
 
 self.onmessage = (event: MessageEvent<RenderRequest>) => {
-  const { id, image, options, svgOptions, texture, textureColor, border, density, pxPerMm } =
-    event.data;
+  const { id, image, options, svgOptions, texture, textureColor, border, density } = event.data;
 
   try {
     const result = imageToPenInk(image, options);
@@ -71,7 +61,6 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
     // separate pens), before the border frames it and the texture goes behind.
     let drawingLines = result.lines;
     let removed: FlowLine[] = [];
-    let densityStats: RenderDensityStats = { enabled: false, removedCount: 0, removedTravelMm: 0 };
     if (density) {
       const cellPx = Math.max(1, svgOptions.strokeWidth ?? 1);
       const out = limitStrokeDensity(
@@ -80,11 +69,6 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
       );
       drawingLines = out.result.lines;
       removed = out.removed;
-      densityStats = {
-        enabled: true,
-        removedCount: removed.length,
-        removedTravelMm: out.removedTravel / (pxPerMm ?? 1),
-      };
     }
 
     const borderLines = border
@@ -129,7 +113,6 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
       previewSvg,
       width: result.width,
       height: result.height,
-      densityStats,
     };
     self.postMessage(response);
   } catch (err) {

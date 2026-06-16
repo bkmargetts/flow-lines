@@ -4,7 +4,7 @@ import type { ConwayState } from './types';
 
 /** Sidebar controls for the Conway Long Exposure project. */
 export function ConwayControls() {
-  const { state, updateState, randomizeSeed } = useConway();
+  const { state, updateState, randomizeSeed, downloadSVG, downloadLayers } = useConway();
 
   return (
     <div className="controls">
@@ -508,6 +508,20 @@ export function ConwayControls() {
           </details>
         )}
       </details>
+
+      <div className="button-group">
+        <button type="button" className="primary" onClick={downloadSVG}>
+          Download SVG
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          onClick={downloadLayers}
+          title="One SVG per layer (present / ghost / trail), zipped — plot each with a different pen"
+        >
+          Download layers (.zip)
+        </button>
+      </div>
     </div>
   );
 }

@@ -3,12 +3,12 @@ import {
   useContext,
   useState,
   useCallback,
-  useEffect,
   useMemo,
   type ReactNode,
 } from 'react';
 import {
   generateConwayExposure,
+  toSVGLayers,
   pageMetrics,
   getPaperSize,
   type ConwayExposureOptions,
@@ -16,15 +16,17 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
-import { usePostProcess } from '../../PostProcessContext';
-import { useOutput } from '../../OutputContext';
 import { finishPlot } from '../../lib/finish';
+import { downloadSvgText, triggerDownload } from '../../lib/download';
+import { zipStore } from '../../lib/zip';
 import { defaultConwayState, type ConwayState } from './types';
 
 interface ConwayValue {
   state: ConwayState;
   updateState: (updates: Partial<ConwayState>) => void;
   randomizeSeed: () => void;
+  downloadSVG: () => void;
+  downloadLayers: () => void;
   generated: { svg: string; width: number; height: number };
 }
 
@@ -38,8 +40,6 @@ export function ConwayProvider({
   children: ReactNode;
 }) {
   const { frame } = useFrame();
-  const { post } = usePostProcess();
-  const { register } = useOutput();
   const [state, setState] = useState<ConwayState>(defaultConwayState);
 
   const updateState = useCallback((updates: Partial<ConwayState>) => {
@@ -70,8 +70,6 @@ export function ConwayProvider({
       exportSvg: '',
       result: null as FlowLinesResult | null,
       svgOptions,
-      hasLayers: false,
-      densityStats: { enabled: false, removedCount: 0, removedTravelMm: 0 },
       width: page.widthPx,
       height: page.heightPx,
     };
@@ -111,28 +109,27 @@ export function ConwayProvider({
     // Shared finishing: density protection, universal border, background
     // texture, and the clean/preview SVGs. The SVG stays paper-free (a plotter
     // draws on real stock); the shared frame paper tone shows behind it.
-    const finished = finishPlot(frame, page, result, svgOptions, post.density);
+    const finished = finishPlot(frame, page, result, svgOptions);
 
     return {
       svg: finished.previewSvg,
       exportSvg: finished.exportSvg,
       result: finished.result,
       svgOptions: finished.svgOptions,
-      hasLayers: finished.hasLayers,
-      densityStats: finished.densityStats,
       width: page.widthPx,
       height: page.heightPx,
     };
   }, [
     active,
     state,
-    post.density,
     frame.paper,
     frame.orientation,
     frame.resolution,
     frame.marginMm,
     frame.borderEnabled,
     frame.borderInsetMm,
+    frame.densityEnabled,
+    frame.densityMaxPasses,
     frame.textureEnabled,
     frame.textureStyle,
     frame.textureSpacingMm,
@@ -147,24 +144,26 @@ export function ConwayProvider({
     frame.textureShapes,
   ]);
 
-  // Publish the current plot to the shared Output / Post-processing section.
-  useEffect(() => {
-    if (!active) return;
-    register({
-      exportSvg: generated.exportSvg,
-      result: generated.result,
-      svgOptions: generated.svgOptions,
-      baseName: 'conway-exposure',
-      seed: state.seed,
-      hasLayers: generated.hasLayers,
-      densityStats: generated.densityStats,
-    });
-  }, [active, generated, state.seed, register]);
+  const downloadSVG = useCallback(() => {
+    if (!generated.exportSvg) return;
+    downloadSvgText(generated.exportSvg, `conway-exposure-${state.seed}.svg`);
+  }, [generated.exportSvg, state.seed]);
+
+  const downloadLayers = useCallback(() => {
+    if (!generated.result) return;
+    const layers = toSVGLayers(generated.result, generated.svgOptions);
+    const zip = zipStore(
+      layers.map(({ layer, svg }) => ({ name: `conway-${state.seed}-${layer}.svg`, text: svg }))
+    );
+    triggerDownload(zip, `conway-exposure-${state.seed}-layers.zip`);
+  }, [generated.result, generated.svgOptions, state.seed]);
 
   const value: ConwayValue = {
     state,
     updateState,
     randomizeSeed,
+    downloadSVG,
+    downloadLayers,
     generated,
   };
 

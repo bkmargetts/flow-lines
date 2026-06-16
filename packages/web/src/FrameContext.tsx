@@ -33,6 +33,12 @@ export interface FrameSettings {
   /** Extra inset of the rule from the margin, in mm (0 = sits at the margin) */
   borderInsetMm: number;
 
+  // ---- Pen-plotting density protection (applies to every tool) ----
+  /** Off → output untouched. On → drop strokes off over-inked paper. */
+  densityEnabled: boolean;
+  /** Max overlapping pen passes a patch may take before further strokes drop. */
+  densityMaxPasses: number;
+
   // ---- Optional plottable background texture (its own 'texture' pen layer) ----
   /** Off → no texture lines, output unchanged */
   textureEnabled: boolean;
@@ -63,6 +69,8 @@ export const defaultFrame: FrameSettings = {
   paperTone: '#faf9f6',
   borderEnabled: false,
   borderInsetMm: 0,
+  densityEnabled: false,
+  densityMaxPasses: 3,
   textureEnabled: false,
   textureStyle: 'hatch',
   textureSpacingMm: 4,

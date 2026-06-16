@@ -3,13 +3,13 @@ import {
   useContext,
   useState,
   useCallback,
-  useEffect,
   useMemo,
   type ReactNode,
 } from 'react';
 import {
   generateFlowLines,
   generateFlowLinesEven,
+  toSVGLayers,
   pageMetrics,
   getPaperSize,
   type FlowLinesOptions,
@@ -18,15 +18,18 @@ import {
   type Point,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
-import { usePostProcess } from '../../PostProcessContext';
-import { useOutput } from '../../OutputContext';
 import { finishPlot } from '../../lib/finish';
+import { downloadSvgText, triggerDownload } from '../../lib/download';
+import { zipStore } from '../../lib/zip';
 import { defaultFlowState, type FlowState } from './types';
 
 interface FlowFieldValue {
   state: FlowState;
   updateState: (updates: Partial<FlowState>) => void;
   randomizeSeed: () => void;
+  downloadSVG: () => void;
+  downloadLayers: () => void;
+  hasLayers: boolean;
   togglePaintMode: () => void;
   clearPaintedPoints: () => void;
   addPaintedPoint: (point: Point) => void;
@@ -43,8 +46,6 @@ export function FlowFieldProvider({
   children: ReactNode;
 }) {
   const { frame } = useFrame();
-  const { post } = usePostProcess();
-  const { register } = useOutput();
   const [state, setState] = useState<FlowState>(defaultFlowState);
 
   const updateState = useCallback((updates: Partial<FlowState>) => {
@@ -79,7 +80,6 @@ export function FlowFieldProvider({
         result: null as FlowLinesResult | null,
         svgOptions: emptyOptions,
         hasLayers: false,
-        densityStats: { enabled: false, removedCount: 0, removedTravelMm: 0 },
         width: page.widthPx,
         height: page.heightPx,
       };
@@ -131,7 +131,7 @@ export function FlowFieldProvider({
 
     // Shared finishing: density protection, universal border, background
     // texture, and the clean/preview SVGs.
-    const finished = finishPlot(frame, page, result, svgOptions, post.density);
+    const finished = finishPlot(frame, page, result, svgOptions);
 
     return {
       svg: finished.previewSvg,
@@ -139,20 +139,20 @@ export function FlowFieldProvider({
       result: finished.result,
       svgOptions: finished.svgOptions,
       hasLayers: finished.hasLayers,
-      densityStats: finished.densityStats,
       width: page.widthPx,
       height: page.heightPx,
     };
   }, [
     active,
     state,
-    post.density,
     frame.paper,
     frame.orientation,
     frame.resolution,
     frame.marginMm,
     frame.borderEnabled,
     frame.borderInsetMm,
+    frame.densityEnabled,
+    frame.densityMaxPasses,
     frame.textureEnabled,
     frame.textureStyle,
     frame.textureSpacingMm,
@@ -167,24 +167,27 @@ export function FlowFieldProvider({
     frame.textureShapes,
   ]);
 
-  // Publish the current plot to the shared Output / Post-processing section.
-  useEffect(() => {
-    if (!active) return;
-    register({
-      exportSvg: generated.exportSvg,
-      result: generated.result,
-      svgOptions: generated.svgOptions,
-      baseName: 'flow-lines',
-      seed: state.seed,
-      hasLayers: generated.hasLayers,
-      densityStats: generated.densityStats,
-    });
-  }, [active, generated, state.seed, register]);
+  const downloadSVG = useCallback(() => {
+    if (!generated.exportSvg) return;
+    downloadSvgText(generated.exportSvg, `flow-lines-${state.seed}.svg`);
+  }, [generated.exportSvg, state.seed]);
+
+  const downloadLayers = useCallback(() => {
+    if (!generated.result) return;
+    const layers = toSVGLayers(generated.result, generated.svgOptions);
+    const zip = zipStore(
+      layers.map(({ layer, svg }) => ({ name: `flow-lines-${state.seed}-${layer}.svg`, text: svg }))
+    );
+    triggerDownload(zip, `flow-lines-${state.seed}-layers.zip`);
+  }, [generated.result, generated.svgOptions, state.seed]);
 
   const value: FlowFieldValue = {
     state,
     updateState,
     randomizeSeed,
+    downloadSVG,
+    downloadLayers,
+    hasLayers: generated.hasLayers,
     togglePaintMode,
     clearPaintedPoints,
     addPaintedPoint,

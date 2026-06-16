@@ -1,11 +1,5 @@
 import type { GrayscaleImage, PenInkOptions, SVGOptions, TextureOptions } from '@flow-lines/core';
-import type {
-  RenderRequest,
-  RenderResponse,
-  RenderBorder,
-  RenderDensity,
-  RenderDensityStats,
-} from './render-worker';
+import type { RenderRequest, RenderResponse, RenderBorder, RenderDensity } from './render-worker';
 
 export interface RenderedSVG {
   /** Clean SVG for download. */
@@ -14,7 +8,6 @@ export interface RenderedSVG {
   previewSvg: string;
   width: number;
   height: number;
-  densityStats: RenderDensityStats;
 }
 
 export interface RenderTexture {
@@ -22,11 +15,10 @@ export interface RenderTexture {
   color: string;
 }
 
-/** Universal finishing forwarded to the worker (border + density + scale). */
+/** Universal finishing forwarded to the worker (border + density). */
 export interface RenderFinish {
   border?: RenderBorder;
   density?: RenderDensity;
-  pxPerMm?: number;
 }
 
 type Job = {
@@ -98,7 +90,6 @@ class RenderClient {
       textureColor: job.texture?.color,
       border: job.finish?.border,
       density: job.finish?.density,
-      pxPerMm: job.finish?.pxPerMm,
     };
     this.getWorker().postMessage(request);
   }
@@ -117,11 +108,6 @@ class RenderClient {
         previewSvg: response.previewSvg ?? response.svg,
         width: response.width ?? 0,
         height: response.height ?? 0,
-        densityStats: response.densityStats ?? {
-          enabled: false,
-          removedCount: 0,
-          removedTravelMm: 0,
-        },
       });
     }
 

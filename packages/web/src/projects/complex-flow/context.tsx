@@ -3,13 +3,13 @@ import {
   useContext,
   useState,
   useCallback,
-  useEffect,
   useMemo,
   type ReactNode,
 } from 'react';
 import {
   generateComplexFlow,
   applyHandDrawnStyle,
+  toSVGLayers,
   pageMetrics,
   getPaperSize,
   type ComplexFlowOptions,
@@ -18,10 +18,10 @@ import {
   type Point,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
-import { usePostProcess } from '../../PostProcessContext';
-import { useOutput } from '../../OutputContext';
 import { buildPaletteLayerColors } from '../../lib/palette';
 import { finishPlot } from '../../lib/finish';
+import { downloadSvgText, triggerDownload } from '../../lib/download';
+import { zipStore } from '../../lib/zip';
 import { defaultComplexFlowState, type ComplexFlowState } from './types';
 
 interface ComplexFlowValue {
@@ -31,6 +31,8 @@ interface ComplexFlowValue {
   togglePlaceMode: () => void;
   addSingularity: (point: Point) => void;
   clearSingularities: () => void;
+  downloadSVG: () => void;
+  downloadLayers: () => void;
   generated: { svg: string; result: FlowLinesResult | null; svgOptions: SVGOptions; width: number; height: number };
 }
 
@@ -44,8 +46,6 @@ export function ComplexFlowProvider({
   children: ReactNode;
 }) {
   const { frame } = useFrame();
-  const { post } = usePostProcess();
-  const { register } = useOutput();
   const [state, setState] = useState<ComplexFlowState>(defaultComplexFlowState);
 
   const updateState = useCallback((updates: Partial<ComplexFlowState>) => {
@@ -91,8 +91,6 @@ export function ComplexFlowProvider({
       exportSvg: '',
       result: null as FlowLinesResult | null,
       svgOptions,
-      hasLayers: false,
-      densityStats: { enabled: false, removedCount: 0, removedTravelMm: 0 },
       width: page.widthPx,
       height: page.heightPx,
     };
@@ -132,28 +130,27 @@ export function ComplexFlowProvider({
 
     // Shared finishing: density protection, universal border, background
     // texture, and the clean/preview SVGs.
-    const finished = finishPlot(frame, page, result, svgOptions, post.density);
+    const finished = finishPlot(frame, page, result, svgOptions);
 
     return {
       svg: finished.previewSvg,
       exportSvg: finished.exportSvg,
       result: finished.result,
       svgOptions: finished.svgOptions,
-      hasLayers: finished.hasLayers,
-      densityStats: finished.densityStats,
       width: page.widthPx,
       height: page.heightPx,
     };
   }, [
     active,
     state,
-    post.density,
     frame.paper,
     frame.orientation,
     frame.resolution,
     frame.marginMm,
     frame.borderEnabled,
     frame.borderInsetMm,
+    frame.densityEnabled,
+    frame.densityMaxPasses,
     frame.textureEnabled,
     frame.textureStyle,
     frame.textureSpacingMm,
@@ -168,19 +165,19 @@ export function ComplexFlowProvider({
     frame.textureShapes,
   ]);
 
-  // Publish the current plot to the shared Output / Post-processing section.
-  useEffect(() => {
-    if (!active) return;
-    register({
-      exportSvg: generated.exportSvg,
-      result: generated.result,
-      svgOptions: generated.svgOptions,
-      baseName: 'complex-flow',
-      seed: state.seed,
-      hasLayers: generated.hasLayers,
-      densityStats: generated.densityStats,
-    });
-  }, [active, generated, state.seed, register]);
+  const downloadSVG = useCallback(() => {
+    if (!generated.exportSvg) return;
+    downloadSvgText(generated.exportSvg, `complex-flow-${state.seed}.svg`);
+  }, [generated.exportSvg, state.seed]);
+
+  const downloadLayers = useCallback(() => {
+    if (!generated.result) return;
+    const layers = toSVGLayers(generated.result, generated.svgOptions);
+    const zip = zipStore(
+      layers.map(({ layer, svg }) => ({ name: `complex-flow-${state.seed}-${layer}.svg`, text: svg }))
+    );
+    triggerDownload(zip, `complex-flow-${state.seed}-layers.zip`);
+  }, [generated.result, generated.svgOptions, state.seed]);
 
   const value: ComplexFlowValue = {
     state,
@@ -189,6 +186,8 @@ export function ComplexFlowProvider({
     togglePlaceMode,
     addSingularity,
     clearSingularities,
+    downloadSVG,
+    downloadLayers,
     generated,
   };
 

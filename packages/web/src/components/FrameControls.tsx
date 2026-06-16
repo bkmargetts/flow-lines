@@ -34,6 +34,8 @@ export function FrameControls() {
   const { frame, updateFrame } = useFrame();
   return (
     <div className="frame-controls">
+      <h3 className="section-title">Page</h3>
+
       <PaperControls
         paper={frame.paper}
         orientation={frame.orientation}
@@ -100,6 +102,34 @@ export function FrameControls() {
             step="1"
             value={frame.borderInsetMm}
             onChange={(e) => updateFrame({ borderInsetMm: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.densityEnabled}
+            onChange={(e) => updateFrame({ densityEnabled: e.target.checked })}
+          />
+          Density protection
+          <InfoTip text="Caps how many pen passes land on the same patch of paper. A little overlap builds texture; too much inflates plot time and breaks the paper down. Removed strokes show ghosted in red in the plot window so you can see the impact. Applies to every tool." />
+        </label>
+      </div>
+
+      {frame.densityEnabled && (
+        <div className="control-group">
+          <label>
+            Max overlapping passes <span>{frame.densityMaxPasses}</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="8"
+            step="1"
+            value={frame.densityMaxPasses}
+            onChange={(e) => updateFrame({ densityMaxPasses: parseInt(e.target.value, 10) })}
           />
         </div>
       )}
