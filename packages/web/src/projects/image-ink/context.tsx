@@ -19,6 +19,8 @@ import {
 } from '@flow-lines/core';
 import { getRenderClient, type RenderedSVG } from '../../render-client';
 import { useFrame } from '../../FrameContext';
+import { usePostProcess } from '../../PostProcessContext';
+import { useOutput } from '../../OutputContext';
 import { textureOptionsFor } from '../../lib/texture';
 import {
   defaultInkSettings,
@@ -109,7 +111,6 @@ interface ImageInkValue {
   applyPreset: (name: string) => void;
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
-  downloadSVG: () => void;
   sourceImage: GrayscaleImage | null;
   isRendering: boolean;
   inkLayout: InkLayout | null;
@@ -149,6 +150,8 @@ export function ImageInkProvider({
   children: ReactNode;
 }) {
   const { frame } = useFrame();
+  const { post } = usePostProcess();
+  const { register } = useOutput();
   const [settings, setSettings] = useState<InkSettings>(defaultInkSettings);
   const [sourceImage, setSourceImage] = useState<GrayscaleImage | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
@@ -537,7 +540,19 @@ export function ImageInkProvider({
         (() => {
           const texOpts = textureOptionsFor(frame, page);
           return texOpts ? { options: texOpts, color: frame.textureColor } : undefined;
-        })()
+        })(),
+        // Universal finishing: page border + density protection (off unless the
+        // shared post-processing section turns them on).
+        {
+          border: frame.borderEnabled
+            ? {
+                marginPx: frame.marginMm * page.pxPerMm,
+                insetPx: frame.borderInsetMm * page.pxPerMm,
+              }
+            : undefined,
+          density: post.density.enabled ? { maxPasses: post.density.maxPasses } : undefined,
+          pxPerMm: page.pxPerMm,
+        }
       )
       .then((rendered) => {
         // Survived the apply — clear the crash breadcrumb
@@ -554,6 +569,8 @@ export function ImageInkProvider({
   }, [
     active, sourceImage, inkLayout, settings, focusPoints, subjectMask, portraitState,
     depthMap, labelMap, lowMemory,
+    post.density,
+    frame.borderEnabled, frame.borderInsetMm,
     frame.textureEnabled, frame.textureStyle, frame.textureSpacingMm, frame.textureAngleDeg,
     frame.textureScale, frame.textureJitter, frame.textureDensity, frame.textureCrossHatch,
     frame.textureColor, frame.textureSeed, frame.textureHaloMm, frame.textureShapes,
@@ -585,21 +602,29 @@ export function ImageInkProvider({
       const dims = inkLayout?.page ?? { widthPx: 0, heightPx: 0 };
       return { svg: '', width: dims.widthPx, height: dims.heightPx };
     }
-    return inkRender;
+    // The plot window shows the preview SVG (ghosts any density-removed strokes).
+    return { svg: inkRender.previewSvg, width: inkRender.width, height: inkRender.height };
   }, [sourceImage, inkRender, inkLayout]);
 
-  const downloadSVG = useCallback(() => {
-    if (!generated.svg) return;
-    const blob = new Blob([generated.svg], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pen-ink-${settings.seed}.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [generated.svg, settings.seed]);
+  // Publish the current plot to the shared Output / Post-processing section.
+  // Image → Ink renders a single unified drawing, so it offers no per-layer
+  // export (result stays in the worker); the clean export SVG drives download.
+  useEffect(() => {
+    if (!active) return;
+    if (!sourceImage || !inkRender) {
+      register(null);
+      return;
+    }
+    register({
+      exportSvg: inkRender.svg,
+      result: null,
+      svgOptions: {},
+      baseName: 'pen-ink',
+      seed: settings.seed,
+      hasLayers: false,
+      densityStats: inkRender.densityStats,
+    });
+  }, [active, sourceImage, inkRender, settings.seed, register]);
 
   const value: ImageInkValue = {
     settings,
@@ -609,7 +634,6 @@ export function ImageInkProvider({
     applyPreset,
     onImageFile,
     randomizeSeed,
-    downloadSVG,
     sourceImage,
     isRendering,
     inkLayout,

@@ -32,8 +32,6 @@ export function ComplexFlowControls() {
     randomizeSeed,
     togglePlaceMode,
     clearSingularities,
-    downloadSVG,
-    downloadLayers,
   } = useComplexFlow();
 
   const manualCount = state.manualZeros.length + state.manualPoles.length;
@@ -472,20 +470,6 @@ export function ComplexFlowControls() {
           />
         </div>
       </details>
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG}>
-          Download SVG
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={downloadLayers}
-          title="One SVG per colour band, zipped — plot each with a different pen"
-        >
-          Download layers (.zip)
-        </button>
-      </div>
     </div>
   );
 }

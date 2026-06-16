@@ -34,8 +34,6 @@ export function FrameControls() {
   const { frame, updateFrame } = useFrame();
   return (
     <div className="frame-controls">
-      <h3 className="section-title">Page</h3>
-
       <PaperControls
         paper={frame.paper}
         orientation={frame.orientation}
@@ -76,6 +74,35 @@ export function FrameControls() {
           onChange={(e) => updateFrame({ marginMm: parseInt(e.target.value, 10) })}
         />
       </div>
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.borderEnabled}
+            onChange={(e) => updateFrame({ borderEnabled: e.target.checked })}
+          />
+          Page border
+          <InfoTip text="A ruled rectangle framing the page on its own pen layer, like a print plate. A pure overlay — it never moves the drawing, so the rest of the output is unchanged. The background texture holds its halo off it too." />
+        </label>
+      </div>
+
+      {frame.borderEnabled && (
+        <div className="control-group">
+          <label>
+            Border inset <span>{frame.borderInsetMm}mm</span>
+            <InfoTip text="Pushes the rule further inside the margin. 0 sits the border right at the margin." />
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="20"
+            step="1"
+            value={frame.borderInsetMm}
+            onChange={(e) => updateFrame({ borderInsetMm: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
 
       <div className="control-group">
         <label>Paper tone</label>

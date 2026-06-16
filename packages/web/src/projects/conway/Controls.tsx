@@ -4,7 +4,7 @@ import type { ConwayState } from './types';
 
 /** Sidebar controls for the Conway Long Exposure project. */
 export function ConwayControls() {
-  const { state, updateState, randomizeSeed, downloadSVG, downloadLayers } = useConway();
+  const { state, updateState, randomizeSeed } = useConway();
 
   return (
     <div className="controls">
@@ -505,55 +505,9 @@ export function ConwayControls() {
                 onChange={(e) => updateState({ vignette: parseFloat(e.target.value) })}
               />
             </div>
-
-            <div className="control-group">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={state.plateBorder}
-                  onChange={(e) => updateState({ plateBorder: e.target.checked })}
-                />
-                Plate border
-                <InfoTip text="A hand-drawn rule just inside the margin, framing the drawing like an etching plate." />
-              </label>
-            </div>
-
-            {state.plateBorder && (
-              <div className="control-group">
-                <label>
-                  <span className="label-text">
-                    Border gap
-                    <InfoTip text="Clear space between the drawing and the plate border, measured in grid cells (so it scales with cell size). Changing it resizes the drawing area; toggling the border itself never does." />
-                  </span>
-                  <span>{state.borderGap.toFixed(1)} cells</span>
-                </label>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="8"
-                  step="0.5"
-                  value={state.borderGap}
-                  onChange={(e) => updateState({ borderGap: parseFloat(e.target.value) })}
-                />
-              </div>
-            )}
           </details>
         )}
       </details>
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG}>
-          Download SVG
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={downloadLayers}
-          title="One SVG per layer (present / ghost / trail), zipped — plot each with a different pen"
-        >
-          Download layers (.zip)
-        </button>
-      </div>
     </div>
   );
 }

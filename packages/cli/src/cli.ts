@@ -11,6 +11,7 @@ import {
   generateFlowLinesGrid,
   grayscaleFromRGBA,
   imageToPenInk,
+  limitStrokeDensity,
   toSVG,
   toSVGLayers,
   pageMetrics,
@@ -289,6 +290,10 @@ program
   .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
   .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
   .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
+  .option(
+    '--density-max-passes <number>',
+    'Pen-plotting density protection: drop strokes once paper has taken this many overlapping passes (omit = off)'
+  )
   .option('--auto-style', 'Per-region mark-making: cross-contour marks wrap curved forms (needs --depth-image)')
   .option('--detail <number>', 'Emphasize detailed regions; flat areas fade (0-1)', '0.3')
   .option(
@@ -443,11 +448,22 @@ program
     };
 
     console.log('Rendering pen-and-ink strokes...');
-    const result = imageToPenInk(image, penInkOptions);
+    let result = imageToPenInk(image, penInkOptions);
 
     console.log(`  Output size: ${result.width}x${result.height}`);
     console.log(`  Seed: ${result.seed}`);
     console.log(`  Generated ${result.lines.length} strokes`);
+
+    if (options.densityMaxPasses !== undefined) {
+      const maxPasses = parseInt(options.densityMaxPasses, 10);
+      const cellPx = svgOptions.strokeWidth ?? 1;
+      const before = result.lines.length;
+      const protect = limitStrokeDensity(result, { maxPasses, cellPx });
+      result = protect.result;
+      console.log(
+        `  Density protection (max ${maxPasses} passes): dropped ${before - result.lines.length} strokes`
+      );
+    }
 
     const svg = toSVG(result, svgOptions);
     const outputPath = resolve(process.cwd(), options.output);

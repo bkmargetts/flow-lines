@@ -109,6 +109,155 @@ function endpoint(line: FlowLine, isStart: boolean): Point {
   return isStart ? line.points[0] : line.points[line.points.length - 1];
 }
 
+export interface DensityProtectOptions {
+  /**
+   * Max pen passes allowed to overlap one coverage cell. Once a cell has been
+   * inked this many times, further strokes that fall mostly on saturated cells
+   * are dropped. A little overlap is welcome (texture); this caps the pile-up
+   * that inflates plot time and breaks down the paper.
+   */
+  maxPasses: number;
+  /** Coverage cell size in px — derive from the pen width so a "pass" ≈ one nib. */
+  cellPx: number;
+  /**
+   * A stroke is dropped when at least this fraction of its length already sits
+   * on saturated cells (default 0.6). Lower = more aggressive thinning.
+   */
+  dropFraction?: number;
+  /**
+   * Layers left untouched and not counted toward density (e.g. 'texture',
+   * 'border' — they're a different pen / deliberate, not drawing pile-up).
+   */
+  skipLayers?: string[];
+}
+
+export interface DensityProtectResult {
+  result: FlowLinesResult;
+  /** Strokes removed because they piled onto already-saturated paper. */
+  removed: FlowLine[];
+  /** Total drawn length of the removed strokes, in px (≈ pen-down time saved). */
+  removedTravel: number;
+}
+
+/** Per-layer pass-count grid; overlap is only counted within one pen layer. */
+class CoverageGrid {
+  private counts = new Map<number, number>();
+  private cols: number;
+
+  constructor(
+    private cellPx: number,
+    width: number,
+    height: number
+  ) {
+    this.cols = Math.max(1, Math.ceil(width / cellPx));
+    void height;
+  }
+
+  index(x: number, y: number): number {
+    const c = Math.max(0, Math.floor(x / this.cellPx));
+    const r = Math.max(0, Math.floor(y / this.cellPx));
+    return r * this.cols + c;
+  }
+
+  countAt(cell: number): number {
+    return this.counts.get(cell) ?? 0;
+  }
+
+  add(cell: number): void {
+    this.counts.set(cell, (this.counts.get(cell) ?? 0) + 1);
+  }
+}
+
+/** Walk a polyline at ~half-cell steps, visiting one sample per step. */
+function walkSamples(points: Point[], step: number, visit: (x: number, y: number) => void): void {
+  if (points.length === 0) return;
+  visit(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.max(1, Math.ceil(segLen / step));
+    for (let s = 1; s <= n; s++) {
+      const t = s / n;
+      visit(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+    }
+  }
+}
+
+function lineLength(points: Point[]): number {
+  let len = 0;
+  for (let i = 1; i < points.length; i++) {
+    len += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  }
+  return len;
+}
+
+/**
+ * Pen-plotting density protection. Strokes are walked in order; each builds up
+ * a per-layer coverage grid. A stroke whose footprint is mostly over cells that
+ * have already taken `maxPasses` passes is dropped — too many repeated strokes
+ * over identical paper waste plot time and break the surface down, while the
+ * first few passes still build the intended texture. Deterministic for a given
+ * input order. Skipped layers (texture/border) pass through untouched.
+ */
+export function limitStrokeDensity(
+  result: FlowLinesResult,
+  options: DensityProtectOptions
+): DensityProtectResult {
+  const cellPx = Math.max(0.5, options.cellPx);
+  const maxPasses = Math.max(1, Math.floor(options.maxPasses));
+  const dropFraction = options.dropFraction ?? 0.6;
+  const skip = new Set(options.skipLayers ?? []);
+  const step = cellPx * 0.5;
+
+  // One coverage grid per pen layer — overlap between different pens (drawn in
+  // separate passes) isn't the pile-up we're guarding against.
+  const grids = new Map<string, CoverageGrid>();
+  const gridFor = (key: string): CoverageGrid => {
+    let g = grids.get(key);
+    if (!g) {
+      g = new CoverageGrid(cellPx, result.width, result.height);
+      grids.set(key, g);
+    }
+    return g;
+  };
+
+  const kept: FlowLine[] = [];
+  const removed: FlowLine[] = [];
+  let removedTravel = 0;
+
+  for (const line of result.lines) {
+    const layerKey = line.layer ?? line.pen ?? 'default';
+    if (line.points.length < 2 || skip.has(layerKey)) {
+      kept.push(line);
+      continue;
+    }
+
+    const grid = gridFor(layerKey);
+    // Distinct cells this stroke touches, so a single stroke counts as one pass
+    // over each cell (not once per sample) when measuring and recording.
+    const cells = new Set<number>();
+    walkSamples(line.points, step, (x, y) => cells.add(grid.index(x, y)));
+
+    let saturated = 0;
+    for (const cell of cells) {
+      if (grid.countAt(cell) >= maxPasses) saturated++;
+    }
+
+    if (cells.size > 0 && saturated / cells.size >= dropFraction) {
+      removed.push(line);
+      removedTravel += lineLength(line.points);
+      continue;
+    }
+
+    // Kept — record its footprint so later strokes see it.
+    for (const cell of cells) grid.add(cell);
+    kept.push(line);
+  }
+
+  return { result: { ...result, lines: kept }, removed, removedTravel };
+}
+
 /**
  * Greedily chain lines whose endpoints are within tolerance. Each line is
  * consumed at most once; chains only grow within the same pen class.

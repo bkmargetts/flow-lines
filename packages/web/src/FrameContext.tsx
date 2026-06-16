@@ -27,6 +27,12 @@ export interface FrameSettings {
   /** Paper colour shown behind the drawing in the preview (not plotted) */
   paperTone: string;
 
+  // ---- Optional plottable page border (its own 'border' pen layer) ----
+  /** Draw a ruled rectangle framing the page (pure overlay, never reshapes art) */
+  borderEnabled: boolean;
+  /** Extra inset of the rule from the margin, in mm (0 = sits at the margin) */
+  borderInsetMm: number;
+
   // ---- Optional plottable background texture (its own 'texture' pen layer) ----
   /** Off → no texture lines, output unchanged */
   textureEnabled: boolean;
@@ -55,6 +61,8 @@ export const defaultFrame: FrameSettings = {
   marginMm: 10,
   fit: 'fit',
   paperTone: '#faf9f6',
+  borderEnabled: false,
+  borderInsetMm: 0,
   textureEnabled: false,
   textureStyle: 'hatch',
   textureSpacingMm: 4,

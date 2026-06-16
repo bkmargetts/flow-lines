@@ -3,14 +3,13 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
   useMemo,
   type ReactNode,
 } from 'react';
 import {
   generateComplexFlow,
   applyHandDrawnStyle,
-  toSVG,
-  toSVGLayers,
   pageMetrics,
   getPaperSize,
   type ComplexFlowOptions,
@@ -19,9 +18,10 @@ import {
   type Point,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
+import { usePostProcess } from '../../PostProcessContext';
+import { useOutput } from '../../OutputContext';
 import { buildPaletteLayerColors } from '../../lib/palette';
-import { buildTexture } from '../../lib/texture';
-import { zipStore } from '../../lib/zip';
+import { finishPlot } from '../../lib/finish';
 import { defaultComplexFlowState, type ComplexFlowState } from './types';
 
 interface ComplexFlowValue {
@@ -31,8 +31,6 @@ interface ComplexFlowValue {
   togglePlaceMode: () => void;
   addSingularity: (point: Point) => void;
   clearSingularities: () => void;
-  downloadSVG: () => void;
-  downloadLayers: () => void;
   generated: { svg: string; result: FlowLinesResult | null; svgOptions: SVGOptions; width: number; height: number };
 }
 
@@ -46,6 +44,8 @@ export function ComplexFlowProvider({
   children: ReactNode;
 }) {
   const { frame } = useFrame();
+  const { post } = usePostProcess();
+  const { register } = useOutput();
   const [state, setState] = useState<ComplexFlowState>(defaultComplexFlowState);
 
   const updateState = useCallback((updates: Partial<ComplexFlowState>) => {
@@ -86,9 +86,17 @@ export function ComplexFlowProvider({
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,
     };
-    if (!active) {
-      return { svg: '', result: null as FlowLinesResult | null, svgOptions, width: page.widthPx, height: page.heightPx };
-    }
+    const empty = {
+      svg: '',
+      exportSvg: '',
+      result: null as FlowLinesResult | null,
+      svgOptions,
+      hasLayers: false,
+      densityStats: { enabled: false, removedCount: 0, removedTravelMm: 0 },
+      width: page.widthPx,
+      height: page.heightPx,
+    };
+    if (!active) return empty;
 
     const options: ComplexFlowOptions = {
       width: page.widthPx,
@@ -122,28 +130,30 @@ export function ComplexFlowProvider({
       result = applyHandDrawnStyle(result, { seed: state.seed, amplitude: 0.8 });
     }
 
-    // Optional shared background texture, held a halo off the streamlines and
-    // laid behind them on its own pen layer.
-    const tex = buildTexture(frame, page, result.lines);
-    if (tex) {
-      result.lines = [...tex.lines, ...result.lines];
-      svgOptions.layerColors = { ...(svgOptions.layerColors ?? {}), texture: tex.color };
-    }
+    // Shared finishing: density protection, universal border, background
+    // texture, and the clean/preview SVGs.
+    const finished = finishPlot(frame, page, result, svgOptions, post.density);
 
     return {
-      svg: toSVG(result, svgOptions),
-      result,
-      svgOptions,
+      svg: finished.previewSvg,
+      exportSvg: finished.exportSvg,
+      result: finished.result,
+      svgOptions: finished.svgOptions,
+      hasLayers: finished.hasLayers,
+      densityStats: finished.densityStats,
       width: page.widthPx,
       height: page.heightPx,
     };
   }, [
     active,
     state,
+    post.density,
     frame.paper,
     frame.orientation,
     frame.resolution,
     frame.marginMm,
+    frame.borderEnabled,
+    frame.borderInsetMm,
     frame.textureEnabled,
     frame.textureStyle,
     frame.textureSpacingMm,
@@ -158,33 +168,19 @@ export function ComplexFlowProvider({
     frame.textureShapes,
   ]);
 
-  const triggerDownload = (blob: Blob, filename: string): void => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadSVG = useCallback(() => {
-    if (!generated.svg) return;
-    triggerDownload(
-      new Blob([generated.svg], { type: 'image/svg+xml' }),
-      `complex-flow-${state.seed}.svg`
-    );
-  }, [generated.svg, state.seed]);
-
-  const downloadLayers = useCallback(() => {
-    if (!generated.result) return;
-    const layers = toSVGLayers(generated.result, generated.svgOptions);
-    const zip = zipStore(
-      layers.map(({ layer, svg }) => ({ name: `complex-flow-${state.seed}-${layer}.svg`, text: svg }))
-    );
-    triggerDownload(zip, `complex-flow-${state.seed}-layers.zip`);
-  }, [generated.result, generated.svgOptions, state.seed]);
+  // Publish the current plot to the shared Output / Post-processing section.
+  useEffect(() => {
+    if (!active) return;
+    register({
+      exportSvg: generated.exportSvg,
+      result: generated.result,
+      svgOptions: generated.svgOptions,
+      baseName: 'complex-flow',
+      seed: state.seed,
+      hasLayers: generated.hasLayers,
+      densityStats: generated.densityStats,
+    });
+  }, [active, generated, state.seed, register]);
 
   const value: ComplexFlowValue = {
     state,
@@ -193,8 +189,6 @@ export function ComplexFlowProvider({
     togglePlaceMode,
     addSingularity,
     clearSingularities,
-    downloadSVG,
-    downloadLayers,
     generated,
   };
 

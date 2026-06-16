@@ -1,10 +1,20 @@
 import type { GrayscaleImage, PenInkOptions, SVGOptions, TextureOptions } from '@flow-lines/core';
-import type { RenderRequest, RenderResponse } from './render-worker';
+import type {
+  RenderRequest,
+  RenderResponse,
+  RenderBorder,
+  RenderDensity,
+  RenderDensityStats,
+} from './render-worker';
 
 export interface RenderedSVG {
+  /** Clean SVG for download. */
   svg: string;
+  /** SVG for the plot window — clean output plus ghosts of removed strokes. */
+  previewSvg: string;
   width: number;
   height: number;
+  densityStats: RenderDensityStats;
 }
 
 export interface RenderTexture {
@@ -12,11 +22,19 @@ export interface RenderTexture {
   color: string;
 }
 
+/** Universal finishing forwarded to the worker (border + density + scale). */
+export interface RenderFinish {
+  border?: RenderBorder;
+  density?: RenderDensity;
+  pxPerMm?: number;
+}
+
 type Job = {
   image: GrayscaleImage;
   options: PenInkOptions;
   svgOptions: SVGOptions;
   texture?: RenderTexture;
+  finish?: RenderFinish;
   resolve: (result: RenderedSVG) => void;
   reject: (err: Error) => void;
 };
@@ -49,10 +67,11 @@ class RenderClient {
     image: GrayscaleImage,
     options: PenInkOptions,
     svgOptions: SVGOptions,
-    texture?: RenderTexture
+    texture?: RenderTexture,
+    finish?: RenderFinish
   ): Promise<RenderedSVG> {
     return new Promise<RenderedSVG>((resolve, reject) => {
-      const job: Job = { image, options, svgOptions, texture, resolve, reject };
+      const job: Job = { image, options, svgOptions, texture, finish, resolve, reject };
 
       if (this.inFlight) {
         if (this.pending) {
@@ -77,6 +96,9 @@ class RenderClient {
       svgOptions: job.svgOptions,
       texture: job.texture?.options,
       textureColor: job.texture?.color,
+      border: job.finish?.border,
+      density: job.finish?.density,
+      pxPerMm: job.finish?.pxPerMm,
     };
     this.getWorker().postMessage(request);
   }
@@ -92,8 +114,14 @@ class RenderClient {
     } else {
       job.resolve({
         svg: response.svg,
+        previewSvg: response.previewSvg ?? response.svg,
         width: response.width ?? 0,
         height: response.height ?? 0,
+        densityStats: response.densityStats ?? {
+          enabled: false,
+          removedCount: 0,
+          removedTravelMm: 0,
+        },
       });
     }
 

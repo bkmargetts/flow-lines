@@ -18,7 +18,6 @@ interface ImageControlsProps {
   updateSettings: (updates: Partial<InkSettings>) => void;
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
-  downloadSVG: () => void;
   focusPoints: Point[];
   clearFocus: () => void;
   subjectMask: GrayscaleImage | null;
@@ -51,7 +50,6 @@ export function ImageControls({
   updateSettings,
   onImageFile,
   randomizeSeed,
-  downloadSVG,
   focusPoints,
   clearFocus,
   subjectMask,
@@ -176,16 +174,14 @@ export function ImageControls({
       </div>
 
       <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG} disabled={!imageName}>
-          Download SVG
-        </button>
         <button
           type="button"
           className="secondary"
           onClick={randomizeSeed}
           title="New random variation"
+          disabled={!imageName}
         >
-          🎲
+          🎲 Surprise me
         </button>
       </div>
 

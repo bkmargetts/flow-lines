@@ -93,5 +93,13 @@ export { generateTexture } from './texture.js';
 export type { TextureOptions, TextureStyle, TextureShapeOptions } from './texture.js';
 
 // Plot optimization
-export { optimizePlot, measurePenTravel } from './optimize.js';
-export type { OptimizePlotOptions } from './optimize.js';
+export { optimizePlot, measurePenTravel, limitStrokeDensity } from './optimize.js';
+export type {
+  OptimizePlotOptions,
+  DensityProtectOptions,
+  DensityProtectResult,
+} from './optimize.js';
+
+// Universal page border (plottable overlay, its own export layer)
+export { pageBorder } from './page-frame.js';
+export type { PageBorderOptions } from './page-frame.js';

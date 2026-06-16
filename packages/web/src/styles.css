@@ -595,6 +595,75 @@ button.secondary:hover {
   margin-bottom: 12px;
 }
 
+/* Scope groups: make it obvious which settings are shared across every tool
+   (universal) and which belong only to the active tool (module). */
+.scope-group {
+  position: relative;
+  margin: 14px 0;
+  padding: 10px 0 6px 12px;
+  border-left: 2px solid transparent;
+}
+
+.scope-universal {
+  border-left-color: var(--accent);
+}
+
+.scope-module {
+  border-left-color: var(--border);
+}
+
+.scope-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.scope-name {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.scope-badge {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--bg-surface);
+  background: var(--accent);
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.scope-badge.module {
+  color: var(--text-secondary);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+}
+
+/* Inside a scope group the page-frame separator is redundant. */
+.scope-group .frame-controls {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* Shared post-processing / output section */
+.post-controls .control-group {
+  margin-bottom: 12px;
+}
+
+.post-readout {
+  margin: 4px 0 12px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
 /* Advanced settings */
 details.advanced {
   margin-top: 10px;
