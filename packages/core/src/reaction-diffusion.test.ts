@@ -146,5 +146,28 @@ describe('generateReactionDiffusion', () => {
       const continuous = generateReactionDiffusion({ ...base, valueBands: 0 });
       expect(JSON.stringify(banded.lines)).not.toBe(JSON.stringify(continuous.lines));
     });
+
+    it('vignette clears marks from the frame corners', () => {
+      // A frame-filling maze so the corners carry contours to begin with.
+      const filling = { ...base, preset: 'maze' as const, steps: 1500, seedSpots: 16 };
+      const cornerPoints = (r: ReturnType<typeof generateReactionDiffusion>) => {
+        const pts = allPoints(r.lines);
+        const xs = pts.map((p) => p.x);
+        const ys = pts.map((p) => p.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const bx = (maxX - minX) * 0.18;
+        const by = (maxY - minY) * 0.18;
+        return pts.filter(
+          (p) =>
+            (p.x < minX + bx || p.x > maxX - bx) && (p.y < minY + by || p.y > maxY - by)
+        ).length;
+      };
+      const off = generateReactionDiffusion({ ...filling, vignette: 0 });
+      const on = generateReactionDiffusion({ ...filling, vignette: 1 });
+      expect(cornerPoints(on)).toBeLessThan(cornerPoints(off));
+    });
   });
 });

@@ -522,19 +522,30 @@ export function generateReactionDiffusion(options: ReactionDiffusionOptions): Fl
     return cyi * cols + cxi;
   };
 
-  // Corner weight (1 at the frame corners, 0 along the central cross) for the
-  // vignette: split a cell-space polyline into the runs that survive it.
+  // Hold faint contours off the four frame corners: vignette sets how far in
+  // from each corner (as a fraction of the half-frame, capped at 0.45) the
+  // clearing reaches. A point is culled by how deep it sits into that corner
+  // square, against a low-frequency noise threshold — so the cleared edge is
+  // broken and organic rather than a hard rectangle. Splits a cell-space
+  // polyline into the runs that survive.
+  const vignetteBand = vignette * 0.45;
   const cullByVignette = (pts: Point[]): Point[][] => {
-    if (vignette <= 0) return pts.length >= 2 ? [pts] : [];
-    const keepThreshold = 1 - vignette;
+    if (vignetteBand <= 0) return pts.length >= 2 ? [pts] : [];
     const runs: Point[][] = [];
     let run: Point[] = [];
     for (const p of pts) {
       const fx = cols > 1 ? p.x / (cols - 1) : 0.5;
       const fy = rows > 1 ? p.y / (rows - 1) : 0.5;
-      const w =
-        Math.max(0, 1 - 2 * Math.min(fx, 1 - fx)) * Math.max(0, 1 - 2 * Math.min(fy, 1 - fy));
-      if (w <= keepThreshold) {
+      // Distance to the nearest vertical/horizontal edge (0 at edge, 0.5 mid).
+      const ex = Math.min(fx, 1 - fx);
+      const ey = Math.min(fy, 1 - fy);
+      // Depth into the corner square: 0 outside the band, → 1 at the corner.
+      const cx = Math.max(0, (vignetteBand - ex) / vignetteBand);
+      const cy = Math.max(0, (vignetteBand - ey) / vignetteBand);
+      const depth = cx * cy;
+      const n = noise.noise2D(p.x * 0.12 + 30.5, p.y * 0.12 + 17.5) * 0.5 + 0.5;
+      const cull = depth > lerp(0.12, 0.6, n);
+      if (!cull) {
         run.push(p);
       } else {
         if (run.length >= 2) runs.push(run);
