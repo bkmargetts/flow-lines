@@ -509,11 +509,13 @@ program
   .option('--gamma <number>', 'Perceptual lift on faint trails (<1 brightens)', '0.45')
   .option(
     '--style <style>',
-    'History render style: marks (discrete) | contour (organic ridges) | streaks (tracked comet trails)',
+    'History render style: marks (discrete) | contour (organic ridges) | streaks (tracked comet trails) | slipstream (flow streamlines) | embers (stipple)',
     'marks'
   )
   .option('--halo-radius <number>', 'Reserved-paper sliver around the present in px (default ~cell*0.6)')
   .option('--contour-levels <number>', 'Nested iso levels for the contour style', '5')
+  .option('--slipstream-spacing <number>', 'Slipstream: base streamline separation in grid cells', '0.9')
+  .option('--stipple-density <number>', 'Embers: stipple dots per cell at full tone', '7')
   .option(
     '--split-layers',
     'Write one SVG per layer (present/ghost/trail) for multi-pen plotting, named <output>.<layer>.svg'
@@ -567,9 +569,11 @@ program
       solidThreshold: parseFloat(options.solidThreshold),
       residueMaxCells: parseInt(options.residueMaxCells, 10),
       wobble: options.wobble ? parseFloat(options.wobble) : undefined,
-      style: options.style as 'marks' | 'contour' | 'streaks',
+      style: options.style as 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers',
       haloRadius: options.haloRadius ? parseFloat(options.haloRadius) : undefined,
       contourLevels: parseInt(options.contourLevels, 10),
+      slipstreamSpacing: parseFloat(options.slipstreamSpacing),
+      stippleDensity: parseFloat(options.stippleDensity),
       optimize: options.optimize,
     };
 

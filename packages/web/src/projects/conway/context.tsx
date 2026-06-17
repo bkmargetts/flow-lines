@@ -94,6 +94,8 @@ export function ConwayProvider({
       style: state.style,
       haloRadius: state.haloMm * page.pxPerMm,
       contourLevels: state.contourLevels,
+      slipstreamSpacing: state.slipstreamSpacing,
+      stippleDensity: state.stippleDensity,
       artStyle: state.artStyle,
       massCore: state.massCore,
       hatchAngle: state.hatchAngle,

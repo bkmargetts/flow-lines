@@ -77,7 +77,7 @@ export interface ConwayExposureOptions {
   /** Base hand-drawn wobble amplitude in px (default scales with cellSize) */
   wobble?: number;
   /** Render style for the history (default 'marks') */
-  style?: 'marks' | 'contour' | 'streaks';
+  style?: 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers';
   /**
    * Reserved-paper sliver in px held around the crisp present (and, in
    * `streaks`, around the trails): history marks/lines stop short of it so the
@@ -92,6 +92,17 @@ export interface ConwayExposureOptions {
   minTrackGenerations?: number;
   /** `streaks`: a track must travel this many cells end-to-end to count (default 6) */
   minTrackDisplacement?: number;
+  /**
+   * `slipstream`: base separation between flowing streamlines, in grid cells
+   * (default 0.9). Tone tightens it (woven core) and loosens it (sparse
+   * tails), so spacing carries the long-exposure value.
+   */
+  slipstreamSpacing?: number;
+  /**
+   * `embers`: stipple dots placed per cell at full tone (default 7). Faint
+   * tails fall to a spark or two; the dark trails build a dense field.
+   */
+  stippleDensity?: number;
   /** Chain strokes and order them to cut pen travel (default true) */
   optimize?: boolean;
 
@@ -749,6 +760,8 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     maxClusterCells = 8,
     minTrackGenerations = 12,
     minTrackDisplacement = 6,
+    slipstreamSpacing = 0.9,
+    stippleDensity = 7,
     optimize = true,
   } = options;
 
@@ -1081,9 +1094,193 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     renderContour(0.5);
   };
 
+  // ---- History as evenly-spaced flow streamlines -------------------------
+  // The colony's motion field — the direction each region was last alive from
+  // — drives a set of Jobard–Lefer evenly-spaced streamlines. Local spacing
+  // carries tone, so the lines weave tight through the dense core and fan out
+  // into the comet tails: one continuous flowing drawing, the toolbox's
+  // signature streamline technique applied to the exposure.
+  const renderSlipstream = (): void => {
+    // motionDir is sparse (null in dead space) and noisy cell-to-cell, so blur
+    // the vector components to fill the gaps and yield a field that flows
+    // continuously across both the core and the receding trails.
+    const rawX = new Float32Array(cols * rows);
+    const rawY = new Float32Array(cols * rows);
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        const d = motionDir(sim.lastAlive, cols, rows, cx, cy);
+        if (d) {
+          rawX[cy * cols + cx] = d.x;
+          rawY[cy * cols + cx] = d.y;
+        }
+      }
+    }
+    const fxField = gaussianBlur({ width: cols, height: rows, data: rawX }, 1.5).data;
+    const fyField = gaussianBlur({ width: cols, height: rows, data: rawY }, 1.5).data;
+
+    // Bilinear sample of the (renormalized) flow field in cell coordinates.
+    const sampleDir = (x: number, y: number): Point | null => {
+      const gx = Math.min(cols - 1.001, Math.max(0, x));
+      const gy = Math.min(rows - 1.001, Math.max(0, y));
+      const x0 = Math.floor(gx);
+      const y0 = Math.floor(gy);
+      const tx = gx - x0;
+      const ty = gy - y0;
+      const i00 = y0 * cols + x0;
+      const sx =
+        fxField[i00] * (1 - tx) * (1 - ty) + fxField[i00 + 1] * tx * (1 - ty) +
+        fxField[i00 + cols] * (1 - tx) * ty + fxField[i00 + cols + 1] * tx * ty;
+      const sy =
+        fyField[i00] * (1 - tx) * (1 - ty) + fyField[i00 + 1] * tx * (1 - ty) +
+        fyField[i00 + cols] * (1 - tx) * ty + fyField[i00 + cols + 1] * tx * ty;
+      const len = Math.hypot(sx, sy);
+      if (len < 1e-4) return null;
+      return { x: sx / len, y: sy / len };
+    };
+    const cellAt = (x: number, y: number): number => {
+      const cxi = Math.min(cols - 1, Math.max(0, Math.round(x)));
+      const cyi = Math.min(rows - 1, Math.max(0, Math.round(y)));
+      return cyi * cols + cxi;
+    };
+    const toneAt = (x: number, y: number): number => tone[cellAt(x, y)];
+    const haloAt = (x: number, y: number): boolean => haloCells[cellAt(x, y)] === 1;
+
+    // Separation (in cells) carries tone: tight in the dark trails, loose in
+    // the faint ones, so spacing reads the long-exposure value.
+    const baseSep = Math.max(0.4, slipstreamSpacing);
+    const sepAt = (t: number): number => baseSep * (1.8 - t);
+
+    // Spatial hash of accepted streamline points for the separation test.
+    const buckets = new Map<number, Point[]>();
+    const keyOf = (x: number, y: number): number =>
+      ((Math.floor(y / baseSep) | 0) * 100000) + Math.floor(x / baseSep);
+    const tooClose = (x: number, y: number, sep: number): boolean => {
+      const bx = Math.floor(x / baseSep);
+      const by = Math.floor(y / baseSep);
+      const s2 = sep * sep;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const arr = buckets.get(((by + dy) | 0) * 100000 + (bx + dx));
+          if (!arr) continue;
+          for (const p of arr) {
+            const ddx = p.x - x;
+            const ddy = p.y - y;
+            if (ddx * ddx + ddy * ddy < s2) return true;
+          }
+        }
+      }
+      return false;
+    };
+    const addPoint = (x: number, y: number): void => {
+      const key = keyOf(x, y);
+      let arr = buckets.get(key);
+      if (!arr) {
+        arr = [];
+        buckets.set(key, arr);
+      }
+      arr.push({ x, y });
+    };
+
+    const step = 0.5; // cell-units advanced per RK2 step
+    const maxSteps = (cols + rows) * 2;
+
+    // Integrate from (sx, sy) along sign·flow until the line leaves the field,
+    // fades below the faint cutoff, reaches the present halo, or crowds an
+    // already-accepted streamline.
+    const integrate = (sx: number, sy: number, sign: number): Point[] => {
+      const pts: Point[] = [];
+      let x = sx;
+      let y = sy;
+      for (let n = 0; n < maxSteps; n++) {
+        if (x < 0 || x >= cols || y < 0 || y >= rows) break;
+        if (toneAt(x, y) < faintThreshold || haloAt(x, y)) break;
+        if (tooClose(x, y, sepAt(toneAt(x, y)) * 0.5)) break;
+        pts.push({ x, y });
+        const d1 = sampleDir(x, y);
+        if (!d1) break;
+        const d2 = sampleDir(x + sign * d1.x * step * 0.5, y + sign * d1.y * step * 0.5) ?? d1;
+        x += sign * d2.x * step;
+        y += sign * d2.y * step;
+      }
+      return pts;
+    };
+
+    // Seed densest first (deterministic, index tiebreak) so the committed core
+    // anchors the field and the trails weave around it.
+    const order: number[] = [];
+    for (let i = 0; i < cols * rows; i++) if (tone[i] >= faintThreshold) order.push(i);
+    order.sort((a, b) => tone[b] - tone[a] || a - b);
+
+    for (const i of order) {
+      const x0 = i % cols;
+      const y0 = (i / cols) | 0;
+      if (haloAt(x0, y0) || tooClose(x0, y0, sepAt(tone[i]))) continue;
+      const fwd = integrate(x0, y0, +1);
+      const bwd = integrate(x0, y0, -1);
+      const linePts = bwd.slice(1).reverse().concat(fwd);
+      if (linePts.length < 4) continue;
+      let meanTone = 0;
+      for (const p of linePts) {
+        addPoint(p.x, p.y);
+        meanTone += toneAt(p.x, p.y);
+      }
+      meanTone /= linePts.length;
+      const layer = meanTone < mediumThreshold ? 'trail' : 'ghost';
+      const px = linePts.map(cellPointToPx);
+      for (const run of clipPolylineByMask(px, inHalo)) {
+        const smooth = smoothPolyline(run, 2);
+        if (smooth.length >= 2) lines.push({ points: smooth, pen: 'fine', layer });
+      }
+    }
+  };
+
+  // ---- History as stipple (sparks & embers) ------------------------------
+  // Dot density carries tone on its own curve: dense clustered comet heads
+  // trailing off into sparse scattered sparks. Density reads the raw tone (not
+  // the banded plan — quantizing kills a stipple gradient), each dot a minimal
+  // tick smeared along travel so the field still records motion.
+  const renderEmbers = (): void => {
+    const rand = makeRandom((seed ^ 0x5be11a) >>> 0);
+    const h = cellSize * 0.08;
+    for (let cy = 0; cy < rows; cy++) {
+      for (let cx = 0; cx < cols; cx++) {
+        const i = cy * cols + cx;
+        if (sim.finalAlive[i]) continue; // present drawn separately
+        if (haloCells[i]) continue; // hold history off the present's halo
+        let t = tone[i];
+        if (vignette > 0) {
+          const fxn = cols > 1 ? cx / (cols - 1) : 0.5;
+          const fyn = rows > 1 ? cy / (rows - 1) : 0.5;
+          const w =
+            Math.max(0, 1 - 2 * Math.min(fxn, 1 - fxn)) * Math.max(0, 1 - 2 * Math.min(fyn, 1 - fyn));
+          t *= 1 - vignette * w;
+        }
+        if (t < faintThreshold) continue;
+        const dots = Math.max(1, Math.round(stippleDensity * t));
+        const c = cellCenter(cx, cy);
+        const d = motionDir(sim.lastAlive, cols, rows, cx, cy) ?? { x: 0.7071, y: 0.7071 };
+        const layer = t < mediumThreshold ? 'trail' : 'ghost';
+        for (let k = 0; k < dots; k++) {
+          const px = c.x + (rand() - 0.5) * cellSize;
+          const py = c.y + (rand() - 0.5) * cellSize;
+          lines.push({
+            points: [
+              { x: px - d.x * h, y: py - d.y * h },
+              { x: px + d.x * h, y: py + d.y * h },
+            ],
+            pen: 'fine',
+            layer,
+          });
+        }
+      }
+    }
+  };
+
   renderPresent();
   if (style === 'contour') renderContour(0);
   else if (style === 'streaks') renderStreaks();
+  else if (style === 'slipstream') renderSlipstream();
+  else if (style === 'embers') renderEmbers();
   else renderMarks();
 
   let result: FlowLinesResult = { lines, width, height, seed };

@@ -22,11 +22,15 @@ export interface ConwayState {
   /** Hand-drawn wobble amplitude in px */
   wobble: number;
   /** History render style */
-  style: 'marks' | 'contour' | 'streaks';
+  style: 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers';
   /** Reserved-paper sliver around the present, in mm */
   haloMm: number;
   /** Nested iso levels for the contour style */
   contourLevels: number;
+  /** Slipstream: base streamline separation in grid cells (tone tightens it) */
+  slipstreamSpacing: number;
+  /** Embers: stipple dots per cell at full tone */
+  stippleDensity: number;
   strokeColor: string;
   /** Pen width in millimetres (plotted line weight) */
   penWidthMm: number;
@@ -75,6 +79,8 @@ export const defaultConwayState: ConwayState = {
   style: 'marks',
   haloMm: 1.2,
   contourLevels: 5,
+  slipstreamSpacing: 0.9,
+  stippleDensity: 7,
   strokeColor: '#000000',
   penWidthMm: 0.3,
 
