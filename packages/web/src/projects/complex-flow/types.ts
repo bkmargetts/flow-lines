@@ -72,7 +72,7 @@ export const defaultComplexFlowState: ComplexFlowState = {
 
   layerCount: 5,
   layerBy: 'seedBand',
-  palette: 'spectral',
+  palette: 'mono',
 
   penWidthMm: 0.25,
   handDrawn: false,
