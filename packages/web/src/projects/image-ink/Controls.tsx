@@ -14,6 +14,8 @@ export function ImageInkControls() {
       onImageFile={ink.onImageFile}
       randomizeSeed={ink.randomizeSeed}
       downloadSVG={ink.downloadSVG}
+      downloadLayers={ink.downloadLayers}
+      hasLayers={ink.hasLayers}
       focusPoints={ink.focusPoints}
       clearFocus={ink.clearFocus}
       subjectMask={ink.subjectMask}

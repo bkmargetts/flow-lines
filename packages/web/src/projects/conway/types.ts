@@ -87,7 +87,7 @@ export const defaultConwayState: ConwayState = {
   offCenter: 0.6,
   vignette: 0.4,
 
-  multiInk: true,
+  multiInk: false,
   presentColor: '#1a1a1a',
   ghostColor: '#5b6e7a',
   trailColor: '#b06a3c',

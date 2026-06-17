@@ -6,6 +6,8 @@ export interface RenderedSVG {
   svg: string;
   /** SVG for the plot window — the same clean, as-plotted output. */
   previewSvg: string;
+  /** One standalone SVG per pen layer, for the multi-pen "download layers" zip. */
+  layers: { layer: string; svg: string }[];
   width: number;
   height: number;
 }
@@ -106,6 +108,7 @@ class RenderClient {
       job.resolve({
         svg: response.svg,
         previewSvg: response.previewSvg ?? response.svg,
+        layers: response.layers ?? [],
         width: response.width ?? 0,
         height: response.height ?? 0,
       });

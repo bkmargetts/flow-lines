@@ -153,6 +153,7 @@ export function FlowFieldProvider({
     frame.borderInsetMm,
     frame.densityEnabled,
     frame.densityMaxPasses,
+    frame.densityMinOverlapMm,
     frame.textureEnabled,
     frame.textureStyle,
     frame.textureSpacingMm,
