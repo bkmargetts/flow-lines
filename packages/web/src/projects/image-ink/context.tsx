@@ -20,7 +20,8 @@ import {
 import { getRenderClient, type RenderedSVG } from '../../render-client';
 import { useFrame } from '../../FrameContext';
 import { textureOptionsFor } from '../../lib/texture';
-import { downloadSvgText } from '../../lib/download';
+import { downloadSvgText, triggerDownload } from '../../lib/download';
+import { zipStore } from '../../lib/zip';
 import {
   defaultInkSettings,
   PRESETS,
@@ -111,6 +112,9 @@ interface ImageInkValue {
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
+  downloadLayers: () => void;
+  /** True when the render splits into more than one pen layer (multi-pen export). */
+  hasLayers: boolean;
   sourceImage: GrayscaleImage | null;
   isRendering: boolean;
   inkLayout: InkLayout | null;
@@ -616,6 +620,19 @@ export function ImageInkProvider({
     downloadSvgText(inkRender.svg, `pen-ink-${settings.seed}.svg`);
   }, [inkRender, settings.seed]);
 
+  // One SVG per pen layer (drawing pens + texture + border), zipped — plot each
+  // with a different pen. The worker slices the layers off the same render.
+  const downloadLayers = useCallback(() => {
+    const layers = inkRender?.layers;
+    if (!layers?.length) return;
+    const zip = zipStore(
+      layers.map(({ layer, svg }) => ({ name: `pen-ink-${settings.seed}-${layer}.svg`, text: svg }))
+    );
+    triggerDownload(zip, `pen-ink-${settings.seed}-layers.zip`);
+  }, [inkRender, settings.seed]);
+
+  const hasLayers = (inkRender?.layers?.length ?? 0) > 1;
+
   const value: ImageInkValue = {
     settings,
     updateSettings,
@@ -625,6 +642,8 @@ export function ImageInkProvider({
     onImageFile,
     randomizeSeed,
     downloadSVG,
+    downloadLayers,
+    hasLayers,
     sourceImage,
     isRendering,
     inkLayout,

@@ -19,6 +19,8 @@ interface ImageControlsProps {
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
   downloadSVG: () => void;
+  downloadLayers: () => void;
+  hasLayers: boolean;
   focusPoints: Point[];
   clearFocus: () => void;
   subjectMask: GrayscaleImage | null;
@@ -52,6 +54,8 @@ export function ImageControls({
   onImageFile,
   randomizeSeed,
   downloadSVG,
+  downloadLayers,
+  hasLayers,
   focusPoints,
   clearFocus,
   subjectMask,
@@ -188,6 +192,20 @@ export function ImageControls({
           🎲
         </button>
       </div>
+
+      {hasLayers && (
+        <div className="button-group">
+          <button
+            type="button"
+            className="secondary"
+            onClick={downloadLayers}
+            disabled={!imageName}
+            title="One SVG per pen layer (drawing pens / texture / border), zipped — plot each with a different pen"
+          >
+            Download layers (.zip)
+          </button>
+        </div>
+      )}
 
       <details className="advanced">
         <summary>Advanced</summary>

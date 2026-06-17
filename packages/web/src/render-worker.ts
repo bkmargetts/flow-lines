@@ -5,6 +5,7 @@ import {
   limitStrokeDensity,
   pageBorder,
   toSVG,
+  toSVGLayers,
   type FlowLine,
   type GrayscaleImage,
   type PenInkOptions,
@@ -45,6 +46,11 @@ export interface RenderResponse {
   svg?: string;
   /** SVG for the plot window — the same clean, as-plotted output. */
   previewSvg?: string;
+  /**
+   * One standalone SVG per pen layer (drawing pens + texture + border), for the
+   * multi-pen "download layers" export. Each shares the combined SVG's viewBox.
+   */
+  layers?: { layer: string; svg: string }[];
   width?: number;
   height?: number;
   error?: string;
@@ -95,7 +101,13 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
 
     const finalLines = [...texLines, ...drawingLines, ...borderLines];
     const opts = layerColors ? { ...svgOptions, layerColors } : svgOptions;
-    const svg = toSVG({ ...result, lines: finalLines }, opts);
+    const finalResult = { ...result, lines: finalLines };
+    const svg = toSVG(finalResult, opts);
+
+    // One SVG per pen layer for the multi-pen export (border and texture come
+    // out on their own layers via their `layer` tags). Sliced here so the
+    // serialisation stays off the UI thread alongside the combined render.
+    const layers = toSVGLayers(finalResult, opts);
 
     // The plot window shows the clean, as-plotted output so the density
     // controls' effect reads directly on the artwork.
@@ -105,6 +117,7 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
       id,
       svg,
       previewSvg,
+      layers,
       width: result.width,
       height: result.height,
     };
