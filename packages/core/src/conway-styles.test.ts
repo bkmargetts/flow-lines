@@ -38,8 +38,37 @@ describe('conway exposure render styles', () => {
     expect(Math.max(...trails.map((l) => l.points.length))).toBeGreaterThan(4);
   });
 
+  it('renders slipstream style as continuous flow streamlines', () => {
+    const r = generateConwayExposure({ ...base, style: 'slipstream' });
+    expect(r.lines.length).toBeGreaterThan(0);
+    // streamlines are long chained polylines, not 2-point dashes
+    const longest = Math.max(...r.lines.map((l) => l.points.length));
+    expect(longest).toBeGreaterThan(6);
+    expect(layersOf(r).has('present')).toBe(true);
+    // history flows as fine streamlines tagged trail/ghost
+    expect(layersOf(r).has('trail') || layersOf(r).has('ghost')).toBe(true);
+  });
+
+  it('renders embers style as a scattered stipple field', () => {
+    // Skip endpoint chaining so the raw stipple ticks survive intact.
+    const r = generateConwayExposure({ ...base, style: 'embers', optimize: false });
+    const history = r.lines.filter((l) => l.layer !== 'present');
+    // many small marks, each a 2-point tick
+    expect(history.length).toBeGreaterThan(20);
+    expect(history.every((l) => l.points.length === 2)).toBe(true);
+    expect(layersOf(r).has('present')).toBe(true);
+  });
+
+  it('denser stipple draws more dots', () => {
+    const sparse = generateConwayExposure({ ...base, style: 'embers', stippleDensity: 3, optimize: false });
+    const dense = generateConwayExposure({ ...base, style: 'embers', stippleDensity: 12, optimize: false });
+    const history = (r: { lines: { layer?: string }[] }) =>
+      r.lines.filter((l) => l.layer !== 'present').length;
+    expect(history(dense)).toBeGreaterThan(history(sparse));
+  });
+
   it('is deterministic per style', () => {
-    for (const style of ['marks', 'contour', 'streaks'] as const) {
+    for (const style of ['marks', 'contour', 'streaks', 'slipstream', 'embers'] as const) {
       const a = generateConwayExposure({ ...base, style });
       const b = generateConwayExposure({ ...base, style });
       expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));

@@ -14,7 +14,7 @@ export function ConwayControls() {
         <label>
           <span className="label-text">
             Style
-            <InfoTip text="Marks: discrete per-cell strokes. Contour ridges: nested smooth contours of the light field — organic, topographic. Comet streaks: each glider's path traced as one continuous flowing line, the core left as soft contours." />
+            <InfoTip text="Marks: discrete per-cell strokes. Contour ridges: nested smooth contours of the light field — organic, topographic. Comet streaks: each glider's path traced as one continuous flowing line, the core left as soft contours. Slipstream: the whole exposure as evenly-spaced streamlines following the colony's motion, woven tight in the core and fanning into the tails. Embers: the trails as stipple dots — dense comet heads scattering off into sparse sparks." />
           </span>
         </label>
         <select
@@ -24,6 +24,8 @@ export function ConwayControls() {
           <option value="marks">Marks (discrete)</option>
           <option value="contour">Contour ridges (organic)</option>
           <option value="streaks">Comet streaks (organic)</option>
+          <option value="slipstream">Slipstream (flow)</option>
+          <option value="embers">Embers (stipple)</option>
         </select>
       </div>
 
@@ -73,6 +75,46 @@ export function ConwayControls() {
             step="1"
             value={state.contourLevels}
             onChange={(e) => updateState({ contourLevels: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
+
+      {state.style === 'slipstream' && (
+        <div className="control-group">
+          <label>
+            <span className="label-text">
+              Flow line spacing
+              <InfoTip text="Base separation between the flowing streamlines, in grid cells. Tone tightens it (the lines weave dense through the core) and loosens it (they fan out in the faint tails). Lower packs the lines for a woven, near-solid field; higher leaves open paper between them." />
+            </span>
+            <span>{state.slipstreamSpacing.toFixed(2)}</span>
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="2"
+            step="0.05"
+            value={state.slipstreamSpacing}
+            onChange={(e) => updateState({ slipstreamSpacing: parseFloat(e.target.value) })}
+          />
+        </div>
+      )}
+
+      {state.style === 'embers' && (
+        <div className="control-group">
+          <label>
+            <span className="label-text">
+              Dot density
+              <InfoTip text="How many stipple dots a fully-exposed cell gets. Density carries the tone, so the dark comet heads cluster dense and the faint tails scatter to a spark or two. Higher builds a richer, smokier field; lower keeps it sparse and airy." />
+            </span>
+            <span>{state.stippleDensity}</span>
+          </label>
+          <input
+            type="range"
+            min="2"
+            max="16"
+            step="1"
+            value={state.stippleDensity}
+            onChange={(e) => updateState({ stippleDensity: parseInt(e.target.value, 10) })}
           />
         </div>
       )}
