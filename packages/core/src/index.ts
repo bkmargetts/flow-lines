@@ -18,6 +18,17 @@ export type { ConwayExposureOptions } from './conway-exposure.js';
 export { generateReactionDiffusion, stepReactionDiffusion, RD_PRESETS } from './reaction-diffusion.js';
 export type { ReactionDiffusionOptions, RDPreset } from './reaction-diffusion.js';
 
+// Lenia — continuous-domain cellular automaton (gliding lifeforms)
+export {
+  generateLenia,
+  stepLenia,
+  makeRingKernel,
+  growthFn,
+  LENIA_PRESETS,
+  ORBIUM,
+} from './lenia.js';
+export type { LeniaOptions, LeniaPreset, LeniaSeedPattern, RingKernel } from './lenia.js';
+
 // Complex-valued rational-function flow field (Savva-style poles & zeros)
 export { generateComplexFlow } from './complex-flow.js';
 export type {
