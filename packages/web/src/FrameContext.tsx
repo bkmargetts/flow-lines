@@ -53,6 +53,8 @@ export interface FrameSettings {
   textureParams: Record<string, unknown>;
   /** Clean-paper sliver reserved around the drawing, in mm (0 = off) — shared. */
   textureHaloMm: number;
+  /** When on, the active project's canvas draws the texture's mask path. */
+  textureMaskDrawing: boolean;
 }
 
 export const defaultFrame: FrameSettings = {
@@ -72,13 +74,21 @@ export const defaultFrame: FrameSettings = {
   textureModuleId: 'classic',
   textureParams: {},
   textureHaloMm: 1.5,
+  textureMaskDrawing: false,
 };
 
 interface FrameContextValue {
   frame: FrameSettings;
   updateFrame: (updates: Partial<FrameSettings>) => void;
-  /** Merge `updates` into the params of texture module `id` (over its defaults). */
-  updateTextureParams: (id: string, updates: Record<string, unknown>) => void;
+  /** Merge `updates` into the params of texture module `id` (over its defaults).
+   * `updates` may be a function of the current (defaults-merged) params, so
+   * appenders (e.g. mask-path points) don't drop rapid updates. */
+  updateTextureParams: (
+    id: string,
+    updates:
+      | Record<string, unknown>
+      | ((current: Record<string, unknown>) => Record<string, unknown>)
+  ) => void;
 }
 
 const FrameContext = createContext<FrameContextValue | null>(null);
@@ -88,19 +98,28 @@ export function FrameProvider({ children }: { children: ReactNode }) {
   const updateFrame = useCallback((updates: Partial<FrameSettings>) => {
     setFrame((prev) => ({ ...prev, ...updates }));
   }, []);
-  const updateTextureParams = useCallback((id: string, updates: Record<string, unknown>) => {
-    setFrame((prev) => {
-      const mod = getTextureModule(id);
-      const current = {
-        ...(mod.defaultParams as Record<string, unknown>),
-        ...((prev.textureParams[id] as Record<string, unknown>) ?? {}),
-      };
-      return {
-        ...prev,
-        textureParams: { ...prev.textureParams, [id]: { ...current, ...updates } },
-      };
-    });
-  }, []);
+  const updateTextureParams = useCallback(
+    (
+      id: string,
+      updates:
+        | Record<string, unknown>
+        | ((current: Record<string, unknown>) => Record<string, unknown>)
+    ) => {
+      setFrame((prev) => {
+        const mod = getTextureModule(id);
+        const current = {
+          ...(mod.defaultParams as Record<string, unknown>),
+          ...((prev.textureParams[id] as Record<string, unknown>) ?? {}),
+        };
+        const patch = typeof updates === 'function' ? updates(current) : updates;
+        return {
+          ...prev,
+          textureParams: { ...prev.textureParams, [id]: { ...current, ...patch } },
+        };
+      });
+    },
+    []
+  );
   return (
     <FrameContext.Provider value={{ frame, updateFrame, updateTextureParams }}>
       {children}

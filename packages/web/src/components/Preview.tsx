@@ -1,5 +1,7 @@
 import { useRef, useCallback, useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import type { Point } from '@flow-lines/core';
+import { useFrame } from '../FrameContext';
+import { textureParamsFor } from '../textures/registry';
 
 interface FocusMarker {
   x: number;
@@ -26,15 +28,34 @@ export function Preview({
   svgContent,
   width,
   height,
-  paintMode,
-  paintedPoints,
-  showDots,
-  onPaint,
+  paintMode: paintModeProp,
+  paintedPoints: paintedPointsProp,
+  showDots: showDotsProp,
+  onPaint: onPaintProp,
   focusSelectMode = false,
   focusMarkers = [],
   onSetFocus,
   background,
 }: PreviewProps) {
+  // When the shared background texture is in "draw mask" mode, the canvas of
+  // whatever project is active collects the texture's mask path — so a texture
+  // (e.g. the grating) can be clipped to a hand-drawn band like the standalone
+  // project. This takes over painting from the active project while it's on.
+  const { frame, updateTextureParams } = useFrame();
+  const textureDrawing =
+    frame.textureEnabled && frame.textureModuleId === 'grating' && frame.textureMaskDrawing;
+  const textureMaskPath = textureDrawing
+    ? ((textureParamsFor('grating', frame.textureParams).maskPath as Point[]) ?? [])
+    : [];
+  const paintMode = textureDrawing ? true : paintModeProp;
+  const paintedPoints = textureDrawing ? textureMaskPath : paintedPointsProp;
+  const showDots = textureDrawing ? true : showDotsProp;
+  const onPaint = textureDrawing
+    ? (p: Point) =>
+        updateTextureParams('grating', (cur) => ({
+          maskPath: [...((cur.maskPath as Point[]) ?? []), p],
+        }))
+    : onPaintProp;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [isPainting, setIsPainting] = useState(false);

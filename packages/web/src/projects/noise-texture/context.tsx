@@ -12,7 +12,6 @@ import {
   pageMetrics,
   getPaperSize,
   type FlowLinesResult,
-  type MaskShape,
   type Point,
   type SVGOptions,
 } from '@flow-lines/core';
@@ -92,15 +91,7 @@ export function NoiseTextureProvider({
     }
 
     const marginPx = frame.marginMm * page.pxPerMm;
-    // The drawn-line band is the project's own mask (needs the canvas); the
-    // shared mapper handles the parametric strips / rect / ellipse.
-    const bandMasks: MaskShape[] =
-      state.maskMode === 'band' && state.maskPath.length >= 1
-        ? [{ type: 'band', path: state.maskPath, halfWidthPx: state.bandWidthMm * page.pxPerMm }]
-        : [];
-    const result = generateOverlappedLines(
-      gratingToOverlapOptions(state, page, marginPx, bandMasks)
-    );
+    const result = generateOverlappedLines(gratingToOverlapOptions(state, page, marginPx));
 
     const svgOptions: SVGOptions = {
       strokeWidth: state.penWidthMm * page.pxPerMm,

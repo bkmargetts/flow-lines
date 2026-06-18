@@ -1,4 +1,4 @@
-import type { MaskShape, OverlappedLinesOptions, PageMetrics } from '@flow-lines/core';
+import type { MaskShape, OverlappedLinesOptions, PageMetrics, Point } from '@flow-lines/core';
 import { buildPaletteLayerColors } from '../../lib/palette';
 
 /**
@@ -29,6 +29,8 @@ export interface GratingParams {
   stripWidthMm: number;
   stripGapMm: number;
   bandWidthMm: number;
+  /** The drawn band centreline, in canvas px (for the 'band' mask). */
+  maskPath: Point[];
   maskWidthPct: number;
   maskHeightPct: number;
 }
@@ -54,6 +56,7 @@ export const defaultGratingParams: GratingParams = {
   stripWidthMm: 12,
   stripGapMm: 12,
   bandWidthMm: 15,
+  maskPath: [],
   maskWidthPct: 0.6,
   maskHeightPct: 0.6,
 };
@@ -93,16 +96,28 @@ export function parametricMaskShapes(
   }
 }
 
-/** Map grating params (+ optional extra mask shapes) to core options. */
+/** All clip shapes for the grating — parametric strips/rect/ellipse plus the
+ * drawn-line band (from `maskPath`). */
+export function gratingMaskShapes(
+  p: GratingParams,
+  page: PageMetrics,
+  marginPx: number
+): MaskShape[] | undefined {
+  const shapes = parametricMaskShapes(p, page, marginPx) ?? [];
+  if (p.maskMode === 'band' && p.maskPath.length >= 1) {
+    shapes.push({ type: 'band', path: p.maskPath, halfWidthPx: p.bandWidthMm * page.pxPerMm });
+  }
+  return shapes.length > 0 ? shapes : undefined;
+}
+
+/** Map grating params to core options (masks built from the params). */
 export function gratingToOverlapOptions(
   p: GratingParams,
   page: PageMetrics,
-  marginPx: number,
-  extraMasks?: MaskShape[]
+  marginPx: number
 ): OverlappedLinesOptions {
   const ppm = page.pxPerMm;
-  const parametric = parametricMaskShapes(p, page, marginPx) ?? [];
-  const maskShapes = [...parametric, ...(extraMasks ?? [])];
+  const maskShapes = gratingMaskShapes(p, page, marginPx);
   return {
     width: page.widthPx,
     height: page.heightPx,
@@ -119,7 +134,7 @@ export function gratingToOverlapOptions(
     wobbleAmpPx: p.wobbleAmpMm * ppm,
     wobbleWavelengthPx: p.wobbleWavelengthMm * ppm,
     edgeSmoothPx: p.edgeSmoothMm * ppm,
-    maskShapes: maskShapes.length > 0 ? maskShapes : undefined,
+    maskShapes,
     seed: p.seed,
   };
 }

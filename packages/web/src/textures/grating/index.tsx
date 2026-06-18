@@ -1,8 +1,8 @@
 import type { TextureModule } from '../types';
 import {
   defaultGratingParams,
+  gratingMaskShapes,
   gratingTextureColors,
-  parametricMaskShapes,
   type GratingParams,
 } from './shared';
 import { GratingTextureControls } from './Controls';
@@ -39,7 +39,7 @@ export const gratingTexture: TextureModule<GratingParams> = {
         wobbleAmpMm: p.wobbleAmpMm,
         wobbleWavelengthMm: p.wobbleWavelengthMm,
         edgeSmoothMm: p.edgeSmoothMm,
-        maskShapes: parametricMaskShapes(p, page, marginPx),
+        maskShapes: gratingMaskShapes(p, page, marginPx),
       },
     },
     layerColors: gratingTextureColors(p),
