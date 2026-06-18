@@ -34,7 +34,8 @@ export interface RenderRequest {
   svgOptions: SVGOptions;
   /** Optional background texture (the worker builds the halo from the art) */
   texture?: Omit<TextureOptions, 'avoid'>;
-  textureColor?: string;
+  /** Per-pen-layer texture colours: single 'texture' or multi-ink 'texture-NN'. */
+  textureLayerColors?: Record<string, string>;
   /** Optional universal page border (drawn after density/texture). */
   border?: RenderBorder;
   /** Optional density protection (drops strokes off saturated paper). */
@@ -58,7 +59,7 @@ export interface RenderResponse {
 }
 
 self.onmessage = (event: MessageEvent<RenderRequest>) => {
-  const { id, image, options, svgOptions, texture, textureColor, border, density } = event.data;
+  const { id, image, options, svgOptions, texture, textureLayerColors, border, density } = event.data;
 
   try {
     const result = imageToPenInk(image, options);
@@ -95,7 +96,7 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
       // halo masks the actual drawing and the border, and lay it behind.
       const avoid = borderLines.length ? [...drawingLines, ...borderLines] : drawingLines;
       texLines = generateTexture({ ...texture, avoid });
-      layerColors = { ...layerColors, texture: textureColor ?? '#c9c2b4' };
+      layerColors = { ...layerColors, ...(textureLayerColors ?? { texture: '#c9c2b4' }) };
     }
     if (borderLines.length) {
       layerColors = { ...layerColors, border: layerColors?.border ?? svgOptions.strokeColor ?? '#111111' };

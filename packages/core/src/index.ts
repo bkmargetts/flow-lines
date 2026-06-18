@@ -109,7 +109,12 @@ export { traceIsoContours } from './iso-contours.js';
 
 // Plottable background texture (its own export layer, behind the drawing)
 export { generateTexture } from './texture.js';
-export type { TextureOptions, TextureStyle, TextureShapeOptions } from './texture.js';
+export type {
+  TextureOptions,
+  TextureStyle,
+  TextureShapeOptions,
+  GratingTextureOptions,
+} from './texture.js';
 
 // Plot optimization
 export { optimizePlot, measurePenTravel, limitStrokeDensity } from './optimize.js';

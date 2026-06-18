@@ -107,6 +107,31 @@ describe('toSVG', () => {
 
     expect(svg).toMatch(/d="M[\d.]+,[\d.]+/);
   });
+
+  it('orders background texture layers (incl. multi-ink texture-NN) behind the drawing', () => {
+    const result = {
+      width: 100,
+      height: 100,
+      seed: 1,
+      lines: [
+        { points: [{ x: 0, y: 0 }, { x: 9, y: 9 }], layer: 'default' },
+        { points: [{ x: 0, y: 1 }, { x: 9, y: 8 }], layer: 'texture-01' },
+        { points: [{ x: 0, y: 2 }, { x: 9, y: 7 }], layer: 'texture-00' },
+      ],
+    };
+    const svg = toSVG(result, {
+      layerColors: { 'texture-00': '#aa0000', 'texture-01': '#00aa00', default: '#000000' },
+    });
+    const i00 = svg.indexOf('#aa0000');
+    const i01 = svg.indexOf('#00aa00');
+    const iDraw = svg.indexOf('#000000');
+    // Both texture bands render before (behind) the drawing's default layer.
+    expect(i00).toBeGreaterThanOrEqual(0);
+    expect(i00).toBeLessThan(iDraw);
+    expect(i01).toBeLessThan(iDraw);
+    // texture-00 sorts before texture-01.
+    expect(i00).toBeLessThan(i01);
+  });
 });
 
 describe('toSVG single pen width', () => {

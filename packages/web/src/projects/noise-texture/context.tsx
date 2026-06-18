@@ -20,45 +20,8 @@ import { useFrame } from '../../FrameContext';
 import { finishPlot } from '../../lib/finish';
 import { downloadSvgText, triggerDownload } from '../../lib/download';
 import { zipStore } from '../../lib/zip';
-import { buildPaletteLayerColors } from '../../lib/palette';
+import { gratingToOverlapOptions, gratingBandColors } from '../../textures/grating/shared';
 import { defaultNoiseTextureState, type NoiseTextureState } from './types';
-
-/** Build the active mask shape (in canvas px) from the project state. */
-function buildMaskShapes(
-  state: NoiseTextureState,
-  page: { widthPx: number; heightPx: number; pxPerMm: number },
-  marginPx: number
-): MaskShape[] | undefined {
-  const ppm = page.pxPerMm;
-  switch (state.maskMode) {
-    case 'strips':
-      return [
-        {
-          type: 'strips',
-          angleDeg: state.stripAngleDeg,
-          widthPx: Math.max(0.5, state.stripWidthMm * ppm),
-          gapPx: Math.max(0, state.stripGapMm * ppm),
-        },
-      ];
-    case 'band':
-      if (state.maskPath.length < 1) return undefined;
-      return [{ type: 'band', path: state.maskPath, halfWidthPx: state.bandWidthMm * ppm }];
-    case 'rect':
-    case 'ellipse': {
-      const usableW = page.widthPx - 2 * marginPx;
-      const usableH = page.heightPx - 2 * marginPx;
-      const w = usableW * state.maskWidthPct;
-      const h = usableH * state.maskHeightPct;
-      const cx = page.widthPx / 2;
-      const cy = page.heightPx / 2;
-      return state.maskMode === 'rect'
-        ? [{ type: 'rect', x: cx - w / 2, y: cy - h / 2, w, h }]
-        : [{ type: 'ellipse', cx, cy, rx: w / 2, ry: h / 2 }];
-    }
-    default:
-      return undefined;
-  }
-}
 
 interface NoiseTextureValue {
   state: NoiseTextureState;
@@ -129,29 +92,19 @@ export function NoiseTextureProvider({
     }
 
     const marginPx = frame.marginMm * page.pxPerMm;
-    const result = generateOverlappedLines({
-      width: page.widthPx,
-      height: page.heightPx,
-      margin: marginPx,
-      angleDeg: state.angleDeg,
-      lineLengthPct: state.lineLengthPct,
-      spacingPx: state.spacingMm * page.pxPerMm,
-      colorCount: state.colorCount,
-      phaseDriftAlongPx: state.phaseDriftAlongMm * page.pxPerMm,
-      phaseDriftAcrossPx: state.phaseDriftAcrossMm * page.pxPerMm,
-      phaseNoiseAmpPx: state.phaseNoiseAmpMm * page.pxPerMm,
-      phaseNoiseScale: state.phaseNoiseScale,
-      jitterPx: state.jitterMm * page.pxPerMm,
-      wobbleAmpPx: state.wobbleAmpMm * page.pxPerMm,
-      wobbleWavelengthPx: state.wobbleWavelengthMm * page.pxPerMm,
-      edgeSmoothPx: state.edgeSmoothMm * page.pxPerMm,
-      maskShapes: buildMaskShapes(state, page, marginPx),
-      seed: state.seed,
-    });
+    // The drawn-line band is the project's own mask (needs the canvas); the
+    // shared mapper handles the parametric strips / rect / ellipse.
+    const bandMasks: MaskShape[] =
+      state.maskMode === 'band' && state.maskPath.length >= 1
+        ? [{ type: 'band', path: state.maskPath, halfWidthPx: state.bandWidthMm * page.pxPerMm }]
+        : [];
+    const result = generateOverlappedLines(
+      gratingToOverlapOptions(state, page, marginPx, bandMasks)
+    );
 
     const svgOptions: SVGOptions = {
       strokeWidth: state.penWidthMm * page.pxPerMm,
-      layerColors: buildPaletteLayerColors(state.palette, state.colorCount, state.customRamp),
+      layerColors: gratingBandColors(state),
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,
     };
@@ -183,17 +136,9 @@ export function NoiseTextureProvider({
     frame.densityMaxPasses,
     frame.densityMinOverlapMm,
     frame.textureEnabled,
-    frame.textureStyle,
-    frame.textureSpacingMm,
-    frame.textureAngleDeg,
-    frame.textureScale,
-    frame.textureJitter,
-    frame.textureDensity,
-    frame.textureCrossHatch,
-    frame.textureColor,
-    frame.textureSeed,
+    frame.textureModuleId,
+    frame.textureParams,
     frame.textureHaloMm,
-    frame.textureShapes,
   ]);
 
   const downloadSVG = useCallback(() => {

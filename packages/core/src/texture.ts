@@ -2,6 +2,7 @@ import { FlowLine, Point } from './flow-lines.js';
 import { createNoise } from './noise.js';
 import { traceIsoContours } from './iso-contours.js';
 import { gaussianBlur } from './image.js';
+import { generateOverlappedLines, type MaskShape } from './overlapped-lines.js';
 
 /**
  * A plottable background texture — a field of single-pen strokes laid behind
@@ -13,7 +14,37 @@ import { gaussianBlur } from './image.js';
  * strokes (`avoid` + `haloMm`), the same reserved-paper idea the contour halos
  * use, so the art reads off the textured ground instead of being crowded by it.
  */
-export type TextureStyle = 'hatch' | 'stipple' | 'contours' | 'grid' | 'shapes';
+export type TextureStyle = 'hatch' | 'stipple' | 'contours' | 'grid' | 'shapes' | 'grating';
+
+/**
+ * Grating-style texture: an interleaved multi-ink line grating (the same engine
+ * as the Noise Texture project). Spacing, angle, jitter and seed come from the
+ * shared `TextureOptions`; these are the grating-specific extras (mm / unitless).
+ * The texture lines are tagged `texture-NN` (one per ink) so the background can
+ * plot in several pens behind the drawing.
+ */
+export interface GratingTextureOptions {
+  /** Number of interleaved inks (→ `texture-00`, `texture-01`, …). */
+  colorCount: number;
+  /** Line length as a fraction of the usable page span, 0..1. */
+  lineLengthPct: number;
+  /** Inter-colour offset built up along the lines, mm. */
+  phaseDriftAlongMm: number;
+  /** Inter-colour offset built up across the block, mm. */
+  phaseDriftAcrossMm: number;
+  /** Noise-driven inter-colour offset amplitude, mm. */
+  phaseNoiseAmpMm: number;
+  /** Spatial frequency of the phase noise. */
+  phaseNoiseScale: number;
+  /** Low-frequency wobble of each line, mm. */
+  wobbleAmpMm: number;
+  /** Wobble wavelength along the line, mm. */
+  wobbleWavelengthMm: number;
+  /** Edge-smoothing envelope width, mm (0 = off). */
+  edgeSmoothMm: number;
+  /** Optional parametric clip shapes (strips / rect / ellipse), in px. */
+  maskShapes?: MaskShape[];
+}
 
 export interface TextureShapeOptions {
   /** The single shape to tile (one kind at a time) */
@@ -47,6 +78,8 @@ export interface TextureOptions {
   crossHatch: boolean;
   seed: number;
   shapes?: TextureShapeOptions;
+  /** Grating-style parameters (style === 'grating') */
+  grating?: GratingTextureOptions;
   /** Drawing strokes the texture should hold off (for the halo) */
   avoid?: FlowLine[];
   /** Clean-paper sliver reserved around `avoid`, in mm (0 = no halo) */
@@ -177,6 +210,25 @@ function pushClipped(out: FlowLine[], pts: Point[], isClear: (x: number, y: numb
   if (run.length >= 2) out.push(TEX(run));
 }
 
+/** Like `pushClipped`, but keeps the line's own layer (for multi-ink grating). */
+function pushClippedLayer(
+  out: FlowLine[],
+  pts: Point[],
+  layer: string,
+  isClear: (x: number, y: number) => boolean
+): void {
+  let run: Point[] = [];
+  const flush = (): void => {
+    if (run.length >= 2) out.push({ points: run, pen: 'fine', layer });
+    run = [];
+  };
+  for (const p of pts) {
+    if (isClear(p.x, p.y)) run.push(p);
+    else flush();
+  }
+  flush();
+}
+
 /** Walk a clipped scanline at `step`, emitting halo-broken runs. */
 function emitLine(
   out: FlowLine[],
@@ -298,6 +350,39 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
   const step = Math.max(2, Math.min(spacing, haloPx > 0 ? haloPx : spacing));
 
   const out: FlowLine[] = [];
+
+  if (style === 'grating') {
+    const g = options.grating;
+    if (!g) return out;
+    const grating = generateOverlappedLines({
+      width,
+      height,
+      margin,
+      angleDeg,
+      lineLengthPct: g.lineLengthPct,
+      spacingPx: spacing,
+      colorCount: g.colorCount,
+      phaseDriftAlongPx: g.phaseDriftAlongMm * pxPerMm,
+      phaseDriftAcrossPx: g.phaseDriftAcrossMm * pxPerMm,
+      phaseNoiseAmpPx: g.phaseNoiseAmpMm * pxPerMm,
+      phaseNoiseScale: g.phaseNoiseScale,
+      jitterPx: jitter * pxPerMm,
+      wobbleAmpPx: g.wobbleAmpMm * pxPerMm,
+      wobbleWavelengthPx: g.wobbleWavelengthMm * pxPerMm,
+      edgeSmoothPx: g.edgeSmoothMm * pxPerMm,
+      maskShapes: g.maskShapes,
+      seed,
+    });
+    // Relabel the grating's band-NN inks to texture-NN (so they plot behind the
+    // drawing on their own pens), holding the same clean-paper halo off the art.
+    for (const line of grating.lines) {
+      const band = line.layer ?? 'band-00';
+      const texLayer = band.startsWith('band-') ? `texture-${band.slice(5)}` : 'texture';
+      if (hasHalo) pushClippedLayer(out, line.points, texLayer, isClear);
+      else out.push({ points: line.points, pen: 'fine', layer: texLayer });
+    }
+    return out;
+  }
 
   if (style === 'hatch' || style === 'grid') {
     const gridMode = style === 'grid';

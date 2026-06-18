@@ -19,7 +19,7 @@ import {
 } from '@flow-lines/core';
 import { getRenderClient, type RenderedSVG } from '../../render-client';
 import { useFrame } from '../../FrameContext';
-import { textureOptionsFor } from '../../lib/texture';
+import { textureBuildFor } from '../../lib/texture';
 import { downloadSvgText, triggerDownload } from '../../lib/download';
 import { zipStore } from '../../lib/zip';
 import {
@@ -538,11 +538,8 @@ export function ImageInkProvider({
           physicalHeight: `${page.heightMm}mm`,
         },
         // Optional shared background texture; the worker holds it a halo off
-        // the rendered ink and lays it behind on its own pen layer.
-        (() => {
-          const texOpts = textureOptionsFor(frame, page);
-          return texOpts ? { options: texOpts, color: frame.textureColor } : undefined;
-        })(),
+        // the rendered ink and lays it behind on its own pen layer(s).
+        textureBuildFor(frame, page) ?? undefined,
         // Universal finishing from the shared page frame: page border + density
         // protection (both off by default, so output is unchanged until set).
         {
@@ -580,9 +577,7 @@ export function ImageInkProvider({
     depthMap, labelMap, lowMemory,
     frame.borderEnabled, frame.borderInsetMm, frame.borderCornerRadiusMm, frame.densityEnabled, frame.densityMaxPasses,
     frame.densityMinOverlapMm,
-    frame.textureEnabled, frame.textureStyle, frame.textureSpacingMm, frame.textureAngleDeg,
-    frame.textureScale, frame.textureJitter, frame.textureDensity, frame.textureCrossHatch,
-    frame.textureColor, frame.textureSeed, frame.textureHaloMm, frame.textureShapes,
+    frame.textureEnabled, frame.textureModuleId, frame.textureParams, frame.textureHaloMm,
   ]);
 
   // Auto ML (scene labels ~5MB, then depth ~25MB where the device

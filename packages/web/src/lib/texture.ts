@@ -1,49 +1,40 @@
-import {
-  generateTexture,
-  type FlowLine,
-  type PageMetrics,
-  type TextureOptions,
-} from '@flow-lines/core';
+import { generateTexture, type FlowLine, type PageMetrics, type TextureOptions } from '@flow-lines/core';
 import type { FrameSettings } from '../FrameContext';
+import { getTextureModule, textureParamsFor } from '../textures/registry';
 
 /**
- * Build the shared background texture for a page, holding it a configurable
- * halo off the drawing's strokes. Returns null when texture is disabled, so
- * callers leave their output (and layerColors) untouched. The texture lines are
- * tagged layer:'texture' and should be prepended to the drawing so they render
- * behind it.
+ * Resolve the active background-texture module to core texture options (sans
+ * `avoid`/`haloMm`, added at build time) plus the per-pen-layer colours it
+ * wants. Returns null when texture is disabled or the module draws nothing, so
+ * callers leave their output (and layerColors) untouched. Texture lines are
+ * tagged `texture` (single pen) or `texture-NN` (multi-ink) and should be
+ * prepended to the drawing so they render behind it.
  */
-/** Texture options for a page (sans `avoid`), or null when texture is off. */
-export function textureOptionsFor(
+export function textureBuildFor(
   frame: FrameSettings,
   page: PageMetrics
-): Omit<TextureOptions, 'avoid'> | null {
+): { options: Omit<TextureOptions, 'avoid'>; layerColors: Record<string, string> } | null {
   if (!frame.textureEnabled) return null;
+  const mod = getTextureModule(frame.textureModuleId);
+  const params = textureParamsFor(frame.textureModuleId, frame.textureParams);
+  const built = mod.toTexture(params, page, frame.marginMm * page.pxPerMm);
+  if (!built) return null;
   return {
-    width: page.widthPx,
-    height: page.heightPx,
-    margin: frame.marginMm * page.pxPerMm,
-    pxPerMm: page.pxPerMm,
-    style: frame.textureStyle,
-    spacingMm: frame.textureSpacingMm,
-    angleDeg: frame.textureAngleDeg,
-    scale: frame.textureScale,
-    jitter: frame.textureJitter,
-    density: frame.textureDensity,
-    crossHatch: frame.textureCrossHatch,
-    seed: frame.textureSeed,
-    shapes: frame.textureShapes,
-    haloMm: frame.textureHaloMm,
+    options: { ...built.options, haloMm: frame.textureHaloMm },
+    layerColors: built.layerColors,
   };
 }
 
-/** Synchronous build (conway/flow-field): texture lines held a halo off the drawing. */
+/** Synchronous build (conway/flow-field/…): texture lines held a halo off the art. */
 export function buildTexture(
   frame: FrameSettings,
   page: PageMetrics,
   drawingLines: FlowLine[]
-): { lines: FlowLine[]; color: string } | null {
-  const options = textureOptionsFor(frame, page);
-  if (!options) return null;
-  return { lines: generateTexture({ ...options, avoid: drawingLines }), color: frame.textureColor };
+): { lines: FlowLine[]; layerColors: Record<string, string> } | null {
+  const built = textureBuildFor(frame, page);
+  if (!built) return null;
+  return {
+    lines: generateTexture({ ...built.options, avoid: drawingLines }),
+    layerColors: built.layerColors,
+  };
 }
