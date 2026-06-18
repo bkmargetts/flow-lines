@@ -47,7 +47,95 @@ export interface OverlappedLinesOptions {
   wobbleAmpPx?: number;
   /** Wobble wavelength along the line, px. */
   wobbleWavelengthPx?: number;
+  /**
+   * Width of an envelope at each block edge over which the offset deviation
+   * (drift, noise, wobble, jitter) relaxes to the clean even interleave, px.
+   * Smooths the ragged silhouette the offset leaves at the edges. 0 = off.
+   */
+  edgeSmoothPx?: number;
+  /**
+   * Shapes the pattern is clipped to: a point is kept only when inside the
+   * union of these shapes. Empty/undefined = the whole page (no mask).
+   */
+  maskShapes?: MaskShape[];
   seed?: number;
+}
+
+/** A region the grating is clipped to. Coordinates are canvas px. */
+export type MaskShape =
+  | { type: 'strips'; angleDeg: number; widthPx: number; gapPx: number; phasePx?: number }
+  | { type: 'band'; path: Point[]; halfWidthPx: number }
+  | { type: 'rect'; x: number; y: number; w: number; h: number }
+  | { type: 'ellipse'; cx: number; cy: number; rx: number; ry: number };
+
+/** Squared distance from point (px,py) to segment (ax,ay)-(bx,by). */
+function distSqToSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return (px - cx) * (px - cx) + (py - cy) * (py - cy);
+}
+
+function inShape(shape: MaskShape, x: number, y: number): boolean {
+  switch (shape.type) {
+    case 'rect':
+      return x >= shape.x && x <= shape.x + shape.w && y >= shape.y && y <= shape.y + shape.h;
+    case 'ellipse': {
+      if (shape.rx <= 0 || shape.ry <= 0) return false;
+      const dx = (x - shape.cx) / shape.rx;
+      const dy = (y - shape.cy) / shape.ry;
+      return dx * dx + dy * dy <= 1;
+    }
+    case 'strips': {
+      const period = shape.widthPx + shape.gapPx;
+      if (period <= 0) return false;
+      const rad = (shape.angleDeg * Math.PI) / 180;
+      // Project onto the stripe normal; "on" bands repeat every period.
+      const s = x * Math.cos(rad) + y * Math.sin(rad) - (shape.phasePx ?? 0);
+      const m = ((s % period) + period) % period;
+      return m < shape.widthPx;
+    }
+    case 'band': {
+      const pts = shape.path;
+      const r2 = shape.halfWidthPx * shape.halfWidthPx;
+      if (pts.length === 0) return false;
+      if (pts.length === 1) {
+        const d = (x - pts[0].x) ** 2 + (y - pts[0].y) ** 2;
+        return d <= r2;
+      }
+      for (let i = 1; i < pts.length; i++) {
+        if (distSqToSegment(x, y, pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y) <= r2) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+}
+
+/** True when (x,y) is inside the union of `shapes` (or when there are none). */
+export function pointInMask(shapes: MaskShape[] | undefined, x: number, y: number): boolean {
+  if (!shapes || shapes.length === 0) return true;
+  for (const s of shapes) if (inShape(s, x, y)) return true;
+  return false;
+}
+
+/** Smoothstep ramp clamped to [0,1]. */
+function smooth01(t: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return t * t * (3 - 2 * t);
 }
 
 /** The export layer name for ink band index i (zero-padded so layers sort). */
@@ -71,6 +159,8 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
     jitterPx = 0,
     wobbleAmpPx = 0,
     wobbleWavelengthPx = 120,
+    edgeSmoothPx = 0,
+    maskShapes,
     seed = Math.floor(Math.random() * 1000000),
   } = options;
 
@@ -135,10 +225,19 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
             ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + k * 1.7, 2, 0.5, 2.2)
             : 0;
         const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5 + k * 13.1, b * 0.5) : 0;
-        const perp = b + k * field(a, b) + wob + jit;
+        // Clean even interleave (straight) plus the deviation that carries the
+        // texture. An edge envelope relaxes the deviation to zero at the block
+        // boundary so the ragged silhouette smooths to a clean rectangle.
+        const deviation = k * (field(a, b) - baseStep) + wob + jit;
+        const env =
+          edgeSmoothPx > 0
+            ? smooth01((halfA - Math.abs(a)) / edgeSmoothPx) *
+              smooth01((halfP - Math.abs(b)) / edgeSmoothPx)
+            : 1;
+        const perp = b + k * baseStep + env * deviation;
         const x = cx + dx * a + px * perp;
         const y = cy + dy * a + py * perp;
-        if (!inBounds(x, y)) {
+        if (!inBounds(x, y) || !pointInMask(maskShapes, x, y)) {
           flush();
           continue;
         }

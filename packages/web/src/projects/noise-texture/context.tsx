@@ -12,6 +12,8 @@ import {
   pageMetrics,
   getPaperSize,
   type FlowLinesResult,
+  type MaskShape,
+  type Point,
   type SVGOptions,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
@@ -21,10 +23,50 @@ import { zipStore } from '../../lib/zip';
 import { buildPaletteLayerColors } from '../../lib/palette';
 import { defaultNoiseTextureState, type NoiseTextureState } from './types';
 
+/** Build the active mask shape (in canvas px) from the project state. */
+function buildMaskShapes(
+  state: NoiseTextureState,
+  page: { widthPx: number; heightPx: number; pxPerMm: number },
+  marginPx: number
+): MaskShape[] | undefined {
+  const ppm = page.pxPerMm;
+  switch (state.maskMode) {
+    case 'strips':
+      return [
+        {
+          type: 'strips',
+          angleDeg: state.stripAngleDeg,
+          widthPx: Math.max(0.5, state.stripWidthMm * ppm),
+          gapPx: Math.max(0, state.stripGapMm * ppm),
+        },
+      ];
+    case 'band':
+      if (state.maskPath.length < 1) return undefined;
+      return [{ type: 'band', path: state.maskPath, halfWidthPx: state.bandWidthMm * ppm }];
+    case 'rect':
+    case 'ellipse': {
+      const usableW = page.widthPx - 2 * marginPx;
+      const usableH = page.heightPx - 2 * marginPx;
+      const w = usableW * state.maskWidthPct;
+      const h = usableH * state.maskHeightPct;
+      const cx = page.widthPx / 2;
+      const cy = page.heightPx / 2;
+      return state.maskMode === 'rect'
+        ? [{ type: 'rect', x: cx - w / 2, y: cy - h / 2, w, h }]
+        : [{ type: 'ellipse', cx, cy, rx: w / 2, ry: h / 2 }];
+    }
+    default:
+      return undefined;
+  }
+}
+
 interface NoiseTextureValue {
   state: NoiseTextureState;
   updateState: (updates: Partial<NoiseTextureState>) => void;
   randomizeSeed: () => void;
+  addMaskPoint: (point: Point) => void;
+  clearMaskPath: () => void;
+  toggleDrawMode: () => void;
   downloadSVG: () => void;
   downloadLayers: () => void;
   hasLayers: boolean;
@@ -56,6 +98,18 @@ export function NoiseTextureProvider({
   const randomizeSeed = useCallback(() => {
     updateState({ seed: Math.floor(Math.random() * 1000000) });
   }, [updateState]);
+
+  const addMaskPoint = useCallback((point: Point) => {
+    setState((prev) => ({ ...prev, maskPath: [...prev.maskPath, point] }));
+  }, []);
+
+  const clearMaskPath = useCallback(() => {
+    updateState({ maskPath: [] });
+  }, [updateState]);
+
+  const toggleDrawMode = useCallback(() => {
+    setState((prev) => ({ ...prev, drawMode: !prev.drawMode }));
+  }, []);
 
   const generated = useMemo(() => {
     // The swatch canvas is a physical sheet too: paper + orientation set the
@@ -90,12 +144,14 @@ export function NoiseTextureProvider({
       jitterPx: state.jitterMm * page.pxPerMm,
       wobbleAmpPx: state.wobbleAmpMm * page.pxPerMm,
       wobbleWavelengthPx: state.wobbleWavelengthMm * page.pxPerMm,
+      edgeSmoothPx: state.edgeSmoothMm * page.pxPerMm,
+      maskShapes: buildMaskShapes(state, page, marginPx),
       seed: state.seed,
     });
 
     const svgOptions: SVGOptions = {
       strokeWidth: state.penWidthMm * page.pxPerMm,
-      layerColors: buildPaletteLayerColors(state.palette, state.colorCount),
+      layerColors: buildPaletteLayerColors(state.palette, state.colorCount, state.customRamp),
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,
     };
@@ -161,6 +217,9 @@ export function NoiseTextureProvider({
     state,
     updateState,
     randomizeSeed,
+    addMaskPoint,
+    clearMaskPath,
+    toggleDrawMode,
     downloadSVG,
     downloadLayers,
     hasLayers: generated.hasLayers,

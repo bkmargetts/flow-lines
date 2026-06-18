@@ -1,6 +1,7 @@
 import type { PaperFit, TextureStyle } from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
 import { InfoTip } from './InfoTip';
+import { ColorField } from './ColorField';
 import { PaperControls } from './PaperControls';
 
 /** Paper-tone swatches shown behind the drawing in the preview (never plotted). */
@@ -174,6 +175,11 @@ export function FrameControls() {
           ))}
         </div>
       </div>
+      <ColorField
+        label="Paper tone (custom)"
+        value={frame.paperTone}
+        onChange={(paperTone) => updateFrame({ paperTone })}
+      />
 
       <div className="control-group">
         <label className="checkbox-label">
@@ -388,6 +394,11 @@ export function FrameControls() {
               ))}
             </div>
           </div>
+          <ColorField
+            label="Texture ink (custom)"
+            value={frame.textureColor}
+            onChange={(textureColor) => updateFrame({ textureColor })}
+          />
 
           <div className="control-group">
             <label>Texture seed</label>

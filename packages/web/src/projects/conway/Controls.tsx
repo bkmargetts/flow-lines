@@ -1,4 +1,5 @@
 import { InfoTip } from '../../components/InfoTip';
+import { ColorField } from '../../components/ColorField';
 import { useConway } from './context';
 import type { ConwayState } from './types';
 
@@ -209,60 +210,32 @@ export function ConwayControls() {
 
       {state.multiInk ? (
         <>
-          <div className="control-group">
-            <label>
-              <span className="label-text">
-                Present ink
-                <InfoTip text="Ink for the crisp present mass and the plate border — the darkest, most committed marks." />
-              </span>
-            </label>
-            <input
-              type="text"
-              value={state.presentColor}
-              onChange={(e) => updateState({ presentColor: e.target.value })}
-            />
-          </div>
-          <div className="control-group">
-            <label>
-              <span className="label-text">
-                Ghost ink
-                <InfoTip text="Ink for the mid-tone ghosts — the recent history hatching." />
-              </span>
-            </label>
-            <input
-              type="text"
-              value={state.ghostColor}
-              onChange={(e) => updateState({ ghostColor: e.target.value })}
-            />
-          </div>
-          <div className="control-group">
-            <label>
-              <span className="label-text">
-                Trail ink
-                <InfoTip text="Ink for the faint comet trails — the oldest, dimmest marks." />
-              </span>
-            </label>
-            <input
-              type="text"
-              value={state.trailColor}
-              onChange={(e) => updateState({ trailColor: e.target.value })}
-            />
-          </div>
+          <ColorField
+            label="Present ink"
+            value={state.presentColor}
+            onChange={(presentColor) => updateState({ presentColor })}
+            info="Ink for the crisp present mass and the plate border — the darkest, most committed marks."
+          />
+          <ColorField
+            label="Ghost ink"
+            value={state.ghostColor}
+            onChange={(ghostColor) => updateState({ ghostColor })}
+            info="Ink for the mid-tone ghosts — the recent history hatching."
+          />
+          <ColorField
+            label="Trail ink"
+            value={state.trailColor}
+            onChange={(trailColor) => updateState({ trailColor })}
+            info="Ink for the faint comet trails — the oldest, dimmest marks."
+          />
         </>
       ) : (
-        <div className="control-group">
-          <label>
-            <span className="label-text">
-              Stroke Color
-              <InfoTip text="Ink colour of the preview and exported SVG. Plotting still uses a single pen — colour is just for on-screen and paper choice." />
-            </span>
-          </label>
-          <input
-            type="text"
-            value={state.strokeColor}
-            onChange={(e) => updateState({ strokeColor: e.target.value })}
-          />
-        </div>
+        <ColorField
+          label="Stroke Color"
+          value={state.strokeColor}
+          onChange={(strokeColor) => updateState({ strokeColor })}
+          info="Ink colour of the preview and exported SVG. Plotting still uses a single pen — colour is just for on-screen and paper choice."
+        />
       )}
 
 

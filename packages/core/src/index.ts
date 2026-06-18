@@ -10,9 +10,9 @@ export type { FlowFieldOptions, Vector2D } from './flow-field.js';
 export { generateFlowLines, generateFlowLinesGrid, generateFlowLinesEven } from './flow-lines.js';
 export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point, EvenFlowLinesOptions } from './flow-lines.js';
 
-// Overlapped-line texture (variable-thickness multi-ink swatches)
-export { generateOverlappedLines, bandLayerName } from './overlapped-lines.js';
-export type { OverlappedLinesOptions } from './overlapped-lines.js';
+// Overlapped-line texture (interleaved multi-ink gratings)
+export { generateOverlappedLines, bandLayerName, pointInMask } from './overlapped-lines.js';
+export type { OverlappedLinesOptions, MaskShape } from './overlapped-lines.js';
 
 // Conway's Game of Life long-exposure still
 export { generateConwayExposure } from './conway-exposure.js';

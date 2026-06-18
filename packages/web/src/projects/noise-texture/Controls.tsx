@@ -1,10 +1,27 @@
 import { InfoTip } from '../../components/InfoTip';
-import { PALETTES } from '../../lib/palette';
+import { PalettePicker } from '../../components/ColorField';
 import { useNoiseTexture } from './context';
+import type { MaskMode } from './types';
+
+const MASK_MODES: { id: MaskMode; label: string }[] = [
+  { id: 'none', label: 'None (full page)' },
+  { id: 'strips', label: 'Diagonal strips' },
+  { id: 'band', label: 'Drawn line + band' },
+  { id: 'rect', label: 'Rectangle' },
+  { id: 'ellipse', label: 'Ellipse' },
+];
 
 /** Sidebar controls for the Noise Texture project. */
 export function NoiseTextureControls() {
-  const { state, updateState, randomizeSeed, downloadSVG, downloadLayers } = useNoiseTexture();
+  const {
+    state,
+    updateState,
+    randomizeSeed,
+    clearMaskPath,
+    toggleDrawMode,
+    downloadSVG,
+    downloadLayers,
+  } = useNoiseTexture();
 
   return (
     <div className="controls">
@@ -66,21 +83,13 @@ export function NoiseTextureControls() {
 
       <h3 className="section-title">Colour</h3>
 
-      <div className="control-group">
-        <label>
-          <span className="label-text">
-            Palette
-            <InfoTip text="Each ink is an interleaved grating plotted as its own pen. The per-layer SVG export keeps them separate — a genuine multi-pen plot, not a colour trick. 'Mono' maps every ink to one pen." />
-          </span>
-        </label>
-        <select value={state.palette} onChange={(e) => updateState({ palette: e.target.value })}>
-          {PALETTES.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      <PalettePicker
+        palette={state.palette}
+        customRamp={state.customRamp}
+        colorCount={state.colorCount}
+        onChange={updateState}
+        info="Each ink is an interleaved grating plotted as its own pen. The per-layer SVG export keeps them separate — a genuine multi-pen plot, not a colour trick. 'Mono' maps every ink to one pen; 'Custom…' lets you pick each ink."
+      />
 
       <div className="control-group">
         <label>
@@ -177,6 +186,165 @@ export function NoiseTextureControls() {
           onChange={(e) => updateState({ phaseNoiseScale: parseFloat(e.target.value) })}
         />
       </div>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Edge smoothing
+            <InfoTip text="Relaxes the offset back to a clean even interleave over this distance at the block edges, mm — smooths the ragged silhouette the drift leaves. 0 = off." />
+          </span>
+          <span>{state.edgeSmoothMm.toFixed(1)}mm</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="40"
+          step="1"
+          value={state.edgeSmoothMm}
+          onChange={(e) => updateState({ edgeSmoothMm: parseFloat(e.target.value) })}
+        />
+      </div>
+
+      <h3 className="section-title">Mask</h3>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Clip to
+            <InfoTip text="Restrict the pattern to a shape — it shows inside, blank outside. Combine with a dark paper tone for cut-out lettering or panels." />
+          </span>
+        </label>
+        <select
+          value={state.maskMode}
+          onChange={(e) => updateState({ maskMode: e.target.value as MaskMode })}
+        >
+          {MASK_MODES.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {state.maskMode === 'strips' && (
+        <>
+          <div className="control-group">
+            <label>
+              <span className="label-text">Strip angle</span>
+              <span>{state.stripAngleDeg}°</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="180"
+              step="5"
+              value={state.stripAngleDeg}
+              onChange={(e) => updateState({ stripAngleDeg: parseInt(e.target.value, 10) })}
+            />
+          </div>
+          <div className="control-group">
+            <label>
+              <span className="label-text">Strip width</span>
+              <span>{state.stripWidthMm.toFixed(0)}mm</span>
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="40"
+              step="1"
+              value={state.stripWidthMm}
+              onChange={(e) => updateState({ stripWidthMm: parseFloat(e.target.value) })}
+            />
+          </div>
+          <div className="control-group">
+            <label>
+              <span className="label-text">Strip gap</span>
+              <span>{state.stripGapMm.toFixed(0)}mm</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="40"
+              step="1"
+              value={state.stripGapMm}
+              onChange={(e) => updateState({ stripGapMm: parseFloat(e.target.value) })}
+            />
+          </div>
+        </>
+      )}
+
+      {state.maskMode === 'band' && (
+        <>
+          <div className="control-group">
+            <div className="paint-controls">
+              <button
+                type="button"
+                className={state.drawMode ? 'primary active' : 'primary'}
+                onClick={toggleDrawMode}
+              >
+                {state.drawMode ? 'Stop drawing' : 'Draw line'}
+              </button>
+              {state.maskPath.length > 0 && (
+                <button type="button" className="secondary" onClick={clearMaskPath}>
+                  Clear ({state.maskPath.length})
+                </button>
+              )}
+            </div>
+            <p className="paint-hint">
+              {state.drawMode
+                ? 'Drag across the canvas to lay down the band centreline.'
+                : 'Tap “Draw line”, then drag on the canvas. The pattern fills a band either side of it.'}
+            </p>
+          </div>
+          <div className="control-group">
+            <label>
+              <span className="label-text">Band width (either side)</span>
+              <span>{state.bandWidthMm.toFixed(0)}mm</span>
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="60"
+              step="1"
+              value={state.bandWidthMm}
+              onChange={(e) => updateState({ bandWidthMm: parseFloat(e.target.value) })}
+            />
+          </div>
+        </>
+      )}
+
+      {(state.maskMode === 'rect' || state.maskMode === 'ellipse') && (
+        <>
+          <div className="control-group">
+            <label>
+              <span className="label-text">Width</span>
+              <span>{Math.round(state.maskWidthPct * 100)}%</span>
+            </label>
+            <input
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={state.maskWidthPct}
+              onChange={(e) => updateState({ maskWidthPct: parseFloat(e.target.value) })}
+            />
+          </div>
+          <div className="control-group">
+            <label>
+              <span className="label-text">Height</span>
+              <span>{Math.round(state.maskHeightPct * 100)}%</span>
+            </label>
+            <input
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={state.maskHeightPct}
+              onChange={(e) => updateState({ maskHeightPct: parseFloat(e.target.value) })}
+            />
+          </div>
+        </>
+      )}
 
       <h3 className="section-title">Style</h3>
 

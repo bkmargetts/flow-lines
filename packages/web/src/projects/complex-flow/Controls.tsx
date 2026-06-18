@@ -1,5 +1,5 @@
 import { InfoTip } from '../../components/InfoTip';
-import { PALETTES } from '../../lib/palette';
+import { PalettePicker } from '../../components/ColorField';
 import { useComplexFlow } from './context';
 import type { SingularityLayout, SeedLayout, LayerBy } from '@flow-lines/core';
 
@@ -287,22 +287,13 @@ export function ComplexFlowControls() {
 
       <h3 className="section-title">Colour</h3>
 
-      <div className="control-group">
-        <label>
-          <span className="label-text">
-            Palette
-            <InfoTip text="Streamlines are grouped into colour bands; each band plots as its own pen. The per-layer SVG export keeps them separate so it's a genuine multi-pen plot, not a colour trick. 'Mono' maps every band to one ink." />
-          </span>
-        </label>
-        <select
-          value={state.palette}
-          onChange={(e) => updateState({ palette: e.target.value })}
-        >
-          {PALETTES.map((p) => (
-            <option key={p.id} value={p.id}>{p.label}</option>
-          ))}
-        </select>
-      </div>
+      <PalettePicker
+        palette={state.palette}
+        customRamp={state.customRamp}
+        colorCount={state.layerCount}
+        onChange={updateState}
+        info="Streamlines are grouped into colour bands; each band plots as its own pen. The per-layer SVG export keeps them separate so it's a genuine multi-pen plot, not a colour trick. 'Mono' maps every band to one ink; 'Custom…' lets you pick each ink."
+      />
 
       <div className="control-group">
         <label>

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { generateOverlappedLines, bandLayerName, type OverlappedLinesOptions } from './overlapped-lines.js';
+import {
+  generateOverlappedLines,
+  bandLayerName,
+  pointInMask,
+  type MaskShape,
+  type OverlappedLinesOptions,
+} from './overlapped-lines.js';
 
 function baseOptions(overrides: Partial<OverlappedLinesOptions> = {}): OverlappedLinesOptions {
   return {
@@ -82,5 +88,87 @@ describe('generateOverlappedLines', () => {
     expect(r.lines).toHaveLength(0);
     expect(r.width).toBe(400);
     expect(r.height).toBe(300);
+  });
+
+  it('edge smoothing relaxes the offset toward the block edges', () => {
+    // Along-drift bends a colour-1 line away from its grid, most at the ends.
+    // Edge smoothing must pull the endpoints back toward the line's centre.
+    const cfg = { phaseDriftAlongPx: 8, colorCount: 2, jitterPx: 0, wobbleAmpPx: 0 } as const;
+    const endDev = (edgeSmoothPx: number): number => {
+      const r = generateOverlappedLines(baseOptions({ ...cfg, edgeSmoothPx }));
+      const line = r.lines.find((l) => l.layer === bandLayerName(1) && l.points.length > 5)!;
+      expect(line).toBeDefined();
+      const mid = line.points[Math.floor(line.points.length / 2)].x;
+      return Math.abs(line.points[0].x - mid);
+    };
+    const sharp = endDev(0);
+    const smoothed = endDev(60);
+    expect(sharp).toBeGreaterThan(1);
+    expect(smoothed).toBeLessThan(sharp);
+  });
+
+  it('clips the pattern to a rectangle mask', () => {
+    const mask: MaskShape[] = [{ type: 'rect', x: 150, y: 100, w: 100, h: 80 }];
+    const r = generateOverlappedLines(baseOptions({ maskShapes: mask }));
+    expect(r.lines.length).toBeGreaterThan(0);
+    for (const line of r.lines) {
+      for (const p of line.points) {
+        expect(p.x).toBeGreaterThanOrEqual(150 - 1e-6);
+        expect(p.x).toBeLessThanOrEqual(250 + 1e-6);
+        expect(p.y).toBeGreaterThanOrEqual(100 - 1e-6);
+        expect(p.y).toBeLessThanOrEqual(180 + 1e-6);
+      }
+    }
+  });
+
+  it('clips the pattern to a drawn-line band mask', () => {
+    const band: MaskShape[] = [
+      { type: 'band', path: [{ x: 60, y: 150 }, { x: 340, y: 150 }], halfWidthPx: 15 },
+    ];
+    const r = generateOverlappedLines(baseOptions({ maskShapes: band }));
+    expect(r.lines.length).toBeGreaterThan(0);
+    for (const line of r.lines) {
+      for (const p of line.points) {
+        expect(Math.abs(p.y - 150)).toBeLessThanOrEqual(15 + 1e-6);
+      }
+    }
+  });
+});
+
+describe('pointInMask', () => {
+  it('treats no shapes as the whole page', () => {
+    expect(pointInMask(undefined, 10, 10)).toBe(true);
+    expect(pointInMask([], 10, 10)).toBe(true);
+  });
+
+  it('tests rectangles, ellipses, strips and bands', () => {
+    expect(pointInMask([{ type: 'rect', x: 0, y: 0, w: 10, h: 10 }], 5, 5)).toBe(true);
+    expect(pointInMask([{ type: 'rect', x: 0, y: 0, w: 10, h: 10 }], 15, 5)).toBe(false);
+
+    const ell: MaskShape[] = [{ type: 'ellipse', cx: 0, cy: 0, rx: 10, ry: 5 }];
+    expect(pointInMask(ell, 0, 0)).toBe(true);
+    expect(pointInMask(ell, 9, 0)).toBe(true);
+    expect(pointInMask(ell, 0, 9)).toBe(false);
+
+    // Vertical strips: 10px wide, 10px gap → x in [0,10) on, [10,20) off.
+    const strips: MaskShape[] = [{ type: 'strips', angleDeg: 0, widthPx: 10, gapPx: 10 }];
+    expect(pointInMask(strips, 5, 999)).toBe(true);
+    expect(pointInMask(strips, 15, 999)).toBe(false);
+
+    const band: MaskShape[] = [
+      { type: 'band', path: [{ x: 0, y: 0 }, { x: 100, y: 0 }], halfWidthPx: 5 },
+    ];
+    expect(pointInMask(band, 50, 3)).toBe(true);
+    expect(pointInMask(band, 50, 8)).toBe(false);
+  });
+
+  it('is the union of multiple shapes', () => {
+    const shapes: MaskShape[] = [
+      { type: 'rect', x: 0, y: 0, w: 10, h: 10 },
+      { type: 'rect', x: 100, y: 100, w: 10, h: 10 },
+    ];
+    expect(pointInMask(shapes, 5, 5)).toBe(true);
+    expect(pointInMask(shapes, 105, 105)).toBe(true);
+    expect(pointInMask(shapes, 50, 50)).toBe(false);
   });
 });
