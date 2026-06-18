@@ -8,23 +8,23 @@ export function NoiseTextureControls() {
 
   return (
     <div className="controls">
-      <h3 className="section-title">Swatches</h3>
+      <h3 className="section-title">Grating</h3>
 
       <div className="control-group">
         <label>
           <span className="label-text">
-            Lines
-            <InfoTip text="How many straight swatch lines are stacked across the page. Each is plotted as a band of overlapped passes." />
+            Spacing
+            <InfoTip text="Gap between adjacent lines within one ink, mm. The other inks interleave into this gap, so the combined line pitch is this divided by the number of colours." />
           </span>
-          <span>{state.lineCount}</span>
+          <span>{state.spacingMm.toFixed(1)}mm</span>
         </label>
         <input
           type="range"
-          min="1"
-          max="40"
-          step="1"
-          value={state.lineCount}
-          onChange={(e) => updateState({ lineCount: parseInt(e.target.value, 10) })}
+          min="0.5"
+          max="8"
+          step="0.1"
+          value={state.spacingMm}
+          onChange={(e) => updateState({ spacingMm: parseFloat(e.target.value) })}
         />
       </div>
 
@@ -32,7 +32,7 @@ export function NoiseTextureControls() {
         <label>
           <span className="label-text">
             Angle
-            <InfoTip text="Orientation of every swatch line. 0° is horizontal." />
+            <InfoTip text="Line direction. 0° is vertical (lines run down the page)." />
           </span>
           <span>{state.angleDeg}°</span>
         </label>
@@ -50,7 +50,7 @@ export function NoiseTextureControls() {
         <label>
           <span className="label-text">
             Length
-            <InfoTip text="Swatch length as a fraction of the usable page. Lines are centred and clipped to the margin." />
+            <InfoTip text="Line length as a fraction of the usable page. Lines are centred and clipped to the margin." />
           </span>
           <span>{Math.round(state.lineLengthPct * 100)}%</span>
         </label>
@@ -64,87 +64,13 @@ export function NoiseTextureControls() {
         />
       </div>
 
-      <h3 className="section-title">Thickness</h3>
-
-      <div className="control-group">
-        <label>
-          <span className="label-text">
-            Max thickness
-            <InfoTip text="Widest the overlapped band swells, in mm. Built from repeated offset passes of the pen — not stroke width — so it stays plottable." />
-          </span>
-          <span>{state.maxThicknessMm.toFixed(1)}mm</span>
-        </label>
-        <input
-          type="range"
-          min="0.5"
-          max="30"
-          step="0.5"
-          value={state.maxThicknessMm}
-          onChange={(e) => updateState({ maxThicknessMm: parseFloat(e.target.value) })}
-        />
-      </div>
-
-      <div className="control-group">
-        <label>
-          <span className="label-text">
-            Min thickness
-            <InfoTip text="Narrowest the band thins to, in mm. The swell between min and max is what gives the swatch its variable weight." />
-          </span>
-          <span>{state.minThicknessMm.toFixed(1)}mm</span>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="15"
-          step="0.5"
-          value={state.minThicknessMm}
-          onChange={(e) => updateState({ minThicknessMm: parseFloat(e.target.value) })}
-        />
-      </div>
-
-      <div className="control-group">
-        <label>
-          <span className="label-text">
-            Pass spacing
-            <InfoTip text="Perpendicular gap between neighbouring offset passes, mm. Tighter packs more overlapping strokes into the band (denser texture)." />
-          </span>
-          <span>{state.passSpacingMm.toFixed(2)}mm</span>
-        </label>
-        <input
-          type="range"
-          min="0.1"
-          max="2"
-          step="0.05"
-          value={state.passSpacingMm}
-          onChange={(e) => updateState({ passSpacingMm: parseFloat(e.target.value) })}
-        />
-      </div>
-
-      <div className="control-group">
-        <label>
-          <span className="label-text">
-            Thickness variation
-            <InfoTip text="Spatial frequency of the noise that drives the swell. Higher makes the band swell and thin more often along its length." />
-          </span>
-          <span>{state.thicknessNoiseScale.toFixed(3)}</span>
-        </label>
-        <input
-          type="range"
-          min="0.001"
-          max="0.05"
-          step="0.001"
-          value={state.thicknessNoiseScale}
-          onChange={(e) => updateState({ thicknessNoiseScale: parseFloat(e.target.value) })}
-        />
-      </div>
-
       <h3 className="section-title">Colour</h3>
 
       <div className="control-group">
         <label>
           <span className="label-text">
             Palette
-            <InfoTip text="Passes are grouped into colour bands; each band plots as its own pen. The per-layer SVG export keeps them separate — a genuine multi-pen plot, not a colour trick. 'Mono' maps every band to one ink." />
+            <InfoTip text="Each ink is an interleaved grating plotted as its own pen. The per-layer SVG export keeps them separate — a genuine multi-pen plot, not a colour trick. 'Mono' maps every ink to one pen." />
           </span>
         </label>
         <select value={state.palette} onChange={(e) => updateState({ palette: e.target.value })}>
@@ -160,7 +86,7 @@ export function NoiseTextureControls() {
         <label>
           <span className="label-text">
             Colours (pens)
-            <InfoTip text="How many ink bands / pen layers the passes split into, sampled from the palette." />
+            <InfoTip text="How many inks interleave. Each is the same grating phase-shifted by spacing ÷ colours so they fill each other's gaps, sampled from the palette." />
           </span>
           <span>{state.colorCount}</span>
         </label>
@@ -174,27 +100,83 @@ export function NoiseTextureControls() {
         />
       </div>
 
+      <p className="paint-hint">
+        Background colour is the shared <strong>Paper tone</strong> in the Page section.
+      </p>
+
+      <h3 className="section-title">Offset drift</h3>
+
       <div className="control-group">
         <label>
           <span className="label-text">
-            Colour patches
-            <InfoTip text="Spatial frequency of the noise that assigns each pass its colour. Higher breaks the inks into smaller, more mixed patches." />
+            Across block
+            <InfoTip text="Gradually alters the inter-colour offset from one side of the block to the other, mm. Lines stay straight while the interleave opens and closes across the page — the colours weave between coincident and evenly spread." />
           </span>
-          <span>{state.colorNoiseScale.toFixed(3)}</span>
+          <span>{state.phaseDriftAcrossMm.toFixed(1)}mm</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="6"
+          step="0.1"
+          value={state.phaseDriftAcrossMm}
+          onChange={(e) => updateState({ phaseDriftAcrossMm: parseFloat(e.target.value) })}
+        />
+      </div>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Along lines
+            <InfoTip text="Gradually alters the inter-colour offset down the length of each line, mm. Non-zero bends the lines and weaves the colours along the trajectory." />
+          </span>
+          <span>{state.phaseDriftAlongMm.toFixed(1)}mm</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="6"
+          step="0.1"
+          value={state.phaseDriftAlongMm}
+          onChange={(e) => updateState({ phaseDriftAlongMm: parseFloat(e.target.value) })}
+        />
+      </div>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Noise amount
+            <InfoTip text="Drives the inter-colour offset with smooth noise, mm — organic patches where the colours pile up or spread apart." />
+          </span>
+          <span>{state.phaseNoiseAmpMm.toFixed(1)}mm</span>
+        </label>
+        <input
+          type="range"
+          min="0"
+          max="4"
+          step="0.1"
+          value={state.phaseNoiseAmpMm}
+          onChange={(e) => updateState({ phaseNoiseAmpMm: parseFloat(e.target.value) })}
+        />
+      </div>
+
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Noise scale
+            <InfoTip text="Spatial frequency of the offset noise. Higher breaks the pattern into smaller, busier patches." />
+          </span>
+          <span>{state.phaseNoiseScale.toFixed(3)}</span>
         </label>
         <input
           type="range"
           min="0.001"
-          max="0.08"
+          max="0.05"
           step="0.001"
-          value={state.colorNoiseScale}
-          onChange={(e) => updateState({ colorNoiseScale: parseFloat(e.target.value) })}
+          value={state.phaseNoiseScale}
+          onChange={(e) => updateState({ phaseNoiseScale: parseFloat(e.target.value) })}
         />
       </div>
-
-      <p className="paint-hint">
-        Background colour is the shared <strong>Paper tone</strong> in the Page section.
-      </p>
 
       <h3 className="section-title">Style</h3>
 
@@ -202,7 +184,7 @@ export function NoiseTextureControls() {
         <label>
           <span className="label-text">
             Pen width
-            <InfoTip text="Plotted line weight in millimetres. Thin pens let the overlapped passes build texture without going muddy." />
+            <InfoTip text="Plotted line weight in millimetres. Thin pens keep the interleaved grating crisp." />
           </span>
           <span>{state.penWidthMm.toFixed(2)}mm</span>
         </label>
@@ -220,7 +202,7 @@ export function NoiseTextureControls() {
         <label>
           <span className="label-text">
             Jitter
-            <InfoTip text="Random per-point shake on each pass, mm. A little roughens the overlap so it reads as inked, not printed." />
+            <InfoTip text="Random per-point shake on each line, mm. A little roughens the grating so it reads as inked, not printed." />
           </span>
           <span>{state.jitterMm.toFixed(2)}mm</span>
         </label>
@@ -238,7 +220,7 @@ export function NoiseTextureControls() {
         <label>
           <span className="label-text">
             Wobble
-            <InfoTip text="Low-frequency hand-drawn wander of each pass, mm. The passes drift together so the band stays coherent while reading as drawn." />
+            <InfoTip text="Low-frequency hand-drawn wander of each line, mm. 0 keeps the lines mechanically straight." />
           </span>
           <span>{state.wobbleAmpMm.toFixed(2)}mm</span>
         </label>
@@ -258,7 +240,7 @@ export function NoiseTextureControls() {
         <label>
           <span className="label-text">
             Seed
-            <InfoTip text="Sets the thickness, colour-patch, jitter and wobble noise. Same seed → identical drawing." />
+            <InfoTip text="Sets the offset noise, jitter and wobble. Same seed → identical drawing." />
           </span>
         </label>
         <div className="seed-input">
@@ -281,7 +263,7 @@ export function NoiseTextureControls() {
           type="button"
           className="secondary"
           onClick={downloadLayers}
-          title="One SVG per colour band, zipped — plot each with a different pen"
+          title="One SVG per colour, zipped — plot each with a different pen"
         >
           Download layers (.zip)
         </button>

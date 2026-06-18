@@ -13,7 +13,6 @@ import {
   getPaperSize,
   type FlowLinesResult,
   type SVGOptions,
-  type Point,
 } from '@flow-lines/core';
 import { useFrame } from '../../FrameContext';
 import { finishPlot } from '../../lib/finish';
@@ -39,42 +38,6 @@ interface NoiseTextureValue {
 }
 
 const NoiseTextureContext = createContext<NoiseTextureValue | null>(null);
-
-/** Lay `count` straight swatch centrelines evenly across the usable page,
- * oriented at `angleDeg` and centred — core clips them to the margin. */
-function layoutSwatches(
-  widthPx: number,
-  heightPx: number,
-  marginPx: number,
-  count: number,
-  angleDeg: number,
-  lengthPct: number
-): Point[][] {
-  const cx = widthPx / 2;
-  const cy = heightPx / 2;
-  const rad = (angleDeg * Math.PI) / 180;
-  const dx = Math.cos(rad);
-  const dy = Math.sin(rad);
-  const px = -Math.sin(rad);
-  const py = Math.cos(rad);
-  const usableW = Math.max(0, widthPx - 2 * marginPx);
-  const usableH = Math.max(0, heightPx - 2 * marginPx);
-  const halfLen = 0.5 * lengthPct * (Math.abs(dx) * usableW + Math.abs(dy) * usableH);
-  const perpSpan = 0.9 * (Math.abs(px) * usableW + Math.abs(py) * usableH);
-  const n = Math.max(1, count);
-  const paths: Point[][] = [];
-  for (let i = 0; i < n; i++) {
-    const t = n > 1 ? i / (n - 1) - 0.5 : 0;
-    const off = t * perpSpan;
-    const ox = cx + px * off;
-    const oy = cy + py * off;
-    paths.push([
-      { x: ox - dx * halfLen, y: oy - dy * halfLen },
-      { x: ox + dx * halfLen, y: oy + dy * halfLen },
-    ]);
-  }
-  return paths;
-}
 
 export function NoiseTextureProvider({
   active,
@@ -112,26 +75,18 @@ export function NoiseTextureProvider({
     }
 
     const marginPx = frame.marginMm * page.pxPerMm;
-    const paths = layoutSwatches(
-      page.widthPx,
-      page.heightPx,
-      marginPx,
-      state.lineCount,
-      state.angleDeg,
-      state.lineLengthPct
-    );
-
     const result = generateOverlappedLines({
       width: page.widthPx,
       height: page.heightPx,
       margin: marginPx,
-      paths,
-      maxThicknessPx: state.maxThicknessMm * page.pxPerMm,
-      minThicknessPx: state.minThicknessMm * page.pxPerMm,
-      passSpacingPx: state.passSpacingMm * page.pxPerMm,
-      thicknessNoiseScale: state.thicknessNoiseScale,
+      angleDeg: state.angleDeg,
+      lineLengthPct: state.lineLengthPct,
+      spacingPx: state.spacingMm * page.pxPerMm,
       colorCount: state.colorCount,
-      colorNoiseScale: state.colorNoiseScale,
+      phaseDriftAlongPx: state.phaseDriftAlongMm * page.pxPerMm,
+      phaseDriftAcrossPx: state.phaseDriftAcrossMm * page.pxPerMm,
+      phaseNoiseAmpPx: state.phaseNoiseAmpMm * page.pxPerMm,
+      phaseNoiseScale: state.phaseNoiseScale,
       jitterPx: state.jitterMm * page.pxPerMm,
       wobbleAmpPx: state.wobbleAmpMm * page.pxPerMm,
       wobbleWavelengthPx: state.wobbleWavelengthMm * page.pxPerMm,

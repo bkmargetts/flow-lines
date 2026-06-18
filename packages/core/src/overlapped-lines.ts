@@ -2,42 +2,50 @@ import { createNoise } from './noise.js';
 import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 
 /**
- * Overlapped-line texture: each input centreline (a "swatch" trajectory) is
- * plotted as many slightly-offset passes of the pen that all follow the same
- * path. The passes pack into a band whose half-thickness swells and thins
- * along the line under low-frequency noise, so the build-up of overlapping
- * strokes — not stroke width — carries the texture. Every pass is tagged with
- * a `band-NN` layer drawn from `colorCount` inks, so the same drawing plots
- * one pen per colour (the noise reads as patches of mixed ink).
+ * Interleaved-grating texture. A block of evenly-spaced straight lines is
+ * drawn in one ink, then the same grating is repeated for each further ink
+ * (`colorCount`) phase-shifted by `spacing / colorCount` so the colours
+ * interleave into each other's gaps. The inter-colour offset can be drifted
+ * gradually — along the lines, across the block, and by noise — so the inks
+ * weave between sitting on top of one another (coincident) and spreading into
+ * an even multi-ink grating. That beating is the texture/noise.
  *
- * Pure and deterministic per `seed`. The web/CLI layer supplies the
- * centrelines; the MVP feeds straight two-point segments, but any polyline
- * works — hand-drawn paths drop in unchanged.
+ * Pure and deterministic per `seed`. Every line is a real stroked polyline
+ * tagged with a `band-NN` layer, so the drawing plots one pen per ink.
  */
 export interface OverlappedLinesOptions {
   width: number;
   height: number;
   /** Clear border kept free of marks, px. */
   margin?: number;
-  /** Centreline polylines to thicken, in canvas px. */
-  paths: Point[][];
-  /** Band half-thickness where the noise peaks, px. */
-  maxThicknessPx?: number;
-  /** Band half-thickness where the noise troughs, px. */
-  minThicknessPx?: number;
-  /** Perpendicular gap between neighbouring offset passes, px. */
-  passSpacingPx?: number;
-  /** Spatial frequency of the thickness noise (cycles per px). */
-  thicknessNoiseScale?: number;
-  /** Number of ink bands (colours). */
+  /** Line direction in degrees; 0 = vertical (lines run down the page). */
+  angleDeg?: number;
+  /** Line length as a fraction of the usable page span, 0..1. */
+  lineLengthPct?: number;
+  /** Gap between adjacent lines within one ink, px. */
+  spacingPx?: number;
+  /** Number of inks (interleaved gratings). */
   colorCount?: number;
-  /** Spatial frequency of the colour-patch noise (cycles per px). */
-  colorNoiseScale?: number;
+  /**
+   * Extra inter-colour offset built up from one end of each line to the
+   * other, px. Non-zero bends the lines and weaves the inks down the page.
+   */
+  phaseDriftAlongPx?: number;
+  /**
+   * Extra inter-colour offset built up across the block (perpendicular),
+   * px. Non-zero opens and closes the interleave across the page while every
+   * line stays straight.
+   */
+  phaseDriftAcrossPx?: number;
+  /** Noise-driven inter-colour offset amplitude, px. */
+  phaseNoiseAmpPx?: number;
+  /** Spatial frequency of the phase noise (cycles per px). */
+  phaseNoiseScale?: number;
   /** Random per-point perpendicular shake, px. */
   jitterPx?: number;
-  /** Peak low-frequency wobble of each pass, px. */
+  /** Peak low-frequency wobble of each line, px. */
   wobbleAmpPx?: number;
-  /** Wobble wavelength along the pass, px. */
+  /** Wobble wavelength along the line, px. */
   wobbleWavelengthPx?: number;
   seed?: number;
 }
@@ -47,82 +55,46 @@ export function bandLayerName(i: number): string {
   return `band-${String(i).padStart(2, '0')}`;
 }
 
-/** Resample a polyline to points spaced ~`step` px apart (keeps both ends). */
-function resample(path: Point[], step: number): Point[] {
-  if (path.length < 2) return path.map((p) => ({ ...p }));
-  const out: Point[] = [{ ...path[0] }];
-  let carry = 0;
-  for (let i = 1; i < path.length; i++) {
-    const a = path[i - 1];
-    const b = path[i];
-    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
-    if (segLen < 1e-9) continue;
-    let d = step - carry;
-    while (d < segLen) {
-      const t = d / segLen;
-      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-      d += step;
-    }
-    carry = segLen - (d - step);
-  }
-  const last = path[path.length - 1];
-  const tail = out[out.length - 1];
-  if (Math.hypot(last.x - tail.x, last.y - tail.y) > step * 0.25) out.push({ ...last });
-  return out;
-}
-
-interface Sample {
-  x: number;
-  y: number;
-  /** Unit perpendicular to the local tangent. */
-  nx: number;
-  ny: number;
-  /** Arc length from the path start, px. */
-  arc: number;
-}
-
-/** Attach unit perpendiculars and cumulative arc length to resampled points. */
-function withFrames(points: Point[]): Sample[] {
-  const out: Sample[] = new Array(points.length);
-  let arc = 0;
-  for (let i = 0; i < points.length; i++) {
-    const ahead = points[Math.min(i + 1, points.length - 1)];
-    const behind = points[Math.max(i - 1, 0)];
-    const tx = ahead.x - behind.x;
-    const ty = ahead.y - behind.y;
-    const len = Math.hypot(tx, ty) || 1;
-    if (i > 0) arc += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
-    out[i] = { x: points[i].x, y: points[i].y, nx: -ty / len, ny: tx / len, arc };
-  }
-  return out;
-}
-
 export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLinesResult {
   const {
     width,
     height,
     margin = 0,
-    paths,
-    maxThicknessPx = 24,
-    minThicknessPx = 4,
-    passSpacingPx = 1.4,
-    thicknessNoiseScale = 0.01,
+    angleDeg = 0,
+    lineLengthPct = 1,
+    spacingPx = 8,
     colorCount = 2,
-    colorNoiseScale = 0.015,
-    jitterPx = 0.5,
-    wobbleAmpPx = 1.5,
-    wobbleWavelengthPx = 90,
+    phaseDriftAlongPx = 0,
+    phaseDriftAcrossPx = 0,
+    phaseNoiseAmpPx = 0,
+    phaseNoiseScale = 0.01,
+    jitterPx = 0,
+    wobbleAmpPx = 0,
+    wobbleWavelengthPx = 120,
     seed = Math.floor(Math.random() * 1000000),
   } = options;
 
   const noise = createNoise(seed);
   const colors = Math.max(1, Math.round(colorCount));
-  const spacing = Math.max(0.1, passSpacingPx);
-  const maxHalf = Math.max(0, maxThicknessPx) / 2;
-  const minHalf = Math.max(0, Math.min(minThicknessPx, maxThicknessPx)) / 2;
-  // The widest the band can ever get bounds how many parallel passes we walk.
-  const maxOffset = Math.ceil(maxHalf / spacing);
-  const lines: FlowLine[] = [];
+  const spacing = Math.max(0.5, spacingPx);
+  // Even interleave: ink k sits k/colors of the way into the gap.
+  const baseStep = spacing / colors;
+
+  const cx = width / 2;
+  const cy = height / 2;
+  const rad = (angleDeg * Math.PI) / 180;
+  // Line direction (0° = straight down) and its perpendicular.
+  const dx = Math.sin(rad);
+  const dy = Math.cos(rad);
+  const px = Math.cos(rad);
+  const py = -Math.sin(rad);
+
+  const usableW = Math.max(0, width - 2 * margin);
+  const usableH = Math.max(0, height - 2 * margin);
+  // Half-extents of the usable rectangle along the line and across the block.
+  const halfA = 0.5 * Math.max(0, Math.min(1, lineLengthPct)) *
+    (Math.abs(dx) * usableW + Math.abs(dy) * usableH);
+  const halfP = 0.5 * (Math.abs(px) * usableW + Math.abs(py) * usableH);
 
   const minX = margin;
   const minY = margin;
@@ -131,65 +103,50 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
   const inBounds = (x: number, y: number): boolean =>
     x >= minX && x <= maxX && y >= minY && y <= maxY;
 
-  paths.forEach((path, pathIndex) => {
-    const samples = withFrames(resample(path, Math.max(1, spacing)));
-    if (samples.length < 2) return;
+  const lines: FlowLine[] = [];
+  if (halfA <= 0 || halfP <= 0 || colors < 1) {
+    return { lines, width, height, seed };
+  }
 
-    // Local half-thickness along the line: low-frequency noise mapped to
-    // [minHalf, maxHalf] so the band swells and thins.
-    const halfAt = (s: Sample): number => {
-      const n = noise.noise2D(
-        (s.x + pathIndex * 9173) * thicknessNoiseScale,
-        s.y * thicknessNoiseScale
-      );
-      const t = (n + 1) / 2;
-      return minHalf + (maxHalf - minHalf) * t;
-    };
-    const halves = samples.map(halfAt);
+  // Sample finely enough that drifting / noisy lines stay smooth.
+  const step = Math.max(2, Math.min(8, halfA / 12));
 
-    // One pass per candidate offset, on both sides of the centreline.
-    for (let k = -maxOffset; k <= maxOffset; k++) {
-      const offset = k * spacing;
-      const absOffset = Math.abs(offset);
-      // Colour band: low-frequency noise keyed by offset → colours cluster
-      // into patches across the band instead of striping.
+  // The interleave-spread field shared by every ink: ink k is offset by
+  // k * field(a, b). field == baseStep is the even interleave; smaller pulls
+  // the inks together, larger spreads them past each other.
+  const field = (a: number, b: number): number =>
+    baseStep +
+    phaseDriftAlongPx * (a / halfA) +
+    phaseDriftAcrossPx * (b / halfP) +
+    phaseNoiseAmpPx * noise.noise2D(b * phaseNoiseScale, a * phaseNoiseScale);
+
+  // Base grating positions across the block, centred.
+  const firstB = -Math.ceil(halfP / spacing) * spacing;
+  for (let b = firstB; b <= halfP + 1e-6; b += spacing) {
+    for (let k = 0; k < colors; k++) {
       let run: Point[] = [];
-      const flush = (band: number): void => {
-        if (run.length >= 2) lines.push({ points: run, layer: bandLayerName(band), pen: 'fine' });
+      const flush = (): void => {
+        if (run.length >= 2) lines.push({ points: run, layer: bandLayerName(k), pen: 'fine' });
         run = [];
       };
-      let runBand = -1;
-      for (let i = 0; i < samples.length; i++) {
-        const s = samples[i];
-        // The pass only exists where the band is wide enough to reach it.
-        if (absOffset > halves[i]) {
-          flush(runBand);
-          continue;
-        }
-        const cn = noise.noise2D(
-          (s.x + offset * s.nx) * colorNoiseScale + pathIndex * 31.7,
-          (s.y + offset * s.ny) * colorNoiseScale
-        );
-        const band = Math.min(colors - 1, Math.floor(((cn + 1) / 2) * colors));
-        if (run.length > 0 && band !== runBand) flush(runBand);
-        runBand = band;
-
+      for (let a = -halfA; a <= halfA + 1e-6; a += step) {
         const wob =
-          wobbleAmpPx *
-          noise.fbm(s.arc / wobbleWavelengthPx, k * 0.37 + pathIndex * 2.13, 2, 0.5, 2.2);
-        const jit = jitterPx * (noise.noise2D(s.x * 0.5 + k * 11.1, s.y * 0.5) || 0);
-        const d = offset + wob + jit;
-        const x = s.x + s.nx * d;
-        const y = s.y + s.ny * d;
+          wobbleAmpPx > 0
+            ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + k * 1.7, 2, 0.5, 2.2)
+            : 0;
+        const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5 + k * 13.1, b * 0.5) : 0;
+        const perp = b + k * field(a, b) + wob + jit;
+        const x = cx + dx * a + px * perp;
+        const y = cy + dy * a + py * perp;
         if (!inBounds(x, y)) {
-          flush(runBand);
+          flush();
           continue;
         }
         run.push({ x, y });
       }
-      flush(runBand);
+      flush();
     }
-  });
+  }
 
   return { lines, width, height, seed };
 }

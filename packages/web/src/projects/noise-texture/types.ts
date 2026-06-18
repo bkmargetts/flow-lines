@@ -1,36 +1,36 @@
 /**
- * Noise Texture settings. Straight line "swatches" are laid across the page
- * and each is plotted as overlapped, slightly-offset passes whose thickness
- * swells and thins — the build-up of strokes carries the texture. Colours come
- * from a palette sampled into `colorCount` ink layers (one pen per layer).
+ * Noise Texture settings. A block of evenly-spaced straight lines is drawn in
+ * one ink, then repeated for each further ink phase-shifted into the gaps
+ * (interleaved). The inter-colour offset can be drifted along the lines,
+ * across the block, and by noise so the inks weave between coincident and
+ * evenly interleaved — that beating is the texture. Colours come from a
+ * palette sampled into `colorCount` ink layers (one pen per layer).
  * The page frame (paper, orientation, margin) lives in the shared FrameContext.
  */
 export interface NoiseTextureState {
-  /** Number of straight swatch lines across the page. */
-  lineCount: number;
-  /** Angle of the swatch lines, degrees (0 = horizontal). */
+  /** Line direction in degrees; 0 = vertical (lines run down the page). */
   angleDeg: number;
-  /** Swatch length as a fraction of the usable page span, 0..1. */
+  /** Line length as a fraction of the usable page span, 0..1. */
   lineLengthPct: number;
-  /** Widest band thickness, mm. */
-  maxThicknessMm: number;
-  /** Narrowest band thickness, mm. */
-  minThicknessMm: number;
-  /** Perpendicular gap between neighbouring offset passes, mm. */
-  passSpacingMm: number;
-  /** Spatial frequency of the thickness noise. */
-  thicknessNoiseScale: number;
+  /** Gap between adjacent lines within one ink, mm. */
+  spacingMm: number;
   /** Palette id (see lib/palette). */
   palette: string;
-  /** Number of ink layers (colours) sampled from the palette. */
+  /** Number of inks / interleaved gratings. */
   colorCount: number;
-  /** Spatial frequency of the colour-patch noise. */
-  colorNoiseScale: number;
+  /** Inter-colour offset built up along the lines (down the page), mm. */
+  phaseDriftAlongMm: number;
+  /** Inter-colour offset built up across the block, mm. */
+  phaseDriftAcrossMm: number;
+  /** Noise-driven inter-colour offset amplitude, mm. */
+  phaseNoiseAmpMm: number;
+  /** Spatial frequency of the phase noise. */
+  phaseNoiseScale: number;
   /** Random per-point shake, mm. */
   jitterMm: number;
-  /** Low-frequency wobble of each pass, mm. */
+  /** Low-frequency wobble of each line, mm. */
   wobbleAmpMm: number;
-  /** Wobble wavelength along the pass, mm. */
+  /** Wobble wavelength along the line, mm. */
   wobbleWavelengthMm: number;
   /** Pen width in millimetres (plotted line weight). */
   penWidthMm: number;
@@ -38,19 +38,18 @@ export interface NoiseTextureState {
 }
 
 export const defaultNoiseTextureState: NoiseTextureState = {
-  lineCount: 7,
   angleDeg: 0,
-  lineLengthPct: 0.9,
-  maxThicknessMm: 8,
-  minThicknessMm: 1,
-  passSpacingMm: 0.4,
-  thicknessNoiseScale: 0.01,
+  lineLengthPct: 1,
+  spacingMm: 2,
   palette: 'riso',
   colorCount: 2,
-  colorNoiseScale: 0.015,
-  jitterMm: 0.15,
-  wobbleAmpMm: 0.4,
-  wobbleWavelengthMm: 24,
+  phaseDriftAlongMm: 0,
+  phaseDriftAcrossMm: 1.5,
+  phaseNoiseAmpMm: 0.6,
+  phaseNoiseScale: 0.01,
+  jitterMm: 0.1,
+  wobbleAmpMm: 0,
+  wobbleWavelengthMm: 30,
   penWidthMm: 0.3,
   seed: Math.floor(Math.random() * 1000000),
 };
