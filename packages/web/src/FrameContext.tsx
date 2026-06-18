@@ -32,6 +32,8 @@ export interface FrameSettings {
   borderEnabled: boolean;
   /** Extra inset of the rule from the margin, in mm (0 = sits at the margin) */
   borderInsetMm: number;
+  /** Corner radius of the border rule, in mm (0 = sharp corners) */
+  borderCornerRadiusMm: number;
 
   // ---- Pen-plotting density protection (applies to every tool) ----
   /** Off → output untouched. On → drop strokes off over-inked paper. */
@@ -77,6 +79,7 @@ export const defaultFrame: FrameSettings = {
   paperTone: '#faf9f6',
   borderEnabled: false,
   borderInsetMm: 0,
+  borderCornerRadiusMm: 0,
   densityEnabled: false,
   densityMaxPasses: 1,
   densityMinOverlapMm: 2.5,

@@ -17,6 +17,7 @@ import {
 export interface RenderBorder {
   marginPx: number;
   insetPx: number;
+  cornerRadiusPx: number;
 }
 
 /** Density protection options from the shared page frame. */
@@ -83,6 +84,7 @@ self.onmessage = (event: MessageEvent<RenderRequest>) => {
           height: result.height,
           marginPx: border.marginPx,
           insetPx: border.insetPx,
+          cornerRadiusPx: border.cornerRadiusPx,
         })
       : [];
 

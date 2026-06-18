@@ -103,6 +103,18 @@ export function FrameControls() {
             value={frame.borderInsetMm}
             onChange={(e) => updateFrame({ borderInsetMm: parseInt(e.target.value, 10) })}
           />
+          <label>
+            Corner radius <span>{frame.borderCornerRadiusMm}mm</span>
+            <InfoTip text="Rounds the border's corners by this radius. 0 keeps sharp right-angle corners. The straight edges stay straight; only the corners curve." />
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="20"
+            step="1"
+            value={frame.borderCornerRadiusMm}
+            onChange={(e) => updateFrame({ borderCornerRadiusMm: parseInt(e.target.value, 10) })}
+          />
         </div>
       )}
 
