@@ -19,5 +19,6 @@ export function buildBorder(frame: FrameSettings, page: PageMetrics): FlowLine[]
     height: page.heightPx,
     marginPx: frame.marginMm * page.pxPerMm,
     insetPx: insetMm * page.pxPerMm,
+    cornerRadiusPx: frame.borderCornerRadiusMm * page.pxPerMm,
   });
 }

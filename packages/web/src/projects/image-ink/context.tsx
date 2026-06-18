@@ -552,6 +552,7 @@ export function ImageInkProvider({
                 // Negative inset opens a gap (rule outward into the margin);
                 // clamp to the sheet edge so it never plots off-page.
                 insetPx: Math.max(frame.borderInsetMm, -frame.marginMm) * page.pxPerMm,
+                cornerRadiusPx: frame.borderCornerRadiusMm * page.pxPerMm,
               }
             : undefined,
           density: frame.densityEnabled
@@ -577,7 +578,7 @@ export function ImageInkProvider({
   }, [
     active, sourceImage, inkLayout, settings, focusPoints, subjectMask, portraitState,
     depthMap, labelMap, lowMemory,
-    frame.borderEnabled, frame.borderInsetMm, frame.densityEnabled, frame.densityMaxPasses,
+    frame.borderEnabled, frame.borderInsetMm, frame.borderCornerRadiusMm, frame.densityEnabled, frame.densityMaxPasses,
     frame.densityMinOverlapMm,
     frame.textureEnabled, frame.textureStyle, frame.textureSpacingMm, frame.textureAngleDeg,
     frame.textureScale, frame.textureJitter, frame.textureDensity, frame.textureCrossHatch,

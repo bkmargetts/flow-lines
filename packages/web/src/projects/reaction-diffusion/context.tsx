@@ -137,6 +137,7 @@ export function RDProvider({
     frame.marginMm,
     frame.borderEnabled,
     frame.borderInsetMm,
+    frame.borderCornerRadiusMm,
     frame.densityEnabled,
     frame.densityMaxPasses,
     frame.densityMinOverlapMm,
