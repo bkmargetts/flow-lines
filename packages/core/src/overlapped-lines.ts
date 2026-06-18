@@ -219,7 +219,8 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
         if (run.length >= 2) lines.push({ points: run, layer: bandLayerName(k), pen: 'fine' });
         run = [];
       };
-      for (let a = -halfA; a <= halfA + 1e-6; a += step) {
+      // The perpendicular position at arc-length `a` (centreline + deviation).
+      const pointAt = (a: number): Point => {
         const wob =
           wobbleAmpPx > 0
             ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + k * 1.7, 2, 0.5, 2.2)
@@ -235,13 +236,41 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
               smooth01((halfP - Math.abs(b)) / edgeSmoothPx)
             : 1;
         const perp = b + k * baseStep + env * deviation;
-        const x = cx + dx * a + px * perp;
-        const y = cy + dy * a + py * perp;
-        if (!inBounds(x, y) || !pointInMask(maskShapes, x, y)) {
-          flush();
-          continue;
+        return { x: cx + dx * a + px * perp, y: cy + dy * a + py * perp };
+      };
+      const passes = (p: Point): boolean =>
+        inBounds(p.x, p.y) && pointInMask(maskShapes, p.x, p.y);
+      // Refine an inside→outside crossing to the boundary so line ends land on
+      // the mask/page edge instead of stair-stepping to the nearest sample.
+      const crossing = (aIn: number, aOut: number): Point => {
+        let lo = aIn;
+        let hi = aOut;
+        for (let i = 0; i < 14; i++) {
+          const mid = (lo + hi) / 2;
+          if (passes(pointAt(mid))) lo = mid;
+          else hi = mid;
         }
-        run.push({ x, y });
+        return pointAt(lo);
+      };
+
+      let prevA: number | null = null;
+      let prevPass = false;
+      for (let a = -halfA; a <= halfA + 1e-6; a += step) {
+        const p = pointAt(a);
+        const pass = passes(p);
+        if (pass) {
+          if (prevA !== null && !prevPass) run.push(crossing(a, prevA));
+          run.push(p);
+        } else {
+          if (prevPass && prevA !== null) {
+            run.push(crossing(prevA, a));
+            flush();
+          } else {
+            flush();
+          }
+        }
+        prevA = a;
+        prevPass = pass;
       }
       flush();
     }

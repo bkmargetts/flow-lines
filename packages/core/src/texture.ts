@@ -105,7 +105,9 @@ function buildHaloMask(
   height: number,
   haloPx: number
 ): (x: number, y: number) => boolean {
-  const cellSize = Math.max(2, Math.round(haloPx / 2));
+  // Finer than the halo radius so the reserved boundary reads as a smooth
+  // curve rather than coarse steps (refined further at clip time by bisection).
+  const cellSize = Math.max(2, Math.round(haloPx / 3));
   const cols = Math.max(1, Math.ceil(width / cellSize));
   const rows = Math.max(1, Math.ceil(height / cellSize));
   const occupied = new Uint8Array(cols * rows);
@@ -210,7 +212,12 @@ function pushClipped(out: FlowLine[], pts: Point[], isClear: (x: number, y: numb
   if (run.length >= 2) out.push(TEX(run));
 }
 
-/** Like `pushClipped`, but keeps the line's own layer (for multi-ink grating). */
+/**
+ * Like `pushClipped`, but keeps the line's own layer (for multi-ink grating)
+ * and refines each clear↔halo crossing to the boundary by bisection, so the
+ * texture's edge against the halo is a smooth curve rather than stair-steps at
+ * the sampling pitch.
+ */
 function pushClippedLayer(
   out: FlowLine[],
   pts: Point[],
@@ -222,9 +229,39 @@ function pushClippedLayer(
     if (run.length >= 2) out.push({ points: run, pen: 'fine', layer });
     run = [];
   };
+  const lerp = (p: Point, q: Point, t: number): Point => ({
+    x: p.x + (q.x - p.x) * t,
+    y: p.y + (q.y - p.y) * t,
+  });
+  // Boundary point between an in-halo `pOut` and a clear `pIn`.
+  const cross = (pIn: Point, pOut: Point): Point => {
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2;
+      const q = lerp(pIn, pOut, mid);
+      if (isClear(q.x, q.y)) lo = mid;
+      else hi = mid;
+    }
+    return lerp(pIn, pOut, lo);
+  };
+  let prev: Point | null = null;
+  let prevClear = false;
   for (const p of pts) {
-    if (isClear(p.x, p.y)) run.push(p);
-    else flush();
+    const clear = isClear(p.x, p.y);
+    if (clear) {
+      if (prev && !prevClear) run.push(cross(p, prev));
+      run.push(p);
+    } else {
+      if (prev && prevClear) {
+        run.push(cross(prev, p));
+        flush();
+      } else {
+        flush();
+      }
+    }
+    prev = p;
+    prevClear = clear;
   }
   flush();
 }

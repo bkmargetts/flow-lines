@@ -121,6 +121,19 @@ describe('generateOverlappedLines', () => {
     }
   });
 
+  it('refines mask crossings to the boundary (no stair-stepping)', () => {
+    // Vertical lines (angle 0) clipped to a rect: their ends should land on the
+    // rect's top/bottom edge to sub-pixel precision, not quantised to the
+    // ~2-8px sampling step.
+    const mask: MaskShape[] = [{ type: 'rect', x: 150, y: 100, w: 100, h: 80 }];
+    const r = generateOverlappedLines(
+      baseOptions({ maskShapes: mask, jitterPx: 0, wobbleAmpPx: 0, phaseNoiseAmpPx: 0 })
+    );
+    const ys = r.lines.flatMap((l) => l.points.map((p) => p.y));
+    expect(Math.min(...ys)).toBeLessThan(100.5);
+    expect(Math.max(...ys)).toBeGreaterThan(179.5);
+  });
+
   it('clips the pattern to a drawn-line band mask', () => {
     const band: MaskShape[] = [
       { type: 'band', path: [{ x: 60, y: 150 }, { x: 340, y: 150 }], halfWidthPx: 15 },
