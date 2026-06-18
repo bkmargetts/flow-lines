@@ -5,6 +5,7 @@ import { conwayProject } from './conway';
 import { complexFlowProject } from './complex-flow';
 import { reactionDiffusionProject } from './reaction-diffusion';
 import { leniaProject } from './lenia';
+import { noiseTextureProject } from './noise-texture';
 
 /**
  * Every art project in the app, in tab order. Image → Ink and Flow Field are
@@ -18,4 +19,5 @@ export const PROJECTS: ProjectModule[] = [
   complexFlowProject,
   reactionDiffusionProject,
   leniaProject,
+  noiseTextureProject,
 ];

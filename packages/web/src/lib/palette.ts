@@ -52,6 +52,12 @@ export const PALETTES: PaletteDef[] = [
     ramp: ['#111111', '#3a3a3a', '#6b6b6b', '#8a7f72', '#b8a999'],
   },
   {
+    id: 'riso',
+    label: 'Riso (black + red)',
+    ground: 'light',
+    ramp: ['#111111', '#e2231a'],
+  },
+  {
     id: 'mono',
     label: 'Mono (single pen)',
     ground: 'either',
