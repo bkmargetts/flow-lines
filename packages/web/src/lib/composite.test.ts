@@ -125,6 +125,48 @@ describe('composite', () => {
     expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(1);
   });
 
+  it('holds a live layer off the lines above it (cheap trim, no re-render)', () => {
+    // A live layer publishes a long horizontal line; a pure layer crosses it.
+    // Hold-off must trim the live layer's published lines too (the worker is
+    // never re-run — the trim is a post-process on the published output).
+    const liveMod = {
+      kind: 'live' as const,
+      id: 'ink',
+      label: 'ink',
+      defaultState: () => ({}),
+      Controls: () => null,
+      useInstance: () => {},
+    };
+    const top: PureModule<unknown> = {
+      kind: 'pure',
+      id: 'top',
+      label: 'top',
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: [{ points: [{ x: 150, y: 0 }, { x: 150, y: 200 }], pen: 'fine' }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+      }),
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      {
+        instanceId: 'ink',
+        module: liveMod,
+        state: {},
+        visible: true,
+        holdOffMm: 1.5,
+        liveOutput: {
+          lines: [{ points: [{ x: 10, y: 80 }, { x: 300, y: 80 }], pen: 'fine' }],
+          strokeColor: '#000',
+          strokeWidthPx: 1,
+        },
+      },
+      layer(top),
+    ]);
+    expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(2);
+  });
+
   it('is a clean empty sheet when there are no visible layers', () => {
     const result = composite({ ...defaultFrame }, page, [
       layer(stripe('a', '#ff0000', 20), { visible: false }),

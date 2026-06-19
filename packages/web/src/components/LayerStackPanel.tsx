@@ -1,6 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { MODULES, getModule } from '../modules/registry';
 import { useLayerStore, MAX_LAYERS } from '../LayerStore';
+
+/**
+ * The per-layer hold-off (halo) field. A bare controlled number input can't be
+ * cleared — emptying it parses to 0 and snaps straight back, so you can't delete
+ * the 0 to type a new value. This keeps the raw text locally, commits any valid
+ * number as you type, and only falls back to 0 on blur of an empty/invalid field.
+ */
+function HoldOffInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [text, setText] = useState(String(value));
+  // Re-sync when the committed value changes from elsewhere.
+  useEffect(() => setText(String(value)), [value]);
+  return (
+    <input
+      type="number"
+      min={0}
+      max={20}
+      step={0.5}
+      value={text}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = parseFloat(e.target.value);
+        if (!Number.isNaN(n)) onChange(Math.max(0, n));
+      }}
+      onBlur={() => {
+        const n = parseFloat(text);
+        if (text === '' || Number.isNaN(n)) {
+          setText('0');
+          onChange(0);
+        }
+      }}
+    />
+  );
+}
 
 /**
  * The layer stack: an ordered list (top row = top of the stack) with per-layer
@@ -83,17 +117,15 @@ export function LayerStackPanel() {
                   {busy && <span className="layer-busy" title="Rendering…"> ⟳</span>}
                 </span>
 
-                <label className="layer-holdoff" title="Clean-paper halo reserved around the layers above this one (mm)" onClick={(e) => e.stopPropagation()}>
+                <label
+                  className="layer-holdoff"
+                  title="Clean-paper halo (mm) this layer reserves around the layers stacked above it"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   halo
-                  <input
-                    type="number"
-                    min={0}
-                    max={20}
-                    step={0.5}
+                  <HoldOffInput
                     value={layer.holdOffMm}
-                    onChange={(e) =>
-                      setHoldOff(layer.instanceId, Math.max(0, Number(e.target.value) || 0))
-                    }
+                    onChange={(v) => setHoldOff(layer.instanceId, v)}
                   />
                 </label>
 

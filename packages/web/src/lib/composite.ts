@@ -79,9 +79,13 @@ export function composite(
     let out: LayerOutput | null;
 
     if (layer.module.kind === 'live') {
-      // Live layers never re-render against what's above them (their worker is
+      // Live layers never *re-render* against what's above them (their worker is
       // too expensive to re-run on stack churn) — take their published lines.
+      // Hold-off is still honoured cheaply by trimming those lines (no re-render).
       out = layer.liveOutput ?? null;
+      if (out && holdOff && haloPx != null) {
+        out = { ...out, lines: holdOffAgainst(out.lines, avoidAccum, haloPx) };
+      }
     } else {
       const env: RenderEnv = {
         page,
