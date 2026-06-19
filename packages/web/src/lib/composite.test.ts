@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { getPaperSize, pageMetrics } from '@flow-lines/core';
 import { composite, type CompositeLayer } from './composite';
 import { defaultFrame } from '../FrameContext';
+import { getModule } from '../modules/registry';
 import type { PureModule } from '../modules/types';
 
 const page = pageMetrics(getPaperSize('a4'), 'portrait', defaultFrame.resolution);
@@ -86,6 +87,42 @@ describe('composite', () => {
     ]);
     const bottomFrags = result.result.lines.filter((l) => l.layer === 'L0/fine');
     expect(bottomFrags.length).toBe(2);
+  });
+
+  it('composites a real generative module (conway) into stroked paths', () => {
+    const conway = getModule('conway') as PureModule<unknown>;
+    const result = composite({ ...defaultFrame }, page, [
+      layer(conway, { instanceId: 'c', state: conway.defaultState() }),
+    ]);
+    // The generator produced lines, namespaced into this layer's slot.
+    expect(result.result.lines.length).toBeGreaterThan(0);
+    expect(result.result.lines.every((l) => (l.layer ?? '').startsWith('L0/'))).toBe(true);
+    expect(result.exportSvg).toContain('<path');
+  });
+
+  it('runs density protection across the whole stack when enabled', () => {
+    // Two layers of identical coincident lines; with density on at one pass and
+    // a short overlap floor, each layer keeps its own line (per-pen grid) but a
+    // single layer's piled duplicates would be trimmed.
+    const dense = (id: string): PureModule<unknown> => ({
+      kind: 'pure',
+      id,
+      label: id,
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: Array.from({ length: 6 }, () => ({
+          points: [{ x: 20, y: 60 }, { x: 300, y: 60 }],
+          pen: 'fine' as const,
+        })),
+        strokeColor: '#000',
+        strokeWidthPx: 2,
+      }),
+    });
+    const frame = { ...defaultFrame, densityEnabled: true, densityMaxPasses: 1, densityMinOverlapMm: 1 };
+    const result = composite(frame, page, [layer(dense('d'), { instanceId: 'd' })]);
+    // 6 coincident passes on one pen → only the first survives.
+    expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(1);
   });
 
   it('is a clean empty sheet when there are no visible layers', () => {
