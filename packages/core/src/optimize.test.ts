@@ -209,4 +209,48 @@ describe('limitStrokeDensity', () => {
     const survivingB = out.result.lines.find((l) => l !== a && l.points[0].y < 50);
     expect(survivingB).toBeDefined();
   });
+
+  // The layer compositor namespaces each stacked layer's keys (e.g.
+  // 'L0/present', 'L1/present'), then runs one density pass over the whole
+  // composite. Because the coverage grid is per layer-key, content in one
+  // layer must not thin content in another — a layer can only saturate itself.
+  it('counts coverage per layer key — stacked layers do not thin each other', () => {
+    const overOneLayer = (layer: string): FlowLine[] =>
+      Array.from({ length: 20 }, () => ({
+        points: [
+          { x: 10, y: 50 },
+          { x: 90, y: 50 },
+        ],
+        layer,
+      }));
+
+    // Twenty coincident strokes split across two distinct layers (ten each).
+    const input = result([...overOneLayer('L0/present'), ...overOneLayer('L1/present')]);
+    const out = limitStrokeDensity(input, { maxPasses: 3, cellPx: 2 });
+
+    // Each layer saturates independently: 3 survive per layer, not 3 total.
+    const survived = (layer: string) =>
+      out.result.lines.filter((l) => l.layer === layer).length;
+    expect(survived('L0/present')).toBe(3);
+    expect(survived('L1/present')).toBe(3);
+  });
+
+  it('exempts namespaced bold layers via skipLayers', () => {
+    const bold = (): FlowLine[] =>
+      Array.from({ length: 10 }, () => ({
+        points: [
+          { x: 10, y: 50 },
+          { x: 90, y: 50 },
+        ],
+        layer: 'L2/bold',
+      }));
+    const out = limitStrokeDensity(result(bold()), {
+      maxPasses: 1,
+      cellPx: 2,
+      skipLayers: ['L2/bold'],
+    });
+    // Deliberate offset passes survive — none trimmed.
+    expect(out.result.lines.length).toBe(10);
+    expect(out.removed.length).toBe(0);
+  });
 });
