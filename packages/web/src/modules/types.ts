@@ -20,6 +20,9 @@ import type { FrameSettings } from '../FrameContext';
  * and never cares how that output was produced.
  */
 
+/** The pen width every built-in module defaults to (mm) — a fine plotter nib. */
+export const DEFAULT_PEN_WIDTH_MM = 0.3;
+
 /** Everything a module needs to turn its per-instance state into lines. */
 export interface RenderEnv {
   page: PageMetrics;
@@ -38,25 +41,35 @@ export interface RenderEnv {
   haloPx?: number;
 }
 
-/** A layer's contribution: its drawing lines plus the per-pen-layer inks it
- *  wants. Layer keys here are the module's own un-namespaced names
+/** A layer's contribution: its drawing lines plus the inks and pen weight it
+ *  wants. Layer keys in `layerColors` are the module's own un-namespaced names
  *  (`present`/`bold`/`texture`/…); the compositor namespaces them per stack
  *  slot so two instances of the same module never collide. */
 export interface LayerOutput {
   lines: FlowLine[];
-  layerColors: Record<string, string>;
+  /** Default ink for this layer's lines whose pen-layer isn't in `layerColors`. */
+  strokeColor: string;
+  /** Pen width for this layer, in px at the page's density. */
+  strokeWidthPx: number;
+  /** Per-pen-layer ink overrides (multi-ink layers), keyed by the module's own
+   *  layer names. Absent keys fall back to `strokeColor`. */
+  layerColors?: Record<string, string>;
 }
 
-/** Merge a partial update into a layer's module state — a value or a function
- *  of the current state (so appenders like mask-path points don't drop rapid
- *  updates). Mirrors the old updateSettings / updateTextureParams. */
-export type Updater<S> = (
-  updates: Partial<S> | ((current: S) => Partial<S>)
-) => void;
+/** A state patch — a partial value or a function of the current state (so
+ *  appenders like mask-path points don't drop rapid updates). */
+export type StateUpdate<S> = Partial<S> | ((current: S) => Partial<S>);
+
+/** Merge a patch into a layer's module state. Mirrors the old
+ *  updateSettings / updateTextureParams. */
+export type Updater<S> = (updates: StateUpdate<S>) => void;
 
 export interface ControlsProps<S> {
   state: S;
   update: Updater<S>;
+  /** This layer's stable instance id — live modules use it to look up their
+   *  per-instance image/ML state from the instance store. */
+  instanceId: string;
   /** Whether this layer is the one currently selected for editing — lets a
    *  module gate canvas-interaction affordances (focus taps, mask paint). */
   selected: boolean;
@@ -90,6 +103,8 @@ export interface LiveInstanceArgs<S> {
   state: S;
   env: RenderEnv;
   selected: boolean;
+  /** Update this layer's own module state (settings), like a pure layer's. */
+  update: Updater<S>;
   /** Publish this instance's latest lines (or null while it has none) and
    *  whether it's mid-render, so the stack can show a busy badge. */
   publish: (output: LayerOutput | null, busy: boolean) => void;

@@ -48,6 +48,17 @@ export interface InkSettings {
   autoStyle: boolean;
 }
 
+/**
+ * The serialisable per-layer state for an Image → Ink layer. Only the marks
+ * settings + the chosen preset live here; the heavy per-photo ML state
+ * (source image, depth/labels/mask/faces/focus) is owned by the mounted
+ * instance hook's local React state, not the layer state.
+ */
+export interface ImageInkLayerState {
+  settings: InkSettings;
+  preset: string;
+}
+
 export type SegmentStatus = 'idle' | 'loading' | 'error';
 export type PortraitStatus = 'idle' | 'loading' | 'error' | 'none';
 export type DepthStatus = 'idle' | 'loading' | 'error';

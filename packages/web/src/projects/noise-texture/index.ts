@@ -1,18 +1,13 @@
-import type { ProjectModule } from '../types';
-import { NoiseTextureProvider } from './context';
+import type { PureModule } from '../../modules/types';
 import { NoiseTextureControls } from './Controls';
-import { NoiseTextureCanvas } from './Canvas';
+import { renderNoiseTexture } from './render';
+import { defaultNoiseTextureState, type NoiseTextureState } from './types';
 
-export const noiseTextureProject: ProjectModule = {
+export const noiseTextureModule: PureModule<NoiseTextureState> = {
+  kind: 'pure',
   id: 'noise-texture',
   label: 'Noise Texture',
-  Provider: NoiseTextureProvider,
-  features: [
-    {
-      id: 'swatches',
-      label: 'Swatches',
-      Controls: NoiseTextureControls,
-      Canvas: NoiseTextureCanvas,
-    },
-  ],
+  defaultState: () => ({ ...defaultNoiseTextureState }),
+  Controls: NoiseTextureControls,
+  render: renderNoiseTexture,
 };

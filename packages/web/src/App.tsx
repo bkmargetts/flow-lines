@@ -1,35 +1,41 @@
-import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ComponentType,
+} from 'react';
 import { FrameProvider } from './FrameContext';
+import { LayerStoreProvider, useLayerStore } from './LayerStore';
 import { FrameControls } from './components/FrameControls';
-import { ProjectTabs } from './components/ProjectTabs';
-import { PROJECTS } from './projects/registry';
-import type { ProjectModule } from './projects/types';
-
-/**
- * Nest every project's Provider (in registry order, stable across renders so
- * React keeps each project's state) around the shell. Each Provider is told
- * whether its project is the active tab, so off-screen projects idle their
- * side-effects while keeping their in-progress work.
- */
-function composeProviders(
-  projects: ProjectModule[],
-  selectedProject: string,
-  children: ReactNode
-): ReactNode {
-  return projects.reduceRight<ReactNode>((acc, project) => {
-    const Provider = project.Provider;
-    if (!Provider) return acc;
-    return <Provider active={project.id === selectedProject}>{acc}</Provider>;
-  }, children);
-}
+import { LayerStackPanel } from './components/LayerStackPanel';
+import { PlotActions } from './components/PlotActions';
+import { PlotCanvas } from './components/PlotCanvas';
+import { getModule } from './modules/registry';
+import type { ControlsProps } from './modules/types';
 
 // How much of the bottom sheet peeks above the fold when collapsed (the grab
 // handle bar), in px.
 const SHEET_PEEK = 60;
 
-export function App() {
-  const [selectedProject, setSelectedProject] = useState(PROJECTS[0].id);
-  const [selectedFeature, setSelectedFeature] = useState(PROJECTS[0].features[0].id);
+/** The selected layer's module Controls, bound to that layer's state. */
+function SelectedLayerControls() {
+  const { layers, selectedId, updateState } = useLayerStore();
+  const layer = layers.find((l) => l.instanceId === selectedId) ?? layers[0];
+  const mod = getModule(layer.moduleId);
+  const Controls = mod.Controls as ComponentType<ControlsProps<unknown>>;
+  return (
+    <Controls
+      key={layer.instanceId}
+      state={layer.state}
+      update={(u) => updateState(layer.instanceId, u)}
+      instanceId={layer.instanceId}
+      selected
+    />
+  );
+}
+
+function Shell() {
   // Desktop: the controls collapse to full-screen the art pane.
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // Mobile: the controls are a bottom sheet that peeks above the art and drags
@@ -39,17 +45,6 @@ export function App() {
   const [dragOffset, setDragOffset] = useState<number | null>(null);
   const sheetRef = useRef<HTMLElement>(null);
   const dragRef = useRef<{ startY: number; base: number } | null>(null);
-
-  const activeProject =
-    PROJECTS.find((p) => p.id === selectedProject) ?? PROJECTS[0];
-  const activeFeature =
-    activeProject.features.find((f) => f.id === selectedFeature) ?? activeProject.features[0];
-
-  const onSelectProject = useCallback((id: string) => {
-    setSelectedProject(id);
-    const project = PROJECTS.find((p) => p.id === id);
-    if (project) setSelectedFeature(project.features[0].id);
-  }, []);
 
   // Track the phone breakpoint (matches the CSS media query) so the sheet
   // gestures only run on mobile.
@@ -61,8 +56,6 @@ export function App() {
     return () => mq.removeEventListener('change', update);
   }, []);
 
-  // Distance the sheet is pushed down when collapsed = its height minus the
-  // peeking handle. Read live so it tracks the viewport.
   const collapsedOffset = useCallback(() => {
     const h = sheetRef.current?.offsetHeight ?? Math.round(window.innerHeight * 0.85);
     return Math.max(0, h - SHEET_PEEK);
@@ -93,7 +86,6 @@ export function App() {
     if (!dragRef.current) return;
     const { base } = dragRef.current;
     const off = dragOffset ?? base;
-    // A tap (negligible travel) toggles; a real drag snaps to the nearer stop.
     if (Math.abs(off - base) < 6) {
       setSheetExpanded((v) => !v);
     } else {
@@ -103,17 +95,10 @@ export function App() {
     setDragOffset(null);
   }, [dragOffset, collapsedOffset]);
 
-  const ActiveControls = activeFeature.Controls;
-  const ActiveCanvas = activeFeature.Canvas;
-
   const dragging = dragOffset != null;
-  // Only drive the transform inline while a finger is down (1:1 tracking); the
-  // snapped open/closed positions are handled in CSS (.sheet-expanded), which
-  // also reserves the matching space for the art pane so the drawing is never
-  // covered.
   const sheetTransform = isMobile && dragging ? `translateY(${dragOffset}px)` : undefined;
 
-  const shell = (
+  return (
     <div className={`app ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
       <aside
         ref={sheetRef}
@@ -149,17 +134,10 @@ export function App() {
           </button>
         </div>
 
-        <ProjectTabs
-          projects={PROJECTS}
-          selectedProject={selectedProject}
-          selectedFeature={activeFeature.id}
-          onSelectProject={onSelectProject}
-          onSelectFeature={setSelectedFeature}
-        />
-
+        <LayerStackPanel />
         <FrameControls />
-
-        <ActiveControls />
+        <SelectedLayerControls />
+        <PlotActions />
 
         {/* Sticky fade hinting the controls scroll. */}
         <div className="scroll-fade" aria-hidden="true" />
@@ -177,10 +155,18 @@ export function App() {
             ☰
           </button>
         )}
-        <ActiveCanvas />
+        <PlotCanvas />
       </main>
     </div>
   );
+}
 
-  return <FrameProvider>{composeProviders(PROJECTS, selectedProject, shell)}</FrameProvider>;
+export function App() {
+  return (
+    <FrameProvider>
+      <LayerStoreProvider>
+        <Shell />
+      </LayerStoreProvider>
+    </FrameProvider>
+  );
 }

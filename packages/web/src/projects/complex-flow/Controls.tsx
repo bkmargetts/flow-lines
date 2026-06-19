@@ -1,7 +1,8 @@
 import { InfoTip } from '../../components/InfoTip';
 import { PalettePicker } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
-import { useComplexFlow } from './context';
+import type { ControlsProps } from '../../modules/types';
+import type { ComplexFlowState } from './types';
 import type { SingularityLayout, SeedLayout, LayerBy } from '@flow-lines/core';
 
 const SINGULARITY_LAYOUTS: { id: SingularityLayout; label: string }[] = [
@@ -25,17 +26,12 @@ const LAYER_BY: { id: LayerBy; label: string }[] = [
   { id: 'angle', label: 'Flow angle' },
 ];
 
-/** Sidebar controls for the Complex Flow project. */
-export function ComplexFlowControls() {
-  const {
-    state,
-    updateState,
-    randomizeSeed,
-    togglePlaceMode,
-    clearSingularities,
-    downloadSVG,
-    downloadLayers,
-  } = useComplexFlow();
+/** Sidebar controls for the Complex Flow module. */
+export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlowState>) {
+  const updateState = update;
+  const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
+  const togglePlaceMode = () => update((prev) => ({ placeMode: !prev.placeMode }));
+  const clearSingularities = () => update({ manualZeros: [], manualPoles: [] });
 
   const manualCount = state.manualZeros.length + state.manualPoles.length;
 
@@ -506,20 +502,6 @@ export function ComplexFlowControls() {
           />
         </div>
       </details>
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG}>
-          Download SVG
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={downloadLayers}
-          title="One SVG per colour band, zipped — plot each with a different pen"
-        >
-          Download layers (.zip)
-        </button>
-      </div>
     </div>
   );
 }

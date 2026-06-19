@@ -1,13 +1,15 @@
 import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
 import { GratingFields } from '../../textures/grating/GratingFields';
-import { useNoiseTexture } from './context';
+import type { ControlsProps } from '../../modules/types';
+import type { NoiseTextureState } from './types';
 
-/** Sidebar controls for the Noise Texture project — the shared grating fields
- * (with the drawn-line band mask wired to the canvas) plus pen width + export. */
-export function NoiseTextureControls() {
-  const { state, updateState, clearMaskPath, toggleDrawMode, downloadSVG, downloadLayers } =
-    useNoiseTexture();
+/** Sidebar controls for the Noise Texture module — the shared grating fields
+ * (with the drawn-line band mask wired to the canvas) plus pen width. */
+export function NoiseTextureControls({ state, update }: ControlsProps<NoiseTextureState>) {
+  const updateState = update;
+  const clearMaskPath = () => update({ maskPath: [] });
+  const toggleDrawMode = () => update({ drawMode: !state.drawMode });
 
   const bandControls = (
     <div className="control-group">
@@ -63,20 +65,6 @@ export function NoiseTextureControls() {
           value={state.penWidthMm}
           onChange={(e) => updateState({ penWidthMm: parseFloat(e.target.value) })}
         />
-      </div>
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG}>
-          Download SVG
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={downloadLayers}
-          title="One SVG per colour, zipped — plot each with a different pen"
-        >
-          Download layers (.zip)
-        </button>
       </div>
     </div>
   );

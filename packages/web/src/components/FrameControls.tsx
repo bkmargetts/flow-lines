@@ -1,11 +1,9 @@
-import type { ComponentType } from 'react';
 import type { PaperFit } from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
 import { InfoTip } from './InfoTip';
 import { ColorField } from './ColorField';
 import { EditableValue } from './EditableValue';
 import { PaperControls } from './PaperControls';
-import { TEXTURE_MODULES, getTextureModule, textureParamsFor } from '../textures/registry';
 
 /** Paper-tone swatches shown behind the drawing in the preview (never plotted). */
 const PAPER_TONES: Array<{ id: string; label: string }> = [
@@ -24,13 +22,7 @@ const PAPER_TONES: Array<{ id: string; label: string }> = [
  * to the same physical sheet.
  */
 export function FrameControls() {
-  const { frame, updateFrame, updateTextureParams } = useFrame();
-  const textureModule = getTextureModule(frame.textureModuleId);
-  const textureModuleParams = textureParamsFor(frame.textureModuleId, frame.textureParams);
-  const ActiveTextureControls = textureModule.Controls as ComponentType<{
-    params: unknown;
-    update: (updates: unknown) => void;
-  }>;
+  const { frame, updateFrame } = useFrame();
   return (
     <div className="frame-controls">
       <h3 className="section-title">Page</h3>
@@ -223,70 +215,6 @@ export function FrameControls() {
         value={frame.paperTone}
         onChange={(paperTone) => updateFrame({ paperTone })}
       />
-
-      <div className="control-group">
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={frame.textureEnabled}
-            onChange={(e) => updateFrame({ textureEnabled: e.target.checked })}
-          />
-          Background texture
-          <InfoTip text="An optional field of plottable strokes laid behind the drawing on its own pen layer (exports as a separate SVG). Held a clean-paper halo off the art so it doesn't crowd it." />
-        </label>
-      </div>
-
-      {frame.textureEnabled && (
-        <details className="adv-group" open>
-          <summary>Texture</summary>
-
-          <div className="control-group">
-            <label>
-              Texture module
-              <InfoTip text="The background texture is a pluggable module. 'Pattern' is the classic hatch/grid/dots; 'Grating' is the multi-ink interleaved line grating; 'Blank' is a template to build from." />
-            </label>
-            <select
-              value={frame.textureModuleId}
-              onChange={(e) => updateFrame({ textureModuleId: e.target.value })}
-            >
-              {TEXTURE_MODULES.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <ActiveTextureControls
-            params={textureModuleParams}
-            update={(u) => updateTextureParams(frame.textureModuleId, u as Record<string, unknown>)}
-          />
-
-          <div className="control-group">
-            <label>
-              Halo{" "}
-              <EditableValue
-                value={frame.textureHaloMm}
-                min={0}
-                max={10}
-                step={0.5}
-                onChange={(v) => updateFrame({ textureHaloMm: v })}
-              >
-                {frame.textureHaloMm.toFixed(1)}mm
-              </EditableValue>
-              <InfoTip text="Clean-paper sliver reserved around the drawing where the texture holds off, so the art reads off the textured ground. 0 lets the texture run under the drawing." />
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              step="0.5"
-              value={frame.textureHaloMm}
-              onChange={(e) => updateFrame({ textureHaloMm: parseFloat(e.target.value) })}
-            />
-          </div>
-        </details>
-      )}
     </div>
   );
 }

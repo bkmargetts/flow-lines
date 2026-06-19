@@ -15,6 +15,14 @@ export interface SVGOptions {
    */
   layerColors?: Record<string, string>;
   /**
+   * Per-layer stroke width in px, keyed like `layerColors`. Any layer not
+   * listed uses `strokeWidth`. Lets a stacked plot keep each layer's own pen
+   * weight (a fine texture under a heavier drawing) in one composited document
+   * while still plotting one pen per layer. Only consulted when `layerColors`
+   * is also set (the per-layer render path).
+   */
+  layerWidths?: Record<string, number>;
+  /**
    * Physical SVG width/height (e.g. "210mm"). When set, the document is
    * tagged with real-world dimensions while the `viewBox` stays in the px
    * coordinate space — so the on-screen preview (which reads the viewBox) and
@@ -101,7 +109,7 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
           renderPathElements(
             lines,
             options.layerColors?.[layer] ?? strokeColor,
-            strokeWidth,
+            options.layerWidths?.[layer] ?? strokeWidth,
             precision,
             optimizePaths
           )
@@ -196,7 +204,7 @@ export function toSVGLayers(
     const body = renderPathElements(
       lines,
       options.layerColors?.[layer] ?? strokeColor,
-      strokeWidth,
+      options.layerWidths?.[layer] ?? strokeWidth,
       precision,
       optimizePaths
     );

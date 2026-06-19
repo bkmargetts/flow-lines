@@ -1,6 +1,6 @@
 import { generateTexture } from '@flow-lines/core';
 import type { TextureModule } from '../textures/types';
-import type { ControlsProps, PureModule } from './types';
+import { DEFAULT_PEN_WIDTH_MM, type ControlsProps, type PureModule } from './types';
 
 /**
  * Adapt a legacy background-texture module into a unified `PureModule`. The
@@ -33,7 +33,13 @@ export function fromTextureModule<P>(mod: TextureModule<P>): PureModule<P> {
         avoid: env.avoid,
         haloMm: env.haloPx != null ? env.haloPx / env.page.pxPerMm : undefined,
       });
-      return { lines, layerColors: built.layerColors };
+      const firstColor = Object.values(built.layerColors)[0] ?? '#000000';
+      return {
+        lines,
+        strokeColor: firstColor,
+        strokeWidthPx: DEFAULT_PEN_WIDTH_MM * env.page.pxPerMm,
+        layerColors: built.layerColors,
+      };
     },
   };
 }

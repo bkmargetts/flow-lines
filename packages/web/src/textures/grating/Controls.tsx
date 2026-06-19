@@ -1,9 +1,9 @@
 import { GratingFields } from './GratingFields';
 import type { GratingParams } from './shared';
-import { useFrame } from '../../FrameContext';
 
-/** Grating controls for the background-texture panel — the full generative set,
- * with the drawn-line band wired to the active project's canvas via the frame. */
+/** Grating controls for the grating module's panel — the full generative set.
+ * (Drawing the band centreline on the canvas is a per-layer interaction that is
+ * not yet wired in the layer-stack canvas; the mask path can still be cleared.) */
 export function GratingTextureControls({
   params,
   update,
@@ -11,32 +11,16 @@ export function GratingTextureControls({
   params: GratingParams;
   update: (updates: Partial<GratingParams>) => void;
 }) {
-  const { frame, updateFrame } = useFrame();
-  const drawing = frame.textureMaskDrawing;
-
-  const bandControls = (
-    <div className="control-group">
-      <div className="paint-controls">
-        <button
-          type="button"
-          className={drawing ? 'primary active' : 'primary'}
-          onClick={() => updateFrame({ textureMaskDrawing: !drawing })}
-        >
-          {drawing ? 'Stop drawing' : 'Draw line'}
-        </button>
-        {params.maskPath.length > 0 && (
+  const bandControls =
+    params.maskPath.length > 0 ? (
+      <div className="control-group">
+        <div className="paint-controls">
           <button type="button" className="secondary" onClick={() => update({ maskPath: [] })}>
-            Clear ({params.maskPath.length})
+            Clear band ({params.maskPath.length})
           </button>
-        )}
+        </div>
       </div>
-      <p className="paint-hint">
-        {drawing
-          ? 'Drag across the canvas to lay down the band centreline.'
-          : 'Tap “Draw line”, then drag on the canvas. The texture fills a band either side of it.'}
-      </p>
-    </div>
-  );
+    ) : undefined;
 
   return (
     <GratingFields

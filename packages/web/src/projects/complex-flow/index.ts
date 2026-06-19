@@ -1,13 +1,13 @@
-import type { ProjectModule } from '../types';
-import { ComplexFlowProvider } from './context';
+import type { PureModule } from '../../modules/types';
 import { ComplexFlowControls } from './Controls';
-import { ComplexFlowCanvas } from './Canvas';
+import { renderComplexFlow } from './render';
+import { defaultComplexFlowState, type ComplexFlowState } from './types';
 
-export const complexFlowProject: ProjectModule = {
+export const complexFlowModule: PureModule<ComplexFlowState> = {
+  kind: 'pure',
   id: 'complex-flow',
   label: 'Complex Flow',
-  Provider: ComplexFlowProvider,
-  features: [
-    { id: 'field', label: 'Field', Controls: ComplexFlowControls, Canvas: ComplexFlowCanvas },
-  ],
+  defaultState: () => ({ ...defaultComplexFlowState }),
+  Controls: ComplexFlowControls,
+  render: renderComplexFlow,
 };

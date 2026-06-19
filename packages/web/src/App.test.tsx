@@ -1,21 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { PROJECTS } from './projects/registry';
+import { MODULES, getModule, DEFAULT_MODULE_ID } from './modules/registry';
 
-describe('Project registry', () => {
-  it('registers Image → Ink and Flow Field as the first two projects', () => {
-    expect(PROJECTS[0].id).toBe('image-ink');
-    expect(PROJECTS[1].id).toBe('flow-field');
+describe('Module registry', () => {
+  it('leads with Image → Ink as the default first layer', () => {
+    expect(MODULES[0].id).toBe('image-ink');
+    expect(DEFAULT_MODULE_ID).toBe('image-ink');
   });
 
-  it('gives every project at least one feature with Controls and Canvas', () => {
-    for (const project of PROJECTS) {
-      expect(project.id).toMatch(/^[a-z0-9-]+$/);
-      expect(project.features.length).toBeGreaterThan(0);
-      for (const feature of project.features) {
-        expect(typeof feature.Controls).toBe('function');
-        expect(typeof feature.Canvas).toBe('function');
-      }
+  it('every module is a well-formed pure or live module', () => {
+    for (const mod of MODULES) {
+      expect(mod.id).toMatch(/^[a-z0-9-]+$/);
+      expect(typeof mod.label).toBe('string');
+      expect(typeof mod.defaultState).toBe('function');
+      expect(typeof mod.Controls).toBe('function');
+      expect(mod.kind === 'pure' || mod.kind === 'live').toBe(true);
+      if (mod.kind === 'pure') expect(typeof mod.render).toBe('function');
+      else expect(typeof mod.useInstance).toBe('function');
     }
+  });
+
+  it('defaultState returns a fresh object per call (independent instances)', () => {
+    for (const mod of MODULES) {
+      const a = mod.defaultState();
+      const b = mod.defaultState();
+      expect(a).not.toBe(b);
+    }
+  });
+
+  it('includes the former background textures as modules', () => {
+    expect(getModule('classic').kind).toBe('pure');
+    expect(getModule('grating').kind).toBe('pure');
   });
 });
 

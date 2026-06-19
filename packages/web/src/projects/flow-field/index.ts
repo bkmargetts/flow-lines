@@ -1,13 +1,13 @@
-import type { ProjectModule } from '../types';
-import { FlowFieldProvider } from './context';
+import type { PureModule } from '../../modules/types';
 import { FlowFieldControls } from './Controls';
-import { FlowFieldCanvas } from './Canvas';
+import { renderFlowField } from './render';
+import { defaultFlowState, type FlowState } from './types';
 
-export const flowFieldProject: ProjectModule = {
+export const flowFieldModule: PureModule<FlowState> = {
+  kind: 'pure',
   id: 'flow-field',
   label: 'Flow Field',
-  Provider: FlowFieldProvider,
-  features: [
-    { id: 'field', label: 'Field', Controls: FlowFieldControls, Canvas: FlowFieldCanvas },
-  ],
+  defaultState: () => ({ ...defaultFlowState }),
+  Controls: FlowFieldControls,
+  render: renderFlowField,
 };

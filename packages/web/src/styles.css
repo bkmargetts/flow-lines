@@ -631,6 +631,118 @@ button.secondary:hover {
   margin-top: 8px;
 }
 
+/* The layer stack — the primary switch now: a plot is a stack of module
+   instances, top row = top of the stack. */
+.layer-stack {
+  margin-bottom: 12px;
+}
+
+.layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  cursor: pointer;
+}
+
+.layer-row.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.layer-reorder {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.7;
+}
+
+.layer-reorder button {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 2px;
+}
+
+.layer-reorder button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.layer-visible,
+.layer-remove {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  color: var(--text-secondary);
+}
+
+.layer-remove:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.layer-label {
+  flex: 1 1 auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-busy {
+  color: var(--accent);
+}
+
+.layer-holdoff {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+}
+
+.layer-holdoff input {
+  width: 44px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 0.72rem;
+}
+
+.layer-add {
+  display: flex;
+  gap: 6px;
+}
+
+.layer-add select {
+  flex: 1 1 auto;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
 /* The shared page frame, sitting under the tabs and above per-project controls */
 .frame-controls {
   margin-bottom: 8px;

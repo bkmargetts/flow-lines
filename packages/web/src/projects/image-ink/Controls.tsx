@@ -1,43 +1,65 @@
 import { ImageControls } from '../../components/ImageControls';
-import { useImageInk } from './context';
+import type { ControlsProps } from '../../modules/types';
+import { useInstanceApi } from './instance-store';
+import { PRESETS, type InkSettings, type ImageInkLayerState } from './types';
 
-/** Sidebar controls for the Image → Ink project, wired to its context. */
-export function ImageInkControls() {
-  const ink = useImageInk();
+/**
+ * Sidebar controls for an Image → Ink layer. Settings/preset come from the
+ * layer state (props); the live photo/ML surface comes from the instance's
+ * published API, looked up by instanceId. Download buttons are gone — SVG
+ * export is the frame/compositor's job now.
+ */
+export function ImageInkControls({
+  state,
+  update,
+  instanceId,
+}: ControlsProps<ImageInkLayerState>) {
+  const api = useInstanceApi(instanceId);
+
+  const updateSettings = (updates: Partial<InkSettings>) =>
+    update((s) => ({ settings: { ...s.settings, ...updates } }));
+
+  const applyPreset = (name: string) => {
+    const def = PRESETS[name];
+    if (!def) return;
+    update((s) => ({ preset: name, settings: { ...s.settings, ...def.settings } }));
+  };
+
+  // The instance hasn't mounted/registered yet (the layer's hook publishes its
+  // API on mount); render nothing until it has.
+  if (!api) return null;
+
   return (
     <ImageControls
-      settings={ink.settings}
-      imageName={ink.imageName}
-      preset={ink.preset}
-      applyPreset={ink.applyPreset}
-      updateSettings={ink.updateSettings}
-      onImageFile={ink.onImageFile}
-      randomizeSeed={ink.randomizeSeed}
-      downloadSVG={ink.downloadSVG}
-      downloadLayers={ink.downloadLayers}
-      hasLayers={ink.hasLayers}
-      focusPoints={ink.focusPoints}
-      clearFocus={ink.clearFocus}
-      subjectMask={ink.subjectMask}
-      segmentStatus={ink.segmentStatus}
-      isolateSubject={ink.isolateSubject}
-      clearSubjectMask={ink.clearSubjectMask}
-      portraitState={ink.portraitState}
-      portraitStatus={ink.portraitStatus}
-      detectFaces={ink.detectFaces}
-      clearPortrait={ink.clearPortrait}
-      depthMap={ink.depthMap}
-      depthStatus={ink.depthStatus}
-      depthError={ink.depthError}
-      estimateDepthMap={ink.estimateDepthMap}
-      clearDepth={ink.clearDepth}
-      labelMap={ink.labelMap}
-      labelStatus={ink.labelStatus}
-      labelError={ink.labelError}
-      estimateSceneLabels={ink.estimateSceneLabels}
-      clearLabels={ink.clearLabels}
-      lowMemory={ink.lowMemory}
-      disableLowMemory={ink.disableLowMemory}
+      settings={state.settings}
+      imageName={api.imageName}
+      preset={state.preset}
+      applyPreset={applyPreset}
+      updateSettings={updateSettings}
+      onImageFile={api.onImageFile}
+      randomizeSeed={api.randomizeSeed}
+      focusPoints={api.focusPoints}
+      clearFocus={api.clearFocus}
+      subjectMask={api.subjectMask}
+      segmentStatus={api.segmentStatus}
+      isolateSubject={api.isolateSubject}
+      clearSubjectMask={api.clearSubjectMask}
+      portraitState={api.portraitState}
+      portraitStatus={api.portraitStatus}
+      detectFaces={api.detectFaces}
+      clearPortrait={api.clearPortrait}
+      depthMap={api.depthMap}
+      depthStatus={api.depthStatus}
+      depthError={api.depthError}
+      estimateDepthMap={api.estimateDepthMap}
+      clearDepth={api.clearDepth}
+      labelMap={api.labelMap}
+      labelStatus={api.labelStatus}
+      labelError={api.labelError}
+      estimateSceneLabels={api.estimateSceneLabels}
+      clearLabels={api.clearLabels}
+      lowMemory={api.lowMemory}
+      disableLowMemory={api.disableLowMemory}
     />
   );
 }

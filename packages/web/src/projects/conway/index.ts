@@ -1,13 +1,13 @@
-import type { ProjectModule } from '../types';
-import { ConwayProvider } from './context';
+import type { PureModule } from '../../modules/types';
 import { ConwayControls } from './Controls';
-import { ConwayCanvas } from './Canvas';
+import { renderConway } from './render';
+import { defaultConwayState, type ConwayState } from './types';
 
-export const conwayProject: ProjectModule = {
+export const conwayModule: PureModule<ConwayState> = {
+  kind: 'pure',
   id: 'conway',
   label: 'Conway Long Exposure',
-  Provider: ConwayProvider,
-  features: [
-    { id: 'exposure', label: 'Long Exposure', Controls: ConwayControls, Canvas: ConwayCanvas },
-  ],
+  defaultState: () => ({ ...defaultConwayState }),
+  Controls: ConwayControls,
+  render: renderConway,
 };
