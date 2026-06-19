@@ -1,5 +1,6 @@
 import type { TextureStyle } from '@flow-lines/core';
 import { InfoTip } from '../../components/InfoTip';
+import { EditableValue } from '../../components/EditableValue';
 import { ColorField } from '../../components/ColorField';
 import type { ClassicParams } from './index';
 
@@ -42,7 +43,10 @@ export function ClassicControls({ params, update }: Props) {
         params.style === 'shapes') && (
         <div className="control-group">
           <label>
-            Spacing <span>{params.spacingMm.toFixed(1)}mm</span>
+            Spacing{" "}
+            <EditableValue value={params.spacingMm} min={1} max={12} step={0.5} onChange={(v) => update({ spacingMm: v })}>
+              {params.spacingMm.toFixed(1)}mm
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -58,7 +62,10 @@ export function ClassicControls({ params, update }: Props) {
       {(params.style === 'hatch' || params.style === 'grid' || params.style === 'shapes') && (
         <div className="control-group">
           <label>
-            Angle <span>{params.angleDeg}°</span>
+            Angle{" "}
+            <EditableValue value={params.angleDeg} min={0} max={180} step={1} onChange={(v) => update({ angleDeg: v })}>
+              {params.angleDeg}°
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -87,7 +94,10 @@ export function ClassicControls({ params, update }: Props) {
       {(params.style === 'stipple' || params.style === 'contours') && (
         <div className="control-group">
           <label>
-            Density <span>{params.density.toFixed(2)}</span>
+            Density{" "}
+            <EditableValue value={params.density} min={0} max={1} step={0.05} onChange={(v) => update({ density: v })}>
+              {params.density.toFixed(2)}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -103,7 +113,10 @@ export function ClassicControls({ params, update }: Props) {
       {params.style !== 'shapes' && (
         <div className="control-group">
           <label>
-            {params.style === 'contours' ? 'Scale' : 'Mark size'} <span>{params.scale.toFixed(2)}</span>
+            {params.style === 'contours' ? 'Scale' : 'Mark size'}{" "}
+            <EditableValue value={params.scale} min={0.2} max={3} step={0.1} onChange={(v) => update({ scale: v })}>
+              {params.scale.toFixed(2)}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -119,7 +132,10 @@ export function ClassicControls({ params, update }: Props) {
       {params.style !== 'grid' && (
         <div className="control-group">
           <label>
-            Jitter <span>{params.jitter.toFixed(2)}</span>
+            Jitter{" "}
+            <EditableValue value={params.jitter} min={0} max={1} step={0.05} onChange={(v) => update({ jitter: v })}>
+              {params.jitter.toFixed(2)}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -153,7 +169,10 @@ export function ClassicControls({ params, update }: Props) {
       {params.style === 'shapes' && (
         <div className="control-group">
           <label>
-            Shape size <span>{params.shapes.sizeMm.toFixed(1)}mm</span>
+            Shape size{" "}
+            <EditableValue value={params.shapes.sizeMm} min={1} max={20} step={0.5} onChange={(v) => update({ shapes: { ...params.shapes, sizeMm: v } })}>
+              {params.shapes.sizeMm.toFixed(1)}mm
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -169,7 +188,10 @@ export function ClassicControls({ params, update }: Props) {
       {params.style === 'shapes' && (
         <div className="control-group">
           <label>
-            Overlap <span>{params.shapes.overlap.toFixed(2)}</span>
+            Overlap{" "}
+            <EditableValue value={params.shapes.overlap} min={0} max={0.9} step={0.05} onChange={(v) => update({ shapes: { ...params.shapes, overlap: v } })}>
+              {params.shapes.overlap.toFixed(2)}
+            </EditableValue>
             <InfoTip text="Compresses the lattice below the spacing so shapes overlap. 0 keeps them on the spacing grid; higher packs them together." />
           </label>
           <input

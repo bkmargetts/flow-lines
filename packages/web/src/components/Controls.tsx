@@ -1,5 +1,6 @@
 import type { FlowState } from '../projects/flow-field/types';
 import { ColorField } from './ColorField';
+import { EditableValue } from './EditableValue';
 
 interface ControlsProps {
   state: FlowState;
@@ -83,7 +84,16 @@ export function Controls({
       {state.denseFill ? (
         <div className="control-group">
           <label>
-            Line Spacing <span>{state.lineSpacingMm.toFixed(1)}mm</span>
+            Line Spacing{" "}
+            <EditableValue
+              value={state.lineSpacingMm}
+              min={0.5}
+              max={10}
+              step={0.5}
+              onChange={(v) => updateState({ lineSpacingMm: v })}
+            >
+              {state.lineSpacingMm.toFixed(1)}mm
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -97,7 +107,16 @@ export function Controls({
       ) : (
         <div className="control-group">
           <label>
-            Line Count <span>{state.lineCount}</span>
+            Line Count{" "}
+            <EditableValue
+              value={state.lineCount}
+              min={10}
+              max={3000}
+              step={10}
+              onChange={(v) => updateState({ lineCount: v })}
+            >
+              {state.lineCount}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -112,7 +131,16 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Step Length <span>{state.stepLength}</span>
+          Step Length{" "}
+          <EditableValue
+            value={state.stepLength}
+            min={1}
+            max={10}
+            step={0.5}
+            onChange={(v) => updateState({ stepLength: v })}
+          >
+            {state.stepLength}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -126,7 +154,16 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Max Steps <span>{state.maxSteps}</span>
+          Max Steps{" "}
+          <EditableValue
+            value={state.maxSteps}
+            min={50}
+            max={1000}
+            step={50}
+            onChange={(v) => updateState({ maxSteps: v })}
+          >
+            {state.maxSteps}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -142,7 +179,16 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Noise Scale <span>{state.noiseScale.toFixed(4)}</span>
+          Noise Scale{" "}
+          <EditableValue
+            value={state.noiseScale}
+            min={0.001}
+            max={0.02}
+            step={0.001}
+            onChange={(v) => updateState({ noiseScale: v })}
+          >
+            {state.noiseScale.toFixed(4)}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -156,7 +202,16 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Octaves <span>{state.octaves}</span>
+          Octaves{" "}
+          <EditableValue
+            value={state.octaves}
+            min={1}
+            max={8}
+            step={1}
+            onChange={(v) => updateState({ octaves: v })}
+          >
+            {state.octaves}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -170,7 +225,16 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Persistence <span>{state.persistence.toFixed(2)}</span>
+          Persistence{" "}
+          <EditableValue
+            value={state.persistence}
+            min={0.1}
+            max={0.9}
+            step={0.05}
+            onChange={(v) => updateState({ persistence: v })}
+          >
+            {state.persistence.toFixed(2)}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -184,7 +248,16 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Lacunarity <span>{state.lacunarity.toFixed(1)}</span>
+          Lacunarity{" "}
+          <EditableValue
+            value={state.lacunarity}
+            min={1}
+            max={4}
+            step={0.1}
+            onChange={(v) => updateState({ lacunarity: v })}
+          >
+            {state.lacunarity.toFixed(1)}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -200,7 +273,16 @@ export function Controls({
 
       <div className="control-group">
         <label>
-          Pen Width <span>{state.penWidthMm}mm</span>
+          Pen Width{" "}
+          <EditableValue
+            value={state.penWidthMm}
+            min={0.1}
+            max={1.5}
+            step={0.05}
+            onChange={(v) => updateState({ penWidthMm: v })}
+          >
+            {state.penWidthMm}mm
+          </EditableValue>
         </label>
         <input
           type="range"

@@ -10,6 +10,7 @@ import {
   type SegmentStatus,
 } from '../projects/image-ink/types';
 import { ColorField } from './ColorField';
+import { EditableValue } from './EditableValue';
 
 interface ImageControlsProps {
   settings: InkSettings;
@@ -216,7 +217,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Layers <span>{settings.layers}</span>
+              Layers{' '}
+              <EditableValue value={settings.layers} min={1} max={5} step={1}
+                onChange={(v) => updateSettings({ layers: v })}>
+                {settings.layers}
+              </EditableValue>
             </label>
             <input
               type="range" min="1" max="5" step="1"
@@ -227,7 +232,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Shadow Spacing <span>{settings.minSpacing.toFixed(1)}px</span>
+              Shadow Spacing{' '}
+              <EditableValue value={settings.minSpacing} min={1.5} max={8} step={0.5}
+                onChange={(v) => updateSettings({ minSpacing: v })}>
+                {settings.minSpacing.toFixed(1)}px
+              </EditableValue>
             </label>
             <input
               type="range" min="1.5" max="8" step="0.5"
@@ -238,7 +247,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Highlight Spacing <span>{settings.maxSpacing.toFixed(0)}px</span>
+              Highlight Spacing{' '}
+              <EditableValue value={settings.maxSpacing} min={6} max={30} step={1}
+                onChange={(v) => updateSettings({ maxSpacing: v })}>
+                {settings.maxSpacing.toFixed(0)}px
+              </EditableValue>
             </label>
             <input
               type="range" min="6" max="30" step="1"
@@ -249,7 +262,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              White Cutoff <span>{settings.whiteCutoff.toFixed(2)}</span>
+              White Cutoff{' '}
+              <EditableValue value={settings.whiteCutoff} min={0} max={0.4} step={0.02}
+                onChange={(v) => updateSettings({ whiteCutoff: v })}>
+                {settings.whiteCutoff.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="0.4" step="0.02"
@@ -260,7 +277,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Tone Gamma <span>{settings.toneGamma.toFixed(2)}</span>
+              Tone Gamma{' '}
+              <EditableValue value={settings.toneGamma} min={0.5} max={2.5} step={0.05}
+                onChange={(v) => updateSettings({ toneGamma: v })}>
+                {settings.toneGamma.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range" min="0.5" max="2.5" step="0.05"
@@ -273,7 +294,10 @@ export function ImageControls({
           <div className="control-group">
             <label>
               Value Bands{' '}
-              <span>{settings.valueBands < 2 ? 'off' : settings.valueBands}</span>
+              <EditableValue value={settings.valueBands} min={0} max={6} step={1}
+                onChange={(v) => updateSettings({ valueBands: v })}>
+                {settings.valueBands < 2 ? 'off' : settings.valueBands}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="6" step="1"
@@ -287,7 +311,12 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Massing <span>{settings.valueBands < 2 ? 'needs value bands' : settings.massing.toFixed(2)}</span>
+              Massing{' '}
+              <EditableValue value={settings.massing} min={0} max={1} step={0.05}
+                onChange={(v) => updateSettings({ massing: v })}
+                disabled={settings.valueBands < 2}>
+                {settings.valueBands < 2 ? 'needs value bands' : settings.massing.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="1" step="0.05"
@@ -302,7 +331,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Hatch Patchiness <span>{settings.hatchPatchiness.toFixed(2)}</span>
+              Hatch Patchiness{' '}
+              <EditableValue value={settings.hatchPatchiness} min={0} max={1} step={0.05}
+                onChange={(v) => updateSettings({ hatchPatchiness: v })}>
+                {settings.hatchPatchiness.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="1" step="0.05"
@@ -331,7 +364,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Hatch Angle <span>{settings.hatchAngle}°</span>
+              Hatch Angle{' '}
+              <EditableValue value={settings.hatchAngle} min={-90} max={90} step={5}
+                onChange={(v) => updateSettings({ hatchAngle: v })}>
+                {settings.hatchAngle}°
+              </EditableValue>
             </label>
             <input
               type="range" min="-90" max="90" step="5"
@@ -342,7 +379,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Wobble <span>{settings.wobble.toFixed(1)}px</span>
+              Wobble{' '}
+              <EditableValue value={settings.wobble} min={0} max={3} step={0.1}
+                onChange={(v) => updateSettings({ wobble: v })}>
+                {settings.wobble.toFixed(1)}px
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="3" step="0.1"
@@ -353,7 +394,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Texture Strokes <span>{settings.textureStrokes.toFixed(2)}</span>
+              Texture Strokes{' '}
+              <EditableValue value={settings.textureStrokes} min={0} max={1} step={0.05}
+                onChange={(v) => updateSettings({ textureStrokes: v })}>
+                {settings.textureStrokes.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="1" step="0.05"
@@ -381,7 +426,10 @@ export function ImageControls({
           <div className="control-group">
             <label>
               Max Stroke Length{' '}
-              <span>{settings.maxStrokeLength === 0 ? 'unlimited' : `${settings.maxStrokeLength}px`}</span>
+              <EditableValue value={settings.maxStrokeLength} min={0} max={80} step={4}
+                onChange={(v) => updateSettings({ maxStrokeLength: v })}>
+                {settings.maxStrokeLength === 0 ? 'unlimited' : `${settings.maxStrokeLength}px`}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="80" step="4"
@@ -392,7 +440,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Flow Smoothing <span>{settings.fieldSmoothing}</span>
+              Flow Smoothing{' '}
+              <EditableValue value={settings.fieldSmoothing} min={2} max={12} step={1}
+                onChange={(v) => updateSettings({ fieldSmoothing: v })}>
+                {settings.fieldSmoothing}
+              </EditableValue>
             </label>
             <input
               type="range" min="2" max="12" step="1"
@@ -403,7 +455,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Counterchange <span>{settings.counterchange.toFixed(2)}</span>
+              Counterchange{' '}
+              <EditableValue value={settings.counterchange} min={0} max={1} step={0.05}
+                onChange={(v) => updateSettings({ counterchange: v })}>
+                {settings.counterchange.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="1" step="0.05"
@@ -415,7 +471,10 @@ export function ImageControls({
           <div className="control-group">
             <label>
               Silhouette Halo{' '}
-              <span>{settings.contourHalo === 0 ? 'off' : `${settings.contourHalo.toFixed(1)}px`}</span>
+              <EditableValue value={settings.contourHalo} min={0} max={6} step={0.2}
+                onChange={(v) => updateSettings({ contourHalo: v })}>
+                {settings.contourHalo === 0 ? 'off' : `${settings.contourHalo.toFixed(1)}px`}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="6" step="0.2"
@@ -497,7 +556,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Detail Emphasis <span>{settings.detailEmphasis.toFixed(2)}</span>
+              Detail Emphasis{' '}
+              <EditableValue value={settings.detailEmphasis} min={0} max={1} step={0.05}
+                onChange={(v) => updateSettings({ detailEmphasis: v })}>
+                {settings.detailEmphasis.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range" min="0" max="1" step="0.05"
@@ -510,7 +573,11 @@ export function ImageControls({
             <>
               <div className="control-group">
                 <label>
-                  Focus Radius <span>{settings.focusRadiusPct}%</span>
+                  Focus Radius{' '}
+                  <EditableValue value={settings.focusRadiusPct} min={5} max={60} step={1}
+                    onChange={(v) => updateSettings({ focusRadiusPct: v })}>
+                    {settings.focusRadiusPct}%
+                  </EditableValue>
                 </label>
                 <input
                   type="range" min="5" max="60" step="1"
@@ -523,7 +590,11 @@ export function ImageControls({
 
               <div className="control-group">
                 <label>
-                  Focus Strength <span>{settings.focusStrength.toFixed(2)}</span>
+                  Focus Strength{' '}
+                  <EditableValue value={settings.focusStrength} min={0} max={1} step={0.05}
+                    onChange={(v) => updateSettings({ focusStrength: v })}>
+                    {settings.focusStrength.toFixed(2)}
+                  </EditableValue>
                 </label>
                 <input
                   type="range" min="0" max="1" step="0.05"
@@ -558,7 +629,11 @@ export function ImageControls({
               {subjectMask && (
                 <div className="control-group">
                   <label>
-                    Mask Strength <span>{settings.maskStrength.toFixed(2)}</span>
+                    Mask Strength{' '}
+                    <EditableValue value={settings.maskStrength} min={0} max={1} step={0.05}
+                      onChange={(v) => updateSettings({ maskStrength: v })}>
+                      {settings.maskStrength.toFixed(2)}
+                    </EditableValue>
                   </label>
                   <input
                     type="range" min="0" max="1" step="0.05"
@@ -637,7 +712,11 @@ export function ImageControls({
             <>
               <div className="control-group">
                 <label>
-                  Skin Lightening <span>{settings.skinLightening.toFixed(2)}</span>
+                  Skin Lightening{' '}
+                  <EditableValue value={settings.skinLightening} min={0} max={1} step={0.05}
+                    onChange={(v) => updateSettings({ skinLightening: v })}>
+                    {settings.skinLightening.toFixed(2)}
+                  </EditableValue>
                 </label>
                 <input
                   type="range" min="0" max="1" step="0.05"
@@ -663,7 +742,11 @@ export function ImageControls({
             <>
               <div className="control-group">
                 <label>
-                  Form Strength <span>{settings.formStrength.toFixed(2)}</span>
+                  Form Strength{' '}
+                  <EditableValue value={settings.formStrength} min={0} max={1} step={0.05}
+                    onChange={(v) => updateSettings({ formStrength: v })}>
+                    {settings.formStrength.toFixed(2)}
+                  </EditableValue>
                 </label>
                 <input
                   type="range" min="0" max="1" step="0.05"
@@ -674,7 +757,11 @@ export function ImageControls({
 
               <div className="control-group">
                 <label>
-                  Depth Fade <span>{settings.depthIsolation.toFixed(2)}</span>
+                  Depth Fade{' '}
+                  <EditableValue value={settings.depthIsolation} min={0} max={1} step={0.05}
+                    onChange={(v) => updateSettings({ depthIsolation: v })}>
+                    {settings.depthIsolation.toFixed(2)}
+                  </EditableValue>
                 </label>
                 <input
                   type="range" min="0" max="1" step="0.05"
@@ -705,7 +792,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Detail Resolution <span>{settings.workingSize}px</span>
+              Detail Resolution{' '}
+              <EditableValue value={settings.workingSize} min={400} max={1000} step={50}
+                onChange={(v) => updateSettings({ workingSize: v })}>
+                {settings.workingSize}px
+              </EditableValue>
             </label>
             <input
               type="range" min="400" max="1000" step="50"
@@ -716,7 +807,11 @@ export function ImageControls({
 
           <div className="control-group">
             <label>
-              Pen Width <span>{settings.penWidthMm}mm</span>
+              Pen Width{' '}
+              <EditableValue value={settings.penWidthMm} min={0.1} max={1.5} step={0.05}
+                onChange={(v) => updateSettings({ penWidthMm: v })}>
+                {settings.penWidthMm}mm
+              </EditableValue>
             </label>
             <input
               type="range" min="0.1" max="1.5" step="0.05"

@@ -1,4 +1,5 @@
 import { InfoTip } from '../../components/InfoTip';
+import { EditableValue } from '../../components/EditableValue';
 import { GratingFields } from '../../textures/grating/GratingFields';
 import { useNoiseTexture } from './context';
 
@@ -44,7 +45,15 @@ export function NoiseTextureControls() {
             Pen width
             <InfoTip text="Plotted line weight in millimetres. Thin pens keep the interleaved grating crisp." />
           </span>
-          <span>{state.penWidthMm.toFixed(2)}mm</span>
+          <EditableValue
+            value={state.penWidthMm}
+            min={0.05}
+            max={0.8}
+            step={0.05}
+            onChange={(v) => updateState({ penWidthMm: v })}
+          >
+            {state.penWidthMm.toFixed(2)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
