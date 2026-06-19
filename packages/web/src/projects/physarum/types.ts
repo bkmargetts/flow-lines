@@ -103,7 +103,7 @@ export const defaultPhysarumState: PhysarumState = {
   style: 'contour',
   sampleEvery: 2,
   minPathLength: 8,
-  pathFraction: 0.12,
+  pathFraction: 0.05,
   contourLevels: 6,
   blurSigma: 1.0,
   isoLow: 0.2,

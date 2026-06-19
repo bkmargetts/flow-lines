@@ -103,16 +103,16 @@ export function PhysarumControls({ state, update }: ControlsProps<PhysarumState>
                 Trail density
                 <InfoTip text="What fraction of the agents have their trajectory drawn. The rest still crawl and lay trail (shaping the network the drawn ones follow) — this only thins the ink. Lower keeps the plot light and the veins legible." />
               </span>
-              <EditableValue value={Math.round(state.pathFraction * 100)} min={5} max={100} step={5}
+              <EditableValue value={Math.round(state.pathFraction * 100)} min={1} max={100} step={1}
                 onChange={(v) => updateState({ pathFraction: v / 100 })}>
                 {Math.round(state.pathFraction * 100)}%
               </EditableValue>
             </label>
             <input
               type="range"
-              min="5"
+              min="1"
               max="100"
-              step="5"
+              step="1"
               value={Math.round(state.pathFraction * 100)}
               onChange={(e) => updateState({ pathFraction: parseInt(e.target.value, 10) / 100 })}
             />

@@ -78,7 +78,7 @@ export interface PhysarumOptions {
   sampleEvery?: number;
   /** 'paths': drop trajectory runs shorter than this, in cells (default 8) */
   minPathLength?: number;
-  /** 'paths': fraction of agents whose trajectory is traced, 0..1 (default 0.12) */
+  /** 'paths': fraction of agents whose trajectory is traced, 0..1 (default 0.05) */
   pathFraction?: number;
   /** 'paths': skip this fraction of the run before recording, so trails follow
    *  the consolidated network rather than the initial random scatter (default 0.45) */
@@ -525,7 +525,7 @@ export function generatePhysarum(options: PhysarumOptions): FlowLinesResult {
     style = 'contour',
     sampleEvery = 2,
     minPathLength = 8,
-    pathFraction = 0.12,
+    pathFraction = 0.05,
     settleFraction = 0.45,
     contourLevels = 6,
     blurSigma = 1.0,
@@ -557,18 +557,24 @@ export function generatePhysarum(options: PhysarumOptions): FlowLinesResult {
 
   const empty = (): FlowLinesResult => ({ lines: [], width, height, seed });
 
-  // The user picks the grid width; the cell pixel size is derived so square
-  // cells fill the framed page. Sim cost depends on cols·rows·steps and
-  // agents·steps, never on page resolution. (Same gutter dance as RD/Lenia.)
+  // The user picks the grid width; the grid *shape* follows the page aspect,
+  // NOT the margin. A fixed-px margin changes the inner box's aspect ratio, so
+  // deriving rows from the margined area made the margin silently resize the
+  // simulation — and since the network is a sensitive emergent system, a
+  // different grid shape grows a wholly different network instead of the same
+  // one reframed. Tying rows to the page aspect means the margin only scales
+  // and insets the same network. Sim cost depends on cols·rows·steps and
+  // agents·steps, never on page resolution.
   const cols = clamp(Math.round(options.gridCols ?? 200), 8, MAX_COLS);
+  const rows = clamp(Math.round((height / width) * cols), 8, 2 * MAX_COLS);
   const innerW = Math.max(0, width - 2 * margin);
   const refCell = cols > 0 ? innerW / cols : 0;
   const gutter = artStyle ? borderGap * refCell : 0;
   const frameMargin = margin + gutter;
   const usableW = Math.max(0, width - 2 * frameMargin);
   const usableH = Math.max(0, height - 2 * frameMargin);
-  const cellPx = cols > 0 ? usableW / cols : 0;
-  const rows = cellPx > 0 ? Math.round(usableH / cellPx) : 0;
+  // Square cells that fit the framed page in both axes.
+  const cellPx = Math.min(cols > 0 ? usableW / cols : 0, rows > 0 ? usableH / rows : 0);
   if (cellPx < 0.5 || cols < 8 || rows < 8) return empty();
 
   const originX = frameMargin + (usableW - cols * cellPx) / 2;
@@ -587,10 +593,12 @@ export function generatePhysarum(options: PhysarumOptions): FlowLinesResult {
   const cellCount = cols * rows;
   if (cellCount * steps > FIELD_STEP_BUDGET) steps = Math.max(1, Math.floor(FIELD_STEP_BUDGET / cellCount));
 
-  // Cap the number of traced trajectories: a good contour network wants many
-  // agents, but drawing thousands of overlapping trails reads as mud. The
-  // fraction thins the ink; the cap keeps `paths` legible at any agent count.
-  const PATH_CEILING = 600;
+  // Trail density: how many of the agents have their trajectory traced. A good
+  // contour network wants many agents, but every traced trail adds ink, so this
+  // fraction is the knob that thins `paths` from a delicate filigree to a dense
+  // tangle. (An absolute ceiling well above the slider's range only guards
+  // against a pathological agentCount×fraction blowing up the SVG.)
+  const PATH_CEILING = 8000;
   const recordCount = style === 'paths'
     ? clamp(Math.round(clamp(pathFraction, 0, 1) * agentCount), 0, Math.min(agentCount, PATH_CEILING))
     : 0;

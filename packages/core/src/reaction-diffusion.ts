@@ -455,20 +455,24 @@ export function generateReactionDiffusion(options: ReactionDiffusionOptions): Fl
 
   const empty = (): FlowLinesResult => ({ lines: [], width, height, seed });
 
-  // The user picks the grid width; the cell pixel size is derived so square
-  // cells fill the framed page. Sim cost depends only on cols·rows·steps,
-  // never on the page resolution. The border gutter is reserved using a
-  // reference cell size from the margin box (cellPx itself depends on the
-  // gutter), so toggling the shared plate border never resizes the grid.
+  // The user picks the grid width; the grid *shape* follows the page aspect,
+  // not the margin. Sim cost depends only on cols·rows·steps, never on the page
+  // resolution. Deriving rows from the margined area let a fixed-px margin
+  // change the inner box's aspect ratio and so the grid shape, re-running a
+  // different pattern on every margin tweak; tying rows to the page aspect means
+  // the margin only scales and insets the same field. The border gutter is
+  // reserved from a reference cell size off the margin box, so toggling the
+  // shared plate border never resizes the grid.
   const cols = clamp(Math.round(options.gridCols ?? 180), 8, MAX_COLS);
+  const rows = clamp(Math.round((height / width) * cols), 8, 2 * MAX_COLS);
   const innerW = Math.max(0, width - 2 * margin);
   const refCell = cols > 0 ? innerW / cols : 0;
   const gutter = artStyle ? borderGap * refCell : 0;
   const frameMargin = margin + gutter;
   const usableW = Math.max(0, width - 2 * frameMargin);
   const usableH = Math.max(0, height - 2 * frameMargin);
-  const cellPx = cols > 0 ? usableW / cols : 0;
-  const rows = cellPx > 0 ? Math.round(usableH / cellPx) : 0;
+  // Square cells that fit the framed page in both axes.
+  const cellPx = Math.min(cols > 0 ? usableW / cols : 0, rows > 0 ? usableH / rows : 0);
   if (cellPx < 0.5 || cols < 8 || rows < 8) return empty();
 
   // Centre the grid within the framed page.
