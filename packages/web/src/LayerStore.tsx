@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { getPaperSize, pageMetrics } from '@flow-lines/core';
 import { useFrame } from './FrameContext';
-import { getModule, DEFAULT_MODULE_ID } from './modules/registry';
+import { getModule } from './modules/registry';
 import type { LayerOutput, LiveModule, RenderEnv, StateUpdate } from './modules/types';
 import { composite, type CompositeLayer, type CompositeResult } from './lib/composite';
 
@@ -65,9 +65,9 @@ function makeLayer(moduleId: string): Layer {
 }
 
 export function LayerStoreProvider({ children }: { children: ReactNode }) {
-  // A fresh plot starts with one layer of the default module.
-  const [layers, setLayers] = useState<Layer[]>(() => [makeLayer(DEFAULT_MODULE_ID)]);
-  const [selectedId, setSelectedId] = useState<string>(() => layers[0].instanceId);
+  // A fresh plot starts empty — the user adds the layers they want.
+  const [layers, setLayers] = useState<Layer[]>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
   const [liveOutputs, setLiveOutputs] = useState<Record<string, LiveEntry>>({});
 
   const addLayer = useCallback((moduleId: string) => {
@@ -82,10 +82,10 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
 
   const removeLayer = useCallback((instanceId: string) => {
     setLayers((prev) => {
-      if (prev.length <= 1) return prev; // a plot always has at least one layer
       const next = prev.filter((l) => l.instanceId !== instanceId);
+      // Reselect the new top layer, or clear the selection if the stack is empty.
       setSelectedId((sel) =>
-        sel === instanceId ? next[next.length - 1].instanceId : sel
+        sel === instanceId ? (next.length ? next[next.length - 1].instanceId : '') : sel
       );
       return next;
     });

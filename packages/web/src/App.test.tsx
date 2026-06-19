@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MODULES, getModule, DEFAULT_MODULE_ID } from './modules/registry';
 
 describe('Module registry', () => {
-  it('leads with Image → Ink as the default first layer', () => {
+  it('leads with Image → Ink as the default add-layer choice', () => {
     expect(MODULES[0].id).toBe('image-ink');
     expect(DEFAULT_MODULE_ID).toBe('image-ink');
   });

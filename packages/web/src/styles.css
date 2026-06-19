@@ -727,6 +727,13 @@ button.secondary:hover {
   font-size: 0.72rem;
 }
 
+.layer-empty {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+  padding: 8px 4px;
+  margin: 0;
+}
+
 .layer-add {
   display: flex;
   gap: 6px;

@@ -21,7 +21,8 @@ const SHEET_PEEK = 60;
 /** The selected layer's module Controls, bound to that layer's state. */
 function SelectedLayerControls() {
   const { layers, selectedId, updateState } = useLayerStore();
-  const layer = layers.find((l) => l.instanceId === selectedId) ?? layers[0];
+  const layer = layers.find((l) => l.instanceId === selectedId) ?? layers[layers.length - 1];
+  if (!layer) return null; // empty stack — nothing selected
   const mod = getModule(layer.moduleId);
   const Controls = mod.Controls as ComponentType<ControlsProps<unknown>>;
   return (

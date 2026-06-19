@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MODULES, getModule } from '../modules/registry';
+import { MODULES, getModule, DEFAULT_MODULE_ID } from '../modules/registry';
 import { useLayerStore, MAX_LAYERS } from '../LayerStore';
 
 /**
@@ -54,13 +54,16 @@ export function LayerStackPanel() {
     setHoldOff,
     canAdd,
   } = useLayerStore();
-  const [pick, setPick] = useState(MODULES[0].id);
+  const [pick, setPick] = useState(DEFAULT_MODULE_ID);
 
   return (
     <div className="layer-stack">
       <h3 className="section-title">Layers</h3>
 
       <div className="layer-list">
+        {layers.length === 0 && (
+          <p className="layer-empty">No layers yet — add one below to begin.</p>
+        )}
         {/* Top of the stack renders at the top of the list. */}
         {layers
           .map((layer, index) => ({ layer, index }))
@@ -133,7 +136,6 @@ export function LayerStackPanel() {
                   type="button"
                   className="layer-remove"
                   title="Remove layer"
-                  disabled={layers.length <= 1}
                   onClick={(e) => {
                     e.stopPropagation();
                     removeLayer(layer.instanceId);

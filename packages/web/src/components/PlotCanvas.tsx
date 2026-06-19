@@ -46,14 +46,21 @@ export function PlotCanvas() {
     });
   };
 
-  const showUploadHint = isInk && api != null && !api.sourceImage && layers.length === 1;
+  // Empty stack → prompt to add a layer. A lone Image→Ink layer with no photo
+  // yet → prompt to upload (its composite is empty until an image lands).
+  const emptyHint =
+    layers.length === 0
+      ? 'Add a layer to begin — pick a module below the layer list.'
+      : isInk && api != null && !api.sourceImage && comp.result.lines.length === 0
+        ? 'Upload an image to render it as pen-and-ink strokes.'
+        : null;
 
   return (
     <>
       {api?.isRendering && <div className="rendering-badge">Rendering…</div>}
-      {showUploadHint ? (
+      {emptyHint ? (
         <div className="empty-state">
-          <p>Upload an image to render it as pen-and-ink strokes.</p>
+          <p>{emptyHint}</p>
         </div>
       ) : (
         <Preview
