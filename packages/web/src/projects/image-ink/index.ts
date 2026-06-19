@@ -1,13 +1,13 @@
-import type { ProjectModule } from '../types';
-import { ImageInkProvider } from './context';
+import type { LiveModule } from '../../modules/types';
 import { ImageInkControls } from './Controls';
-import { ImageInkCanvas } from './Canvas';
+import { useImageInkInstance } from './live';
+import { defaultInkSettings, type ImageInkLayerState } from './types';
 
-export const imageInkProject: ProjectModule = {
+export const imageInkModule: LiveModule<ImageInkLayerState> = {
+  kind: 'live',
   id: 'image-ink',
   label: 'Image → Ink',
-  Provider: ImageInkProvider,
-  features: [
-    { id: 'photo', label: 'Photo', Controls: ImageInkControls, Canvas: ImageInkCanvas },
-  ],
+  defaultState: () => ({ settings: { ...defaultInkSettings }, preset: 'classic' }),
+  Controls: ImageInkControls,
+  useInstance: useImageInkInstance,
 };

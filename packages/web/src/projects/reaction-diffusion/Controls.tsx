@@ -2,7 +2,7 @@ import { RD_PRESETS, type RDPreset } from '@flow-lines/core';
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
-import { useRD } from './context';
+import type { ControlsProps } from '../../modules/types';
 import type { RDState } from './types';
 
 const PRESET_LABELS: Record<RDPreset, string> = {
@@ -16,9 +16,10 @@ const PRESET_LABELS: Record<RDPreset, string> = {
   worms: 'Worms (filaments)',
 };
 
-/** Sidebar controls for the Reaction–Diffusion project. */
-export function RDControls() {
-  const { state, updateState, randomizeSeed, downloadSVG, downloadLayers } = useRD();
+/** Sidebar controls for the Reaction–Diffusion module. */
+export function RDControls({ state, update }: ControlsProps<RDState>) {
+  const updateState = update;
+  const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
 
   // The preset sets a feed/kill base; the advanced sliders fine-tune from there.
   const selectPreset = (preset: RDPreset) => {
@@ -542,20 +543,6 @@ export function RDControls() {
           </details>
         )}
       </details>
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG}>
-          Download SVG
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={downloadLayers}
-          title="One SVG per layer (core / mid / rim), zipped — plot each with a different pen"
-        >
-          Download layers (.zip)
-        </button>
-      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { LENIA_PRESETS, type LeniaPreset } from '@flow-lines/core';
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
-import { useLenia } from './context';
+import type { ControlsProps } from '../../modules/types';
 import type { LeniaState } from './types';
 
 const PRESET_LABELS: Record<LeniaPreset, string> = {
@@ -12,9 +12,10 @@ const PRESET_LABELS: Record<LeniaPreset, string> = {
   pulse: 'Pulse (symmetric)',
 };
 
-/** Sidebar controls for the Lenia project. */
-export function LeniaControls() {
-  const { state, updateState, randomizeSeed, downloadSVG, downloadLayers } = useLenia();
+/** Sidebar controls for the Lenia module. */
+export function LeniaControls({ state, update }: ControlsProps<LeniaState>) {
+  const updateState = update;
+  const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
 
   // The preset binds a rule (kernel + growth) and a seed pattern; the advanced
   // sliders fine-tune from there.
@@ -589,20 +590,6 @@ export function LeniaControls() {
           </details>
         )}
       </details>
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG}>
-          Download SVG
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={downloadLayers}
-          title="One SVG per layer (core / mid / rim), zipped — plot each with a different pen"
-        >
-          Download layers (.zip)
-        </button>
-      </div>
     </div>
   );
 }

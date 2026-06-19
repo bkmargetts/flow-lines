@@ -1,12 +1,13 @@
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
-import { useConway } from './context';
+import type { ControlsProps } from '../../modules/types';
 import type { ConwayState } from './types';
 
-/** Sidebar controls for the Conway Long Exposure project. */
-export function ConwayControls() {
-  const { state, updateState, randomizeSeed, downloadSVG, downloadLayers } = useConway();
+/** Sidebar controls for the Conway Long Exposure module. */
+export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
+  const updateState = update;
+  const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
 
   return (
     <div className="controls">
@@ -587,20 +588,6 @@ export function ConwayControls() {
           </details>
         )}
       </details>
-
-      <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG}>
-          Download SVG
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          onClick={downloadLayers}
-          title="One SVG per layer (present / ghost / trail), zipped — plot each with a different pen"
-        >
-          Download layers (.zip)
-        </button>
-      </div>
     </div>
   );
 }

@@ -97,6 +97,36 @@ describe('texture layer ordering', () => {
   });
 });
 
+describe('preserveLayerOrder', () => {
+  // A stack arranged back-to-front by a compositor: a texture-tagged layer on
+  // top of a 'present' layer. The heuristic would yank texture behind; with
+  // preserveLayerOrder the input order wins.
+  const stacked: FlowLinesResult = {
+    width: 100,
+    height: 80,
+    seed: 1,
+    lines: [
+      { points: [{ x: 0, y: 0 }, { x: 50, y: 0 }], layer: 'L0/present' },
+      { points: [{ x: 0, y: 40 }, { x: 50, y: 40 }], layer: 'L1/texture' },
+    ],
+  };
+
+  it('keeps input layer order in toSVGLayers', () => {
+    const layers = toSVGLayers(stacked, { preserveLayerOrder: true });
+    expect(layers.map((l) => l.layer)).toEqual(['L0/present', 'L1/texture']);
+  });
+
+  it('renders layers in input order in toSVG with layerColors', () => {
+    const svg = toSVG(stacked, {
+      strokeColor: '#000000',
+      preserveLayerOrder: true,
+      layerColors: { 'L0/present': '#111111', 'L1/texture': '#cccccc' },
+    });
+    // present (bottom) emitted before texture (top) — opposite of the heuristic.
+    expect(svg.indexOf('stroke="#111111"')).toBeLessThan(svg.indexOf('stroke="#cccccc"'));
+  });
+});
+
 describe('toSVG per-layer colors', () => {
   it('colors each layer when layerColors is given', () => {
     const svg = toSVG(mixed, {

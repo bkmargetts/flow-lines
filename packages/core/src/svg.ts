@@ -15,6 +15,14 @@ export interface SVGOptions {
    */
   layerColors?: Record<string, string>;
   /**
+   * Per-layer stroke width in px, keyed like `layerColors`. Any layer not
+   * listed uses `strokeWidth`. Lets a stacked plot keep each layer's own pen
+   * weight (a fine texture under a heavier drawing) in one composited document
+   * while still plotting one pen per layer. Only consulted when `layerColors`
+   * is also set (the per-layer render path).
+   */
+  layerWidths?: Record<string, number>;
+  /**
    * Physical SVG width/height (e.g. "210mm"). When set, the document is
    * tagged with real-world dimensions while the `viewBox` stays in the px
    * coordinate space — so the on-screen preview (which reads the viewBox) and
@@ -22,6 +30,14 @@ export interface SVGOptions {
    */
   physicalWidth?: string;
   physicalHeight?: string;
+  /**
+   * Honour the input array order when grouping layers instead of the built-in
+   * `texture`-to-back heuristic. The web layer compositor stacks layers
+   * explicitly (bottom→top) and namespaces their keys, so z-order is already
+   * baked into the line order — re-sorting by name would fight it. Off by
+   * default, so the CLI and single-layer callers keep the legacy ordering.
+   */
+  preserveLayerOrder?: boolean;
 }
 
 /**
@@ -88,12 +104,12 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
   // given — then emit one colored block per layer so a single document can
   // preview in two or three pens. Absent layerColors → byte-identical output.
   const pathElements = options.layerColors
-    ? orderedLayers(result.lines)
+    ? orderedLayers(result.lines, options.preserveLayerOrder)
         .map(([layer, lines]) =>
           renderPathElements(
             lines,
             options.layerColors?.[layer] ?? strokeColor,
-            strokeWidth,
+            options.layerWidths?.[layer] ?? strokeWidth,
             precision,
             optimizePaths
           )
@@ -117,14 +133,28 @@ function layerKey(line: FlowLine): string {
   return line.layer ?? line.pen ?? 'default';
 }
 
-/** Group lines by layer in a stable order (present → ghost → trail → others). */
-function orderedLayers(lines: FlowLine[]): Array<[string, FlowLine[]]> {
+/**
+ * Group lines by layer. By default the keys are sorted into a stable order
+ * (texture behind, then present → ghost → trail → others). When
+ * `preserveOrder` is set the keys keep the order they first appear in `lines`,
+ * so a caller that has already arranged its lines back-to-front (the web layer
+ * compositor) controls z-order directly.
+ */
+function orderedLayers(
+  lines: FlowLine[],
+  preserveOrder = false
+): Array<[string, FlowLine[]]> {
   const groups = new Map<string, FlowLine[]>();
   for (const line of lines) {
     const key = layerKey(line);
     const list = groups.get(key);
     if (list) list.push(line);
     else groups.set(key, [line]);
+  }
+
+  // Insertion order already follows the input array — keep it as-is.
+  if (preserveOrder) {
+    return [...groups.keys()].map((k) => [k, groups.get(k) as FlowLine[]]);
   }
 
   // Background texture layers ('texture' and multi-ink 'texture-NN') sort first
@@ -170,11 +200,11 @@ export function toSVGLayers(
     ? `  <rect width="${result.width}" height="${result.height}" fill="${backgroundColor}"/>\n`
     : '';
 
-  return orderedLayers(result.lines).map(([layer, lines]) => {
+  return orderedLayers(result.lines, options.preserveLayerOrder).map(([layer, lines]) => {
     const body = renderPathElements(
       lines,
       options.layerColors?.[layer] ?? strokeColor,
-      strokeWidth,
+      options.layerWidths?.[layer] ?? strokeWidth,
       precision,
       optimizePaths
     );

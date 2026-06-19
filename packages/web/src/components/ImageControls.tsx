@@ -20,9 +20,11 @@ interface ImageControlsProps {
   updateSettings: (updates: Partial<InkSettings>) => void;
   onImageFile: (file: File) => void;
   randomizeSeed: () => void;
-  downloadSVG: () => void;
-  downloadLayers: () => void;
-  hasLayers: boolean;
+  /** SVG export is the frame/compositor's job now; the buttons render only when
+   *  these are supplied (kept optional for any legacy caller). */
+  downloadSVG?: () => void;
+  downloadLayers?: () => void;
+  hasLayers?: boolean;
   focusPoints: Point[];
   clearFocus: () => void;
   subjectMask: GrayscaleImage | null;
@@ -182,9 +184,11 @@ export function ImageControls({
       </div>
 
       <div className="button-group">
-        <button type="button" className="primary" onClick={downloadSVG} disabled={!imageName}>
-          Download SVG
-        </button>
+        {downloadSVG && (
+          <button type="button" className="primary" onClick={downloadSVG} disabled={!imageName}>
+            Download SVG
+          </button>
+        )}
         <button
           type="button"
           className="secondary"
@@ -195,7 +199,7 @@ export function ImageControls({
         </button>
       </div>
 
-      {hasLayers && (
+      {hasLayers && downloadLayers && (
         <div className="button-group">
           <button
             type="button"

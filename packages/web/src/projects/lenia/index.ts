@@ -1,11 +1,13 @@
-import type { ProjectModule } from '../types';
-import { LeniaProvider } from './context';
+import type { PureModule } from '../../modules/types';
 import { LeniaControls } from './Controls';
-import { LeniaCanvas } from './Canvas';
+import { renderLenia } from './render';
+import { defaultLeniaState, type LeniaState } from './types';
 
-export const leniaProject: ProjectModule = {
+export const leniaModule: PureModule<LeniaState> = {
+  kind: 'pure',
   id: 'lenia',
   label: 'Lenia',
-  Provider: LeniaProvider,
-  features: [{ id: 'life', label: 'Lifeforms', Controls: LeniaControls, Canvas: LeniaCanvas }],
+  defaultState: () => ({ ...defaultLeniaState }),
+  Controls: LeniaControls,
+  render: renderLenia,
 };

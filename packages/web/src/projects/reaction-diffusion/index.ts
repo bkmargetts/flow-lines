@@ -1,13 +1,13 @@
-import type { ProjectModule } from '../types';
-import { RDProvider } from './context';
+import type { PureModule } from '../../modules/types';
 import { RDControls } from './Controls';
-import { RDCanvas } from './Canvas';
+import { renderReactionDiffusion } from './render';
+import { defaultRDState, type RDState } from './types';
 
-export const reactionDiffusionProject: ProjectModule = {
+export const reactionDiffusionModule: PureModule<RDState> = {
+  kind: 'pure',
   id: 'reaction-diffusion',
   label: 'Reaction–Diffusion',
-  Provider: RDProvider,
-  features: [
-    { id: 'turing', label: 'Turing Patterns', Controls: RDControls, Canvas: RDCanvas },
-  ],
+  defaultState: () => ({ ...defaultRDState }),
+  Controls: RDControls,
+  render: renderReactionDiffusion,
 };
