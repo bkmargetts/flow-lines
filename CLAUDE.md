@@ -223,6 +223,19 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 - The web UI's first principle: **effortless** — upload, tap subject,
   download. Automation (face detect, depth when WebGPU, isolation on tap)
   runs without being asked; every knob lives in collapsed Advanced groups.
+- **Every slider's value is click-to-type** — any `<input type="range">`
+  config control must render its value badge through the shared
+  `EditableValue` component (`packages/web/src/components/EditableValue.tsx`),
+  so the number can be clicked (or focused + Enter/Space) and typed exactly;
+  it commits clamped + step-snapped on Enter/blur. This is non-optional and
+  applies to every new slider going forward. The
+  guardrail test `packages/web/src/editable-sliders.test.ts` fails if any
+  `.tsx` has a range slider without a matching `EditableValue`, so a forgotten
+  one is caught by `pnpm test` / CI rather than relying on memory. Pass the
+  same `min`/`max`/`step` as the slider; for a percentage display (slider
+  bound to a 0–1 fraction, badge showing `%`) edit in percent units
+  (`value={Math.round(x * 100)}` … `onChange={(v) => set(v / 100)}`); mirror a
+  slider's `disabled` onto the `EditableValue`.
 
 ## Where the frontier is
 

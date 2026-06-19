@@ -1,6 +1,7 @@
 import { RD_PRESETS, type RDPreset } from '@flow-lines/core';
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
+import { EditableValue } from '../../components/EditableValue';
 import { useRD } from './context';
 import type { RDState } from './types';
 
@@ -84,7 +85,10 @@ export function RDControls() {
               Contour levels
               <InfoTip text="How many nested iso-contours trace the field. More levels give a finer tonal gradient (denser shading); fewer give bold, sparse rings." />
             </span>
-            <span>{state.contourLevels}</span>
+            <EditableValue value={state.contourLevels} min={2} max={12} step={1}
+              onChange={(v) => updateState({ contourLevels: v })}>
+              {state.contourLevels}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -104,7 +108,10 @@ export function RDControls() {
               Fill threshold
               <InfoTip text="How concentrated the chemical must be before a region is hatched solid. Lower fills more of the field; higher inks only the densest cores." />
             </span>
-            <span>{state.fillThreshold.toFixed(2)}</span>
+            <EditableValue value={state.fillThreshold} min={0.1} max={0.8} step={0.02}
+              onChange={(v) => updateState({ fillThreshold: v })}>
+              {state.fillThreshold.toFixed(2)}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -125,7 +132,10 @@ export function RDControls() {
             Steps
             <InfoTip text="How long the reaction runs before the shutter closes. Patterns start as small seeds and grow/branch over thousands of steps — more steps mean a more developed, frame-filling structure." />
           </span>
-          <span>{state.steps}</span>
+          <EditableValue value={state.steps} min={1000} max={6000} step={250}
+            onChange={(v) => updateState({ steps: v })}>
+            {state.steps}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -143,7 +153,10 @@ export function RDControls() {
             Grid resolution
             <InfoTip text="Width of the simulation grid in cells (rows follow the page shape). Finer grids resolve smaller features and longer lines but take longer to simulate and plot." />
           </span>
-          <span>{state.gridCols}</span>
+          <EditableValue value={state.gridCols} min={64} max={250} step={2}
+            onChange={(v) => updateState({ gridCols: v })}>
+            {state.gridCols}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -179,7 +192,10 @@ export function RDControls() {
               Seed spots
               <InfoTip text="How many blobs of chemical are dropped to start. More seeds means a busier frame where neighbouring growths collide and interleave." />
             </span>
-            <span>{state.seedSpots}</span>
+            <EditableValue value={state.seedSpots} min={1} max={40} step={1}
+              onChange={(v) => updateState({ seedSpots: v })}>
+              {state.seedSpots}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -200,7 +216,10 @@ export function RDControls() {
             Pen Width
             <InfoTip text="Plotted line weight in millimetres — match it to the pen you'll draw with so the filled cores read cleanly." />
           </span>
-          <span>{state.penWidthMm}mm</span>
+          <EditableValue value={state.penWidthMm} min={0.1} max={1.5} step={0.05}
+            onChange={(v) => updateState({ penWidthMm: v })}>
+            {state.penWidthMm}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -287,7 +306,10 @@ export function RDControls() {
                 Feed rate (f)
                 <InfoTip text="How fast chemical U is replenished. Together with the kill rate this sets which pattern forms — the Pattern presets just pick a starting pair. Small changes can completely change the structure." />
               </span>
-              <span>{state.feed.toFixed(4)}</span>
+              <EditableValue value={state.feed} min={0.01} max={0.09} step={0.0005}
+                onChange={(v) => updateState({ feed: v })}>
+                {state.feed.toFixed(4)}
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -305,7 +327,10 @@ export function RDControls() {
                 Kill rate (k)
                 <InfoTip text="How fast chemical V is removed. Paired with the feed rate it tunes the regime; nudge both to wander between coral, spots and mazes." />
               </span>
-              <span>{state.kill.toFixed(4)}</span>
+              <EditableValue value={state.kill} min={0.03} max={0.07} step={0.0005}
+                onChange={(v) => updateState({ kill: v })}>
+                {state.kill.toFixed(4)}
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -323,7 +348,10 @@ export function RDControls() {
                 U diffusion
                 <InfoTip text="How fast chemical U spreads. The classic patterns want U spreading about twice as fast as V; drift it to stretch or freeze the structure." />
               </span>
-              <span>{state.du.toFixed(2)}</span>
+              <EditableValue value={state.du} min={0.4} max={1.2} step={0.05}
+                onChange={(v) => updateState({ du: v })}>
+                {state.du.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -341,7 +369,10 @@ export function RDControls() {
                 V diffusion
                 <InfoTip text="How fast chemical V spreads. Keeping it around half the U diffusion is what gives the Turing instability its characteristic scale." />
               </span>
-              <span>{state.dv.toFixed(2)}</span>
+              <EditableValue value={state.dv} min={0.2} max={0.7} step={0.05}
+                onChange={(v) => updateState({ dv: v })}>
+                {state.dv.toFixed(2)}
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -363,7 +394,10 @@ export function RDControls() {
                 Field smoothing
                 <InfoTip text="Gaussian blur applied to the chemical field before the contours are traced. More smoothing gives cleaner, calmer lines; less keeps the fine detail (and the line count)." />
               </span>
-              <span>{state.blurSigma.toFixed(1)}</span>
+              <EditableValue value={state.blurSigma} min={0.4} max={3} step={0.1}
+                onChange={(v) => updateState({ blurSigma: v })}>
+                {state.blurSigma.toFixed(1)}
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -381,7 +415,10 @@ export function RDControls() {
                 Wobble
                 <InfoTip text="Hand-drawn shake on the strokes. Faint rim contours wobble most; the dense core stays steady. 0 is ruler-smooth." />
               </span>
-              <span>{state.wobble.toFixed(1)}px</span>
+              <EditableValue value={state.wobble} min={0} max={3} step={0.1}
+                onChange={(v) => updateState({ wobble: v })}>
+                {state.wobble.toFixed(1)}px
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -404,7 +441,10 @@ export function RDControls() {
                   Value bands
                   <InfoTip text="Commit the field to this many decisive value shapes instead of continuous gradation — the artist's tonal abstraction. 0 keeps continuous tone." />
                 </span>
-                <span>{state.valueBands === 0 ? 'Continuous' : state.valueBands}</span>
+                <EditableValue value={state.valueBands} min={0} max={8} step={1}
+                  onChange={(v) => updateState({ valueBands: v })}>
+                  {state.valueBands === 0 ? 'Continuous' : state.valueBands}
+                </EditableValue>
               </label>
               <input
                 type="range"
@@ -422,7 +462,10 @@ export function RDControls() {
                   Hatch angle
                   <InfoTip text="Direction of the strokes filling the dense regions (hatch and dual styles). The cross-hatch layer sits at a shallow offset to this." />
                 </span>
-                <span>{state.hatchAngle}°</span>
+                <EditableValue value={state.hatchAngle} min={-90} max={90} step={1}
+                  onChange={(v) => updateState({ hatchAngle: v })}>
+                  {state.hatchAngle}°
+                </EditableValue>
               </label>
               <input
                 type="range"
@@ -440,7 +483,10 @@ export function RDControls() {
                   Cross-hatch amount
                   <InfoTip text="How much of the filled region gets a second layer of hatching at a shallow angle — more darkens and enriches the core; less keeps it open and linear." />
                 </span>
-                <span>{state.crossHatchAmount.toFixed(2)}</span>
+                <EditableValue value={state.crossHatchAmount} min={0} max={1} step={0.05}
+                  onChange={(v) => updateState({ crossHatchAmount: v })}>
+                  {state.crossHatchAmount.toFixed(2)}
+                </EditableValue>
               </label>
               <input
                 type="range"
@@ -458,7 +504,10 @@ export function RDControls() {
                   Hatch jitter
                   <InfoTip text="Low-frequency variation in hatch spacing and phase, so the fill reads as a hand laying down strokes rather than an even mechanical screen." />
                 </span>
-                <span>{state.hatchJitter.toFixed(2)}</span>
+                <EditableValue value={state.hatchJitter} min={0} max={1} step={0.05}
+                  onChange={(v) => updateState({ hatchJitter: v })}>
+                  {state.hatchJitter.toFixed(2)}
+                </EditableValue>
               </label>
               <input
                 type="range"
@@ -476,7 +525,10 @@ export function RDControls() {
                   Corner vignette
                   <InfoTip text="Hold faint contours off the frame corners so the negative space reads as a decision. Higher clears more; 0 lets the field run to the edges." />
                 </span>
-                <span>{state.vignette.toFixed(2)}</span>
+                <EditableValue value={state.vignette} min={0} max={1} step={0.05}
+                  onChange={(v) => updateState({ vignette: v })}>
+                  {state.vignette.toFixed(2)}
+                </EditableValue>
               </label>
               <input
                 type="range"

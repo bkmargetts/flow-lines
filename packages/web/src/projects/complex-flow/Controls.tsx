@@ -1,5 +1,6 @@
 import { InfoTip } from '../../components/InfoTip';
 import { PalettePicker } from '../../components/ColorField';
+import { EditableValue } from '../../components/EditableValue';
 import { useComplexFlow } from './context';
 import type { SingularityLayout, SeedLayout, LayerBy } from '@flow-lines/core';
 
@@ -48,7 +49,10 @@ export function ComplexFlowControls() {
             Zeros (sinks/sources)
             <InfoTip text="Numerator roots of f(z)=Π(z-zero)/Π(z-pole). The flow streams out of (or into) each zero — they read as the bright centres the streamlines spiral around." />
           </span>
-          <span>{state.zeroCount}</span>
+          <EditableValue value={state.zeroCount} min={0} max={8} step={1}
+            onChange={(v) => updateState({ zeroCount: v })}>
+            {state.zeroCount}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -66,7 +70,10 @@ export function ComplexFlowControls() {
             Poles (saddles)
             <InfoTip text="Denominator roots of f(z). The flow curves around each pole like a saddle, the structural counterweight to the zeros." />
           </span>
-          <span>{state.poleCount}</span>
+          <EditableValue value={state.poleCount} min={0} max={8} step={1}
+            onChange={(v) => updateState({ poleCount: v })}>
+            {state.poleCount}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -112,7 +119,10 @@ export function ComplexFlowControls() {
             Spread
             <InfoTip text="How far the zeros and poles sit from the centre. Tight spreads knot the flow into a dense core; wide spreads spread the topology across the page." />
           </span>
-          <span>{state.singularitySpread.toFixed(2)}</span>
+          <EditableValue value={state.singularitySpread} min={0.1} max={1} step={0.05}
+            onChange={(v) => updateState({ singularitySpread: v })}>
+            {state.singularitySpread.toFixed(2)}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -130,7 +140,10 @@ export function ComplexFlowControls() {
             Field rotation
             <InfoTip text="Spin the whole vector field. At 90° sources become swirls (the flow circulates instead of radiating), so it's a quick way to turn explosions into vortices." />
           </span>
-          <span>{state.fieldRotationDeg}°</span>
+          <EditableValue value={state.fieldRotationDeg} min={0} max={360} step={5}
+            onChange={(v) => updateState({ fieldRotationDeg: v })}>
+            {state.fieldRotationDeg}°
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -219,7 +232,10 @@ export function ComplexFlowControls() {
             Line count
             <InfoTip text="How many streamlines are traced. The blog's pieces layer many thousands of thin lines; more lines = denser, richer, longer to plot." />
           </span>
-          <span>{state.seedCount}</span>
+          <EditableValue value={state.seedCount} min={100} max={5000} step={100}
+            onChange={(v) => updateState({ seedCount: v })}>
+            {state.seedCount}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -237,7 +253,10 @@ export function ComplexFlowControls() {
             Length (steps/dir)
             <InfoTip text="How far each streamline runs forward and backward from its seed. Higher draws long sweeping curves; lower keeps them as short directional dashes." />
           </span>
-          <span>{state.stepsPerDir}</span>
+          <EditableValue value={state.stepsPerDir} min={20} max={400} step={10}
+            onChange={(v) => updateState({ stepsPerDir: v })}>
+            {state.stepsPerDir}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -255,7 +274,10 @@ export function ComplexFlowControls() {
             Step length
             <InfoTip text="Distance per integration step (px). Smaller hugs the field more tightly (smoother curves, slower); larger is coarser and faster." />
           </span>
-          <span>{state.stepLength.toFixed(1)}px</span>
+          <EditableValue value={state.stepLength} min={0.5} max={6} step={0.5}
+            onChange={(v) => updateState({ stepLength: v })}>
+            {state.stepLength.toFixed(1)}px
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -273,7 +295,10 @@ export function ComplexFlowControls() {
             Step jitter
             <InfoTip text="Randomises each step's length so neighbouring streamlines don't lock into visible banding moiré. 0 is perfectly even." />
           </span>
-          <span>{state.stepJitter.toFixed(2)}</span>
+          <EditableValue value={state.stepJitter} min={0} max={1} step={0.05}
+            onChange={(v) => updateState({ stepJitter: v })}>
+            {state.stepJitter.toFixed(2)}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -301,7 +326,10 @@ export function ComplexFlowControls() {
             Colour bands (pens)
             <InfoTip text="How many colour bands / pen layers the streamlines split into. With concentric-ring seeding, each band is one ring." />
           </span>
-          <span>{state.layerCount}</span>
+          <EditableValue value={state.layerCount} min={1} max={8} step={1}
+            onChange={(v) => updateState({ layerCount: v })}>
+            {state.layerCount}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -343,7 +371,10 @@ export function ComplexFlowControls() {
             Pen width
             <InfoTip text="Plotted line weight in millimetres. Thin pens (0.1–0.3mm) let the many layered lines build density without going muddy." />
           </span>
-          <span>{state.penWidthMm.toFixed(2)}mm</span>
+          <EditableValue value={state.penWidthMm} min={0.05} max={0.8} step={0.05}
+            onChange={(v) => updateState({ penWidthMm: v })}>
+            {state.penWidthMm.toFixed(2)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -373,7 +404,10 @@ export function ComplexFlowControls() {
             Wobble
             <InfoTip text="A decorative perpendicular ripple baked into each streamline as it's traced — a different texture from the hand-drawn shake. 0 is clean." />
           </span>
-          <span>{state.wobble.toFixed(1)}px</span>
+          <EditableValue value={state.wobble} min={0} max={3} step={0.1}
+            onChange={(v) => updateState({ wobble: v })}>
+            {state.wobble.toFixed(1)}px
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -415,7 +449,10 @@ export function ComplexFlowControls() {
               Plane zoom
               <InfoTip text="How much of the complex plane the page shows. Larger zooms out (the singularities cluster toward the centre); smaller zooms in on the field." />
             </span>
-            <span>{state.planeScale.toFixed(2)}</span>
+            <EditableValue value={state.planeScale} min={0.5} max={2.5} step={0.1}
+              onChange={(v) => updateState({ planeScale: v })}>
+              {state.planeScale.toFixed(2)}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -433,7 +470,10 @@ export function ComplexFlowControls() {
               Speed clamp
               <InfoTip text="A streamline that rockets off near a pole is cut when its raw speed exceeds this. Lower trims more aggressively around singularities." />
             </span>
-            <span>{state.speedClampMax}</span>
+            <EditableValue value={state.speedClampMax} min={100} max={10000} step={100}
+              onChange={(v) => updateState({ speedClampMax: v })}>
+              {state.speedClampMax}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -451,7 +491,10 @@ export function ComplexFlowControls() {
               Min line length
               <InfoTip text="Streamlines shorter than this (px) are discarded — clears the stubs that form right on top of a singularity." />
             </span>
-            <span>{state.minLineLength}px</span>
+            <EditableValue value={state.minLineLength} min={0} max={60} step={2}
+              onChange={(v) => updateState({ minLineLength: v })}>
+              {state.minLineLength}px
+            </EditableValue>
           </label>
           <input
             type="range"
