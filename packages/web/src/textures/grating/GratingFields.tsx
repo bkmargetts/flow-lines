@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { InfoTip } from '../../components/InfoTip';
+import { EditableValue } from '../../components/EditableValue';
 import { PalettePicker } from '../../components/ColorField';
 import type { GratingMaskMode, GratingParams } from './shared';
 
@@ -37,7 +38,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Spacing
             <InfoTip text="Gap between adjacent lines within one ink, mm. The other inks interleave into this gap, so the combined line pitch is this divided by the number of colours." />
           </span>
-          <span>{params.spacingMm.toFixed(1)}mm</span>
+          <EditableValue value={params.spacingMm} min={0.5} max={8} step={0.1} onChange={(v) => update({ spacingMm: v })}>
+            {params.spacingMm.toFixed(1)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -55,7 +58,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Angle
             <InfoTip text="Line direction. 0° is vertical (lines run down the page)." />
           </span>
-          <span>{params.angleDeg}°</span>
+          <EditableValue value={params.angleDeg} min={0} max={180} step={5} onChange={(v) => update({ angleDeg: v })}>
+            {params.angleDeg}°
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -73,7 +78,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Length
             <InfoTip text="Line length as a fraction of the usable page. Lines are centred and clipped to the margin." />
           </span>
-          <span>{Math.round(params.lineLengthPct * 100)}%</span>
+          <EditableValue value={Math.round(params.lineLengthPct * 100)} min={10} max={100} step={5} onChange={(v) => update({ lineLengthPct: v / 100 })}>
+            {Math.round(params.lineLengthPct * 100)}%
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -101,7 +108,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Colours (pens)
             <InfoTip text="How many inks interleave. Each is the same grating phase-shifted by spacing ÷ colours so they fill each other's gaps, sampled from the palette." />
           </span>
-          <span>{params.colorCount}</span>
+          <EditableValue value={params.colorCount} min={1} max={6} step={1} onChange={(v) => update({ colorCount: v })}>
+            {params.colorCount}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -121,7 +130,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Across block
             <InfoTip text="Gradually alters the inter-colour offset from one side of the block to the other, mm. Lines stay straight while the interleave opens and closes across the page." />
           </span>
-          <span>{params.phaseDriftAcrossMm.toFixed(1)}mm</span>
+          <EditableValue value={params.phaseDriftAcrossMm} min={0} max={6} step={0.1} onChange={(v) => update({ phaseDriftAcrossMm: v })}>
+            {params.phaseDriftAcrossMm.toFixed(1)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -139,7 +150,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Along lines
             <InfoTip text="Gradually alters the inter-colour offset down the length of each line, mm. Non-zero bends the lines and weaves the colours along the trajectory." />
           </span>
-          <span>{params.phaseDriftAlongMm.toFixed(1)}mm</span>
+          <EditableValue value={params.phaseDriftAlongMm} min={0} max={6} step={0.1} onChange={(v) => update({ phaseDriftAlongMm: v })}>
+            {params.phaseDriftAlongMm.toFixed(1)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -157,7 +170,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Noise amount
             <InfoTip text="Drives the inter-colour offset with smooth noise, mm — organic patches where the colours pile up or spread apart." />
           </span>
-          <span>{params.phaseNoiseAmpMm.toFixed(1)}mm</span>
+          <EditableValue value={params.phaseNoiseAmpMm} min={0} max={4} step={0.1} onChange={(v) => update({ phaseNoiseAmpMm: v })}>
+            {params.phaseNoiseAmpMm.toFixed(1)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -175,7 +190,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Noise scale
             <InfoTip text="Spatial frequency of the offset noise. Higher breaks the pattern into smaller, busier patches." />
           </span>
-          <span>{params.phaseNoiseScale.toFixed(3)}</span>
+          <EditableValue value={params.phaseNoiseScale} min={0.001} max={0.05} step={0.001} onChange={(v) => update({ phaseNoiseScale: v })}>
+            {params.phaseNoiseScale.toFixed(3)}
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -193,7 +210,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Edge smoothing
             <InfoTip text="Relaxes the offset back to a clean even interleave over this distance at the block edges, mm — smooths the ragged silhouette the drift leaves. 0 = off." />
           </span>
-          <span>{params.edgeSmoothMm.toFixed(1)}mm</span>
+          <EditableValue value={params.edgeSmoothMm} min={0} max={40} step={1} onChange={(v) => update({ edgeSmoothMm: v })}>
+            {params.edgeSmoothMm.toFixed(1)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -231,7 +250,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
           <div className="control-group">
             <label>
               <span className="label-text">Strip angle</span>
-              <span>{params.stripAngleDeg}°</span>
+              <EditableValue value={params.stripAngleDeg} min={0} max={180} step={5} onChange={(v) => update({ stripAngleDeg: v })}>
+                {params.stripAngleDeg}°
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -245,7 +266,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
           <div className="control-group">
             <label>
               <span className="label-text">Strip width</span>
-              <span>{params.stripWidthMm.toFixed(0)}mm</span>
+              <EditableValue value={params.stripWidthMm} min={1} max={40} step={1} onChange={(v) => update({ stripWidthMm: v })}>
+                {params.stripWidthMm.toFixed(0)}mm
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -259,7 +282,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
           <div className="control-group">
             <label>
               <span className="label-text">Strip gap</span>
-              <span>{params.stripGapMm.toFixed(0)}mm</span>
+              <EditableValue value={params.stripGapMm} min={0} max={40} step={1} onChange={(v) => update({ stripGapMm: v })}>
+                {params.stripGapMm.toFixed(0)}mm
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -279,7 +304,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
           <div className="control-group">
             <label>
               <span className="label-text">Band width (either side)</span>
-              <span>{params.bandWidthMm.toFixed(0)}mm</span>
+              <EditableValue value={params.bandWidthMm} min={1} max={60} step={1} onChange={(v) => update({ bandWidthMm: v })}>
+                {params.bandWidthMm.toFixed(0)}mm
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -298,7 +325,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
           <div className="control-group">
             <label>
               <span className="label-text">Width</span>
-              <span>{Math.round(params.maskWidthPct * 100)}%</span>
+              <EditableValue value={Math.round(params.maskWidthPct * 100)} min={10} max={100} step={5} onChange={(v) => update({ maskWidthPct: v / 100 })}>
+                {Math.round(params.maskWidthPct * 100)}%
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -312,7 +341,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
           <div className="control-group">
             <label>
               <span className="label-text">Height</span>
-              <span>{Math.round(params.maskHeightPct * 100)}%</span>
+              <EditableValue value={Math.round(params.maskHeightPct * 100)} min={10} max={100} step={5} onChange={(v) => update({ maskHeightPct: v / 100 })}>
+                {Math.round(params.maskHeightPct * 100)}%
+              </EditableValue>
             </label>
             <input
               type="range"
@@ -334,7 +365,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Jitter
             <InfoTip text="Random per-point shake on each line, mm. A little roughens the grating so it reads as inked, not printed." />
           </span>
-          <span>{params.jitterMm.toFixed(2)}mm</span>
+          <EditableValue value={params.jitterMm} min={0} max={1} step={0.05} onChange={(v) => update({ jitterMm: v })}>
+            {params.jitterMm.toFixed(2)}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -352,7 +385,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             Wobble
             <InfoTip text="Low-frequency hand-drawn wander of each line, mm. 0 keeps the lines mechanically straight." />
           </span>
-          <span>{params.wobbleAmpMm.toFixed(2)}mm</span>
+          <EditableValue value={params.wobbleAmpMm} min={0} max={3} step={0.1} onChange={(v) => update({ wobbleAmpMm: v })}>
+            {params.wobbleAmpMm.toFixed(2)}mm
+          </EditableValue>
         </label>
         <input
           type="range"

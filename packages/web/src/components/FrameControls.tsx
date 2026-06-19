@@ -3,6 +3,7 @@ import type { PaperFit } from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
 import { InfoTip } from './InfoTip';
 import { ColorField } from './ColorField';
+import { EditableValue } from './EditableValue';
 import { PaperControls } from './PaperControls';
 import { TEXTURE_MODULES, getTextureModule, textureParamsFor } from '../textures/registry';
 
@@ -63,7 +64,16 @@ export function FrameControls() {
 
       <div className="control-group">
         <label>
-          Margin <span>{frame.marginMm}mm</span>
+          Margin{" "}
+          <EditableValue
+            value={frame.marginMm}
+            min={0}
+            max={40}
+            step={1}
+            onChange={(v) => updateFrame({ marginMm: v })}
+          >
+            {frame.marginMm}mm
+          </EditableValue>
         </label>
         <input
           type="range"
@@ -90,7 +100,16 @@ export function FrameControls() {
       {frame.borderEnabled && (
         <div className="control-group">
           <label>
-            Border inset <span>{frame.borderInsetMm}mm</span>
+            Border inset{" "}
+            <EditableValue
+              value={frame.borderInsetMm}
+              min={-frame.marginMm}
+              max={20}
+              step={1}
+              onChange={(v) => updateFrame({ borderInsetMm: v })}
+            >
+              {frame.borderInsetMm}mm
+            </EditableValue>
             <InfoTip text="Where the rule sits relative to the margin. 0 sits it right at the margin (touching the art). Negative pushes it outward toward the paper edge, opening a clear gap between the art and the border. Positive pushes it inward, into the art." />
           </label>
           <input
@@ -102,7 +121,16 @@ export function FrameControls() {
             onChange={(e) => updateFrame({ borderInsetMm: parseInt(e.target.value, 10) })}
           />
           <label>
-            Corner radius <span>{frame.borderCornerRadiusMm}mm</span>
+            Corner radius{" "}
+            <EditableValue
+              value={frame.borderCornerRadiusMm}
+              min={0}
+              max={20}
+              step={1}
+              onChange={(v) => updateFrame({ borderCornerRadiusMm: v })}
+            >
+              {frame.borderCornerRadiusMm}mm
+            </EditableValue>
             <InfoTip text="Rounds the border's corners by this radius. 0 keeps sharp right-angle corners. The straight edges stay straight; only the corners curve." />
           </label>
           <input
@@ -131,7 +159,16 @@ export function FrameControls() {
       {frame.densityEnabled && (
         <div className="control-group">
           <label>
-            Max passes before trimming <span>{frame.densityMaxPasses}</span>
+            Max passes before trimming{" "}
+            <EditableValue
+              value={frame.densityMaxPasses}
+              min={1}
+              max={8}
+              step={1}
+              onChange={(v) => updateFrame({ densityMaxPasses: v })}
+            >
+              {frame.densityMaxPasses}
+            </EditableValue>
           </label>
           <input
             type="range"
@@ -142,7 +179,16 @@ export function FrameControls() {
             onChange={(e) => updateFrame({ densityMaxPasses: parseInt(e.target.value, 10) })}
           />
           <label>
-            Min overlap to trim <span>{frame.densityMinOverlapMm.toFixed(1)} mm</span>
+            Min overlap to trim{" "}
+            <EditableValue
+              value={frame.densityMinOverlapMm}
+              min={0.5}
+              max={8}
+              step={0.5}
+              onChange={(v) => updateFrame({ densityMinOverlapMm: v })}
+            >
+              {frame.densityMinOverlapMm.toFixed(1)} mm
+            </EditableValue>
             <InfoTip text="How far two lines must run together before the shared run is cut. Below this they're treated as a crossing and kept whole. Lower it to thin the dense convergence right at flow singularities (where many lines genuinely meet); raise it to trim only long parallel duplication and preserve detail at the poles." />
           </label>
           <input
@@ -218,7 +264,16 @@ export function FrameControls() {
 
           <div className="control-group">
             <label>
-              Halo <span>{frame.textureHaloMm.toFixed(1)}mm</span>
+              Halo{" "}
+              <EditableValue
+                value={frame.textureHaloMm}
+                min={0}
+                max={10}
+                step={0.5}
+                onChange={(v) => updateFrame({ textureHaloMm: v })}
+              >
+                {frame.textureHaloMm.toFixed(1)}mm
+              </EditableValue>
               <InfoTip text="Clean-paper sliver reserved around the drawing where the texture holds off, so the art reads off the textured ground. 0 lets the texture run under the drawing." />
             </label>
             <input

@@ -175,6 +175,41 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Value badge becomes click-to-type; subtle hover cue */
+.control-group label span.editable-value {
+  cursor: pointer;
+  padding: 0 3px;
+  margin: 0 -3px;
+  border-radius: 4px;
+}
+.control-group label span.editable-value:hover {
+  background: var(--bg-inset-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Inline numeric editor shown while typing a value */
+.control-group label .editable-value-input {
+  width: 68px;
+  padding: 2px 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text-primary);
+  background: var(--bg-surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+.editable-value-input::-webkit-outer-spin-button,
+.editable-value-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.editable-value-input {
+  -moz-appearance: textfield;
+}
+
 /* The descriptive part of a label (left side); the value span stays on the
    right. Reset the bold/primary that .control-group label span applies. */
 .control-group label .label-text {
