@@ -10,8 +10,7 @@ export type MaskMode = GratingMaskMode;
 export interface NoiseTextureState extends GratingParams {
   /** Pen width in millimetres (plotted line weight). */
   penWidthMm: number;
-  /** Whether tapping/dragging the canvas adds to the band path (`maskPath`). */
-  drawMode: boolean;
+  // `drawMode` + `maskPath` (the canvas band) are inherited from GratingParams.
 }
 
 export const defaultNoiseTextureState: NoiseTextureState = {

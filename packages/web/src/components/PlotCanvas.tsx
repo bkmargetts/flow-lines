@@ -11,15 +11,43 @@ import type { ImageInkLayerState } from '../projects/image-ink/types';
  * Image→Ink layer gets focus-point selection (tap the subject), wired to its
  * per-instance api. Other modules render without interaction.
  */
+/** A layer state that supports drawing a band centreline on the canvas
+ *  (the grating / noise-texture modules: a `drawMode` toggle + `maskPath`). */
+interface DrawableState {
+  drawMode: boolean;
+  maskPath: Point[];
+}
+function isDrawable(state: unknown): state is DrawableState {
+  return (
+    !!state &&
+    typeof (state as DrawableState).drawMode === 'boolean' &&
+    Array.isArray((state as DrawableState).maskPath)
+  );
+}
+
 export function PlotCanvas() {
   const { frame } = useFrame();
-  const { layers, selectedId } = useLayerStore();
+  const { layers, selectedId, updateState } = useLayerStore();
   const comp = useComposite();
 
   const selected = layers.find((l) => l.instanceId === selectedId);
   const isInk = selected?.moduleId === 'image-ink';
   // Hook called unconditionally; '' yields null when the selection isn't ink.
   const api = useInstanceApi(isInk ? selectedId : '');
+
+  // Band-drawing for the selected grating/noise-texture layer: the canvas drag
+  // appends the centreline to its `maskPath` (in canvas px, what `onPaint`
+  // gives), so "Draw line" actually draws. Inert for modules without a band.
+  const drawable = !isInk && selected && isDrawable(selected.state) ? selected.state : null;
+  const paintMode = Boolean(drawable?.drawMode);
+  const maskPath = drawable?.maskPath ?? [];
+  const onPaint = (point: Point) => {
+    if (!drawable) return;
+    // Functional update so a fast drag never drops points.
+    updateState(selectedId, (cur) => ({
+      maskPath: [...(cur as DrawableState).maskPath, point],
+    }));
+  };
 
   const inkLayout = api?.inkLayout ?? null;
   const settings = isInk ? (selected!.state as ImageInkLayerState).settings : null;
@@ -67,10 +95,10 @@ export function PlotCanvas() {
           svgContent={comp.previewSvg}
           width={comp.width}
           height={comp.height}
-          paintMode={false}
-          paintedPoints={[]}
-          showDots={false}
-          onPaint={() => {}}
+          paintMode={paintMode}
+          paintedPoints={maskPath}
+          showDots={paintMode || maskPath.length > 0}
+          onPaint={onPaint}
           focusSelectMode={focusSelectMode}
           focusMarkers={focusMarkers}
           onSetFocus={onSetFocus}
