@@ -9,6 +9,7 @@ import { conwayModule } from '../projects/conway';
 import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
 import { leniaModule } from '../projects/lenia';
+import { physarumModule } from '../projects/physarum';
 import { noiseTextureModule } from '../projects/noise-texture';
 
 /**
@@ -28,6 +29,7 @@ export const MODULES: Module<any>[] = [
   complexFlowModule,
   reactionDiffusionModule,
   leniaModule,
+  physarumModule,
   noiseTextureModule,
   fromTextureModule(classicTexture),
   fromTextureModule(gratingTexture),

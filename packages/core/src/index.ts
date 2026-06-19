@@ -33,6 +33,10 @@ export {
 } from './lenia.js';
 export type { LeniaOptions, LeniaPreset, LeniaSeedPattern, RingKernel } from './lenia.js';
 
+// Physarum — slime-mold agent transport networks (Jones 2010)
+export { generatePhysarum, stepPhysarum, PHYSARUM_PRESETS } from './physarum.js';
+export type { PhysarumOptions, PhysarumPreset, PhysarumAgents, PhysarumStepParams } from './physarum.js';
+
 // Complex-valued rational-function flow field (Savva-style poles & zeros)
 export { generateComplexFlow } from './complex-flow.js';
 export type {
