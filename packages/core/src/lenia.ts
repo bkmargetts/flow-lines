@@ -601,18 +601,22 @@ export function generateLenia(options: LeniaOptions): FlowLinesResult {
 
   const empty = (): FlowLinesResult => ({ lines: [], width, height, seed });
 
-  // The user picks the grid width; the cell pixel size is derived so square
-  // cells fill the framed page. Sim cost depends on cols·rows·steps·taps, never
-  // on page resolution. (Same gutter-reservation dance as RD.)
+  // The user picks the grid width; the grid *shape* follows the page aspect,
+  // not the margin. Deriving rows from the margined area let a fixed-px margin
+  // change the inner box's aspect ratio and so the grid shape, which re-ran a
+  // wholly different simulation on every margin tweak; tying rows to the page
+  // aspect means the margin only scales and insets the same field. Sim cost
+  // depends on cols·rows·steps·taps, never on page resolution.
   const cols = clamp(Math.round(options.gridCols ?? 120), 8, MAX_COLS);
+  const rows = clamp(Math.round((height / width) * cols), 8, 2 * MAX_COLS);
   const innerW = Math.max(0, width - 2 * margin);
   const refCell = cols > 0 ? innerW / cols : 0;
   const gutter = artStyle ? borderGap * refCell : 0;
   const frameMargin = margin + gutter;
   const usableW = Math.max(0, width - 2 * frameMargin);
   const usableH = Math.max(0, height - 2 * frameMargin);
-  const cellPx = cols > 0 ? usableW / cols : 0;
-  const rows = cellPx > 0 ? Math.round(usableH / cellPx) : 0;
+  // Square cells that fit the framed page in both axes.
+  const cellPx = Math.min(cols > 0 ? usableW / cols : 0, rows > 0 ? usableH / rows : 0);
   // The toroidal kernel needs the grid comfortably larger than its diameter.
   if (cellPx < 0.5 || cols < 2 * R + 2 || rows < 2 * R + 2) return empty();
 

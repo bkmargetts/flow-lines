@@ -31,6 +31,8 @@ export interface GratingParams {
   bandWidthMm: number;
   /** The drawn band centreline, in canvas px (for the 'band' mask). */
   maskPath: Point[];
+  /** Whether dragging the canvas appends to the band path (`maskPath`). */
+  drawMode: boolean;
   maskWidthPct: number;
   maskHeightPct: number;
 }
@@ -57,6 +59,7 @@ export const defaultGratingParams: GratingParams = {
   stripGapMm: 12,
   bandWidthMm: 15,
   maskPath: [],
+  drawMode: false,
   maskWidthPct: 0.6,
   maskHeightPct: 0.6,
 };
