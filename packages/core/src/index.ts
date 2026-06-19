@@ -10,6 +10,10 @@ export type { FlowFieldOptions, Vector2D } from './flow-field.js';
 export { generateFlowLines, generateFlowLinesGrid, generateFlowLinesEven } from './flow-lines.js';
 export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point, EvenFlowLinesOptions } from './flow-lines.js';
 
+// Overlapped-line texture (interleaved multi-ink gratings)
+export { generateOverlappedLines, bandLayerName, pointInMask } from './overlapped-lines.js';
+export type { OverlappedLinesOptions, MaskShape } from './overlapped-lines.js';
+
 // Conway's Game of Life long-exposure still
 export { generateConwayExposure } from './conway-exposure.js';
 export type { ConwayExposureOptions } from './conway-exposure.js';
@@ -105,7 +109,12 @@ export { traceIsoContours } from './iso-contours.js';
 
 // Plottable background texture (its own export layer, behind the drawing)
 export { generateTexture } from './texture.js';
-export type { TextureOptions, TextureStyle, TextureShapeOptions } from './texture.js';
+export type {
+  TextureOptions,
+  TextureStyle,
+  TextureShapeOptions,
+  GratingTextureOptions,
+} from './texture.js';
 
 // Plot optimization
 export { optimizePlot, measurePenTravel, limitStrokeDensity } from './optimize.js';

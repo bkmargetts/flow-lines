@@ -9,6 +9,7 @@ import {
   type PortraitStatus,
   type SegmentStatus,
 } from '../projects/image-ink/types';
+import { ColorField } from './ColorField';
 
 interface ImageControlsProps {
   settings: InkSettings;
@@ -724,14 +725,11 @@ export function ImageControls({
             />
           </div>
 
-          <div className="control-group">
-            <label>Stroke Color</label>
-            <input
-              type="text"
-              value={settings.strokeColor}
-              onChange={(e) => updateSettings({ strokeColor: e.target.value })}
-            />
-          </div>
+          <ColorField
+            label="Stroke Color"
+            value={settings.strokeColor}
+            onChange={(strokeColor) => updateSettings({ strokeColor })}
+          />
 
           <div className="control-group">
             <label>Seed</label>

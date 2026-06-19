@@ -469,6 +469,29 @@ button.secondary:hover {
   box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--accent, #4a90d9);
 }
 
+/* Shared colour picker: native swatch + hex field */
+.color-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.color-field input[type='color'] {
+  width: 36px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.color-field input[type='text'] {
+  flex: 1;
+  min-width: 0;
+}
+
 .mode-tabs {
   margin-bottom: 20px;
 }

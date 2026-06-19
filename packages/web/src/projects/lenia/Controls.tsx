@@ -1,5 +1,6 @@
 import { LENIA_PRESETS, type LeniaPreset } from '@flow-lines/core';
 import { InfoTip } from '../../components/InfoTip';
+import { ColorField } from '../../components/ColorField';
 import { useLenia } from './context';
 import type { LeniaState } from './types';
 
@@ -266,60 +267,32 @@ export function LeniaControls() {
 
       {state.multiInk ? (
         <>
-          <div className="control-group">
-            <label>
-              <span className="label-text">
-                Core ink
-                <InfoTip text="Ink for the dense core — the darkest, most committed marks." />
-              </span>
-            </label>
-            <input
-              type="text"
-              value={state.coreColor}
-              onChange={(e) => updateState({ coreColor: e.target.value })}
-            />
-          </div>
-          <div className="control-group">
-            <label>
-              <span className="label-text">
-                Mid ink
-                <InfoTip text="Ink for the mid field — the bulk of the contour line work." />
-              </span>
-            </label>
-            <input
-              type="text"
-              value={state.midColor}
-              onChange={(e) => updateState({ midColor: e.target.value })}
-            />
-          </div>
-          <div className="control-group">
-            <label>
-              <span className="label-text">
-                Rim ink
-                <InfoTip text="Ink for the faint outer rim contours (and the comet trails) — the lightest marks." />
-              </span>
-            </label>
-            <input
-              type="text"
-              value={state.rimColor}
-              onChange={(e) => updateState({ rimColor: e.target.value })}
-            />
-          </div>
+          <ColorField
+            label="Core ink"
+            value={state.coreColor}
+            onChange={(coreColor) => updateState({ coreColor })}
+            info="Ink for the dense core — the darkest, most committed marks."
+          />
+          <ColorField
+            label="Mid ink"
+            value={state.midColor}
+            onChange={(midColor) => updateState({ midColor })}
+            info="Ink for the mid field — the bulk of the contour line work."
+          />
+          <ColorField
+            label="Rim ink"
+            value={state.rimColor}
+            onChange={(rimColor) => updateState({ rimColor })}
+            info="Ink for the faint outer rim contours (and the comet trails) — the lightest marks."
+          />
         </>
       ) : (
-        <div className="control-group">
-          <label>
-            <span className="label-text">
-              Stroke Color
-              <InfoTip text="Ink colour of the preview and exported SVG. Plotting still uses a single pen — colour is just for on-screen and paper choice." />
-            </span>
-          </label>
-          <input
-            type="text"
-            value={state.strokeColor}
-            onChange={(e) => updateState({ strokeColor: e.target.value })}
-          />
-        </div>
+        <ColorField
+          label="Stroke Color"
+          value={state.strokeColor}
+          onChange={(strokeColor) => updateState({ strokeColor })}
+          info="Ink colour of the preview and exported SVG. Plotting still uses a single pen — colour is just for on-screen and paper choice."
+        />
       )}
 
       <h3 className="section-title">Seed</h3>

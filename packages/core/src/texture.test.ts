@@ -168,4 +168,49 @@ describe('generateTexture', () => {
       expect(JSON.stringify(off)).toBe(JSON.stringify(none));
     });
   });
+
+  describe('grating style', () => {
+    const avoid = [{ points: [{ x: 40, y: 400 }, { x: 560, y: 400 }] }];
+    const grating = {
+      colorCount: 3,
+      lineLengthPct: 1,
+      phaseDriftAlongMm: 0,
+      phaseDriftAcrossMm: 1.5,
+      phaseNoiseAmpMm: 0.6,
+      phaseNoiseScale: 0.01,
+      wobbleAmpMm: 0,
+      wobbleWavelengthMm: 30,
+      edgeSmoothMm: 0,
+    };
+
+    it('emits one texture-NN layer per ink, all plottable', () => {
+      const lines = generateTexture({ ...base, style: 'grating', grating });
+      expect(lines.length).toBeGreaterThan(0);
+      const layers = new Set(lines.map((l) => l.layer));
+      expect(layers.has('texture-00')).toBe(true);
+      expect(layers.has('texture-02')).toBe(true);
+      for (const l of lines) {
+        expect(l.layer?.startsWith('texture-')).toBe(true);
+        expect(l.points.length).toBeGreaterThanOrEqual(2);
+      }
+    });
+
+    it('returns nothing when grating options are missing', () => {
+      expect(generateTexture({ ...base, style: 'grating' })).toHaveLength(0);
+    });
+
+    it('holds the halo off the drawing', () => {
+      const haloPx = 6 * base.pxPerMm;
+      const lines = generateTexture({
+        ...base,
+        style: 'grating',
+        grating,
+        avoid,
+        haloMm: 6,
+      });
+      for (const p of allPoints(lines)) {
+        if (p.x >= 40 && p.x <= 560) expect(Math.abs(p.y - 400)).toBeGreaterThan(haloPx - 3);
+      }
+    });
+  });
 });

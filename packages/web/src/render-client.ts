@@ -14,7 +14,8 @@ export interface RenderedSVG {
 
 export interface RenderTexture {
   options: Omit<TextureOptions, 'avoid'>;
-  color: string;
+  /** Per-pen-layer colours: single 'texture' or multi-ink 'texture-NN'. */
+  layerColors: Record<string, string>;
 }
 
 /** Universal finishing forwarded to the worker (border + density). */
@@ -89,7 +90,7 @@ class RenderClient {
       options: job.options,
       svgOptions: job.svgOptions,
       texture: job.texture?.options,
-      textureColor: job.texture?.color,
+      textureLayerColors: job.texture?.layerColors,
       border: job.finish?.border,
       density: job.finish?.density,
     };

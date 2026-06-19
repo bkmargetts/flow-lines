@@ -37,6 +37,8 @@ export interface ComplexFlowState {
   layerCount: number;
   layerBy: LayerBy;
   palette: string;
+  /** Per-ink colours used when `palette === 'custom'`. */
+  customRamp: string[];
 
   // Style
   /** Pen width in millimetres (plotted line weight) */
@@ -73,6 +75,7 @@ export const defaultComplexFlowState: ComplexFlowState = {
   layerCount: 5,
   layerBy: 'seedBand',
   palette: 'mono',
+  customRamp: ['#111111', '#e2231a', '#3a86ff', '#1b998b', '#ffba08'],
 
   penWidthMm: 0.25,
   handDrawn: false,

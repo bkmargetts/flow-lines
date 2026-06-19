@@ -69,7 +69,7 @@ export function finishPlot(
   const finalLines: FlowLine[] = [...(tex ? tex.lines : []), ...drawingLines, ...border];
 
   const layerColors: Record<string, string> = { ...(svgOptions.layerColors ?? {}) };
-  if (tex) layerColors.texture = tex.color;
+  if (tex) Object.assign(layerColors, tex.layerColors);
   if (border.length) layerColors.border = layerColors.border ?? svgOptions.strokeColor ?? '#111111';
   const opts: SVGOptions =
     Object.keys(layerColors).length > 0 ? { ...svgOptions, layerColors } : { ...svgOptions };

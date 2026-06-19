@@ -127,11 +127,18 @@ function orderedLayers(lines: FlowLine[]): Array<[string, FlowLine[]]> {
     else groups.set(key, [line]);
   }
 
-  const preferred = ['texture', 'present', 'ghost', 'trail'];
+  // Background texture layers ('texture' and multi-ink 'texture-NN') sort first
+  // so they render behind the drawing, then the named drawing layers.
+  const preferred = ['present', 'ghost', 'trail'];
+  const rank = (k: string): number => {
+    if (k === 'texture' || k.startsWith('texture-')) return -1;
+    const i = preferred.indexOf(k);
+    return i === -1 ? 99 : i;
+  };
   const keys = [...groups.keys()].sort((a, b) => {
-    const ia = preferred.indexOf(a);
-    const ib = preferred.indexOf(b);
-    if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
     return a < b ? -1 : a > b ? 1 : 0;
   });
   return keys.map((k) => [k, groups.get(k) as FlowLine[]]);

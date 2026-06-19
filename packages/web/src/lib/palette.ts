@@ -52,26 +52,59 @@ export const PALETTES: PaletteDef[] = [
     ramp: ['#111111', '#3a3a3a', '#6b6b6b', '#8a7f72', '#b8a999'],
   },
   {
+    id: 'riso',
+    label: 'Riso (black + red)',
+    ground: 'light',
+    ramp: ['#111111', '#e2231a'],
+  },
+  {
     id: 'mono',
     label: 'Mono (single pen)',
     ground: 'either',
     ramp: ['#111111'],
   },
+  {
+    id: 'custom',
+    label: 'Custom…',
+    ground: 'either',
+    ramp: ['#111111', '#e2231a'],
+  },
 ];
+
+export const CUSTOM_PALETTE_ID = 'custom';
 
 const PALETTE_BY_ID = new Map(PALETTES.map((p) => [p.id, p]));
 
 /** The export layer name for band index i (zero-padded so layers sort in order). */
 export const bandLayerName = (i: number): string => `band-${String(i).padStart(2, '0')}`;
 
+/** Pad or trim a custom ramp to exactly `count` colours, repeating the last. */
+export function padRamp(ramp: string[] | undefined, count: number): string[] {
+  const base = ramp && ramp.length > 0 ? ramp : PALETTE_BY_ID.get(CUSTOM_PALETTE_ID)!.ramp;
+  const out: string[] = [];
+  for (let i = 0; i < Math.max(1, count); i++) out.push(base[Math.min(i, base.length - 1)]);
+  return out;
+}
+
 /**
  * Sample a palette ramp into `{ 'band-00': hex, … }` for `layerCount` bands.
- * A single-colour ramp ('mono') maps every band to one ink — a true one-pen plot.
+ * A single-colour ramp ('mono') maps every band to one ink — a true one-pen
+ * plot. The 'custom' palette maps each band directly to the matching entry of
+ * `customRamp` (repeating the last if short), so the user picks every ink.
  */
-export function buildPaletteLayerColors(paletteId: string, layerCount: number): Record<string, string> {
-  const ramp = (PALETTE_BY_ID.get(paletteId) ?? PALETTES[0]).ramp;
-  const out: Record<string, string> = {};
+export function buildPaletteLayerColors(
+  paletteId: string,
+  layerCount: number,
+  customRamp?: string[]
+): Record<string, string> {
   const n = Math.max(1, layerCount);
+  const out: Record<string, string> = {};
+  if (paletteId === CUSTOM_PALETTE_ID) {
+    const ramp = padRamp(customRamp, n);
+    for (let i = 0; i < n; i++) out[bandLayerName(i)] = ramp[i];
+    return out;
+  }
+  const ramp = (PALETTE_BY_ID.get(paletteId) ?? PALETTES[0]).ramp;
   for (let i = 0; i < n; i++) {
     const t = n > 1 ? i / (n - 1) : 0;
     out[bandLayerName(i)] = ramp[Math.round(t * (ramp.length - 1))];

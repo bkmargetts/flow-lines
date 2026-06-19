@@ -145,17 +145,9 @@ export function LeniaProvider({
     frame.densityMaxPasses,
     frame.densityMinOverlapMm,
     frame.textureEnabled,
-    frame.textureStyle,
-    frame.textureSpacingMm,
-    frame.textureAngleDeg,
-    frame.textureScale,
-    frame.textureJitter,
-    frame.textureDensity,
-    frame.textureCrossHatch,
-    frame.textureColor,
-    frame.textureSeed,
+    frame.textureModuleId,
+    frame.textureParams,
     frame.textureHaloMm,
-    frame.textureShapes,
   ]);
 
   const downloadSVG = useCallback(() => {

@@ -1,4 +1,5 @@
 import type { FlowState } from '../projects/flow-field/types';
+import { ColorField } from './ColorField';
 
 interface ControlsProps {
   state: FlowState;
@@ -211,14 +212,11 @@ export function Controls({
         />
       </div>
 
-      <div className="control-group">
-        <label>Stroke Color</label>
-        <input
-          type="text"
-          value={state.strokeColor}
-          onChange={(e) => updateState({ strokeColor: e.target.value })}
-        />
-      </div>
+      <ColorField
+        label="Stroke Color"
+        value={state.strokeColor}
+        onChange={(strokeColor) => updateState({ strokeColor })}
+      />
 
       <h3 className="section-title">Seed</h3>
 

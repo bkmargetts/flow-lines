@@ -82,7 +82,7 @@ export function ComplexFlowProvider({
       // (paper-free, plottable) SVG in the preview — same as every project.
       strokeColor: '#111111',
       strokeWidth: state.penWidthMm * page.pxPerMm,
-      layerColors: buildPaletteLayerColors(state.palette, state.layerCount),
+      layerColors: buildPaletteLayerColors(state.palette, state.layerCount, state.customRamp),
       physicalWidth: `${page.widthMm}mm`,
       physicalHeight: `${page.heightMm}mm`,
     };
@@ -154,17 +154,9 @@ export function ComplexFlowProvider({
     frame.densityMaxPasses,
     frame.densityMinOverlapMm,
     frame.textureEnabled,
-    frame.textureStyle,
-    frame.textureSpacingMm,
-    frame.textureAngleDeg,
-    frame.textureScale,
-    frame.textureJitter,
-    frame.textureDensity,
-    frame.textureCrossHatch,
-    frame.textureColor,
-    frame.textureSeed,
+    frame.textureModuleId,
+    frame.textureParams,
     frame.textureHaloMm,
-    frame.textureShapes,
   ]);
 
   const downloadSVG = useCallback(() => {
