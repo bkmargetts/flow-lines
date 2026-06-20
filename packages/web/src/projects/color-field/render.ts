@@ -41,6 +41,7 @@ function colorFieldToOptions(state: ColorFieldState, page: PageMetrics, marginPx
     gradientNoiseAmpPx: state.gradientNoiseAmpMm * ppm,
     gradientNoiseScale: state.gradientNoiseScale,
     ditherScale: state.ditherScale,
+    coincidentInks: state.blendInks,
     jitterPx: state.jitterMm * ppm,
     wobbleAmpPx: state.wobbleAmpMm * ppm,
     wobbleWavelengthPx: state.wobbleWavelengthMm * ppm,
@@ -73,10 +74,22 @@ export function renderColorField(state: ColorFieldState, env: RenderEnv): LayerO
   }
 
   const strokeColor = Object.values(layerColors)[0] ?? '#000000';
+
+  // Overprint: where two inks overlap, multiply their colours so the overlap
+  // shows the blended hue (the band-NN ink layers only; accents stay solid).
+  let layerBlend: Record<string, string> | undefined;
+  if (state.blendInks) {
+    layerBlend = {};
+    for (const key of Object.keys(layerColors)) {
+      if (key.startsWith('band-')) layerBlend[key] = 'multiply';
+    }
+  }
+
   return {
     lines: result.lines,
     strokeColor,
     strokeWidthPx: state.penWidthMm * page.pxPerMm,
     layerColors,
+    layerBlend,
   };
 }

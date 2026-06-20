@@ -54,6 +54,9 @@ export interface ColorFieldState {
   penWidthMm: number;
   seed: number;
   accents: AccentUIState[];
+  /** Overprint: where inks of different colours overlap, multiply them so the
+   *  overlap shows the blended colour (like two pens overprinting). */
+  blendInks: boolean;
 }
 
 export const defaultColorFieldState: ColorFieldState = {
@@ -81,6 +84,7 @@ export const defaultColorFieldState: ColorFieldState = {
   penWidthMm: 0.3,
   seed: Math.floor(Math.random() * 1000000),
   accents: [],
+  blendInks: false,
 };
 
 /** A sensible fresh accent (a contrasting vertical bar, as in the references). */

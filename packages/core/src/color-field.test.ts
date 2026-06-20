@@ -196,6 +196,24 @@ describe('generateColorField', () => {
     expect(aligned / pairs).toBeLessThan(0.25);
   });
 
+  it('coincident inks share line positions (overprint); interleaved offsets them', () => {
+    const sharedFraction = (coincidentInks: boolean): number => {
+      const r = generateColorField(
+        baseOptions({ inkCount: 2, blend: 2, jitterPx: 0, wobbleAmpPx: 0, gradientNoiseAmpPx: 0, coincidentInks })
+      );
+      const xOf = (layer: string) =>
+        new Set(r.lines.filter((l) => l.layer === layer).map((l) => Math.round(l.points[0].x)));
+      const s0 = xOf(bandLayerName(0));
+      const s1 = xOf(bandLayerName(1));
+      if (s1.size === 0) return 0;
+      return [...s1].filter((x) => s0.has(x)).length / s1.size;
+    };
+    // Coincident: the two inks land on the same line x's so they overprint.
+    expect(sharedFraction(true)).toBeGreaterThan(0.8);
+    // Interleaved: ink 1 sits in ink 0's gaps, so their x's barely coincide.
+    expect(sharedFraction(false)).toBeLessThan(0.2);
+  });
+
   it('keeps every field point inside the margin', () => {
     const margin = 20;
     const r = generateColorField(

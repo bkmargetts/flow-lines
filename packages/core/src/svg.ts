@@ -38,6 +38,15 @@ export interface SVGOptions {
    * default, so the CLI and single-layer callers keep the legacy ordering.
    */
   preserveLayerOrder?: boolean;
+  /**
+   * Per-layer SVG blend mode (CSS `mix-blend-mode`, e.g. 'multiply'), keyed
+   * like `layerColors`. When set for a layer, that layer's paths are wrapped in
+   * a `<g>` with the blend mode, so overlapping inks show the overprinted
+   * (multiplied) colour the way two pens physically overprint on paper. Only
+   * consulted on the per-layer (`layerColors`) render path; absent → no `<g>`,
+   * byte-identical output.
+   */
+  layerBlend?: Record<string, string>;
 }
 
 /**
@@ -105,15 +114,19 @@ export function toSVG(result: FlowLinesResult, options: SVGOptions = {}): string
   // preview in two or three pens. Absent layerColors → byte-identical output.
   const pathElements = options.layerColors
     ? orderedLayers(result.lines, options.preserveLayerOrder)
-        .map(([layer, lines]) =>
-          renderPathElements(
+        .map(([layer, lines]) => {
+          const body = renderPathElements(
             lines,
             options.layerColors?.[layer] ?? strokeColor,
             options.layerWidths?.[layer] ?? strokeWidth,
             precision,
             optimizePaths
-          )
-        )
+          );
+          const blend = options.layerBlend?.[layer];
+          // Wrap the layer so its strokes overprint (multiply) onto whatever is
+          // already painted — overlapping inks show their blended colour.
+          return blend && body.length > 0 ? `  <g style="mix-blend-mode:${blend}">\n${body}\n  </g>` : body;
+        })
         .filter((s) => s.length > 0)
         .join('\n')
     : renderPathElements(result.lines, strokeColor, strokeWidth, precision, optimizePaths);

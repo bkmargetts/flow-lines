@@ -205,6 +205,15 @@ export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldSt
         step={1}
         onChange={(v) => u({ colorCount: v })}
       />
+      <label className="checkbox-label">
+        <input
+          type="checkbox"
+          checked={state.blendInks}
+          onChange={(e) => u({ blendInks: e.target.checked })}
+        />
+        Overprint blend
+        <InfoTip text="Stacks the inks on the same lines and multiplies them, so where two colours overlap you see the blended hue (like two pens overprinting). Off keeps them interleaved as a pure-ink optical mix." />
+      </label>
 
       <h3 className="section-title">Gradient</h3>
       <div className="control-group">

@@ -53,6 +53,13 @@ export interface ColorFieldOptions {
   gradientNoiseScale?: number;
   /** Spatial frequency of the density dither that thins each ink (cycles per px). */
   ditherScale?: number;
+  /**
+   * Draw every ink on the same line positions instead of interleaving them into
+   * each other's gaps. Where two inks are both present they then sit on top of
+   * one another, so an overprint (multiply) render blends their colours — the
+   * physical-overprint look. Default false (interleaved optical mix).
+   */
+  coincidentInks?: boolean;
 
   /** Random per-point perpendicular shake, px. */
   jitterPx?: number;
@@ -193,6 +200,7 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     gradientNoiseAmpPx = 0,
     gradientNoiseScale = 0.004,
     ditherScale = 0.04,
+    coincidentInks = false,
     jitterPx = 0,
     wobbleAmpPx = 0,
     wobbleWavelengthPx = 120,
@@ -206,7 +214,9 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
   const noise = createNoise(seed);
   const inks = Math.max(1, Math.round(inkCount));
   const spacing = Math.max(0.5, spacingPx);
-  const baseStep = spacing / inks; // even interleave: ink k sits k/inks into the gap
+  // Even interleave: ink k sits k/inks into the gap. Coincident: all inks share
+  // the same positions so overlapping colours overprint.
+  const baseStep = coincidentInks ? 0 : spacing / inks;
 
   const cx = width / 2;
   const cy = height / 2;
@@ -303,12 +313,19 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
       // coherent striations down the page, and a strong per-line phase offset
       // (`b`) staggers neighbouring lines so their breaks never align into
       // horizontal "ladder" rungs while each line stays a coherent striation.
+      //
+      // Per-ink phase (`k`) decorrelates the inks so they tile into each other's
+      // gaps (the interleaved optical mix). For overprint, the inks instead
+      // share one dither so wherever two are both present they land on the same
+      // line and stack — the multiply render then shows their blended colour.
       const alongScale = ditherScale * 0.3;
+      const kPhaseX = coincidentInks ? 0 : k * 97.3;
+      const kPhaseA = coincidentInks ? 0 : k * 53.7;
       const inkedAt = (a: number, p: Point): boolean => {
         const w = weightK(gradientT(p.x, p.y), k);
         if (w <= 0) return false;
         if (w >= 1) return true;
-        const d = 0.5 * (noise.noise2D(b * ditherScale + k * 97.3, a * alongScale + b * 0.5 + k * 53.7) + 1);
+        const d = 0.5 * (noise.noise2D(b * ditherScale + kPhaseX, a * alongScale + b * 0.5 + kPhaseA) + 1);
         return d < w;
       };
       // A sample is drawn when on the page, inside the mask, outside every gap,
