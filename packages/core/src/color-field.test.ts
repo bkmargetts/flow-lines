@@ -222,6 +222,13 @@ describe('generateColorField', () => {
     expect(totalLength(true)).toBeGreaterThan(totalLength(false));
   });
 
+  it('mix grain (ditherScale) changes the colour mixing', () => {
+    const cfg = { blend: 2.2, jitterPx: 0, wobbleAmpPx: 0, gradientNoiseAmpPx: 0 };
+    const coarse = generateColorField(baseOptions({ ...cfg, ditherScale: 0.015 }));
+    const fine = generateColorField(baseOptions({ ...cfg, ditherScale: 0.09 }));
+    expect(JSON.stringify(coarse.lines)).not.toEqual(JSON.stringify(fine.lines));
+  });
+
   it('keeps every field point inside the margin', () => {
     const margin = 20;
     const r = generateColorField(

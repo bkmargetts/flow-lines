@@ -321,8 +321,11 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     const coveredAt = (a: number): boolean =>
       fillClamped >= 1 || 0.5 * (noise.noise2D(b * ditherScale, a * alongScale + b * 0.5) + 1) < fillClamped;
     // Per-line colour-pick value: decorrelated across neighbouring lines (so the
-    // transition zone mixes adjacent colours) and coherent along the line.
-    const colNoiseAt = (a: number): number => 0.5 * (noise.noise2D(b * 0.08 + 17, a * 0.012) + 1);
+    // transition zone mixes adjacent colours) and coherent along the line. The
+    // scale follows `ditherScale` (the "mix grain" control): higher → faster
+    // decorrelation → finer, smoother mixing; lower → chunkier colour patches.
+    const colNoiseAt = (a: number): number =>
+      0.5 * (noise.noise2D(b * ditherScale * 1.8 + 17, a * ditherScale * 0.27) + 1);
     // Which inks ink this sample: the weighted-pick colour, plus (overprint) any
     // co-dominant ink so they stack and the multiply render blends them.
     const drawsHere = (k: number, a: number): boolean => {
