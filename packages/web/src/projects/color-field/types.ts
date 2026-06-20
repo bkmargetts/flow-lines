@@ -1,12 +1,14 @@
 /**
- * Colour Field settings — dense directional lines banded into a soft gradient
- * (a Rothko-style colour field) plus optional geometric accents cutting through
- * it. Distances are in mm (mapped to px in `render.ts`); palette/seed/pen-width
- * follow the same conventions as the other generative modules.
+ * Colour Field settings — a soft gradient built by *combining* inks (like the
+ * grating) rather than banding them: every ink is an interleaved grating across
+ * the whole field, and each ink's density drifts along a gradient coordinate so
+ * overlapping colours optically mix. Distances are in mm (mapped to px in
+ * `render.ts`); palette / seed / pen-width follow the other generative modules.
  */
 
 export type AccentType = 'bar' | 'gap';
 export type AccentOrientation = 'vertical' | 'horizontal';
+export type GradientMode = 'linear' | 'radial';
 
 /** One geometric accent, in UI units (mm + fractions + a bar colour). */
 export interface AccentUIState {
@@ -30,17 +32,21 @@ export interface ColorFieldState {
   angleDeg: number;
   lineLengthPct: number;
   spacingMm: number;
-  /** Number of colour bands = pen layers, sampled from the palette. */
+  /** Number of inks = pen layers, sampled along the gradient and mixed. */
   colorCount: number;
   palette: string;
   customRamp: string[];
-  bandWaveAmpMm: number;
-  bandWaveLengthMm: number;
-  featherMm: number;
-  featherNoiseScale: number;
-  densityGradient: number;
-  densityNoiseAmt: number;
-  densityNoiseScale: number;
+
+  gradientMode: GradientMode;
+  gradientAngleDeg: number;
+  focalXPct: number;
+  focalYPct: number;
+  gradientRadiusPct: number;
+  blend: number;
+  gradientNoiseAmpMm: number;
+  gradientNoiseScale: number;
+  ditherScale: number;
+
   jitterMm: number;
   wobbleAmpMm: number;
   wobbleWavelengthMm: number;
@@ -57,17 +63,21 @@ export const defaultColorFieldState: ColorFieldState = {
   colorCount: 4,
   palette: 'ice',
   customRamp: ['#caf0f8', '#48cae4', '#0077b6', '#023e8a'],
-  bandWaveAmpMm: 8,
-  bandWaveLengthMm: 60,
-  featherMm: 14,
-  featherNoiseScale: 0.02,
-  densityGradient: 1.4,
-  densityNoiseAmt: 0.15,
-  densityNoiseScale: 0.01,
+
+  gradientMode: 'linear',
+  gradientAngleDeg: 0,
+  focalXPct: 0.5,
+  focalYPct: 0.4,
+  gradientRadiusPct: 0.7,
+  blend: 1.4,
+  gradientNoiseAmpMm: 6,
+  gradientNoiseScale: 0.004,
+  ditherScale: 0.04,
+
   jitterMm: 0.1,
   wobbleAmpMm: 0.4,
   wobbleWavelengthMm: 40,
-  minSegmentLengthMm: 1.5,
+  minSegmentLengthMm: 1,
   penWidthMm: 0.3,
   seed: Math.floor(Math.random() * 1000000),
   accents: [],

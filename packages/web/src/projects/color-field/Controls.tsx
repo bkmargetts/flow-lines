@@ -2,7 +2,13 @@ import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
 import { ColorField, PalettePicker } from '../../components/ColorField';
 import type { ControlsProps, Updater } from '../../modules/types';
-import type { AccentOrientation, AccentType, AccentUIState, ColorFieldState } from './types';
+import type {
+  AccentOrientation,
+  AccentType,
+  ColorFieldState,
+  GradientMode,
+  AccentUIState,
+} from './types';
 import { defaultAccent } from './types';
 
 /** One labelled range slider with a click-to-type value badge. */
@@ -182,91 +188,118 @@ export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldSt
         format={(v) => `${v}%`}
       />
 
-      <h3 className="section-title">Colour bands</h3>
+      <h3 className="section-title">Colour</h3>
       <PalettePicker
         palette={state.palette}
         customRamp={state.customRamp}
         colorCount={state.colorCount}
         onChange={u}
-        info="The gradient runs through these inks top→bottom, one pen per band. 'Ice' / 'Ember' match the references; 'Custom…' lets you pick each band."
+        info="The gradient mixes these inks — every pen is present across the field and overlapping colours blend optically. 'Ice' / 'Ember' match the references; 'Custom…' lets you pick each ink."
       />
       <Slider
-        label="Bands (pens)"
-        info="How many colour bands stack along the gradient. Each is its own pen layer."
+        label="Inks (pens)"
+        info="How many inks are combined along the gradient. Each is its own pen layer; neighbours overlap and mix into in-between hues."
         value={state.colorCount}
         min={2}
         max={6}
         step={1}
         onChange={(v) => u({ colorCount: v })}
       />
-      <Slider
-        label="Boundary wave"
-        info="Undulation of the band boundaries, mm — wavy edges instead of straight rules."
-        value={state.bandWaveAmpMm}
-        min={0}
-        max={30}
-        step={1}
-        onChange={(v) => u({ bandWaveAmpMm: v })}
-        format={(v) => `${v.toFixed(0)}mm`}
-      />
-      <Slider
-        label="Wave length"
-        value={state.bandWaveLengthMm}
-        min={10}
-        max={150}
-        step={5}
-        onChange={(v) => u({ bandWaveLengthMm: v })}
-        format={(v) => `${v.toFixed(0)}mm`}
-      />
-      <Slider
-        label="Feather"
-        info="Width of the dithered transition zone where neighbouring bands interleave — the soft gradient blend, mm."
-        value={state.featherMm}
-        min={0}
-        max={40}
-        step={1}
-        onChange={(v) => u({ featherMm: v })}
-        format={(v) => `${v.toFixed(0)}mm`}
-      />
-      <Slider
-        label="Feather grain"
-        info="Spatial frequency of the feather dither. Higher = finer mottling."
-        value={state.featherNoiseScale}
-        min={0.005}
-        max={0.08}
-        step={0.005}
-        onChange={(v) => u({ featherNoiseScale: v })}
-        format={(v) => v.toFixed(3)}
-      />
 
-      <h3 className="section-title">Density (tone)</h3>
+      <h3 className="section-title">Gradient</h3>
+      <div className="control-group">
+        <label>
+          <span className="label-text">
+            Shape
+            <InfoTip text="Linear runs the palette across the page in a direction; Radial spreads it out from a focal point (a glow)." />
+          </span>
+        </label>
+        <select value={state.gradientMode} onChange={(e) => u({ gradientMode: e.target.value as GradientMode })}>
+          <option value="linear">Linear</option>
+          <option value="radial">Radial (focal glow)</option>
+        </select>
+      </div>
+      {state.gradientMode === 'linear' && (
+        <Slider
+          label="Direction"
+          info="Direction the palette runs. 0° = top→bottom."
+          value={state.gradientAngleDeg}
+          min={0}
+          max={360}
+          step={5}
+          onChange={(v) => u({ gradientAngleDeg: v })}
+          format={(v) => `${v}°`}
+        />
+      )}
+      {state.gradientMode === 'radial' && (
+        <>
+          <Slider
+            label="Focal X"
+            value={Math.round(state.focalXPct * 100)}
+            min={0}
+            max={100}
+            step={1}
+            onChange={(v) => u({ focalXPct: v / 100 })}
+            format={(v) => `${v}%`}
+          />
+          <Slider
+            label="Focal Y"
+            value={Math.round(state.focalYPct * 100)}
+            min={0}
+            max={100}
+            step={1}
+            onChange={(v) => u({ focalYPct: v / 100 })}
+            format={(v) => `${v}%`}
+          />
+          <Slider
+            label="Radius"
+            value={Math.round(state.gradientRadiusPct * 100)}
+            min={20}
+            max={150}
+            step={5}
+            onChange={(v) => u({ gradientRadiusPct: v / 100 })}
+            format={(v) => `${v}%`}
+          />
+        </>
+      )}
       <Slider
-        label="Gradient"
-        info="Adds lines toward the bottom so deep bands read denser/darker. 1 = uniform."
-        value={state.densityGradient}
-        min={1}
+        label="Blend"
+        info="How much the inks overlap. Higher mixes more colours at once for a softer, muddier blend; lower keeps each colour cleaner."
+        value={state.blend}
+        min={0.5}
         max={3}
         step={0.1}
-        onChange={(v) => u({ densityGradient: v })}
+        onChange={(v) => u({ blend: v })}
         format={(v) => `${v.toFixed(1)}×`}
       />
       <Slider
-        label="Wander"
-        info="Per-line bunching, as a fraction of spacing — the squeegee-pull look."
-        value={state.densityNoiseAmt}
+        label="Warp"
+        info="Organic distortion of the gradient, mm — so the colour transition wanders instead of running dead straight."
+        value={state.gradientNoiseAmpMm}
         min={0}
-        max={1}
-        step={0.05}
-        onChange={(v) => u({ densityNoiseAmt: v })}
-        format={(v) => v.toFixed(2)}
+        max={40}
+        step={1}
+        onChange={(v) => u({ gradientNoiseAmpMm: v })}
+        format={(v) => `${v.toFixed(0)}mm`}
       />
       <Slider
-        label="Wander grain"
-        value={state.densityNoiseScale}
-        min={0.002}
-        max={0.04}
-        step={0.002}
-        onChange={(v) => u({ densityNoiseScale: v })}
+        label="Warp grain"
+        info="Spatial frequency of the gradient warp. Lower = broad swells, higher = finer turbulence."
+        value={state.gradientNoiseScale}
+        min={0.001}
+        max={0.02}
+        step={0.001}
+        onChange={(v) => u({ gradientNoiseScale: v })}
+        format={(v) => v.toFixed(3)}
+      />
+      <Slider
+        label="Mix grain"
+        info="Texture of the density dither that interleaves the inks. Higher = finer, smoother mixing; lower = chunkier patches."
+        value={state.ditherScale}
+        min={0.01}
+        max={0.1}
+        step={0.005}
+        onChange={(v) => u({ ditherScale: v })}
         format={(v) => v.toFixed(3)}
       />
 

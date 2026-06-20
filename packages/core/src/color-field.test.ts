@@ -13,95 +13,139 @@ function baseOptions(overrides: Partial<ColorFieldOptions> = {}): ColorFieldOpti
     height: 600,
     margin: 20,
     angleDeg: 0,
-    spacingPx: 8,
-    bandCount: 4,
+    spacingPx: 6,
+    inkCount: 4,
     seed: 42,
     ...overrides,
   };
 }
 
+/** Total inked length on a given band layer whose segment midpoints satisfy `pred`. */
+function bandLength(
+  lines: { layer?: string; points: { x: number; y: number }[] }[],
+  layer: string,
+  pred: (x: number, y: number) => boolean = () => true
+): number {
+  let len = 0;
+  for (const l of lines) {
+    if (l.layer !== layer) continue;
+    for (let i = 1; i < l.points.length; i++) {
+      const mx = (l.points[i].x + l.points[i - 1].x) / 2;
+      const my = (l.points[i].y + l.points[i - 1].y) / 2;
+      if (pred(mx, my)) len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+    }
+  }
+  return len;
+}
+
 describe('generateColorField', () => {
   it('is deterministic per seed', () => {
-    const cfg = { bandWaveAmpPx: 8, featherPx: 14, densityNoiseAmt: 0.3, jitterPx: 1, wobbleAmpPx: 3 };
+    const cfg = { gradientNoiseAmpPx: 30, jitterPx: 1, wobbleAmpPx: 3 };
     const a = generateColorField(baseOptions(cfg));
     const b = generateColorField(baseOptions(cfg));
     expect(JSON.stringify(a.lines)).toEqual(JSON.stringify(b.lines));
   });
 
-  it('changes with the seed when noise is on', () => {
-    const cfg = { featherPx: 14, densityNoiseAmt: 0.3 };
-    const a = generateColorField(baseOptions({ ...cfg, seed: 1 }));
-    const b = generateColorField(baseOptions({ ...cfg, seed: 2 }));
+  it('changes with the seed', () => {
+    const a = generateColorField(baseOptions({ seed: 1 }));
+    const b = generateColorField(baseOptions({ seed: 2 }));
     expect(JSON.stringify(a.lines)).not.toEqual(JSON.stringify(b.lines));
   });
 
   it('draws many dense lines', () => {
     const r = generateColorField(baseOptions());
-    expect(r.lines.length).toBeGreaterThan(10);
+    expect(r.lines.length).toBeGreaterThan(20);
   });
 
   it('tighter spacing yields more lines', () => {
-    const wide = generateColorField(baseOptions({ spacingPx: 24 }));
-    const tight = generateColorField(baseOptions({ spacingPx: 6 }));
+    const wide = generateColorField(baseOptions({ spacingPx: 18 }));
+    const tight = generateColorField(baseOptions({ spacingPx: 4 }));
     expect(tight.lines.length).toBeGreaterThan(wide.lines.length);
   });
 
-  it('every line is tagged with a band layer within bandCount', () => {
-    const bandCount = 4;
-    const r = generateColorField(baseOptions({ bandCount }));
-    const allowed = new Set(Array.from({ length: bandCount }, (_, i) => bandLayerName(i)));
+  it('every line is tagged with an ink band layer within inkCount', () => {
+    const inkCount = 4;
+    const r = generateColorField(baseOptions({ inkCount }));
+    const allowed = new Set(Array.from({ length: inkCount }, (_, i) => bandLayerName(i)));
     for (const line of r.lines) {
       expect(line.layer).toBeDefined();
       expect(allowed.has(line.layer!)).toBe(true);
     }
   });
 
-  it('all bands appear and stack top→bottom (feather off)', () => {
-    const bandCount = 4;
-    const r = generateColorField(
-      baseOptions({ bandCount, featherPx: 0, bandWaveAmpPx: 0, jitterPx: 0, wobbleAmpPx: 0 })
-    );
+  it('every ink is present somewhere across the field', () => {
+    const inkCount = 4;
+    const r = generateColorField(baseOptions({ inkCount }));
     const seen = new Set(r.lines.map((l) => l.layer));
-    for (let i = 0; i < bandCount; i++) expect(seen.has(bandLayerName(i))).toBe(true);
-
-    // Top band owns the smallest y; the last band owns the largest y.
-    const yByBand = (layer: string): number[] =>
-      r.lines.filter((l) => l.layer === layer).flatMap((l) => l.points.map((p) => p.y));
-    const topYs = yByBand(bandLayerName(0));
-    const botYs = yByBand(bandLayerName(bandCount - 1));
-    expect(Math.min(...topYs)).toBeLessThan(Math.min(...botYs));
-    expect(Math.max(...botYs)).toBeGreaterThan(Math.max(...topYs));
+    for (let i = 0; i < inkCount; i++) expect(seen.has(bandLayerName(i))).toBe(true);
   });
 
-  it('adjacent band segments on a line meet at a shared point', () => {
-    const r = generateColorField(
-      baseOptions({ bandCount: 3, featherPx: 0, bandWaveAmpPx: 0, jitterPx: 0, wobbleAmpPx: 0 })
-    );
-    // Group segments by their (rounded) constant x — one vertical line.
-    const groups = new Map<number, typeof r.lines>();
-    for (const l of r.lines) {
-      const key = Math.round(l.points[0].x * 10);
-      (groups.get(key) ?? groups.set(key, []).get(key)!).push(l);
-    }
-    let checked = 0;
-    for (const segs of groups.values()) {
-      if (segs.length < 2) continue;
-      const ordered = [...segs].sort((a, b) => a.points[0].y - b.points[0].y);
-      for (let i = 1; i < ordered.length; i++) {
-        const prevEnd = ordered[i - 1].points[ordered[i - 1].points.length - 1];
-        const nextStart = ordered[i].points[0];
-        expect(Math.abs(prevEnd.x - nextStart.x)).toBeLessThan(1e-6);
-        expect(Math.abs(prevEnd.y - nextStart.y)).toBeLessThan(1e-6);
-        checked++;
+  it('each ink is densest at its end of the gradient (no banding, just balance)', () => {
+    // Vertical gradient: ink 0 belongs to the top, the last ink to the bottom.
+    const inkCount = 4;
+    const r = generateColorField(baseOptions({ inkCount, gradientAngleDeg: 0, jitterPx: 0, wobbleAmpPx: 0 }));
+    const top = (x: number, y: number) => y < 300;
+    const bottom = (x: number, y: number) => y >= 300;
+    const first = bandLayerName(0);
+    const last = bandLayerName(inkCount - 1);
+    expect(bandLength(r.lines, first, top)).toBeGreaterThan(bandLength(r.lines, first, bottom));
+    expect(bandLength(r.lines, last, bottom)).toBeGreaterThan(bandLength(r.lines, last, top));
+  });
+
+  it('inks coexist and mix (multiple inks share a region)', () => {
+    const r = generateColorField(baseOptions({ inkCount: 4 }));
+    // Scan horizontal slices; at least one must hold points from ≥2 inks — the
+    // optical-mix overlap a banded approach could never produce.
+    let maxLayersInSlice = 0;
+    for (let y0 = 20; y0 < 580; y0 += 30) {
+      const inSlice = new Set<string>();
+      for (const l of r.lines) {
+        if (!l.layer?.startsWith('band-')) continue;
+        if (l.points.some((p) => p.y >= y0 && p.y < y0 + 30)) inSlice.add(l.layer);
       }
+      maxLayersInSlice = Math.max(maxLayersInSlice, inSlice.size);
     }
-    expect(checked).toBeGreaterThan(0);
+    expect(maxLayersInSlice).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a wider blend mixes more inks at once', () => {
+    const layersAtMid = (blend: number): number => {
+      const r = generateColorField(baseOptions({ inkCount: 5, blend, jitterPx: 0, wobbleAmpPx: 0 }));
+      const mid = new Set<string>();
+      for (const l of r.lines) {
+        if (l.layer?.startsWith('band-') && l.points.some((p) => p.y >= 280 && p.y < 320)) mid.add(l.layer);
+      }
+      return mid.size;
+    };
+    expect(layersAtMid(2.2)).toBeGreaterThanOrEqual(layersAtMid(0.8));
+  });
+
+  it('radial mode concentrates the first ink near the focal point', () => {
+    const inkCount = 4;
+    const r = generateColorField(
+      baseOptions({ inkCount, gradientMode: 'radial', focalXPct: 0.5, focalYPct: 0.5, jitterPx: 0, wobbleAmpPx: 0 })
+    );
+    const cx = 200;
+    const cy = 300;
+    const meanDist = (layer: string): number => {
+      let sum = 0;
+      let n = 0;
+      for (const l of r.lines) {
+        if (l.layer !== layer) continue;
+        for (const p of l.points) {
+          sum += Math.hypot(p.x - cx, p.y - cy);
+          n++;
+        }
+      }
+      return n > 0 ? sum / n : Infinity;
+    };
+    expect(meanDist(bandLayerName(0))).toBeLessThan(meanDist(bandLayerName(inkCount - 1)));
   });
 
   it('keeps every field point inside the margin', () => {
     const margin = 20;
     const r = generateColorField(
-      baseOptions({ margin, jitterPx: 2, wobbleAmpPx: 4, bandWaveAmpPx: 10, densityNoiseAmt: 0.5 })
+      baseOptions({ margin, jitterPx: 2, wobbleAmpPx: 4, gradientNoiseAmpPx: 40 })
     );
     for (const line of r.lines) {
       for (const p of line.points) {
@@ -113,24 +157,9 @@ describe('generateColorField', () => {
     }
   });
 
-  it('a density gradient adds line-length in the lower half', () => {
-    const lowerLength = (grad: number): number => {
-      const r = generateColorField(baseOptions({ densityGradient: grad, jitterPx: 0, wobbleAmpPx: 0 }));
-      let len = 0;
-      for (const l of r.lines) {
-        for (let i = 1; i < l.points.length; i++) {
-          const my = (l.points[i].y + l.points[i - 1].y) / 2;
-          if (my > 300) len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
-        }
-      }
-      return len;
-    };
-    expect(lowerLength(2.5)).toBeGreaterThan(lowerLength(1));
-  });
-
   it('drops segments shorter than minSegmentLengthPx', () => {
     const min = 40;
-    const r = generateColorField(baseOptions({ minSegmentLengthPx: min, featherPx: 12 }));
+    const r = generateColorField(baseOptions({ minSegmentLengthPx: min }));
     for (const line of r.lines) {
       let len = 0;
       for (let i = 1; i < line.points.length; i++) {
@@ -173,22 +202,12 @@ describe('generateColorField', () => {
       const gapY0 = 20 + 0.5 * (600 - 40) - 15;
       const gapY1 = gapY0 + 30;
       for (const line of r.lines) {
+        if (!line.layer?.startsWith('band-')) continue;
         for (const p of line.points) {
-          // Field (non-accent) points must not fall inside the gap band.
-          if (line.layer?.startsWith('band-')) {
-            const inside = p.y > gapY0 + 1e-6 && p.y < gapY1 - 1e-6;
-            expect(inside).toBe(false);
-          }
+          const inside = p.y > gapY0 + 1e-6 && p.y < gapY1 - 1e-6;
+          expect(inside).toBe(false);
         }
       }
-      // A vertical line crossing the gap should be split into ≥2 segments.
-      const byX = new Map<number, number>();
-      for (const l of r.lines) {
-        if (!l.layer?.startsWith('band-')) continue;
-        const key = Math.round(l.points[0].x);
-        byX.set(key, (byX.get(key) ?? 0) + 1);
-      }
-      expect(Math.max(...byX.values())).toBeGreaterThanOrEqual(2);
     });
 
     it('a bar accent inks its own pen layer confined to the bar', () => {

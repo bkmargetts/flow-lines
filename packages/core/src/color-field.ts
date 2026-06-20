@@ -3,23 +3,20 @@ import { bandLayerName, pointInMask, type MaskShape } from './overlapped-lines.j
 import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 
 /**
- * Colour-field texture — dense directional lines arranged into a soft,
- * atmospheric gradient of stacked colour bands (a Rothko-style colour field).
+ * Colour-field texture — a soft, atmospheric gradient built the way the grating
+ * builds texture: by *combining* inks in the same space, not by banding them
+ * into separate zones. Every ink is an interleaved grating present across the
+ * whole field; what varies across the page is each ink's *density*. A gradient
+ * coordinate (linear at any angle, or radial from a focal point) places the
+ * palette inks along it, each with an overlapping weight bump, and a noise
+ * dither thins each ink's strokes to that local weight. Where two inks overlap
+ * at partial density they interleave and optically mix into the in-between hue,
+ * so a yellow→blue gradient really passes through green — the colour comes from
+ * the shifting balance of mixed inks, never from a hard boundary.
  *
- * Unlike the interleaved grating (`overlapped-lines.ts`), which assigns colour
- * by *interleave index* and modulates an inter-colour offset, here every line
- * runs the full page and is split by *position* into `bandCount` bands stacked
- * along the cross-axis (for vertical lines: horizontal bands, top→bottom). Band
- * boundaries undulate (low-frequency noise) and feather (a noise-dithered
- * transition zone) so adjacent bands interleave into a soft gradient — the
- * organic key. Tone is carried by line density (a vertical density gradient and
- * a noise wander), never by stroke width, so the drawing stays plottable: each
- * band is a real `band-NN` pen layer, each accent an `accent-NN` layer.
- *
- * An optional set of geometric *accents* cut through the field: a `bar` (a
- * contrasting solid built from repeated pen passes — the project's bold-line
- * convention, not a wide stroke) or a `gap` (reserved clean paper the field
- * lines break around). Pure and deterministic per `seed`.
+ * Stays plottable: tone/colour is carried by line density (dithered presence),
+ * never stroke width; each ink is a real `band-NN` pen layer, each accent an
+ * `accent-NN` layer. Pure and deterministic per `seed`.
  */
 export interface ColorFieldOptions {
   width: number;
@@ -30,35 +27,42 @@ export interface ColorFieldOptions {
   angleDeg?: number;
   /** Line length as a fraction of the usable page span, 0..1. */
   lineLengthPct?: number;
-  /** Base gap between adjacent lines, px. */
+  /** Base gap between adjacent lines within one ink, px. */
   spacingPx?: number;
-  /** Number of colour bands stacked along the cross-axis (= palette layers). */
-  bandCount?: number;
-  /** Peak undulation of the band boundaries, in arc-length px. */
-  bandWaveAmpPx?: number;
-  /** Wavelength of the boundary undulation, px. */
-  bandWaveLengthPx?: number;
-  /** Width of the noise-dithered transition zone straddling each boundary, px. */
-  featherPx?: number;
-  /** Spatial frequency of the feather dither noise (cycles per px). */
-  featherNoiseScale?: number;
+  /** Number of inks (interleaved gratings) sampled along the gradient. */
+  inkCount?: number;
+
+  /** How the palette is laid across the page. */
+  gradientMode?: 'linear' | 'radial';
+  /** Direction of a linear gradient in degrees; 0 = top→bottom (vertical). */
+  gradientAngleDeg?: number;
+  /** Focal point of a radial gradient, as fractions of the usable page, 0..1. */
+  focalXPct?: number;
+  focalYPct?: number;
+  /** Radius of a radial gradient as a fraction of the usable half-extent. */
+  gradientRadiusPct?: number;
   /**
-   * Density multiplier from top (1) to bottom: >1 adds an interleaved pass over
-   * the lower part of the page so deep bands read denser/darker. Clamped to 3.
+   * Overlap width of each ink's weight bump, in gradient-coordinate units
+   * relative to the even ink spacing (1 ≈ adjacent inks just touch; >1 mixes
+   * more colours at once for a softer blend).
    */
-  densityGradient?: number;
-  /** Per-line across-position wander as a fraction of spacing, 0..1. */
-  densityNoiseAmt?: number;
-  /** Spatial frequency of the density wander noise (cycles per px). */
-  densityNoiseScale?: number;
+  blend?: number;
+  /** Organic warp of the gradient coordinate (displaces it), px. */
+  gradientNoiseAmpPx?: number;
+  /** Spatial frequency of the gradient warp noise (cycles per px). */
+  gradientNoiseScale?: number;
+  /** Spatial frequency of the density dither that thins each ink (cycles per px). */
+  ditherScale?: number;
+
   /** Random per-point perpendicular shake, px. */
   jitterPx?: number;
   /** Peak low-frequency wobble of each line, px. */
   wobbleAmpPx?: number;
   /** Wobble wavelength along the line, px. */
   wobbleWavelengthPx?: number;
-  /** Drop emitted polylines shorter than this, px (kills feather slivers). */
+  /** Drop emitted polylines shorter than this, px (kills dither specks). */
   minSegmentLengthPx?: number;
+
   /** Geometric accents drawn over (bar) or cut into (gap) the field. */
   accents?: AccentSpec[];
   /** Pen width, px — sets the pass spacing when filling `bar` accents. */
@@ -162,24 +166,10 @@ function buildAccentBar(rect: Rect, penWidthPx: number, taper: boolean, layer: s
     if (inset * 2 >= length) continue; // taper consumed the whole pass
     if (vertical) {
       const x = rect.x0 + cross * thickness;
-      lines.push({
-        points: [
-          { x, y: rect.y0 + inset },
-          { x, y: rect.y1 - inset },
-        ],
-        layer,
-        pen: 'bold',
-      });
+      lines.push({ points: [{ x, y: rect.y0 + inset }, { x, y: rect.y1 - inset }], layer, pen: 'bold' });
     } else {
       const y = rect.y0 + cross * thickness;
-      lines.push({
-        points: [
-          { x: rect.x0 + inset, y },
-          { x: rect.x1 - inset, y },
-        ],
-        layer,
-        pen: 'bold',
-      });
+      lines.push({ points: [{ x: rect.x0 + inset, y }, { x: rect.x1 - inset, y }], layer, pen: 'bold' });
     }
   }
   return lines;
@@ -193,14 +183,16 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     angleDeg = 0,
     lineLengthPct = 1,
     spacingPx = 8,
-    bandCount = 4,
-    bandWaveAmpPx = 0,
-    bandWaveLengthPx = 240,
-    featherPx = 0,
-    featherNoiseScale = 0.02,
-    densityGradient = 1,
-    densityNoiseAmt = 0,
-    densityNoiseScale = 0.01,
+    inkCount = 4,
+    gradientMode = 'linear',
+    gradientAngleDeg = 0,
+    focalXPct = 0.5,
+    focalYPct = 0.5,
+    gradientRadiusPct = 0.7,
+    blend = 1.3,
+    gradientNoiseAmpPx = 0,
+    gradientNoiseScale = 0.004,
+    ditherScale = 0.04,
     jitterPx = 0,
     wobbleAmpPx = 0,
     wobbleWavelengthPx = 120,
@@ -212,8 +204,9 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
   } = options;
 
   const noise = createNoise(seed);
-  const bands = Math.max(1, Math.round(bandCount));
+  const inks = Math.max(1, Math.round(inkCount));
   const spacing = Math.max(0.5, spacingPx);
+  const baseStep = spacing / inks; // even interleave: ink k sits k/inks into the gap
 
   const cx = width / 2;
   const cy = height / 2;
@@ -236,10 +229,39 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
   const maxY = height - margin;
   const inBounds = (x: number, y: number): boolean => x >= minX && x <= maxX && y >= minY && y <= maxY;
 
+  // --- gradient coordinate: position → t in [0,1] along the palette ---
+  const gRad = (gradientAngleDeg * Math.PI) / 180;
+  const gx = Math.sin(gRad);
+  const gy = Math.cos(gRad);
+  const halfSpan = 0.5 * (Math.abs(gx) * usableW + Math.abs(gy) * usableH) || 1;
+  const fx = margin + focalXPct * usableW;
+  const fy = margin + focalYPct * usableH;
+  const radius = Math.max(1, gradientRadiusPct * Math.max(usableW, usableH) * 0.5 * 1.41);
+  const gradientT = (x: number, y: number): number => {
+    const warp = gradientNoiseAmpPx > 0 ? gradientNoiseAmpPx * noise.noise2D(x * gradientNoiseScale, y * gradientNoiseScale) : 0;
+    let t: number;
+    if (gradientMode === 'radial') {
+      const d = Math.hypot(x - fx, y - fy) + warp;
+      t = d / radius;
+    } else {
+      const proj = (x - cx) * gx + (y - cy) * gy + warp;
+      t = 0.5 + proj / (2 * halfSpan);
+    }
+    return t < 0 ? 0 : t > 1 ? 1 : t;
+  };
+
+  // Ink k is centred at t = k/(inks-1); its weight bump overlaps its neighbours
+  // so adjacent inks coexist and mix. Wider `blend` → more colours at once.
+  const bumpHalfWidth = inks > 1 ? (blend * 1) / (inks - 1) : 1;
+  const weightK = (t: number, k: number): number => {
+    const tk = inks > 1 ? k / (inks - 1) : 0.5;
+    const w = 1 - Math.abs(t - tk) / bumpHalfWidth;
+    return w < 0 ? 0 : w > 1 ? 1 : w;
+  };
+
   const lines: FlowLine[] = [];
 
-  // Geometric accents: gaps become exclusion rects (field breaks around them);
-  // bars are inked separately as their own pen layer.
+  // Geometric accents: gaps become exclusion rects; bars are inked separately.
   const gapRects: Rect[] = [];
   const barLines: FlowLine[] = [];
   for (const a of accents) {
@@ -256,115 +278,76 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     return { lines: barLines, width, height, seed };
   }
 
-  // Sample finely enough that wavy / wobbling lines stay smooth.
+  // Sample finely enough that wobbling / dithered lines stay smooth.
   const step = Math.max(2, Math.min(8, halfA / 12));
 
-  // Normalised position along the line, 0 at the top, 1 at the bottom.
-  const frac01 = (a: number): number => (a + halfA) / (2 * halfA);
-
-  // The colour band at arc-length `a` on the line through across-position `b`.
-  const bandAt = (a: number, b: number): number => {
-    const wave = bandWaveAmpPx > 0 ? bandWaveAmpPx * noise.noise2D(b / bandWaveLengthPx, a / bandWaveLengthPx) : 0;
-    const uShift = (a + wave + halfA) / (2 * halfA);
-    const fBand = uShift * bands;
-    let i = Math.floor(fBand);
-    const frac = fBand - Math.floor(fBand); // 0..1 within the band cell
-    if (featherPx > 0 && bands > 1) {
-      const cellPx = (2 * halfA) / bands;
-      const featherFrac = Math.min(0.5, featherPx / cellPx);
-      const distUpper = 1 - frac; // toward the next band (i+1)
-      const distLower = frac; // toward the previous band (i-1)
-      if (distUpper < featherFrac) {
-        // P(flip) = 0.5 at the boundary, fading to 0 at the zone edge.
-        const t = distUpper / featherFrac;
-        if (noise.noise2D(b * featherNoiseScale, a * featherNoiseScale) > t) i += 1;
-      } else if (distLower < featherFrac) {
-        const t = distLower / featherFrac;
-        if (noise.noise2D(b * featherNoiseScale + 31.7, a * featherNoiseScale + 13.3) > t) i -= 1;
-      }
-    }
-    return Math.max(0, Math.min(bands - 1, i));
-  };
-
-  // Interleaved passes. The base pass covers the whole page; a density gradient
-  // adds one half-spacing-offset pass over the lower part so deep bands read
-  // denser. `lowerOnly` is the frac01 threshold below which a pass draws nothing.
-  const grad = Math.max(1, Math.min(3, densityGradient));
-  const passDefs =
-    grad > 1
-      ? [
-          { offset: 0, lowerOnly: 0 },
-          { offset: spacing / 2, lowerOnly: 1 - Math.min(1, (grad - 1) / 2) },
-        ]
-      : [{ offset: 0, lowerOnly: 0 }];
-
-  for (const pd of passDefs) {
-    const firstB = -Math.ceil(halfP / spacing) * spacing + pd.offset;
-    for (let bRaw = firstB; bRaw <= halfP + 1e-6; bRaw += spacing) {
-      // Per-line across-position wander (squeegee bunching), fixed along the line.
-      const b =
-        densityNoiseAmt > 0 ? bRaw + densityNoiseAmt * spacing * noise.noise2D(bRaw * densityNoiseScale, 7.3) : bRaw;
-
+  const firstB = -Math.ceil(halfP / spacing) * spacing;
+  for (let b = firstB; b <= halfP + 1e-6; b += spacing) {
+    for (let k = 0; k < inks; k++) {
       const pointAt = (a: number): Point => {
         const wob =
-          wobbleAmpPx > 0 ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + 1.7, 2, 0.5, 2.2) : 0;
-        const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5 + b * 0.31, b * 0.5) : 0;
-        const perp = b + wob + jit;
+          wobbleAmpPx > 0 ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + k * 1.7, 2, 0.5, 2.2) : 0;
+        const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5 + k * 13.1, b * 0.5) : 0;
+        const perp = b + k * baseStep + wob + jit;
         return { x: cx + dx * a + px * perp, y: cy + dy * a + py * perp };
       };
-      // A sample is drawable when on the page, inside the mask, outside every
-      // gap, and (for the gradient pass) below the density threshold.
-      const passesA = (a: number): boolean => {
-        if (frac01(a) < pd.lowerOnly) return false;
+      // Geometry: on the page, inside the mask, outside every gap.
+      const drawableAt = (a: number): boolean => {
         const p = pointAt(a);
         return inBounds(p.x, p.y) && pointInMask(maskShapes, p.x, p.y) && !inAnyGap(p.x, p.y);
       };
-      // Refine an inside→outside crossing to the boundary (page / mask / gap /
-      // density edge) so line ends land on it instead of the sampling step.
+      // Refine an inside→outside geometry crossing to the boundary.
       const crossing = (aIn: number, aOut: number): Point => {
         let lo = aIn;
         let hi = aOut;
         for (let i = 0; i < 14; i++) {
           const mid = (lo + hi) / 2;
-          if (passesA(mid)) lo = mid;
+          if (drawableAt(mid)) lo = mid;
           else hi = mid;
         }
         return pointAt(lo);
       };
+      // This ink is inked here when the dither falls under its local weight —
+      // dense where the colour belongs, sparse (broken) as it fades out. The
+      // dither is stretched along the line (low `alongScale`) so it breaks into
+      // coherent striations down the page, not isotropic confetti, while still
+      // decorrelating across neighbouring lines (b) and inks (k).
+      const alongScale = ditherScale * 0.3;
+      const inkedAt = (a: number, p: Point): boolean => {
+        const w = weightK(gradientT(p.x, p.y), k);
+        if (w <= 0) return false;
+        if (w >= 1) return true;
+        const d = 0.5 * (noise.noise2D(b * ditherScale + k * 97.3, a * alongScale + k * 53.7) + 1);
+        return d < w;
+      };
 
       let run: Point[] = [];
-      let runBand = 0;
       const flush = (): void => {
         if (run.length >= 2 && polylineLength(run) >= minSegmentLengthPx) {
-          lines.push({ points: run, layer: bandLayerName(runBand), pen: 'fine' });
+          lines.push({ points: run, layer: bandLayerName(k), pen: 'fine' });
         }
         run = [];
       };
 
       let prevA: number | null = null;
-      let prevPass = false;
+      let prevDraw = false;
+      let prevInk = false;
       for (let a = -halfA; a <= halfA + 1e-6; a += step) {
-        const pass = passesA(a);
-        if (pass) {
-          const band = bandAt(a, b);
-          const p = pointAt(a);
-          if (!prevPass) {
-            if (prevA !== null) run.push(crossing(a, prevA));
-            runBand = band;
-          } else if (band !== runBand) {
-            // Band change within a continuous run: split at this point so the
-            // two segments share it exactly (no seam gap or overlap).
-            run.push(p);
-            flush();
-            runBand = band;
-          }
+        const draw = drawableAt(a);
+        const p = draw ? pointAt(a) : null;
+        const ink = draw && p !== null && inkedAt(a, p);
+        if (ink && p) {
+          // Entering the drawable region mid-stroke: land the start on its edge.
+          if (!prevInk && !prevDraw && prevA !== null) run.push(crossing(a, prevA));
           run.push(p);
-        } else if (prevPass && prevA !== null) {
-          run.push(crossing(prevA, a));
+        } else if (prevInk) {
+          // Exiting geometry → clean crossing; a plain dither break just ends.
+          if (!draw && prevA !== null) run.push(crossing(prevA, a));
           flush();
         }
         prevA = a;
-        prevPass = pass;
+        prevDraw = draw;
+        prevInk = ink;
       }
       flush();
     }
