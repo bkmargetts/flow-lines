@@ -46,6 +46,8 @@ export interface ColorFieldState {
   gradientNoiseAmpMm: number;
   gradientNoiseScale: number;
   ditherScale: number;
+  /** Coverage 0..1 — fraction of each line inked (1 = solid, no white space). */
+  fill: number;
 
   jitterMm: number;
   wobbleAmpMm: number;
@@ -62,7 +64,7 @@ export interface ColorFieldState {
 export const defaultColorFieldState: ColorFieldState = {
   angleDeg: 0,
   lineLengthPct: 1,
-  spacingMm: 0.8,
+  spacingMm: 0.5,
   colorCount: 4,
   palette: 'ice',
   customRamp: ['#caf0f8', '#48cae4', '#0077b6', '#023e8a'],
@@ -76,6 +78,7 @@ export const defaultColorFieldState: ColorFieldState = {
   gradientNoiseAmpMm: 12,
   gradientNoiseScale: 0.004,
   ditherScale: 0.045,
+  fill: 0.92,
 
   jitterMm: 0.1,
   wobbleAmpMm: 1.6,

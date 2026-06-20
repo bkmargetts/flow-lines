@@ -196,22 +196,30 @@ describe('generateColorField', () => {
     expect(aligned / pairs).toBeLessThan(0.25);
   });
 
-  it('coincident inks share line positions (overprint); interleaved offsets them', () => {
-    const sharedFraction = (coincidentInks: boolean): number => {
-      const r = generateColorField(
-        baseOptions({ inkCount: 2, blend: 2, jitterPx: 0, wobbleAmpPx: 0, gradientNoiseAmpPx: 0, coincidentInks })
-      );
-      const xOf = (layer: string) =>
-        new Set(r.lines.filter((l) => l.layer === layer).map((l) => Math.round(l.points[0].x)));
-      const s0 = xOf(bandLayerName(0));
-      const s1 = xOf(bandLayerName(1));
-      if (s1.size === 0) return 0;
-      return [...s1].filter((x) => s0.has(x)).length / s1.size;
+  it('fill drives coverage — more ink at higher fill', () => {
+    const totalLength = (fill: number): number => {
+      const r = generateColorField(baseOptions({ fill, jitterPx: 0, wobbleAmpPx: 0 }));
+      let len = 0;
+      for (const l of r.lines)
+        for (let i = 1; i < l.points.length; i++)
+          len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+      return len;
     };
-    // Coincident: the two inks land on the same line x's so they overprint.
-    expect(sharedFraction(true)).toBeGreaterThan(0.8);
-    // Interleaved: ink 1 sits in ink 0's gaps, so their x's barely coincide.
-    expect(sharedFraction(false)).toBeLessThan(0.2);
+    expect(totalLength(0.95)).toBeGreaterThan(totalLength(0.4) * 1.3);
+  });
+
+  it('overprint stacks co-dominant inks (more total ink than single-pick)', () => {
+    const totalLength = (overprint: boolean): number => {
+      const r = generateColorField(baseOptions({ overprint, blend: 2, fill: 1, jitterPx: 0, wobbleAmpPx: 0 }));
+      let len = 0;
+      for (const l of r.lines)
+        for (let i = 1; i < l.points.length; i++)
+          len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+      return len;
+    };
+    // Overprint draws co-dominant inks on the same lines, so there is strictly
+    // more inked length than the one-colour-per-stroke pick.
+    expect(totalLength(true)).toBeGreaterThan(totalLength(false));
   });
 
   it('keeps every field point inside the margin', () => {

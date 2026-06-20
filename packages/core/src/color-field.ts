@@ -51,15 +51,22 @@ export interface ColorFieldOptions {
   gradientNoiseAmpPx?: number;
   /** Spatial frequency of the gradient warp noise (cycles per px). */
   gradientNoiseScale?: number;
-  /** Spatial frequency of the density dither that thins each ink (cycles per px). */
+  /** Spatial frequency of the density dither that breaks the lines (cycles per px). */
   ditherScale?: number;
   /**
-   * Draw every ink on the same line positions instead of interleaving them into
-   * each other's gaps. Where two inks are both present they then sit on top of
-   * one another, so an overprint (multiply) render blends their colours — the
-   * physical-overprint look. Default false (interleaved optical mix).
+   * Coverage, 0..1 — the fraction of each line that is inked. 1 = solid lines
+   * (no white paper between strokes within a colour); lower leaves organic
+   * breaks. Density is governed by this and `spacingPx`, independent of the
+   * number of colours.
    */
-  coincidentInks?: boolean;
+  fill?: number;
+  /**
+   * Overprint: where two colours are co-dominant they both draw on the same
+   * line and stack, so a multiply render shows their blended hue (physical
+   * overprint). Off → exactly one colour per stroke (chosen by the local
+   * weights), giving full coverage with an interleaved optical mix.
+   */
+  overprint?: boolean;
 
   /** Random per-point perpendicular shake, px. */
   jitterPx?: number;
@@ -200,7 +207,8 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     gradientNoiseAmpPx = 0,
     gradientNoiseScale = 0.004,
     ditherScale = 0.04,
-    coincidentInks = false,
+    fill = 1,
+    overprint = false,
     jitterPx = 0,
     wobbleAmpPx = 0,
     wobbleWavelengthPx = 120,
@@ -214,9 +222,7 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
   const noise = createNoise(seed);
   const inks = Math.max(1, Math.round(inkCount));
   const spacing = Math.max(0.5, spacingPx);
-  // Even interleave: ink k sits k/inks into the gap. Coincident: all inks share
-  // the same positions so overlapping colours overprint.
-  const baseStep = coincidentInks ? 0 : spacing / inks;
+  const fillClamped = Math.max(0, Math.min(1, fill));
 
   const cx = width / 2;
   const cy = height / 2;
@@ -292,47 +298,57 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
   const step = Math.max(2, Math.min(8, halfA / 12));
 
   const firstB = -Math.ceil(halfP / spacing) * spacing;
+  // Coverage dither stretched along the line so breaks read as striations.
+  const alongScale = ditherScale * 0.3;
+  const overprintMin = 0.3;
   for (let b = firstB; b <= halfP + 1e-6; b += spacing) {
+    // One grating line per position, shared by every ink (no interleave). Each
+    // stroke's colour is chosen from the local weights and coverage is a
+    // separate dither, so density depends on `fill`/`spacing`, never on the
+    // number of colours — full coverage with no structural white space.
+    const pointAt = (a: number): Point => {
+      const wob = wobbleAmpPx > 0 ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + 1.7, 2, 0.5, 2.2) : 0;
+      const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5, b * 0.5) : 0;
+      const perp = b + wob + jit;
+      return { x: cx + dx * a + px * perp, y: cy + dy * a + py * perp };
+    };
+    const drawableAt = (a: number): boolean => {
+      const p = pointAt(a);
+      return inBounds(p.x, p.y) && pointInMask(maskShapes, p.x, p.y) && !inAnyGap(p.x, p.y);
+    };
+    // Coverage: keep the sample when the dither (per-line staggered by `b*0.5`,
+    // so breaks never align into rungs) falls under `fill`. fill=1 → solid.
+    const coveredAt = (a: number): boolean =>
+      fillClamped >= 1 || 0.5 * (noise.noise2D(b * ditherScale, a * alongScale + b * 0.5) + 1) < fillClamped;
+    // Per-line colour-pick value: decorrelated across neighbouring lines (so the
+    // transition zone mixes adjacent colours) and coherent along the line.
+    const colNoiseAt = (a: number): number => 0.5 * (noise.noise2D(b * 0.08 + 17, a * 0.012) + 1);
+    // Which inks ink this sample: the weighted-pick colour, plus (overprint) any
+    // co-dominant ink so they stack and the multiply render blends them.
+    const drawsHere = (k: number, a: number): boolean => {
+      const p = pointAt(a);
+      const t = gradientT(p.x, p.y);
+      let sum = 0;
+      for (let j = 0; j < inks; j++) sum += weightK(t, j);
+      if (sum <= 0) return false;
+      if (overprint && weightK(t, k) / sum >= overprintMin) return true;
+      const cN = colNoiseAt(a);
+      let cum = 0;
+      let pick = inks - 1;
+      for (let j = 0; j < inks; j++) {
+        cum += weightK(t, j) / sum;
+        if (cN < cum) {
+          pick = j;
+          break;
+        }
+      }
+      return k === pick;
+    };
+
     for (let k = 0; k < inks; k++) {
-      const pointAt = (a: number): Point => {
-        const wob =
-          wobbleAmpPx > 0 ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + k * 1.7, 2, 0.5, 2.2) : 0;
-        const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5 + k * 13.1, b * 0.5) : 0;
-        const perp = b + k * baseStep + wob + jit;
-        return { x: cx + dx * a + px * perp, y: cy + dy * a + py * perp };
-      };
-      // Geometry: on the page, inside the mask, outside every gap.
-      const drawableAt = (a: number): boolean => {
-        const p = pointAt(a);
-        return inBounds(p.x, p.y) && pointInMask(maskShapes, p.x, p.y) && !inAnyGap(p.x, p.y);
-      };
-      // Refine an inside→outside geometry crossing to the boundary.
-      // This ink is inked here when the dither falls under its local weight —
-      // dense where the colour belongs, sparse (broken) as it fades out. The
-      // dither is stretched along the line (low `alongScale`) so it breaks into
-      // coherent striations down the page, and a strong per-line phase offset
-      // (`b`) staggers neighbouring lines so their breaks never align into
-      // horizontal "ladder" rungs while each line stays a coherent striation.
-      //
-      // Per-ink phase (`k`) decorrelates the inks so they tile into each other's
-      // gaps (the interleaved optical mix). For overprint, the inks instead
-      // share one dither so wherever two are both present they land on the same
-      // line and stack — the multiply render then shows their blended colour.
-      const alongScale = ditherScale * 0.3;
-      const kPhaseX = coincidentInks ? 0 : k * 97.3;
-      const kPhaseA = coincidentInks ? 0 : k * 53.7;
-      const inkedAt = (a: number, p: Point): boolean => {
-        const w = weightK(gradientT(p.x, p.y), k);
-        if (w <= 0) return false;
-        if (w >= 1) return true;
-        const d = 0.5 * (noise.noise2D(b * ditherScale + kPhaseX, a * alongScale + b * 0.5 + kPhaseA) + 1);
-        return d < w;
-      };
-      // A sample is drawn when on the page, inside the mask, outside every gap,
-      // and inked by the dither. One predicate so every transition — geometry
-      // or dither — is refined to the boundary instead of the coarse step grid.
-      const passesA = (a: number): boolean => drawableAt(a) && inkedAt(a, pointAt(a));
-      // Refine an inside→outside crossing to the true boundary.
+      // One predicate so every transition — geometry, coverage, or colour
+      // change — is bisection-refined to its boundary, not the coarse step grid.
+      const passesA = (a: number): boolean => drawableAt(a) && coveredAt(a) && drawsHere(k, a);
       const crossing = (aIn: number, aOut: number): Point => {
         let lo = aIn;
         let hi = aOut;

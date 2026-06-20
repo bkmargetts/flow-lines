@@ -187,6 +187,16 @@ export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldSt
         onChange={(v) => u({ lineLengthPct: v / 100 })}
         format={(v) => `${v}%`}
       />
+      <Slider
+        label="Fill"
+        info="How much of each line is inked. 100% = solid (no white paper between strokes); lower leaves organic breaks. With Spacing, this sets overall density."
+        value={Math.round(state.fill * 100)}
+        min={30}
+        max={100}
+        step={5}
+        onChange={(v) => u({ fill: v / 100 })}
+        format={(v) => `${v}%`}
+      />
 
       <h3 className="section-title">Colour</h3>
       <PalettePicker
