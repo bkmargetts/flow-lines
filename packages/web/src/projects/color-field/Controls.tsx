@@ -208,10 +208,10 @@ export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldSt
       />
       <Slider
         label="Inks (pens)"
-        info="How many inks are combined along the gradient. Each is its own pen layer; neighbours overlap and mix into in-between hues."
+        info="How many inks are combined along the gradient. Each is its own pen layer; neighbours overlap and mix into in-between hues. A handful reads cleanest; high counts give a smooth many-ink gradient."
         value={state.colorCount}
         min={2}
-        max={6}
+        max={15}
         step={1}
         onChange={(v) => u({ colorCount: v })}
       />
