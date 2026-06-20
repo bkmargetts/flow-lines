@@ -59,6 +59,10 @@ export interface ColorFieldState {
   /** Overprint: where inks of different colours overlap, multiply them so the
    *  overlap shows the blended colour (like two pens overprinting). */
   blendInks: boolean;
+  /** Number of cross-hatch directions (1 = single direction, no weave). */
+  crossHatch: number;
+  /** Fan each colour to its own angle so colours cross/overlap (degrees). */
+  inkAngleSpreadDeg: number;
 }
 
 export const defaultColorFieldState: ColorFieldState = {
@@ -88,6 +92,8 @@ export const defaultColorFieldState: ColorFieldState = {
   seed: Math.floor(Math.random() * 1000000),
   accents: [],
   blendInks: false,
+  crossHatch: 1,
+  inkAngleSpreadDeg: 0,
 };
 
 /** A sensible fresh accent (a contrasting vertical bar, as in the references). */

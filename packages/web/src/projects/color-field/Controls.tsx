@@ -322,6 +322,27 @@ export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldSt
         format={(v) => v.toFixed(3)}
       />
 
+      <h3 className="section-title">Weave</h3>
+      <Slider
+        label="Cross-hatch"
+        info="Number of line directions. 1 = single direction; higher adds crossing passes (evenly spaced) that intersect into a woven grid. With Overprint, crossings of different colours blend."
+        value={state.crossHatch}
+        min={1}
+        max={3}
+        step={1}
+        onChange={(v) => u({ crossHatch: v })}
+      />
+      <Slider
+        label="Colour fan"
+        info="Fans each colour out to its own angle, so different-coloured lines physically cross and overlap (most grating-like). 0 = all colours share the direction. Heavier to render at high ink counts."
+        value={state.inkAngleSpreadDeg}
+        min={0}
+        max={60}
+        step={5}
+        onChange={(v) => u({ inkAngleSpreadDeg: v })}
+        format={(v) => `${v}°`}
+      />
+
       <h3 className="section-title">Line style</h3>
       <Slider
         label="Jitter"

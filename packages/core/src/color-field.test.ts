@@ -229,6 +229,45 @@ describe('generateColorField', () => {
     expect(JSON.stringify(coarse.lines)).not.toEqual(JSON.stringify(fine.lines));
   });
 
+  it('cross-hatch adds a second line direction (woven grid)', () => {
+    // Orientation of a polyline, folded to [0,180).
+    const orient = (l: { points: { x: number; y: number }[] }): number => {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      let deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+      deg = ((deg % 180) + 180) % 180;
+      return deg;
+    };
+    const distinctDirs = (crossHatch: number): number => {
+      const r = generateColorField(baseOptions({ crossHatch, jitterPx: 0, wobbleAmpPx: 0 }));
+      const buckets = new Set<number>();
+      for (const l of r.lines) if (l.points.length >= 2) buckets.add(Math.round(orient(l) / 20));
+      return buckets.size;
+    };
+    expect(distinctDirs(2)).toBeGreaterThan(distinctDirs(1));
+  });
+
+  it('colour fan runs each ink at its own angle', () => {
+    const meanOrient = (layer: string, lines: { layer?: string; points: { x: number; y: number }[] }[]): number => {
+      let sum = 0;
+      let n = 0;
+      for (const l of lines) {
+        if (l.layer !== layer || l.points.length < 2) continue;
+        const a = l.points[0];
+        const b = l.points[l.points.length - 1];
+        let deg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+        deg = ((deg % 180) + 180) % 180;
+        sum += deg;
+        n++;
+      }
+      return n > 0 ? sum / n : NaN;
+    };
+    const r = generateColorField(baseOptions({ inkAngleSpreadDeg: 50, blend: 2, jitterPx: 0, wobbleAmpPx: 0 }));
+    const first = meanOrient(bandLayerName(0), r.lines);
+    const last = meanOrient(bandLayerName(3), r.lines);
+    expect(Math.abs(first - last)).toBeGreaterThan(10);
+  });
+
   it('keeps every field point inside the margin', () => {
     const margin = 20;
     const r = generateColorField(

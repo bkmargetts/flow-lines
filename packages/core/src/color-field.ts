@@ -67,6 +67,17 @@ export interface ColorFieldOptions {
    * weights), giving full coverage with an interleaved optical mix.
    */
   overprint?: boolean;
+  /**
+   * Number of cross-hatch directions (1 = single direction). Extra directions
+   * are evenly spaced by `180/crossHatch`, so the strokes intersect into a woven
+   * grid. Default 1.
+   */
+  crossHatch?: number;
+  /**
+   * Fan each ink to its own angle so different-coloured lines cross and overlap
+   * (degrees, total spread across the inks). 0 = all inks share the direction.
+   */
+  inkAngleSpreadDeg?: number;
 
   /** Random per-point perpendicular shake, px. */
   jitterPx?: number;
@@ -209,6 +220,8 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     ditherScale = 0.04,
     fill = 1,
     overprint = false,
+    crossHatch = 1,
+    inkAngleSpreadDeg = 0,
     jitterPx = 0,
     wobbleAmpPx = 0,
     wobbleWavelengthPx = 120,
@@ -226,18 +239,9 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
 
   const cx = width / 2;
   const cy = height / 2;
-  const rad = (angleDeg * Math.PI) / 180;
-  // Line direction (0° = straight down) and its perpendicular.
-  const dx = Math.sin(rad);
-  const dy = Math.cos(rad);
-  const px = Math.cos(rad);
-  const py = -Math.sin(rad);
 
   const usableW = Math.max(0, width - 2 * margin);
   const usableH = Math.max(0, height - 2 * margin);
-  const halfA =
-    0.5 * Math.max(0, Math.min(1, lineLengthPct)) * (Math.abs(dx) * usableW + Math.abs(dy) * usableH);
-  const halfP = 0.5 * (Math.abs(px) * usableW + Math.abs(py) * usableH);
 
   const minX = margin;
   const minY = margin;
@@ -290,102 +294,133 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     return false;
   };
 
-  if (halfA <= 0 || halfP <= 0) {
+  if (usableW <= 0 || usableH <= 0) {
     return { lines: barLines, width, height, seed };
   }
 
-  // Sample finely enough that wobbling / dithered lines stay smooth.
-  const step = Math.max(2, Math.min(8, halfA / 12));
-
-  const firstB = -Math.ceil(halfP / spacing) * spacing;
-  // Coverage dither stretched along the line so breaks read as striations.
-  const alongScale = ditherScale * 0.3;
+  // Coverage dither stretched along the line; overprint co-dominance threshold.
+  // Both are independent of the pass direction.
   const overprintMin = 0.3;
-  for (let b = firstB; b <= halfP + 1e-6; b += spacing) {
-    // One grating line per position, shared by every ink (no interleave). Each
-    // stroke's colour is chosen from the local weights and coverage is a
-    // separate dither, so density depends on `fill`/`spacing`, never on the
-    // number of colours — full coverage with no structural white space.
-    const pointAt = (a: number): Point => {
-      const wob = wobbleAmpPx > 0 ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + 1.7, 2, 0.5, 2.2) : 0;
-      const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5, b * 0.5) : 0;
-      const perp = b + wob + jit;
-      return { x: cx + dx * a + px * perp, y: cy + dy * a + py * perp };
-    };
-    const drawableAt = (a: number): boolean => {
-      const p = pointAt(a);
-      return inBounds(p.x, p.y) && pointInMask(maskShapes, p.x, p.y) && !inAnyGap(p.x, p.y);
-    };
-    // Coverage: keep the sample when the dither (per-line staggered by `b*0.5`,
-    // so breaks never align into rungs) falls under `fill`. fill=1 → solid.
-    const coveredAt = (a: number): boolean =>
-      fillClamped >= 1 || 0.5 * (noise.noise2D(b * ditherScale, a * alongScale + b * 0.5) + 1) < fillClamped;
-    // Per-line colour-pick value: decorrelated across neighbouring lines (so the
-    // transition zone mixes adjacent colours) and coherent along the line. The
-    // scale follows `ditherScale` (the "mix grain" control): higher → faster
-    // decorrelation → finer, smoother mixing; lower → chunkier colour patches.
-    const colNoiseAt = (a: number): number =>
-      0.5 * (noise.noise2D(b * ditherScale * 1.8 + 17, a * ditherScale * 0.27) + 1);
-    // Which inks ink this sample: the weighted-pick colour, plus (overprint) any
-    // co-dominant ink so they stack and the multiply render blends them.
-    const drawsHere = (k: number, a: number): boolean => {
-      const p = pointAt(a);
-      const t = gradientT(p.x, p.y);
-      let sum = 0;
-      for (let j = 0; j < inks; j++) sum += weightK(t, j);
-      if (sum <= 0) return false;
-      if (overprint && weightK(t, k) / sum >= overprintMin) return true;
-      const cN = colNoiseAt(a);
-      let cum = 0;
-      let pick = inks - 1;
-      for (let j = 0; j < inks; j++) {
-        cum += weightK(t, j) / sum;
-        if (cN < cum) {
-          pick = j;
-          break;
-        }
-      }
-      return k === pick;
-    };
 
-    for (let k = 0; k < inks; k++) {
-      // One predicate so every transition — geometry, coverage, or colour
-      // change — is bisection-refined to its boundary, not the coarse step grid.
-      const passesA = (a: number): boolean => drawableAt(a) && coveredAt(a) && drawsHere(k, a);
-      const crossing = (aIn: number, aOut: number): Point => {
-        let lo = aIn;
-        let hi = aOut;
-        for (let i = 0; i < 14; i++) {
-          const mid = (lo + hi) / 2;
-          if (passesA(mid)) lo = mid;
-          else hi = mid;
+  // Emit one directional grating. `onlyInk == null` draws every ink (colour
+  // chosen per stroke by the local weights); a number draws just that ink where
+  // it is the local pick — used when each colour is fanned to its own angle.
+  // `phase` offsets the noise so stacked/crossing passes don't coincide.
+  const emitPass = (passAngleDeg: number, onlyInk: number | null, phase: number): void => {
+    const rad = (passAngleDeg * Math.PI) / 180;
+    const dx = Math.sin(rad);
+    const dy = Math.cos(rad);
+    const px = Math.cos(rad);
+    const py = -Math.sin(rad);
+    const halfA =
+      0.5 * Math.max(0, Math.min(1, lineLengthPct)) * (Math.abs(dx) * usableW + Math.abs(dy) * usableH);
+    const halfP = 0.5 * (Math.abs(px) * usableW + Math.abs(py) * usableH);
+    if (halfA <= 0 || halfP <= 0) return;
+    const step = Math.max(2, Math.min(8, halfA / 12));
+    const alongScale = ditherScale * 0.3;
+    const firstB = -Math.ceil(halfP / spacing) * spacing;
+    const kFrom = onlyInk == null ? 0 : onlyInk;
+    const kTo = onlyInk == null ? inks - 1 : onlyInk;
+
+    for (let b = firstB; b <= halfP + 1e-6; b += spacing) {
+      const pointAt = (a: number): Point => {
+        const wob =
+          wobbleAmpPx > 0 ? wobbleAmpPx * noise.fbm(a / wobbleWavelengthPx, b * 0.013 + 1.7 + phase, 2, 0.5, 2.2) : 0;
+        const jit = jitterPx > 0 ? jitterPx * noise.noise2D(a * 0.5, b * 0.5 + phase) : 0;
+        const perp = b + wob + jit;
+        return { x: cx + dx * a + px * perp, y: cy + dy * a + py * perp };
+      };
+      const drawableAt = (a: number): boolean => {
+        const p = pointAt(a);
+        return inBounds(p.x, p.y) && pointInMask(maskShapes, p.x, p.y) && !inAnyGap(p.x, p.y);
+      };
+      // Coverage: keep the sample when the dither (per-line staggered by `b*0.5`)
+      // falls under `fill`. fill=1 → solid lines.
+      const coveredAt = (a: number): boolean =>
+        fillClamped >= 1 || 0.5 * (noise.noise2D(b * ditherScale + phase, a * alongScale + b * 0.5) + 1) < fillClamped;
+      // Colour-pick value: decorrelated across neighbours (mixing) and coherent
+      // along the line; scale follows `ditherScale` (the mix-grain control).
+      const colNoiseAt = (a: number): number =>
+        0.5 * (noise.noise2D(b * ditherScale * 1.8 + 17 + phase, a * ditherScale * 0.27) + 1);
+      // Which inks ink this sample: the weighted-pick colour, plus (overprint)
+      // any co-dominant ink so they stack and the multiply render blends them.
+      const drawsHere = (k: number, a: number): boolean => {
+        const p = pointAt(a);
+        const t = gradientT(p.x, p.y);
+        let sum = 0;
+        for (let j = 0; j < inks; j++) sum += weightK(t, j);
+        if (sum <= 0) return false;
+        if (overprint && weightK(t, k) / sum >= overprintMin) return true;
+        const cN = colNoiseAt(a);
+        let cum = 0;
+        let pick = inks - 1;
+        for (let j = 0; j < inks; j++) {
+          cum += weightK(t, j) / sum;
+          if (cN < cum) {
+            pick = j;
+            break;
+          }
         }
-        return pointAt(lo);
+        return k === pick;
       };
 
-      let run: Point[] = [];
-      const flush = (): void => {
-        if (run.length >= 2 && polylineLength(run) >= minSegmentLengthPx) {
-          lines.push({ points: run, layer: bandLayerName(k), pen: 'fine' });
-        }
-        run = [];
-      };
+      for (let k = kFrom; k <= kTo; k++) {
+        // One predicate so every transition — geometry, coverage, or colour
+        // change — is bisection-refined to its boundary, not the coarse step grid.
+        const passesA = (a: number): boolean => drawableAt(a) && coveredAt(a) && drawsHere(k, a);
+        const crossing = (aIn: number, aOut: number): Point => {
+          let lo = aIn;
+          let hi = aOut;
+          for (let i = 0; i < 14; i++) {
+            const mid = (lo + hi) / 2;
+            if (passesA(mid)) lo = mid;
+            else hi = mid;
+          }
+          return pointAt(lo);
+        };
 
-      let prevA: number | null = null;
-      let prevPass = false;
-      for (let a = -halfA; a <= halfA + 1e-6; a += step) {
-        const pass = passesA(a);
-        if (pass) {
-          if (!prevPass && prevA !== null) run.push(crossing(a, prevA));
-          run.push(pointAt(a));
-        } else if (prevPass && prevA !== null) {
-          run.push(crossing(prevA, a));
-          flush();
+        let run: Point[] = [];
+        const flush = (): void => {
+          if (run.length >= 2 && polylineLength(run) >= minSegmentLengthPx) {
+            lines.push({ points: run, layer: bandLayerName(k), pen: 'fine' });
+          }
+          run = [];
+        };
+
+        let prevA: number | null = null;
+        let prevPass = false;
+        for (let a = -halfA; a <= halfA + 1e-6; a += step) {
+          const pass = passesA(a);
+          if (pass) {
+            if (!prevPass && prevA !== null) run.push(crossing(a, prevA));
+            run.push(pointAt(a));
+          } else if (prevPass && prevA !== null) {
+            run.push(crossing(prevA, a));
+            flush();
+          }
+          prevA = a;
+          prevPass = pass;
         }
-        prevA = a;
-        prevPass = pass;
+        flush();
       }
-      flush();
+    }
+  };
+
+  // Build the passes: `crossHatch` directions evenly spaced by 180/dirs; when
+  // `inkAngleSpreadDeg` > 0 each colour is fanned to its own angle so the
+  // different inks physically cross and overlap.
+  const dirs = Math.max(1, Math.round(crossHatch));
+  const dirSpread = 180 / dirs;
+  let passIndex = 0;
+  for (let d = 0; d < dirs; d++) {
+    const baseAngle = angleDeg + d * dirSpread;
+    if (inkAngleSpreadDeg <= 0 || inks < 2) {
+      emitPass(baseAngle, null, passIndex++ * 1000);
+    } else {
+      for (let k = 0; k < inks; k++) {
+        const fan = (k / (inks - 1) - 0.5) * inkAngleSpreadDeg;
+        emitPass(baseAngle + fan, k, passIndex++ * 1000);
+      }
     }
   }
 

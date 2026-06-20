@@ -43,6 +43,8 @@ function colorFieldToOptions(state: ColorFieldState, page: PageMetrics, marginPx
     ditherScale: state.ditherScale,
     fill: state.fill,
     overprint: state.blendInks,
+    crossHatch: state.crossHatch,
+    inkAngleSpreadDeg: state.inkAngleSpreadDeg,
     jitterPx: state.jitterMm * ppm,
     wobbleAmpPx: state.wobbleAmpMm * ppm,
     wobbleWavelengthPx: state.wobbleWavelengthMm * ppm,
