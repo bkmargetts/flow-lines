@@ -142,6 +142,60 @@ describe('generateColorField', () => {
     expect(meanDist(bandLayerName(0))).toBeLessThan(meanDist(bandLayerName(inkCount - 1)));
   });
 
+  it('refines dither break ends off the sampling grid (no staircase)', () => {
+    // With jitter/wobble off, segment endpoints would land on the coarse `step`
+    // sampling grid unless dither breaks are bisection-refined. Assert a healthy
+    // fraction of endpoints are clearly off any plausible step grid.
+    const margin = 20;
+    const r = generateColorField(
+      baseOptions({ margin, jitterPx: 0, wobbleAmpPx: 0, gradientNoiseAmpPx: 0 })
+    );
+    // Vertical lines: endpoints are at a = y - cy; the sample grid step is
+    // clamped to [2,8]px. Probe against the finest plausible grid (2px): a
+    // refined endpoint should rarely sit within 0.05px of a 2px multiple.
+    let offGrid = 0;
+    let total = 0;
+    for (const l of r.lines) {
+      for (const p of [l.points[0], l.points[l.points.length - 1]]) {
+        total++;
+        const nearest = Math.round(p.y / 2) * 2;
+        if (Math.abs(p.y - nearest) > 0.05) offGrid++;
+      }
+    }
+    expect(total).toBeGreaterThan(50);
+    expect(offGrid / total).toBeGreaterThan(0.5);
+  });
+
+  it('staggers neighbouring lines so breaks do not align into rungs', () => {
+    const r = generateColorField(baseOptions({ jitterPx: 0, wobbleAmpPx: 0, gradientNoiseAmpPx: 0 }));
+    // Group one ink's segments by their (constant) x into vertical lines.
+    const byLine = new Map<number, number[]>();
+    for (const l of r.lines) {
+      if (l.layer !== bandLayerName(1)) continue;
+      const key = Math.round(l.points[0].x);
+      const ys = byLine.get(key) ?? byLine.set(key, []).get(key)!;
+      ys.push(l.points[0].y, l.points[l.points.length - 1].y);
+    }
+    const lines = [...byLine.entries()].filter(([, ys]) => ys.length >= 2).sort((a, b) => a[0] - b[0]);
+    expect(lines.length).toBeGreaterThan(3);
+    // For adjacent line pairs, the mean nearest-neighbour distance between their
+    // break-y sets must exceed a small threshold — identical (laddered) breaks
+    // would be ~0.
+    let pairs = 0;
+    let aligned = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const aYs = lines[i - 1][1];
+      const bYs = lines[i][1];
+      let sum = 0;
+      for (const y of aYs) sum += Math.min(...bYs.map((z) => Math.abs(z - y)));
+      const meanDist = sum / aYs.length;
+      pairs++;
+      if (meanDist < 0.5) aligned++;
+    }
+    expect(pairs).toBeGreaterThan(0);
+    expect(aligned / pairs).toBeLessThan(0.25);
+  });
+
   it('keeps every field point inside the margin', () => {
     const margin = 20;
     const r = generateColorField(

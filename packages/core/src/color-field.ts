@@ -297,28 +297,34 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
         return inBounds(p.x, p.y) && pointInMask(maskShapes, p.x, p.y) && !inAnyGap(p.x, p.y);
       };
       // Refine an inside→outside geometry crossing to the boundary.
-      const crossing = (aIn: number, aOut: number): Point => {
-        let lo = aIn;
-        let hi = aOut;
-        for (let i = 0; i < 14; i++) {
-          const mid = (lo + hi) / 2;
-          if (drawableAt(mid)) lo = mid;
-          else hi = mid;
-        }
-        return pointAt(lo);
-      };
       // This ink is inked here when the dither falls under its local weight —
       // dense where the colour belongs, sparse (broken) as it fades out. The
       // dither is stretched along the line (low `alongScale`) so it breaks into
-      // coherent striations down the page, not isotropic confetti, while still
-      // decorrelating across neighbouring lines (b) and inks (k).
+      // coherent striations down the page, and a strong per-line phase offset
+      // (`b`) staggers neighbouring lines so their breaks never align into
+      // horizontal "ladder" rungs while each line stays a coherent striation.
       const alongScale = ditherScale * 0.3;
       const inkedAt = (a: number, p: Point): boolean => {
         const w = weightK(gradientT(p.x, p.y), k);
         if (w <= 0) return false;
         if (w >= 1) return true;
-        const d = 0.5 * (noise.noise2D(b * ditherScale + k * 97.3, a * alongScale + k * 53.7) + 1);
+        const d = 0.5 * (noise.noise2D(b * ditherScale + k * 97.3, a * alongScale + b * 0.5 + k * 53.7) + 1);
         return d < w;
+      };
+      // A sample is drawn when on the page, inside the mask, outside every gap,
+      // and inked by the dither. One predicate so every transition — geometry
+      // or dither — is refined to the boundary instead of the coarse step grid.
+      const passesA = (a: number): boolean => drawableAt(a) && inkedAt(a, pointAt(a));
+      // Refine an inside→outside crossing to the true boundary.
+      const crossing = (aIn: number, aOut: number): Point => {
+        let lo = aIn;
+        let hi = aOut;
+        for (let i = 0; i < 14; i++) {
+          const mid = (lo + hi) / 2;
+          if (passesA(mid)) lo = mid;
+          else hi = mid;
+        }
+        return pointAt(lo);
       };
 
       let run: Point[] = [];
@@ -330,24 +336,18 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
       };
 
       let prevA: number | null = null;
-      let prevDraw = false;
-      let prevInk = false;
+      let prevPass = false;
       for (let a = -halfA; a <= halfA + 1e-6; a += step) {
-        const draw = drawableAt(a);
-        const p = draw ? pointAt(a) : null;
-        const ink = draw && p !== null && inkedAt(a, p);
-        if (ink && p) {
-          // Entering the drawable region mid-stroke: land the start on its edge.
-          if (!prevInk && !prevDraw && prevA !== null) run.push(crossing(a, prevA));
-          run.push(p);
-        } else if (prevInk) {
-          // Exiting geometry → clean crossing; a plain dither break just ends.
-          if (!draw && prevA !== null) run.push(crossing(prevA, a));
+        const pass = passesA(a);
+        if (pass) {
+          if (!prevPass && prevA !== null) run.push(crossing(a, prevA));
+          run.push(pointAt(a));
+        } else if (prevPass && prevA !== null) {
+          run.push(crossing(prevA, a));
           flush();
         }
         prevA = a;
-        prevDraw = draw;
-        prevInk = ink;
+        prevPass = pass;
       }
       flush();
     }
