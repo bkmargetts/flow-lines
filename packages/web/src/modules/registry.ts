@@ -10,6 +10,7 @@ import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
 import { leniaModule } from '../projects/lenia';
 import { physarumModule } from '../projects/physarum';
+import { venationModule } from '../projects/venation';
 import { noiseTextureModule } from '../projects/noise-texture';
 import { colorFieldModule } from '../projects/color-field';
 
@@ -31,6 +32,7 @@ export const MODULES: Module<any>[] = [
   reactionDiffusionModule,
   leniaModule,
   physarumModule,
+  venationModule,
   noiseTextureModule,
   colorFieldModule,
   fromTextureModule(classicTexture),

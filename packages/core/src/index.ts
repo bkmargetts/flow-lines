@@ -41,6 +41,10 @@ export type { LeniaOptions, LeniaPreset, LeniaSeedPattern, RingKernel } from './
 export { generatePhysarum, stepPhysarum, PHYSARUM_PRESETS } from './physarum.js';
 export type { PhysarumOptions, PhysarumPreset, PhysarumAgents, PhysarumStepParams } from './physarum.js';
 
+// Leaf venation — space-colonization branching networks (Runions 2005)
+export { generateVenation } from './venation.js';
+export type { VenationOptions, VenationRegion } from './venation.js';
+
 // Complex-valued rational-function flow field (Savva-style poles & zeros)
 export { generateComplexFlow } from './complex-flow.js';
 export type {
