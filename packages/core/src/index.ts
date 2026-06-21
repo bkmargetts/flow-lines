@@ -14,6 +14,10 @@ export type { FlowLinesOptions, FlowLinesResult, FlowLine, Point, EvenFlowLinesO
 export { generateOverlappedLines, bandLayerName, pointInMask } from './overlapped-lines.js';
 export type { OverlappedLinesOptions, MaskShape } from './overlapped-lines.js';
 
+// Colour-field texture (dense banded gradient lines + geometric accents)
+export { generateColorField, accentLayerName } from './color-field.js';
+export type { ColorFieldOptions, AccentSpec } from './color-field.js';
+
 // Conway's Game of Life long-exposure still
 export { generateConwayExposure } from './conway-exposure.js';
 export type { ConwayExposureOptions } from './conway-exposure.js';

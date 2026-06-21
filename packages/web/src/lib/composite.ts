@@ -109,6 +109,7 @@ export function composite(
   const finalLines: FlowLine[] = [];
   const layerColors: Record<string, string> = {};
   const layerWidths: Record<string, number> = {};
+  const layerBlend: Record<string, string> = {};
 
   for (let i = 0; i < stack.length; i++) {
     const out = outputs[i];
@@ -121,6 +122,8 @@ export function composite(
       if (!(nsKey in layerColors)) {
         layerColors[nsKey] = out.layerColors?.[key] ?? out.strokeColor;
         layerWidths[nsKey] = out.strokeWidthPx;
+        const blend = out.layerBlend?.[key];
+        if (blend) layerBlend[nsKey] = blend;
       }
     }
   }
@@ -164,6 +167,7 @@ export function composite(
     physicalHeight: `${page.heightMm}mm`,
     preserveLayerOrder: true,
     ...(hasMulti ? { layerColors, layerWidths } : {}),
+    ...(Object.keys(layerBlend).length ? { layerBlend } : {}),
   };
 
   const exportSvg = toSVG(result, svgOptions);

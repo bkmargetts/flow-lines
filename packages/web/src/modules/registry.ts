@@ -11,6 +11,7 @@ import { reactionDiffusionModule } from '../projects/reaction-diffusion';
 import { leniaModule } from '../projects/lenia';
 import { physarumModule } from '../projects/physarum';
 import { noiseTextureModule } from '../projects/noise-texture';
+import { colorFieldModule } from '../projects/color-field';
 
 /**
  * Every module, in panel order — the single registry that replaces the old
@@ -31,6 +32,7 @@ export const MODULES: Module<any>[] = [
   leniaModule,
   physarumModule,
   noiseTextureModule,
+  colorFieldModule,
   fromTextureModule(classicTexture),
   fromTextureModule(gratingTexture),
   fromTextureModule(blankTexture),

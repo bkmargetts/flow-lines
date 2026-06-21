@@ -132,6 +132,27 @@ describe('toSVG', () => {
     // texture-00 sorts before texture-01.
     expect(i00).toBeLessThan(i01);
   });
+
+  it('wraps a layer in a mix-blend-mode group when layerBlend is set', () => {
+    const result = {
+      width: 100,
+      height: 100,
+      seed: 1,
+      lines: [
+        { points: [{ x: 0, y: 0 }, { x: 9, y: 9 }], layer: 'band-00' },
+        { points: [{ x: 0, y: 1 }, { x: 9, y: 8 }], layer: 'band-01' },
+      ],
+    };
+    const svg = toSVG(result, {
+      layerColors: { 'band-00': '#ffd23f', 'band-01': '#1f6feb' },
+      layerBlend: { 'band-00': 'multiply', 'band-01': 'multiply' },
+    });
+    expect(svg).toContain('mix-blend-mode:multiply');
+    expect((svg.match(/<g style="mix-blend-mode:multiply">/g) ?? []).length).toBe(2);
+    // Absent layerBlend → no group wrapper (byte-stable default).
+    const plain = toSVG(result, { layerColors: { 'band-00': '#ffd23f', 'band-01': '#1f6feb' } });
+    expect(plain).not.toContain('<g');
+  });
 });
 
 describe('toSVG single pen width', () => {

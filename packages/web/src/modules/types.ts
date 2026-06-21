@@ -54,6 +54,10 @@ export interface LayerOutput {
   /** Per-pen-layer ink overrides (multi-ink layers), keyed by the module's own
    *  layer names. Absent keys fall back to `strokeColor`. */
   layerColors?: Record<string, string>;
+  /** Per-pen-layer SVG blend mode (e.g. 'multiply'), keyed by the module's own
+   *  layer names. Lets a layer overprint so overlapping inks show the blended
+   *  colour (physical pen overprint). Absent keys render normally. */
+  layerBlend?: Record<string, string>;
 }
 
 /** A state patch — a partial value or a function of the current state (so
