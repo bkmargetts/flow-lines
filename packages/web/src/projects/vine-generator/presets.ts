@@ -160,22 +160,45 @@ export function getVinePreset(id: string): VinePreset | undefined {
 }
 
 /**
- * Cross two species into a coherent hybrid "genome": the first parent's habit
- * (composition, growth, stem) is kept as the base, and a handful of foliage,
- * flowering and accessory traits are pulled at random from either parent. The
- * result reads as a plausible new plant rather than noise — the breeder behind
- * the "surprise" button.
+ * Cross two species into a *coherent, restrained* hybrid "genome": the first
+ * parent's habit (composition, growth, stem) is the base; light traits (leaf
+ * type, phyllotaxis, flower type, palette) mix freely; but only **one** of the
+ * second parent's "showy" structural features (compound leaves, an
+ * inflorescence, fruit, or thorns) crosses over — stacking all of them at once
+ * is what made randomised plants an overcrowded, angular mess. Density is kept
+ * tasteful and dialled down further when the foliage or flowering is already
+ * busy, so the page never overcrowds. The breeder behind the "surprise" button.
  */
-const CROSS_TRAITS: (keyof VineState)[] = [
-  'leafType', 'leafArrangement', 'leafletCount', 'phyllotaxis',
-  'flowers', 'flowerType', 'inflorescence', 'fruitType', 'thorns', 'palette',
-];
-
 export function crossVinePresets(a: VinePreset, b: VinePreset, rnd: () => number): Partial<VineState> {
   const out: Partial<VineState> = { ...a.state };
-  for (const k of CROSS_TRAITS) {
-    const v = rnd() < 0.5 ? b.state[k] : a.state[k];
-    if (v !== undefined) (out as Record<string, unknown>)[k] = v;
+  const maybe = <K extends keyof VineState>(k: K) => {
+    const v = b.state[k];
+    if (v !== undefined && rnd() < 0.5) (out as Record<string, unknown>)[k] = v;
+  };
+  // Light, always-compatible traits mix freely.
+  (['leafType', 'leafStyle', 'phyllotaxis', 'flowerType', 'palette'] as (keyof VineState)[]).forEach(maybe);
+
+  // At most one of parent B's showy features crosses over.
+  const showy: (() => void)[] = [];
+  if (b.state.leafArrangement && b.state.leafArrangement !== 'simple') {
+    showy.push(() => {
+      out.leafArrangement = b.state.leafArrangement;
+      if (b.state.leafletCount) out.leafletCount = b.state.leafletCount;
+    });
   }
+  if (b.state.inflorescence && b.state.inflorescence !== 'none') {
+    showy.push(() => {
+      out.inflorescence = b.state.inflorescence;
+      out.flowers = true;
+      if (b.state.flowerType) out.flowerType = b.state.flowerType;
+    });
+  }
+  if (b.state.fruitType && b.state.fruitType !== 'none') showy.push(() => { out.fruitType = b.state.fruitType; });
+  if (b.state.thorns) showy.push(() => { out.thorns = true; });
+  if (showy.length > 0) showy[Math.floor(rnd() * showy.length)]();
+
+  // Tasteful density — lighter when the plant is already structurally busy.
+  const busy = (out.leafArrangement && out.leafArrangement !== 'simple') || (out.inflorescence && out.inflorescence !== 'none');
+  out.density = Math.min(a.state.density ?? 0.45, 0.55) * (busy ? 0.7 : 1);
   return out;
 }

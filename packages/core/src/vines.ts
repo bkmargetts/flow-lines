@@ -2535,17 +2535,27 @@ function makeInflorescence(
   const py = dx;
 
   if (type === 'umbel' || type === 'corymb') {
-    // Pedicels radiate from `base`; a corymb's outer stalks are longer so the
-    // florets reach a flat top.
-    const stalk = size * (type === 'umbel' ? 2.4 : 2.8);
-    for (let k = 0; k < n; k++) {
-      const u = n === 1 ? 0.5 : k / (n - 1);
-      const a = axisDir + (u - 0.5) * 1.6;
-      const len = type === 'umbel' ? stalk * (0.85 + rng() * 0.3) : stalk * (0.5 + Math.abs(u - 0.5) * 1.1);
+    // Florets gathered on slender, gently *curving* pedicels — a rounded posy
+    // (umbel) or flat-topped head (corymb). Curved, varied-length pedicels and
+    // small florets read as a natural cluster instead of a stiff umbrella of
+    // straight radial spokes.
+    const m = Math.max(4, Math.min(11, n));
+    const stalk = size * (type === 'umbel' ? 1.7 : 2.0);
+    for (let k = 0; k < m; k++) {
+      const u = m === 1 ? 0.5 : k / (m - 1);
+      const a = axisDir + (u - 0.5) * 1.1 + (rng() - 0.5) * 0.3;
+      const len = type === 'umbel'
+        ? stalk * (0.78 + rng() * 0.35)
+        : stalk * (0.55 + Math.abs(u - 0.5) * 0.9 + rng() * 0.2);
       const fx = base.x + Math.cos(a) * len;
       const fy = base.y + Math.sin(a) * len;
-      add([{ points: [base, { x: fx, y: fy }], layer: 'stem' }], []);
-      const fl = makeFlower({ x: fx, y: fy }, size * (0.55 + rng() * 0.3), penPx, d.flowerType, d.light, rng);
+      // Bow the pedicel sideways so it arcs rather than spoking out straight.
+      const bow = (rng() - 0.5) * 0.5;
+      const mx = (base.x + fx) / 2 + Math.cos(a + Math.PI / 2) * len * bow;
+      const my = (base.y + fy) / 2 + Math.sin(a + Math.PI / 2) * len * bow;
+      const ped = smoothPolyline([base, { x: mx, y: my }, { x: fx, y: fy }], 1);
+      add([{ points: ped, layer: 'stem' }], []);
+      const fl = makeFlower({ x: fx, y: fy }, size * (0.4 + rng() * 0.2), penPx, d.flowerType, d.light, rng);
       add(fl.lines, fl.silhouette);
     }
     return;
