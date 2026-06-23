@@ -1,5 +1,5 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType } from '@flow-lines/core';
 
 /**
  * Vine Generator settings. Lengths are in millimetres (converted to px at the
@@ -12,6 +12,7 @@ import type { VineMode, VineSeeding, VineFill, LeafStyle } from '@flow-lines/cor
  */
 export interface VineState {
   mode: VineMode;
+  composition: VineComposition;
   seeding: VineSeeding;
   seedCount: number;
 
@@ -35,9 +36,16 @@ export interface VineState {
   vineFill: VineFill;
   avoidOverlap: boolean;
 
+  // form shading & depth
+  lightAngle: number;
+  shadeDensity: number;
+  occlude: boolean;
+
   // decorations
   leaves: boolean;
   leafStyle: LeafStyle;
+  leafType: LeafType;
+  veins: boolean;
   leafSizeMm: number;
   leafWidthRatio: number;
   leafSpacingMm: number;
@@ -63,14 +71,15 @@ export interface VineState {
 
 export const defaultVineState: VineState = {
   mode: 'growth',
+  composition: 'specimen',
   seeding: 'scatter',
   seedCount: 6,
 
-  stepLengthMm: 2,
-  maxLengthMm: 120,
+  stepLengthMm: 2.2,
+  maxLengthMm: 90,
   curl: 0.5,
-  noiseScale: 0.004,
-  gravitropism: 0.45,
+  noiseScale: 0.005,
+  gravitropism: 0.4,
   branchProb: 0.05,
   maxDepth: 5,
 
@@ -78,28 +87,34 @@ export const defaultVineState: VineState = {
   attractorRadiusMm: 30,
   killRadiusMm: 5,
 
-  stemWidthMm: 2.2,
+  stemWidthMm: 3,
   taper: 0.85,
-  vineFill: 'solid',
+  vineFill: 'shaded',
   avoidOverlap: true,
 
+  lightAngle: -130,
+  shadeDensity: 0.55,
+  occlude: true,
+
   leaves: true,
-  leafStyle: 'solid',
-  leafSizeMm: 8,
-  leafWidthRatio: 0.5,
-  leafSpacingMm: 10,
+  leafStyle: 'shaded',
+  leafType: 'ovate',
+  veins: true,
+  leafSizeMm: 11,
+  leafWidthRatio: 0.55,
+  leafSpacingMm: 11,
   tendrils: true,
-  tendrilProb: 0.15,
+  tendrilProb: 0.12,
   flowers: true,
-  flowerProb: 0.25,
+  flowerProb: 0.18,
   flowerSizeMm: 4,
 
-  wobbleMm: 0.4,
+  wobbleMm: 0.35,
 
   seed: Math.floor(Math.random() * 1000000),
-  strokeColor: '#234023',
-  leafColor: '#2e6b2e',
-  flowerColor: '#8a2350',
+  strokeColor: '#2a2a26',
+  leafColor: '#2a2a26',
+  flowerColor: '#5a2238',
   penWidthMm: 0.3,
 
   drawMode: false,

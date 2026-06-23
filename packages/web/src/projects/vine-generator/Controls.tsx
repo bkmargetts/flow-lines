@@ -45,6 +45,22 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       <h3 className="section-title">Growth</h3>
 
       <div className="control-group">
+        <label className="label-text">Composition</label>
+        <select
+          value={state.composition}
+          onChange={(e) => update({ composition: e.target.value as VineState['composition'] })}
+        >
+          <option value="specimen">Specimen (designed sprig)</option>
+          <option value="free">Free (from roots)</option>
+        </select>
+        <p className="paint-hint">
+          {state.composition === 'specimen'
+            ? 'One designed specimen: a master gesture sweeping to a focal point, with white space.'
+            : 'Grow freely from the roots below.'}
+        </p>
+      </div>
+
+      <div className="control-group">
         <label className="label-text">Model</label>
         <div className="paint-controls">
           <button
@@ -155,6 +171,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       <div className="control-group">
         <label className="label-text">Fill</label>
         <select value={state.vineFill} onChange={(e) => update({ vineFill: e.target.value as VineState['vineFill'] })}>
+          <option value="shaded">Shaded tube (botanical)</option>
           <option value="solid">Solid</option>
           <option value="outline">Hollow outline</option>
           <option value="highlight">Solid + highlight</option>
@@ -162,22 +179,67 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       </div>
 
       {state.leaves && (
-        <div className="control-group">
-          <label className="label-text">Leaf style</label>
-          <select value={state.leafStyle} onChange={(e) => update({ leafStyle: e.target.value as VineState['leafStyle'] })}>
-            <option value="solid">Solid</option>
-            <option value="veined">Outline + veins</option>
-            <option value="outline">Outline only</option>
-          </select>
-        </div>
+        <>
+          <div className="control-group">
+            <label className="label-text">Leaf style</label>
+            <select value={state.leafStyle} onChange={(e) => update({ leafStyle: e.target.value as VineState['leafStyle'] })}>
+              <option value="shaded">Shaded (veins + form)</option>
+              <option value="veined">Outline + veins</option>
+              <option value="outline">Outline only</option>
+              <option value="solid">Solid</option>
+            </select>
+          </div>
+          <div className="control-group">
+            <label className="label-text">Leaf type</label>
+            <select value={state.leafType} onChange={(e) => update({ leafType: e.target.value as VineState['leafType'] })}>
+              <option value="ovate">Ovate</option>
+              <option value="lance">Lance</option>
+              <option value="cordate">Cordate (heart)</option>
+              <option value="lobed">Lobed</option>
+              <option value="serrate">Serrated</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+          <label className="checkbox-label">
+            <input type="checkbox" checked={state.veins} onChange={(e) => update({ veins: e.target.checked })} />
+            Veins
+          </label>
+        </>
       )}
 
+      <h3 className="section-title">Form &amp; light</h3>
+
+      <Slider
+        label="Light Angle"
+        value={state.lightAngle}
+        min={-180}
+        max={180}
+        step={5}
+        onChange={(v) => update({ lightAngle: v })}
+        format={(v) => `${v}°`}
+      />
+      <Slider
+        label="Shading"
+        value={state.shadeDensity}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ shadeDensity: v })}
+        format={(v) => v.toFixed(2)}
+      />
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input type="checkbox" checked={state.occlude} onChange={(e) => update({ occlude: e.target.checked })} />
+          Depth (hide overlapped lines)
+        </label>
+        <p className="paint-hint">Leaves and stems in front cleanly interrupt what's behind them.</p>
+      </div>
       <div className="control-group">
         <label className="checkbox-label">
           <input type="checkbox" checked={state.avoidOverlap} onChange={(e) => update({ avoidOverlap: e.target.checked })} />
-          Avoid overlap
+          Avoid overlap (growth)
         </label>
-        <p className="paint-hint">Vines stop short of geometry they'd grow into, and leaves won't sit on top of each other.</p>
+        <p className="paint-hint">Vines stop short of geometry they'd grow into.</p>
       </div>
 
       <h3 className="section-title">Style</h3>

@@ -1,24 +1,27 @@
 /**
- * Vine generator — procedurally grown, plottable pen-and-ink vines. Pure,
- * ML-free, DOM-free, deterministic per seed (like every other core generator).
+ * Vine generator — procedurally grown, plottable pen-and-ink vines aimed at a
+ * botanical-illustration look. Pure, ML-free, DOM-free, deterministic per seed.
  *
  * Two growth models, switchable:
- *   - `growth`        — recursive tip-growth steered by a simplex curl field,
- *                       with an upward gravitropism bias and stochastic
- *                       side-branches. The classic climbing-vine look.
+ *   - `growth`        — recursive tip-growth steered by a simplex curl field
+ *                       (optionally along a composed master gesture) with an
+ *                       upward gravitropism bias and stochastic side-branches.
  *   - `colonization`  — Runions-style space colonization: attractor points pull
- *                       branches toward them and are consumed as they're
- *                       reached, growing a space-filling venation/ivy network.
+ *                       branches toward them and are consumed as they're reached.
  *
- * Vines and leaves are drawn as *solid filled ribbons*: every shape is an axis
- * polyline plus a half-width profile, rendered the plottable way — a continuous
- * tapered outline plus parallel single-pen fill passes between the two edges
- * (never stroke-width). Vines taper thick→thin from base to tip; leaves are
- * organic, varied, filled silhouettes attached to the stem by a stalk. Growth
- * and decoration both avoid existing geometry so marks don't overlap.
+ * Rendering follows the toolbox's "hatching follows form" house style rather
+ * than flat fills. Every drawn thing is an *element* with a closed silhouette
+ * and a depth order; a final pass models form with light-directional hatching
+ * and removes hidden lines so overlaps read as real depth:
+ *   - Stems are rounded tubes: tapered outline + along-axis hatching on the
+ *     shadow side.
+ *   - Leaves are curved blades with a species shape, branching veins, optional
+ *     foreshortening, and shadow hatching.
+ *   - The page is composed (a master gesture to a focal point, with negative
+ *     space) for the `specimen` composition.
  *
- * Every line is tagged with a `layer` (`stem` / `leaf` / `tendril` / `flower`)
- * so a caller can plot each element with its own pen.
+ * Lines are tagged with a `layer` (`stem` / `leaf` / `vein` / `tendril` /
+ * `flower`) so a caller can plot each element with its own pen.
  */
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { createNoise, SimplexNoise } from './noise.js';
@@ -26,79 +29,66 @@ import { applyHandDrawnStyle } from './hand-drawn.js';
 
 export type VineMode = 'growth' | 'colonization';
 export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
-/** How a vine body is inked: `solid` filled, `outline` (hollow cane/tube), or
- *  `highlight` (filled but for a thin uninked line down one side). */
-export type VineFill = 'solid' | 'outline' | 'highlight';
-/** How a leaf is inked: `solid` filled silhouette, `outline` only, or `veined`
- *  (outline with a midrib + side veins). */
-export type LeafStyle = 'solid' | 'outline' | 'veined';
+export type VineComposition = 'specimen' | 'free';
+/** How a vine body is inked. */
+export type VineFill = 'shaded' | 'solid' | 'outline' | 'highlight';
+/** How a leaf is inked. */
+export type LeafStyle = 'shaded' | 'veined' | 'outline' | 'solid';
+export type LeafType = 'ovate' | 'lance' | 'cordate' | 'lobed' | 'serrate' | 'mixed';
 
 export interface VinesOptions {
   width: number;
   height: number;
-  /** Clean-paper border kept clear of growth, in px. */
   margin?: number;
   seed?: number;
   mode?: VineMode;
+  /** Page arrangement: a designed single specimen, or free growth from roots. */
+  composition?: VineComposition;
   seeding?: VineSeeding;
-  /** Roots for `painted`/`point` seeding, in px (page coordinates). */
   startPoints?: Point[];
-  /** Roots scattered / placed along edges for `scatter`/`edges`. */
   seedCount?: number;
 
   // — growth model —
-  /** Distance advanced per growth step, px. */
   stepLength?: number;
-  /** Arc length a primary stem grows before stopping, px. */
   maxLength?: number;
-  /** 0..1 how strongly the curl field bends the stem (wiggliness). */
   curl?: number;
-  /** Spatial frequency of the curl field (per px). */
   noiseScale?: number;
-  /** 0..1 upward bias — vines climb toward the top of the sheet. */
   gravitropism?: number;
-  /** 0..1 per-step chance of spawning a side-branch. */
   branchProb?: number;
-  /** Maximum branch recursion depth. */
   maxDepth?: number;
 
   // — space colonization —
   attractorCount?: number;
-  /** Influence radius: an attractor only pulls nodes within this, px. */
   attractorRadius?: number;
-  /** A node within this of an attractor consumes it, px. */
   killRadius?: number;
 
   // — vine body —
-  /** Full vine width at the base (px); tapers to ~one pen toward the tip. */
   stemWidth?: number;
-  /** Pen line width / fill-pass spacing (px) — solid fill packs at this gap. */
   penWidth?: number;
-  /** 0..1 how aggressively the vine narrows toward the tip. */
   taper?: number;
-  /** How the vine body is inked (solid / hollow outline / highlight). */
   vineFill?: VineFill;
-
-  // — overlap avoidance —
   avoidOverlap?: boolean;
-  /** Minimum gap kept between separate vine centerlines, px. */
   spacing?: number;
+
+  // — form shading —
+  /** Light source direction, degrees (0 = +x; default top-left). */
+  lightAngle?: number;
+  /** 0..1 how much shadow hatching to lay down. */
+  shadeDensity?: number;
+  /** Allow overlap and remove hidden lines for depth (vs flat). */
+  occlude?: boolean;
 
   // — decorations —
   leaves?: boolean;
-  /** How leaves are inked (solid / outline / veined). */
   leafStyle?: LeafStyle;
-  /** Leaf blade length, px. */
+  leafType?: LeafType;
+  veins?: boolean;
   leafSize?: number;
-  /** Leaf width as a fraction of its length (0..1). */
   leafWidthRatio?: number;
-  /** Arc-length gap between leaves along a stem, px. */
   leafSpacing?: number;
   tendrils?: boolean;
-  /** 0..1 chance of a tendril at each leaf node and at stem tips. */
   tendrilProb?: number;
   flowers?: boolean;
-  /** 0..1 chance of a flower at a stem tip. */
   flowerProb?: number;
   flowerSize?: number;
 
@@ -112,12 +102,23 @@ interface Stem {
   baseHalf: number;
 }
 
-/** A growth root: a position and an initial heading (radians, screen space —
- *  −π/2 is straight up). */
+/** A growth root: position, initial heading, the width/length it starts with,
+ *  and an optional guide curve (the composed master gesture). */
 interface Root {
   x: number;
   y: number;
   angle: number;
+  half: number;
+  maxLength: number;
+  guide?: Point[];
+}
+
+/** A drawable element: its marks, a closed silhouette for occlusion, and a
+ *  depth order (higher = nearer the viewer). */
+interface Element {
+  lines: FlowLine[];
+  silhouette: Point[][];
+  z: number;
 }
 
 /** Deterministic LCG, the same one used across the core generators. */
@@ -137,10 +138,14 @@ function steer(angle: number, target: number, amount: number): number {
   return angle + d * amount;
 }
 
-/** A uniform spatial-hash grid for "is anything within `dist` of here?"
- *  queries — the same proximity test the evenly-spaced streamliner uses
- *  (flow-lines.ts). Cell size = the query distance, so a check touches a 3×3
- *  neighbourhood. */
+/** Smoothstep ease 0..1. */
+function smoothstep(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+}
+
+/** A uniform spatial-hash grid for proximity ("anything within `dist`?") tests
+ *  — the evenly-spaced-streamline pattern (flow-lines.ts). */
 class ProximityGrid {
   private readonly cell: number;
   private readonly cols: number;
@@ -160,7 +165,6 @@ class ProximityGrid {
     this.buckets[cy * this.cols + cx].push(p);
   }
 
-  /** True if any stored point lies within `dist` of (x, y). */
   hasNear(x: number, y: number, dist: number): boolean {
     const d2 = dist * dist;
     const cx = Math.max(0, Math.min(this.cols - 1, Math.floor(x / this.cell)));
@@ -177,6 +181,66 @@ class ProximityGrid {
       }
     }
     return false;
+  }
+}
+
+/** A depth buffer of element ids: rasterize silhouettes (front wins), then ask
+ *  whether a point is hidden by something nearer. Drives hidden-line removal. */
+class ZBuffer {
+  private readonly cell: number;
+  private readonly cols: number;
+  private readonly rows: number;
+  private readonly z: Float32Array;
+
+  constructor(width: number, height: number, cell: number) {
+    this.cell = Math.max(1, cell);
+    this.cols = Math.max(1, Math.ceil(width / this.cell));
+    this.rows = Math.max(1, Math.ceil(height / this.cell));
+    this.z = new Float32Array(this.cols * this.rows).fill(-1);
+  }
+
+  /** Scanline-fill a closed polygon, keeping the max z per cell. */
+  fill(poly: Point[], z: number): void {
+    if (poly.length < 3) return;
+    const c = this.cell;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const p of poly) {
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    const r0 = Math.max(0, Math.floor(minY / c));
+    const r1 = Math.min(this.rows - 1, Math.floor(maxY / c));
+    const xs: number[] = [];
+    for (let r = r0; r <= r1; r++) {
+      const yc = (r + 0.5) * c;
+      xs.length = 0;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i];
+        const b = poly[j];
+        if ((a.y <= yc && b.y > yc) || (b.y <= yc && a.y > yc)) {
+          xs.push(a.x + ((yc - a.y) / (b.y - a.y)) * (b.x - a.x));
+        }
+      }
+      if (xs.length < 2) continue;
+      xs.sort((p, q) => p - q);
+      for (let k = 0; k + 1 < xs.length; k += 2) {
+        const cx0 = Math.max(0, Math.floor(xs[k] / c));
+        const cx1 = Math.min(this.cols - 1, Math.floor(xs[k + 1] / c));
+        for (let cx = cx0; cx <= cx1; cx++) {
+          const idx = r * this.cols + cx;
+          if (z > this.z[idx]) this.z[idx] = z;
+        }
+      }
+    }
+  }
+
+  /** True if a point is hidden by an element nearer than `z`. */
+  hidden(x: number, y: number, z: number): boolean {
+    const cx = Math.floor(x / this.cell);
+    const cy = Math.floor(y / this.cell);
+    if (cx < 0 || cx >= this.cols || cy < 0 || cy >= this.rows) return false;
+    return this.z[cy * this.cols + cx] > z + 0.5;
   }
 }
 
@@ -198,8 +262,7 @@ function densify(points: Point[], step: number): Point[] {
   return out;
 }
 
-/** Light moving-average smoothing with fixed endpoints — turns the stepped
- *  growth tracks into flowing curves. */
+/** Moving-average smoothing with fixed endpoints — flowing curves. */
 function smoothPolyline(points: Point[], iterations: number): Point[] {
   if (points.length < 3) return points.map((p) => ({ ...p }));
   let pts = points;
@@ -241,88 +304,9 @@ function polylineLength(pts: Point[]): number {
   return len;
 }
 
-/**
- * Render an axis + half-width profile as a filled shape: a continuous tapered
- * outline plus, for `solid`/`highlight`, parallel single-pen fill passes between
- * the two edges. `halfWidthAt(t)` takes a normalized arc position t∈[0,1].
- * Everything stays plottable with one pen — the "thickness" is built geometry,
- * not stroke width.
- *   - `solid`     — outline + full fill.
- *   - `outline`   — the tapered outline only (hollow).
- *   - `highlight` — solid, but a thin uninked margin is left inside the +normal
- *                   edge (a woodcut/engraving highlight suggesting roundness).
- */
-function ribbon(
-  axis: Point[],
-  halfWidthAt: (t: number) => number,
-  penPx: number,
-  layer: string,
-  mode: VineFill = 'solid'
-): FlowLine[] {
-  const samples = densify(axis, penPx);
-  const n = samples.length;
-  if (n < 2) return [];
-
-  const cum: number[] = new Array(n);
-  cum[0] = 0;
-  for (let i = 1; i < n; i++) {
-    cum[i] = cum[i - 1] + Math.hypot(samples[i].x - samples[i - 1].x, samples[i].y - samples[i - 1].y);
-  }
-  const total = cum[n - 1] || 1;
-  const normals = normalsOf(samples);
-  const w: number[] = new Array(n);
-  let maxHalf = 0;
-  for (let i = 0; i < n; i++) {
-    w[i] = Math.max(0, halfWidthAt(cum[i] / total));
-    if (w[i] > maxHalf) maxHalf = w[i];
-  }
-
-  const lines: FlowLine[] = [];
-
-  // Continuous tapered outline (left edge forward, right edge back, closed).
-  const outline: Point[] = new Array(2 * n + 1);
-  for (let i = 0; i < n; i++) {
-    outline[i] = { x: samples[i].x + normals[i].x * w[i], y: samples[i].y + normals[i].y * w[i] };
-    const j = n - 1 - i;
-    outline[n + i] = { x: samples[j].x - normals[j].x * w[j], y: samples[j].y - normals[j].y * w[j] };
-  }
-  outline[2 * n] = { ...outline[0] };
-  lines.push({ points: outline, layer, pen: 'bold' });
-
-  if (mode === 'outline') return lines;
-
-  // Solid fill: the centerline (d=0) plus offset passes either side, each broken
-  // into the runs where the local width still supports that offset — so passes
-  // shorten toward the tip and the taper falls out for free. For `highlight`,
-  // positive-side passes within a pen of the edge are dropped, leaving a thin
-  // uninked highlight line down that side.
-  const gap = mode === 'highlight' ? penPx * 1.6 : 0;
-  for (let k = 0; k * penPx <= maxHalf + 1e-6; k++) {
-    const offsets = k === 0 ? [0] : [k * penPx, -k * penPx];
-    for (const d of offsets) {
-      const ad = Math.abs(d);
-      let run: Point[] = [];
-      for (let i = 0; i < n; i++) {
-        const fits = ad <= w[i] + 1e-6 && !(d > 0 && gap > 0 && w[i] - d < gap);
-        if (fits) {
-          run.push({ x: samples[i].x + normals[i].x * d, y: samples[i].y + normals[i].y * d });
-        } else if (run.length >= 2) {
-          lines.push({ points: run, layer, pen: 'bold' });
-          run = [];
-        } else {
-          run = [];
-        }
-      }
-      if (run.length >= 2) lines.push({ points: run, layer, pen: 'bold' });
-    }
-  }
-
-  return lines;
-}
-
 /** Total fill lines we'll ever emit — keeps dense presets bounded & fast. */
 const STEM_CAP = 4000;
-const LINE_CAP = 80000;
+const LINE_CAP = 90000;
 
 export function generateVines(options: VinesOptions): FlowLinesResult {
   const {
@@ -331,6 +315,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     margin = 20,
     seed = Math.floor(Math.random() * 1000000),
     mode = 'growth',
+    composition = 'specimen',
     seeding = 'scatter',
     startPoints = [],
     seedCount = 6,
@@ -347,11 +332,16 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     stemWidth = 6,
     penWidth = 1,
     taper = 0.85,
-    vineFill = 'solid',
+    vineFill = 'shaded',
     avoidOverlap = true,
+    lightAngle = -135,
+    shadeDensity = 0.5,
+    occlude = true,
     leaves = true,
-    leafStyle = 'solid',
-    leafSize = 22,
+    leafStyle = 'shaded',
+    leafType = 'ovate',
+    veins = true,
+    leafSize = 26,
     leafWidthRatio = 0.5,
     leafSpacing = 30,
     tendrils = true,
@@ -359,137 +349,159 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     flowers = true,
     flowerProb = 0.2,
     flowerSize = 12,
-    wobble = 1.2,
+    wobble = 1.0,
   } = options;
 
   const penPx = Math.max(0.6, penWidth);
   const baseHalf = Math.max(penPx, stemWidth / 2);
   const spacing = options.spacing ?? stemWidth + penPx * 2;
+  const lr = (lightAngle * Math.PI) / 180;
+  const light: Point = { x: Math.cos(lr), y: Math.sin(lr) };
 
   const rng = makeRandom(seed);
   const noise = createNoise(seed);
 
-  const roots = makeRoots(seeding, { width, height, margin }, startPoints, seedCount, rng);
-
-  // Growth-time avoidance grid (growth mode self/other-stem separation).
   const growthGrid = new ProximityGrid(width, height, Math.max(1, spacing));
+  const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
 
   const rawStems: Stem[] =
     mode === 'colonization'
-      ? colonize(
-          roots,
-          { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius },
-          rng,
-          baseHalf,
-          penPx,
-          maxLength
-        )
-      : growStems(
-          roots,
-          { width, height, margin, stepLength, maxLength, curl, noiseScale, gravitropism, branchProb, maxDepth },
-          rng,
-          noise,
-          baseHalf,
-          avoidOverlap ? growthGrid : null,
-          spacing
-        );
+      ? colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength)
+      : growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, avoidOverlap ? growthGrid : null, spacing);
 
-  // Smooth then wobble the centerlines (so all fill passes share one wobble),
-  // before thickening them into solid ribbons.
+  // Smooth then wobble the centerlines before they're rendered.
   const centerlines = rawStems.map((s) => smoothPolyline(s.points, 2));
   const wobbled = applyHandDrawnStyle(
     { lines: centerlines.map((points) => ({ points })), width, height, seed },
     { amplitude: wobble, seed }
-  ).lines;
+  ).lines.map((l) => l.points);
 
-  // Occupancy grid for decoration placement: built from the final vine bodies so
-  // leaves/tendrils/flowers don't sit on top of stems — or each other.
-  const decorGrid = new ProximityGrid(width, height, Math.max(1, penPx * 2));
+  const elements: Element[] = [];
+  const add = (lines: FlowLine[], silhouette: Point[][]): void => {
+    elements.push({ lines, silhouette, z: elements.length + 1 });
+  };
 
-  const stemLines: FlowLine[] = [];
-  centerlines.forEach((_, i) => {
-    const center = wobbled[i].points;
-    const base = rawStems[i].baseHalf;
-    const tipHalf = Math.max(penPx * 0.5, base * 0.12);
-    const fill = ribbon(center, (t) => base + (tipHalf - base) * smoothstep(Math.pow(t, 1 - taper * 0.5)), penPx, 'stem', vineFill);
-    for (const ln of fill) {
-      stemLines.push(ln);
-      for (const p of ln.points) decorGrid.add(p);
-    }
+  // Stems (drawn behind the foliage).
+  wobbled.forEach((center, i) => {
+    const built = buildStem(center, rawStems[i].baseHalf, { penPx, taper, vineFill, light, shadeDensity });
+    add(built.lines, built.silhouette);
   });
 
-  const extras = decorate(
-    wobbled.map((l) => l.points),
-    { leaves, leafStyle, leafSize, leafWidthRatio, leafSpacing, tendrils, tendrilProb, flowers, flowerProb, flowerSize, penPx },
+  // Decorations (in front, in placement order).
+  decorate(
+    wobbled,
+    {
+      leaves, leafStyle, leafType, veins, leafSize, leafWidthRatio, leafSpacing,
+      tendrils, tendrilProb, flowers, flowerProb, flowerSize, penPx, light, shadeDensity,
+    },
     rng,
-    decorGrid
+    add
   );
 
-  return { lines: [...stemLines, ...extras], width, height, seed };
+  // Hidden-line removal: rasterize silhouettes (front wins) then clip each
+  // element's lines to where it isn't covered by something nearer.
+  let outLines: FlowLine[];
+  if (occlude) {
+    const zbuf = new ZBuffer(width, height, Math.max(1, penPx));
+    for (const el of elements) for (const poly of el.silhouette) zbuf.fill(poly, el.z);
+    outLines = [];
+    for (const el of elements) {
+      for (const ln of el.lines) {
+        for (const run of clipHidden(ln.points, el.z, zbuf)) {
+          outLines.push({ ...ln, points: run });
+          if (outLines.length >= LINE_CAP) break;
+        }
+      }
+    }
+  } else {
+    outLines = elements.flatMap((el) => el.lines);
+  }
+
+  return { lines: outLines, width, height, seed };
 }
 
-/** Smoothstep ease 0..1. */
-function smoothstep(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
-  return x * x * (3 - 2 * x);
+/** Split a polyline into the runs whose points are not hidden by nearer ones. */
+function clipHidden(points: Point[], z: number, zbuf: ZBuffer): Point[][] {
+  const runs: Point[][] = [];
+  let run: Point[] = [];
+  for (const p of points) {
+    if (zbuf.hidden(p.x, p.y, z)) {
+      if (run.length >= 2) runs.push(run);
+      run = [];
+    } else {
+      run.push(p);
+    }
+  }
+  if (run.length >= 2) runs.push(run);
+  return runs;
 }
 
-// ——— seeding ———
+// ——— composition & seeding ———
 
-function makeRoots(
-  seeding: VineSeeding,
-  page: { width: number; height: number; margin: number },
-  startPoints: Point[],
-  seedCount: number,
-  rng: () => number
-): Root[] {
-  const { width, height, margin } = page;
+interface RootOpts {
+  width: number;
+  height: number;
+  margin: number;
+  mode: VineMode;
+  composition: VineComposition;
+  seeding: VineSeeding;
+  startPoints: Point[];
+  seedCount: number;
+  baseHalf: number;
+  maxLength: number;
+}
+
+function makeRoots(o: RootOpts, rng: () => number): Root[] {
+  const { width, height, margin, baseHalf, maxLength } = o;
   const up = -Math.PI / 2;
   const jitter = () => (rng() - 0.5) * 0.5;
 
-  if (seeding === 'painted') {
-    return startPoints.map((p) => ({ x: p.x, y: p.y, angle: up + jitter() }));
+  // A designed single specimen: a master gesture from a base in the lower third
+  // sweeping to a focal point on a rule-of-thirds intersection, leaving the
+  // opposite side as negative space.
+  if (o.composition === 'specimen' && o.mode === 'growth') {
+    const leftFocal = rng() < 0.5;
+    const fx = margin + (leftFocal ? 1 / 3 : 2 / 3) * (width - 2 * margin);
+    const fy = margin + (0.22 + rng() * 0.16) * (height - 2 * margin);
+    const baseFromPaint = o.seeding === 'painted' || o.seeding === 'point' ? o.startPoints[0] : undefined;
+    const bx = baseFromPaint?.x ?? margin + (leftFocal ? 0.62 : 0.38) * (width - 2 * margin);
+    const by = baseFromPaint?.y ?? height - margin * 1.3;
+    // A bowed guide curve base → focal (control point pushed to one side).
+    const mx = (bx + fx) / 2 + (leftFocal ? 1 : -1) * (width * 0.12);
+    const my = (by + fy) / 2;
+    const guide = smoothPolyline([
+      { x: bx, y: by },
+      { x: (bx + mx) / 2, y: (by + my) / 2 },
+      { x: mx, y: my },
+      { x: (mx + fx) / 2, y: (my + fy) / 2 },
+      { x: fx, y: fy },
+    ], 1);
+    const startAngle = Math.atan2(guide[1].y - by, guide[1].x - bx);
+    // A woody trunk that tapers up the gesture.
+    return [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide }];
   }
-  if (seeding === 'point') {
-    const p = startPoints[0] ?? { x: width / 2, y: height - margin };
-    return [{ x: p.x, y: p.y, angle: up }];
+
+  const base = (x: number, y: number, angle: number): Root => ({ x, y, angle: angle + jitter(), half: baseHalf, maxLength });
+
+  if (o.seeding === 'painted') return o.startPoints.map((p) => base(p.x, p.y, up));
+  if (o.seeding === 'point') {
+    const p = o.startPoints[0] ?? { x: width / 2, y: height - margin };
+    return [base(p.x, p.y, up)];
   }
-  if (seeding === 'edges') {
+  if (o.seeding === 'edges') {
     const roots: Root[] = [];
-    for (let i = 0; i < seedCount; i++) {
+    for (let i = 0; i < o.seedCount; i++) {
       const edge = Math.floor(rng() * 4);
-      let x: number;
-      let y: number;
-      let angle: number;
-      if (edge === 0) {
-        x = margin + rng() * (width - 2 * margin);
-        y = height - margin;
-        angle = up;
-      } else if (edge === 1) {
-        x = margin + rng() * (width - 2 * margin);
-        y = margin;
-        angle = Math.PI / 2;
-      } else if (edge === 2) {
-        x = margin;
-        y = margin + rng() * (height - 2 * margin);
-        angle = 0;
-      } else {
-        x = width - margin;
-        y = margin + rng() * (height - 2 * margin);
-        angle = Math.PI;
-      }
-      roots.push({ x, y, angle: angle + jitter() });
+      if (edge === 0) roots.push(base(margin + rng() * (width - 2 * margin), height - margin, up));
+      else if (edge === 1) roots.push(base(margin + rng() * (width - 2 * margin), margin, Math.PI / 2));
+      else if (edge === 2) roots.push(base(margin, margin + rng() * (height - 2 * margin), 0));
+      else roots.push(base(width - margin, margin + rng() * (height - 2 * margin), Math.PI));
     }
     return roots;
   }
-  // scatter
   const roots: Root[] = [];
-  for (let i = 0; i < seedCount; i++) {
-    roots.push({
-      x: margin + rng() * (width - 2 * margin),
-      y: margin + rng() * (height - 2 * margin),
-      angle: up + jitter(),
-    });
+  for (let i = 0; i < o.seedCount; i++) {
+    roots.push(base(margin + rng() * (width - 2 * margin), margin + rng() * (height - 2 * margin), up));
   }
   return roots;
 }
@@ -501,7 +513,6 @@ interface GrowthParams {
   height: number;
   margin: number;
   stepLength: number;
-  maxLength: number;
   curl: number;
   noiseScale: number;
   gravitropism: number;
@@ -514,7 +525,6 @@ function growStems(
   p: GrowthParams,
   rng: () => number,
   noise: SimplexNoise,
-  baseHalf: number,
   grid: ProximityGrid | null,
   spacing: number
 ): Stem[] {
@@ -529,35 +539,45 @@ function growStems(
     depth: number;
     maxLength: number;
     half: number;
+    guide?: Point[];
+    gi: number;
   }
-  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: p.maxLength, half: baseHalf }));
+  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1 }));
 
-  const inBounds = (x: number, y: number) =>
-    x >= margin && x <= width - margin && y >= margin && y <= height - margin;
-
-  // A growing tip ignores collisions until it has cleared its origin (so a fresh
-  // branch can leave its parent stem before it starts avoiding geometry).
+  const inBounds = (x: number, y: number) => x >= margin && x <= width - margin && y >= margin && y <= height - margin;
   const clearDist = spacing * 1.6;
   const sepDist = spacing * 0.5;
 
   while (stack.length > 0 && stems.length < STEM_CAP) {
     const tip = stack.pop()!;
     const pts: Point[] = [{ x: tip.x, y: tip.y }];
-    let { x, y, angle } = tip;
+    let { x, y, angle, gi } = tip;
     const startX = tip.x;
     const startY = tip.y;
     const steps = Math.max(2, Math.ceil(tip.maxLength / stepLength));
     const toInsert: Point[] = [];
 
     for (let i = 0; i < steps; i++) {
-      const n = noise.noise2D(x * noiseScale, y * noiseScale);
-      angle += n * curl * 0.3;
-      angle = steer(angle, up, 0.04 + gravitropism * 0.13);
+      if (tip.guide) {
+        // Follow the composed master gesture: steer toward the active guide
+        // point, advancing along the guide as we reach each.
+        let target = tip.guide[Math.min(gi, tip.guide.length - 1)];
+        if (Math.hypot(target.x - x, target.y - y) < stepLength * 2 && gi < tip.guide.length - 1) {
+          gi++;
+          target = tip.guide[gi];
+        }
+        const want = Math.atan2(target.y - y, target.x - x);
+        angle = steer(angle, want, 0.25);
+        angle += noise.noise2D(x * noiseScale, y * noiseScale) * curl * 0.18;
+        if (gi >= tip.guide.length - 1 && Math.hypot(target.x - x, target.y - y) < stepLength * 1.5) break;
+      } else {
+        angle += noise.noise2D(x * noiseScale, y * noiseScale) * curl * 0.3;
+        angle = steer(angle, up, 0.04 + gravitropism * 0.13);
+      }
 
       const nx = x + Math.cos(angle) * stepLength;
       const ny = y + Math.sin(angle) * stepLength;
       if (!inBounds(nx, ny)) break;
-
       const cleared = Math.hypot(nx - startX, ny - startY) > clearDist;
       if (grid && cleared && grid.hasNear(nx, ny, sepDist)) break;
 
@@ -566,26 +586,23 @@ function growStems(
       pts.push({ x, y });
       if (grid && cleared) toInsert.push({ x, y });
 
-      if (
-        tip.depth < maxDepth &&
-        stack.length + stems.length < STEM_CAP &&
-        rng() < branchProb
-      ) {
-        const turn = (rng() < 0.5 ? 1 : -1) * (0.5 + rng() * 0.6);
+      if (tip.depth < maxDepth && stack.length + stems.length < STEM_CAP && rng() < branchProb) {
+        // Asymmetric bias gives a more designed, less even branch pattern.
+        const dir = rng() < 0.62 ? 1 : -1;
+        const turn = dir * (0.5 + rng() * 0.6);
         stack.push({
-          x,
-          y,
+          x, y,
           angle: angle + turn,
           depth: tip.depth + 1,
-          maxLength: tip.maxLength * (0.5 + rng() * 0.25),
-          half: Math.max(0.6, tip.half * 0.62),
+          maxLength: tip.maxLength * (0.42 + rng() * 0.24),
+          half: Math.max(0.6, tip.half * 0.6),
+          gi: 0,
         });
       }
     }
 
     if (pts.length >= 2) {
       stems.push({ points: pts, baseHalf: tip.half });
-      // Register the whole accepted stem so later stems avoid all of it.
       if (grid) for (const q of toInsert) grid.add(q);
     }
   }
@@ -620,18 +637,10 @@ function colonize(
 
   const attractors: { x: number; y: number; alive: boolean }[] = [];
   for (let i = 0; i < attractorCount; i++) {
-    attractors.push({
-      x: margin + rng() * (width - 2 * margin),
-      y: margin + rng() * (height - 2 * margin),
-      alive: true,
-    });
+    attractors.push({ x: margin + rng() * (width - 2 * margin), y: margin + rng() * (height - 2 * margin), alive: true });
   }
 
-  interface Node {
-    x: number;
-    y: number;
-    parent: number;
-  }
+  interface Node { x: number; y: number; parent: number; }
   const nodes: Node[] = roots.map((r) => ({ x: r.x, y: r.y, parent: -1 }));
 
   const MAX_ITER = 600;
@@ -647,10 +656,7 @@ function colonize(
         const dx = a.x - nodes[n].x;
         const dy = a.y - nodes[n].y;
         const d = dx * dx + dy * dy;
-        if (d < bestD) {
-          bestD = d;
-          best = n;
-        }
+        if (d < bestD) { bestD = d; best = n; }
       }
       if (best >= 0) {
         any = true;
@@ -658,11 +664,9 @@ function colonize(
         let dx = a.x - nd.x;
         let dy = a.y - nd.y;
         const L = Math.hypot(dx, dy) || 1;
-        dx /= L;
-        dy /= L;
         const inf = influence.get(best) ?? { dx: 0, dy: 0 };
-        inf.dx += dx;
-        inf.dy += dy;
+        inf.dx += dx / L;
+        inf.dy += dy / L;
         influence.set(best, inf);
       }
     }
@@ -672,11 +676,7 @@ function colonize(
     for (const [ni, inf] of influence) {
       const L = Math.hypot(inf.dx, inf.dy) || 1;
       const nd = nodes[ni];
-      nodes.push({
-        x: nd.x + (inf.dx / L) * stepLength,
-        y: nd.y + (inf.dy / L) * stepLength,
-        parent: ni,
-      });
+      nodes.push({ x: nd.x + (inf.dx / L) * stepLength, y: nd.y + (inf.dy / L) * stepLength, parent: ni });
       if (nodes.length >= NODE_CAP) break;
     }
 
@@ -685,10 +685,7 @@ function colonize(
       for (let n = base; n < nodes.length; n++) {
         const dx = a.x - nodes[n].x;
         const dy = a.y - nodes[n].y;
-        if (dx * dx + dy * dy < krSq) {
-          a.alive = false;
-          break;
-        }
+        if (dx * dx + dy * dy < krSq) { a.alive = false; break; }
       }
     }
   }
@@ -696,9 +693,6 @@ function colonize(
   return extractChains(nodes, baseHalf, penPx, maxLength);
 }
 
-/** Walk the node tree into polylines: a chain starts at a root or just after a
- *  branch point and runs through single-child descendants to the next
- *  branch/tip. Width scales with chain length (longer chains read as trunks). */
 function extractChains(
   nodes: { x: number; y: number; parent: number }[],
   baseHalf: number,
@@ -718,7 +712,6 @@ function extractChains(
     const par = nodes[i].parent;
     const beginsBranch = par < 0 || childCount[par] > 1;
     if (!beginsBranch) continue;
-
     const pts: Point[] = [];
     if (par >= 0) pts.push({ x: nodes[par].x, y: nodes[par].y });
     let cur = i;
@@ -736,11 +729,173 @@ function extractChains(
   return stems;
 }
 
+// ——— stem rendering (rounded tube) ———
+
+interface StemRenderOpts {
+  penPx: number;
+  taper: number;
+  vineFill: VineFill;
+  light: Point;
+  shadeDensity: number;
+}
+
+function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts): { lines: FlowLine[]; silhouette: Point[][] } {
+  const { penPx, taper, light, shadeDensity } = o;
+  const samples = densify(center, penPx);
+  const n = samples.length;
+  if (n < 2) return { lines: [], silhouette: [] };
+
+  const cum: number[] = new Array(n);
+  cum[0] = 0;
+  for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + Math.hypot(samples[i].x - samples[i - 1].x, samples[i].y - samples[i - 1].y);
+  const total = cum[n - 1] || 1;
+  const normals = normalsOf(samples);
+  const tipHalf = Math.max(penPx * 0.5, baseHalf * 0.12);
+  const w: number[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = cum[i] / total;
+    w[i] = baseHalf + (tipHalf - baseHalf) * smoothstep(Math.pow(t, 1 - taper * 0.5));
+  }
+
+  // Silhouette polygon (left edge forward, right edge back).
+  const poly: Point[] = new Array(2 * n);
+  for (let i = 0; i < n; i++) {
+    poly[i] = { x: samples[i].x + normals[i].x * w[i], y: samples[i].y + normals[i].y * w[i] };
+    const j = n - 1 - i;
+    poly[n + i] = { x: samples[j].x - normals[j].x * w[j], y: samples[j].y - normals[j].y * w[j] };
+  }
+
+  // Non-shaded modes keep the old filled/outline ribbon.
+  if (o.vineFill !== 'shaded') {
+    const fill = ribbon(samples, normals, w, penPx, 'stem', o.vineFill);
+    return { lines: fill, silhouette: [poly] };
+  }
+
+  const lines: FlowLine[] = [];
+  const leftEdge: Point[] = poly.slice(0, n);
+  const rightEdge: Point[] = poly.slice(n).reverse(); // back to forward order
+
+  // Per-sample shadow side: the edge whose outward normal faces away from light.
+  // +normal is the 'left' edge, −normal the 'right'. Weight the shadow edge.
+  let leftShadow = 0;
+  for (let i = 0; i < n; i++) leftShadow += normals[i].x * light.x + normals[i].y * light.y < 0 ? 1 : -1;
+  const shadowOnLeft = leftShadow > 0;
+  const shadowEdge = shadowOnLeft ? leftEdge : rightEdge;
+  const litEdge = shadowOnLeft ? rightEdge : leftEdge;
+  const shadowSign = shadowOnLeft ? 1 : -1;
+
+  // Outline: lit edge as one fine line; shadow edge heavier (a second offset
+  // pass) for an engraver's swelling line.
+  lines.push({ points: litEdge, layer: 'stem' });
+  lines.push({ points: shadowEdge, layer: 'stem', pen: 'bold' });
+  if (baseHalf > penPx * 2) {
+    const heavier = offsetPolyline(shadowEdge, shadowSign * penPx * 0.55);
+    if (heavier.length >= 2) lines.push({ points: trimPolyline(heavier, 0.08), layer: 'stem', pen: 'bold' });
+  }
+
+  // Round the tube: along-axis hatch lines inset from the shadow edge.
+  const shadeSpacing = penPx * (2 + (1 - shadeDensity) * 4);
+  const bands = Math.max(0, Math.round((shadeDensity * baseHalf) / shadeSpacing));
+  for (let b = 0; b < bands; b++) {
+    const inset = (b + 0.6) * shadeSpacing;
+    let run: Point[] = [];
+    for (let i = 0; i < n; i++) {
+      const dmag = w[i] - inset;
+      // Only on the shadow side, and only where the tube is wide enough.
+      const sideShadow = (normals[i].x * light.x + normals[i].y * light.y < 0 ? 1 : -1);
+      if (dmag > w[i] * 0.12 && sideShadow === shadowSign) {
+        run.push({ x: samples[i].x + normals[i].x * shadowSign * dmag, y: samples[i].y + normals[i].y * shadowSign * dmag });
+      } else if (run.length >= 2) {
+        lines.push({ points: run, layer: 'stem' });
+        run = [];
+      } else {
+        run = [];
+      }
+    }
+    if (run.length >= 2) lines.push({ points: run, layer: 'stem' });
+  }
+
+  return { lines, silhouette: [poly] };
+}
+
+/** Offset a polyline perpendicular to its local tangent (pen-ink.ts pattern). */
+function offsetPolyline(points: Point[], distance: number): Point[] {
+  if (Math.abs(distance) < 1e-6) return points.map((p) => ({ ...p }));
+  const out: Point[] = new Array(points.length);
+  for (let i = 0; i < points.length; i++) {
+    const ahead = points[Math.min(i + 1, points.length - 1)];
+    const behind = points[Math.max(i - 1, 0)];
+    const tx = ahead.x - behind.x;
+    const ty = ahead.y - behind.y;
+    const len = Math.hypot(tx, ty) || 1;
+    out[i] = { x: points[i].x + (-ty / len) * distance, y: points[i].y + (tx / len) * distance };
+  }
+  return out;
+}
+
+/** Drop a fraction of arc length from each end (tapered ends). */
+function trimPolyline(points: Point[], fraction: number): Point[] {
+  if (points.length < 3) return points;
+  const cum: number[] = [0];
+  for (let i = 1; i < points.length; i++) cum.push(cum[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  const total = cum[cum.length - 1];
+  const trim = Math.min(total * fraction, 12);
+  const start = cum.findIndex((c) => c >= trim);
+  let end = points.length - 1;
+  while (end > 0 && cum[end] > total - trim) end--;
+  if (start < 0 || end - start < 1) return points;
+  return points.slice(start, end + 1);
+}
+
+/** Filled / outline ribbon (the non-botanical fill modes). */
+function ribbon(
+  samples: Point[],
+  normals: Point[],
+  w: number[],
+  penPx: number,
+  layer: string,
+  mode: VineFill
+): FlowLine[] {
+  const n = samples.length;
+  let maxHalf = 0;
+  for (const v of w) if (v > maxHalf) maxHalf = v;
+
+  const lines: FlowLine[] = [];
+  const outline: Point[] = new Array(2 * n + 1);
+  for (let i = 0; i < n; i++) {
+    outline[i] = { x: samples[i].x + normals[i].x * w[i], y: samples[i].y + normals[i].y * w[i] };
+    const j = n - 1 - i;
+    outline[n + i] = { x: samples[j].x - normals[j].x * w[j], y: samples[j].y - normals[j].y * w[j] };
+  }
+  outline[2 * n] = { ...outline[0] };
+  lines.push({ points: outline, layer, pen: 'bold' });
+  if (mode === 'outline') return lines;
+
+  const gap = mode === 'highlight' ? penPx * 1.6 : 0;
+  for (let k = 0; k * penPx <= maxHalf + 1e-6; k++) {
+    const offsets = k === 0 ? [0] : [k * penPx, -k * penPx];
+    for (const d of offsets) {
+      const ad = Math.abs(d);
+      let run: Point[] = [];
+      for (let i = 0; i < n; i++) {
+        const fits = ad <= w[i] + 1e-6 && !(d > 0 && gap > 0 && w[i] - d < gap);
+        if (fits) run.push({ x: samples[i].x + normals[i].x * d, y: samples[i].y + normals[i].y * d });
+        else if (run.length >= 2) { lines.push({ points: run, layer, pen: 'bold' }); run = []; }
+        else run = [];
+      }
+      if (run.length >= 2) lines.push({ points: run, layer, pen: 'bold' });
+    }
+  }
+  return lines;
+}
+
 // ——— decorations ———
 
 interface DecorParams {
   leaves: boolean;
   leafStyle: LeafStyle;
+  leafType: LeafType;
+  veins: boolean;
   leafSize: number;
   leafWidthRatio: number;
   leafSpacing: number;
@@ -750,212 +905,236 @@ interface DecorParams {
   flowerProb: number;
   flowerSize: number;
   penPx: number;
+  light: Point;
+  shadeDensity: number;
 }
 
-function decorate(stems: Point[][], d: DecorParams, rng: () => number, grid: ProximityGrid): FlowLine[] {
-  const extras: FlowLine[] = [];
-
+function decorate(
+  stems: Point[][],
+  d: DecorParams,
+  rng: () => number,
+  add: (lines: FlowLine[], sil: Point[][]) => void
+): void {
   for (const pts of stems) {
     if (pts.length < 2) continue;
     const stemLen = polylineLength(pts);
-    // Restraint: skip stubby twigs so dense networks stay sparse and deliberate.
     if (stemLen < d.leafSpacing) continue;
 
     let arc = 0;
     let nextLeaf = d.leafSpacing * (0.5 + rng());
     let side: 1 | -1 = rng() < 0.5 ? 1 : -1;
 
-    for (let i = 1; i < pts.length && extras.length < LINE_CAP; i++) {
+    for (let i = 1; i < pts.length; i++) {
       const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
       arc += seg;
       const dir = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
 
       if (arc >= nextLeaf) {
         side = (side === 1 ? -1 : 1) as 1 | -1;
-        // Leaves larger near the base, smaller toward the tip.
         const along = arc / stemLen;
-        const sizeScale = 0.6 + 0.6 * (1 - along);
-
+        const sizeScale = 0.55 + 0.6 * (1 - along);
         if (d.leaves) {
-          placeLeaf(extras, grid, pts[i], dir, side, d, sizeScale, rng);
+          // A small cluster of 1–3 leaves per node.
+          const cluster = 1 + (rng() < 0.5 ? 1 : 0) + (rng() < 0.25 ? 1 : 0);
+          for (let c = 0; c < cluster; c++) {
+            const s: 1 | -1 = c === 0 ? side : ((rng() < 0.5 ? 1 : -1) as 1 | -1);
+            const leaf = makeLeaf(pts[i], dir, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, rng);
+            add(leaf.lines, leaf.silhouette);
+          }
         }
         if (d.tendrils && rng() < d.tendrilProb) {
-          placeTendril(extras, grid, pts[i], dir, (-side) as 1 | -1, d.leafSize * (1 + rng()), d.penPx, rng);
+          const t = makeTendril(pts[i], dir, (-side) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
+          add([t], []);
         }
         nextLeaf += d.leafSpacing * (0.7 + rng() * 0.6);
       }
     }
 
-    // Tip: a flower or a terminal tendril.
     const tip = pts[pts.length - 1];
     const prev = pts[pts.length - 2];
     const tipDir = Math.atan2(tip.y - prev.y, tip.x - prev.x);
     if (d.flowers && rng() < d.flowerProb) {
-      placeFlower(extras, grid, tip, d.flowerSize * (0.75 + rng() * 0.5), d.penPx, rng);
+      const f = makeFlower(tip, d.flowerSize * (0.75 + rng() * 0.5), d.penPx, rng);
+      add(f.lines, f.silhouette);
     } else if (d.tendrils && rng() < d.tendrilProb) {
-      placeTendril(extras, grid, tip, tipDir, (rng() < 0.5 ? 1 : -1) as 1 | -1, d.leafSize * (1 + rng()), d.penPx, rng);
+      const t = makeTendril(tip, tipDir, (rng() < 0.5 ? 1 : -1) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
+      add([t], []);
     }
   }
-
-  return extras;
 }
 
-/** Test a set of points against the grid (ignoring those near `anchor`, which
- *  legitimately touch the stem), and register them all if clear. */
-function tryPlace(
-  lines: FlowLine[],
-  grid: ProximityGrid,
-  candidate: FlowLine[],
-  anchor: Point,
-  anchorSkip: number,
-  clearance: number
-): boolean {
-  const skip2 = anchorSkip * anchorSkip;
-  for (const ln of candidate) {
-    for (const p of ln.points) {
-      const dx = p.x - anchor.x;
-      const dy = p.y - anchor.y;
-      if (dx * dx + dy * dy < skip2) continue;
-      if (grid.hasNear(p.x, p.y, clearance)) return false;
-    }
-  }
-  for (const ln of candidate) {
-    lines.push(ln);
-    for (const p of ln.points) grid.add(p);
-  }
-  return true;
-}
+// ——— leaves ———
 
-/** Place an organic filled leaf, retrying once smaller before giving up. */
-function placeLeaf(
-  lines: FlowLine[],
-  grid: ProximityGrid,
-  base: Point,
-  stemDir: number,
-  side: 1 | -1,
-  d: DecorParams,
-  sizeScale: number,
-  rng: () => number
-): void {
-  // Per-leaf organic variation.
-  const spread = (Math.PI / 3) * (0.8 + rng() * 0.6);
-  const curl = (rng() - 0.5) * 0.9;
-  const widthRatio = d.leafWidthRatio * (0.8 + rng() * 0.5);
-  const sharp = 0.6 + rng() * 0.5;
+const LEAF_TYPES: LeafType[] = ['ovate', 'lance', 'cordate', 'lobed', 'serrate'];
 
-  for (const scale of [sizeScale, sizeScale * 0.6]) {
-    const len = d.leafSize * scale;
-    if (len < d.penPx * 3) break;
-    const leaf = makeLeaf(base, stemDir, side, len, spread, curl, widthRatio, sharp, d.penPx, d.leafStyle);
-    if (tryPlace(lines, grid, leaf, base, d.penPx * 2.5, d.penPx)) return;
+/** Half-width profile fraction (0..1) along the blade for a leaf species. */
+function leafProfile(type: LeafType, u: number, lobes: number): number {
+  switch (type) {
+    case 'lance':
+      return Math.pow(Math.sin(Math.PI * Math.pow(u, 1.35)), 1.15);
+    case 'cordate':
+      return Math.pow(Math.sin(Math.PI * Math.pow(u, 0.5)), 0.7);
+    case 'lobed':
+      return Math.pow(Math.sin(Math.PI * Math.pow(u, 0.7)), 0.85) * (0.72 + 0.28 * Math.cos(lobes * Math.PI * u));
+    case 'ovate':
+    case 'serrate':
+    default:
+      return Math.pow(Math.sin(Math.PI * Math.pow(u, 0.7)), 0.85);
   }
 }
 
-/** A leaf as a ribbon: a short stalk into an asymmetric pointed blade. Inked
- *  solid, outline-only, or with a midrib + side veins per `style`. */
 function makeLeaf(
   base: Point,
   stemDir: number,
   side: 1 | -1,
   len: number,
-  spread: number,
-  curl: number,
-  widthRatio: number,
-  sharp: number,
-  penPx: number,
-  style: LeafStyle
-): FlowLine[] {
+  d: DecorParams,
+  rng: () => number
+): { lines: FlowLine[]; silhouette: Point[][] } {
+  const type: LeafType = d.leafType === 'mixed' ? LEAF_TYPES[Math.floor(rng() * LEAF_TYPES.length)] : d.leafType;
+  const penPx = d.penPx;
+  const spread = (Math.PI / 3) * (0.85 + rng() * 0.5);
+  const curl = (rng() - 0.5) * 0.8;
+  // Foreshortening: a tilted leaf is narrower; a steep one folds edge-on.
+  const tilt = rng();
+  const widthRatio = d.leafWidthRatio * (0.85 + rng() * 0.4) * (1 - 0.7 * tilt);
+  const lobes = 2 + Math.floor(rng() * 2); // 2–3 lobe pairs
+  const serrate = type === 'serrate';
+
   const baseAngle = stemDir + side * spread;
-  const M = 16;
+  const M = 22;
   const axis: Point[] = [{ x: base.x, y: base.y }];
   let x = base.x;
   let y = base.y;
   for (let j = 1; j <= M; j++) {
     const t = j / M;
-    const ang = baseAngle + curl * t; // gentle curl gives organic asymmetry
+    const ang = baseAngle + curl * t;
     const step = len / M;
     x += Math.cos(ang) * step;
     y += Math.sin(ang) * step;
     axis.push({ x, y });
   }
-
-  const maxHalf = len * widthRatio * 0.5;
-  const pet = 0.16; // petiole fraction (thin stalk attaching to the stem)
-  const halfWidthAt = (t: number): number => {
-    if (t < pet) return Math.max(penPx * 0.5, maxHalf * 0.12 * (t / pet));
+  const normals = normalsOf(axis);
+  const maxHalf = Math.max(penPx, len * widthRatio * 0.5);
+  const pet = 0.16; // petiole fraction
+  const halfAt = (t: number): number => {
+    if (t < pet) return Math.max(penPx * 0.4, maxHalf * 0.1 * (t / pet));
     const u = (t - pet) / (1 - pet);
-    // Pointed-leaf bump: wide mid, tapering to a point at the tip.
-    return maxHalf * Math.pow(Math.sin(Math.PI * Math.pow(u, sharp)), 0.85);
+    return Math.max(0, maxHalf * leafProfile(type, u, lobes));
   };
 
-  // Solid → filled ribbon; otherwise the outline, plus veins for `veined`.
-  const lines = ribbon(axis, halfWidthAt, penPx, 'leaf', style === 'solid' ? 'solid' : 'outline');
-  if (style !== 'veined') return lines;
+  // Light/shadow side of the blade.
+  const mid = Math.floor(axis.length / 2);
+  const litIsPlus = normals[mid].x * d.light.x + normals[mid].y * d.light.y > 0;
+  const shadowSign = litIsPlus ? -1 : 1;
 
-  const samples = densify(axis, penPx);
-  const normals = normalsOf(samples);
-  const last = samples.length - 1;
-  // Midrib (the stalk + spine).
-  lines.push({ points: samples.map((p) => ({ ...p })), layer: 'leaf' });
-  // A few side veins angling from the midrib toward the blade edge.
-  for (const t of [0.32, 0.52, 0.72]) {
-    const i = Math.max(1, Math.min(last - 1, Math.round(t * last)));
-    const half = halfWidthAt(i / last) * 0.8;
-    if (half < penPx) continue;
-    const tx = samples[Math.min(i + 1, last)].x - samples[i - 1].x;
-    const ty = samples[Math.min(i + 1, last)].y - samples[i - 1].y;
-    const tl = Math.hypot(tx, ty) || 1;
-    for (const s of [1, -1]) {
-      const ex = samples[i].x + normals[i].x * s * half + (tx / tl) * half * 0.5;
-      const ey = samples[i].y + normals[i].y * s * half + (ty / tl) * half * 0.5;
-      lines.push({ points: [{ x: samples[i].x, y: samples[i].y }, { x: ex, y: ey }], layer: 'leaf' });
+  const lines: FlowLine[] = [];
+
+  // Outline edges (closed silhouette). Serrate margins get small teeth.
+  const left: Point[] = [];
+  const right: Point[] = [];
+  for (let i = 0; i < axis.length; i++) {
+    const t = i / (axis.length - 1);
+    let h = halfAt(t);
+    if (serrate && t > pet) h *= 1 + 0.16 * Math.sin(i * 1.7);
+    left.push({ x: axis[i].x + normals[i].x * h, y: axis[i].y + normals[i].y * h });
+    right.push({ x: axis[i].x - normals[i].x * h, y: axis[i].y - normals[i].y * h });
+  }
+  const poly = [...left, ...right.slice().reverse()];
+
+  if (tilt > 0.78) {
+    // Edge-on: just a folded sickle (one edge + optional midrib).
+    lines.push({ points: left, layer: 'leaf' });
+    if (d.veins && d.leafStyle !== 'outline') lines.push({ points: axis.map((p) => ({ ...p })), layer: 'vein' });
+    return { lines, silhouette: [poly] };
+  }
+
+  if (d.leafStyle === 'solid') {
+    return { lines: ribbon(densify(axis, penPx), normalsOf(densify(axis, penPx)), densify(axis, penPx).map((_, i, arr) => halfAt(i / (arr.length - 1))), penPx, 'leaf', 'solid'), silhouette: [poly] };
+  }
+
+  // Outline: shadow edge slightly heavier.
+  lines.push({ points: litIsPlus ? left : right, layer: 'leaf' });
+  lines.push({ points: (litIsPlus ? right : left), layer: 'leaf', pen: 'bold' });
+
+  // Veins.
+  if (d.veins && d.leafStyle !== 'outline') {
+    lines.push({ points: axis.map((p) => ({ ...p })), layer: 'vein' }); // midrib
+    const veinN = Math.max(3, Math.round(len / (penPx * 12)));
+    for (let v = 1; v <= veinN; v++) {
+      const t = pet + (v / (veinN + 1)) * (1 - pet);
+      const i = Math.max(1, Math.min(axis.length - 2, Math.round(t * (axis.length - 1))));
+      const h = halfAt(t) * 0.82;
+      if (h < penPx) continue;
+      const tx = axis[Math.min(i + 1, axis.length - 1)].x - axis[i - 1].x;
+      const ty = axis[Math.min(i + 1, axis.length - 1)].y - axis[i - 1].y;
+      const tl = Math.hypot(tx, ty) || 1;
+      for (const s of [1, -1] as const) {
+        // Curve the vein toward the tip.
+        const ex = axis[i].x + normals[i].x * s * h + (tx / tl) * h * 0.55;
+        const ey = axis[i].y + normals[i].y * s * h + (ty / tl) * h * 0.55;
+        const mxp = axis[i].x + normals[i].x * s * h * 0.5 + (tx / tl) * h * 0.15;
+        const myp = axis[i].y + normals[i].y * s * h * 0.5 + (ty / tl) * h * 0.15;
+        lines.push({ points: [{ x: axis[i].x, y: axis[i].y }, { x: mxp, y: myp }, { x: ex, y: ey }], layer: 'vein' });
+      }
     }
   }
-  return lines;
+
+  // Shadow hatching: fine cross strokes from the midrib to the shadow edge.
+  if (d.leafStyle === 'shaded' && d.shadeDensity > 0.01) {
+    const hatchStep = penPx * (2 + (1 - d.shadeDensity) * 5);
+    let acc = 0;
+    for (let i = 1; i < axis.length; i++) {
+      acc += Math.hypot(axis[i].x - axis[i - 1].x, axis[i].y - axis[i - 1].y);
+      if (acc < hatchStep) continue;
+      acc = 0;
+      const t = i / (axis.length - 1);
+      const h = halfAt(t) * 0.86;
+      if (h < penPx * 1.5) continue;
+      const fromX = axis[i].x + normals[i].x * shadowSign * h * 0.18;
+      const fromY = axis[i].y + normals[i].y * shadowSign * h * 0.18;
+      const toX = axis[i].x + normals[i].x * shadowSign * h;
+      const toY = axis[i].y + normals[i].y * shadowSign * h;
+      lines.push({ points: [{ x: fromX, y: fromY }, { x: toX, y: toY }], layer: 'leaf' });
+    }
+  }
+
+  return { lines, silhouette: [poly] };
 }
 
-/** A coiling tendril (thin single line that tightens as it curls inward). */
-function placeTendril(
-  lines: FlowLine[],
-  grid: ProximityGrid,
-  base: Point,
-  stemDir: number,
-  side: 1 | -1,
-  size: number,
-  penPx: number,
-  rng: () => number
-): void {
-  const coils = 2 + rng() * 1.5;
-  const steps = 48;
-  const baseR = size * 0.5;
-  const cx = base.x + Math.cos(stemDir + side * (Math.PI / 2)) * baseR;
-  const cy = base.y + Math.sin(stemDir + side * (Math.PI / 2)) * baseR;
-  const phi0 = Math.atan2(base.y - cy, base.x - cx);
+// ——— tendrils & flowers ———
 
-  const pts: Point[] = [];
-  for (let i = 0; i <= steps; i++) {
+function makeTendril(base: Point, stemDir: number, side: 1 | -1, size: number, rng: () => number): FlowLine {
+  // A graceful tendril: a straight lead-in off the stem easing into an open
+  // coil that gently tightens — not a mechanical bullseye.
+  const lead = size * (0.5 + rng() * 0.4);
+  const lx = Math.cos(stemDir + side * 0.5);
+  const ly = Math.sin(stemDir + side * 0.5);
+  const pts: Point[] = [{ x: base.x, y: base.y }];
+  const tipX = base.x + lx * lead;
+  const tipY = base.y + ly * lead;
+  pts.push({ x: tipX, y: tipY });
+
+  const coils = 1.1 + rng() * 0.9;
+  const steps = 40;
+  const baseR = size * 0.55;
+  const cx = tipX + Math.cos(stemDir + side * (Math.PI / 2)) * baseR;
+  const cy = tipY + Math.sin(stemDir + side * (Math.PI / 2)) * baseR;
+  const phi0 = Math.atan2(tipY - cy, tipX - cx);
+  for (let i = 1; i <= steps; i++) {
     const t = i / steps;
     const phi = phi0 + side * coils * 2 * Math.PI * t;
-    const r = baseR * (1 - 0.75 * t);
+    const r = baseR * (1 - 0.45 * t); // tightens gently, stays open
     pts.push({ x: cx + Math.cos(phi) * r, y: cy + Math.sin(phi) * r });
   }
-  tryPlace(lines, grid, [{ points: smoothPolyline(pts, 1), layer: 'tendril' }], base, penPx * 2.5, penPx);
+  return { points: smoothPolyline(pts, 2), layer: 'tendril' };
 }
 
-/** A small flower: a rosette of filled petals around a filled centre. */
-function placeFlower(
-  lines: FlowLine[],
-  grid: ProximityGrid,
-  center: Point,
-  size: number,
-  penPx: number,
-  rng: () => number
-): void {
+function makeFlower(center: Point, size: number, penPx: number, rng: () => number): { lines: FlowLine[]; silhouette: Point[][] } {
   const petals = 5 + Math.floor(rng() * 2);
-  const candidate: FlowLine[] = [];
+  const lines: FlowLine[] = [];
   const petalLen = size;
   const petalHalf = size * 0.32;
-
   for (let k = 0; k < petals; k++) {
     const ang = (k / petals) * 2 * Math.PI + rng() * 0.25;
     const dx = Math.cos(ang);
@@ -964,18 +1143,21 @@ function placeFlower(
       { x: center.x + dx * size * 0.2, y: center.y + dy * size * 0.2 },
       { x: center.x + dx * petalLen, y: center.y + dy * petalLen },
     ];
-    candidate.push(...ribbon(axis, (t) => petalHalf * Math.sin(Math.PI * t), penPx, 'flower', 'solid'));
+    const s = densify(axis, penPx);
+    lines.push(...ribbon(s, normalsOf(s), s.map((_, i, a) => petalHalf * Math.sin(Math.PI * (i / (a.length - 1)))), penPx, 'flower', 'solid'));
   }
-  // Filled centre.
-  candidate.push(...filledDisc(center, Math.max(penPx, size * 0.28), penPx, 'flower'));
+  lines.push(...filledDisc(center, Math.max(penPx, size * 0.28), penPx, 'flower'));
 
-  // The flower sits on the stem tip, so its whole footprint overlaps that stem
-  // end — skip the anchor region (its own radius) and only guard against other
-  // decorations beyond it.
-  tryPlace(lines, grid, candidate, center, petalLen * 1.2, penPx);
+  // Silhouette: a disc roughly covering the bloom.
+  const sil: Point[] = [];
+  const R = size * 1.05;
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * 2 * Math.PI;
+    sil.push({ x: center.x + Math.cos(a) * R, y: center.y + Math.sin(a) * R });
+  }
+  return { lines, silhouette: [sil] };
 }
 
-/** A solid filled disc as concentric pen rings. */
 function filledDisc(center: Point, radius: number, penPx: number, layer: string): FlowLine[] {
   const lines: FlowLine[] = [];
   for (let r = radius; r > 0; r -= penPx) {

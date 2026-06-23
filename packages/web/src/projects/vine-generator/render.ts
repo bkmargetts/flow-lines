@@ -19,6 +19,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     margin: marginPx,
     seed: state.seed,
     mode: state.mode,
+    composition: state.composition,
     seeding: state.seeding,
     startPoints: state.maskPath,
     seedCount: state.seedCount,
@@ -42,8 +43,14 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     vineFill: state.vineFill,
     avoidOverlap: state.avoidOverlap,
 
+    lightAngle: state.lightAngle,
+    shadeDensity: state.shadeDensity,
+    occlude: state.occlude,
+
     leaves: state.leaves,
     leafStyle: state.leafStyle,
+    leafType: state.leafType,
+    veins: state.veins,
     leafSize: state.leafSizeMm * mm,
     leafWidthRatio: state.leafWidthRatio,
     leafSpacing: Math.max(1, state.leafSpacingMm * mm),
