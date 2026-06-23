@@ -91,7 +91,7 @@ export const defaultVineState: VineState = {
   attractorRadiusMm: 30,
   killRadiusMm: 5,
 
-  stemWidthMm: 3,
+  stemWidthMm: 4,
   taper: 0.85,
   vineFill: 'shaded',
   avoidOverlap: true,

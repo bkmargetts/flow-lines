@@ -376,7 +376,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     attractorCount = 600,
     attractorRadius = 90,
     killRadius = 16,
-    stemWidth = 6,
+    stemWidth = 8,
     penWidth = 1,
     taper = 0.85,
     vineFill = 'shaded',
