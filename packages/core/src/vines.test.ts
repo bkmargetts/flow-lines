@@ -48,7 +48,7 @@ describe('generateVines', () => {
         );
         const stems = layers(result.lines, 'stem');
         expect(stems.length).toBeGreaterThanOrEqual(1);
-        const tol = 40;
+        const tol = 60;
         for (const ln of result.lines) {
           for (const p of ln.points) {
             expect(Number.isFinite(p.x)).toBe(true);

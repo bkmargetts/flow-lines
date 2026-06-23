@@ -435,12 +435,18 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     add(built.lines, built.silhouette);
   });
 
+  // The composition focal point is the end of the master gesture (specimen).
+  const guide = rawStems.length > 0 ? roots[0]?.guide : undefined;
+  const focal = composition === 'specimen' && mode === 'growth' && guide ? guide[guide.length - 1] : null;
+  const focalR = Math.min(width, height) * 0.24;
+
   // Decorations (in front, in placement order).
   decorate(
     wobbled,
     {
       leaves, leafStyle, leafType, veins, leafSize, leafWidthRatio, leafSpacing,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
+      focal, focalR,
     },
     rng,
     add
@@ -1004,6 +1010,10 @@ interface DecorParams {
   penPx: number;
   light: Point;
   shadeDensity: number;
+  /** Composition focal point — foliage and blooms swell and concentrate near
+   *  it (the visual "event"); null for free/colonization growth. */
+  focal: Point | null;
+  focalR: number;
 }
 
 function decorate(
@@ -1012,6 +1022,13 @@ function decorate(
   rng: () => number,
   add: (lines: FlowLine[], sil: Point[][]) => void
 ): void {
+  // 0..1 nearness to the composition focal point (0 when there's no focal).
+  const nearFocal = (p: Point): number => {
+    if (!d.focal) return 0;
+    const dist = Math.hypot(p.x - d.focal.x, p.y - d.focal.y);
+    return smoothstep(1 - dist / d.focalR);
+  };
+
   for (const pts of stems) {
     if (pts.length < 2) continue;
     const stemLen = polylineLength(pts);
@@ -1029,10 +1046,13 @@ function decorate(
       if (arc >= nextLeaf) {
         side = (side === 1 ? -1 : 1) as 1 | -1;
         const along = arc / stemLen;
-        const sizeScale = 0.55 + 0.6 * (1 - along);
+        const nf = nearFocal(pts[i]);
+        // Leaves swell toward the focal point and stay full elsewhere; they
+        // overlap freely now (occlusion resolves the depth).
+        const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.7 * nf);
         if (d.leaves) {
-          // A small cluster of 1–3 leaves per node.
-          const cluster = 1 + (rng() < 0.5 ? 1 : 0) + (rng() < 0.25 ? 1 : 0);
+          // Fuller clusters, denser near the focal point.
+          const cluster = 2 + (rng() < 0.6 ? 1 : 0) + (rng() < 0.3 + 0.5 * nf ? 1 : 0);
           for (let c = 0; c < cluster; c++) {
             const s: 1 | -1 = c === 0 ? side : ((rng() < 0.5 ? 1 : -1) as 1 | -1);
             const leaf = makeLeaf(pts[i], dir, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, rng);
@@ -1043,20 +1063,23 @@ function decorate(
           const t = makeTendril(pts[i], dir, (-side) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
           add([t], []);
         }
-        nextLeaf += d.leafSpacing * (0.7 + rng() * 0.6);
+        // Tighter leaf spacing near the focal point packs the cluster.
+        nextLeaf += d.leafSpacing * (0.7 + rng() * 0.6) * (1 - 0.4 * nf);
       }
     }
 
     const tip = pts[pts.length - 1];
     const prev = pts[pts.length - 2];
     const tipDir = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-    if (d.flowers && rng() < d.flowerProb) {
-      // A small cluster of blooms near the tip.
-      const blooms = 1 + (rng() < 0.45 ? 1 : 0) + (rng() < 0.2 ? 1 : 0);
+    const nfTip = nearFocal(tip);
+    const flowerChance = Math.min(1, d.flowerProb * (1 + 2.5 * nfTip));
+    if (d.flowers && rng() < flowerChance) {
+      // A bloom cluster, larger and more numerous toward the focal point.
+      const blooms = 1 + (rng() < 0.45 + 0.4 * nfTip ? 1 : 0) + (rng() < 0.2 + 0.5 * nfTip ? 1 : 0);
       for (let b = 0; b < blooms; b++) {
-        const jx = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2;
-        const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2;
-        const f = makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6), d.penPx, d.flowerType, d.light, rng);
+        const jx = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
+        const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
+        const f = makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng);
         add(f.lines, f.silhouette);
       }
     } else if (d.tendrils && rng() < d.tendrilProb) {
