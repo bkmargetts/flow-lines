@@ -105,11 +105,12 @@ describe('generateVines', () => {
     expect(pointCount(occluded.lines)).toBeLessThanOrEqual(pointCount(flat.lines));
   });
 
-  it('occludes overlapping foliage even with perspective on (no see-through)', () => {
-    // Regression: with perspective on, sibling leaves must still occlude each
-    // other — they previously shared a near-equal z and showed through.
+  it('occludes overlapping foliage (no see-through)', () => {
+    // Regression: sibling leaves must occlude each other — they previously
+    // shared a near-equal z and showed through. Creation-order integer z fixes
+    // this (each element gets a distinct z), so a covered leaf is cut back.
     const common = {
-      composition: 'specimen', mode: 'growth', perspective: 0.6, depthSpread: 0.7,
+      composition: 'specimen', mode: 'growth',
       density: 0.95, leafStyle: 'solid', leafSize: 40, leafSpacing: 10, castShadow: 0,
     } as const;
     const occluded = generateVines(baseOptions({ ...common, occlude: true }));
@@ -155,14 +156,8 @@ describe('generateVines', () => {
     expect(layers(solid.lines, 'leaf').length).toBeGreaterThan(layers(outline.lines, 'leaf').length);
   });
 
-  it('perspective changes the drawing (depth scaling + ordering)', () => {
-    const flat = generateVines(baseOptions({ composition: 'specimen', mode: 'growth', perspective: 0 }));
-    const deep = generateVines(baseOptions({ composition: 'specimen', mode: 'growth', perspective: 0.9, depthSpread: 0.9 }));
-    expect(deep.lines).not.toEqual(flat.lines);
-  });
-
   it('cast shadows add a shadow layer only when enabled and occluding', () => {
-    const common = { composition: 'specimen', mode: 'growth', occlude: true, perspective: 0.6, density: 0.8 } as const;
+    const common = { composition: 'specimen', mode: 'growth', occlude: true, density: 0.8 } as const;
     const off = generateVines(baseOptions({ ...common, castShadow: 0 }));
     const on = generateVines(baseOptions({ ...common, castShadow: 0.7 }));
     expect(layers(off.lines, 'shadow').length).toBe(0);
