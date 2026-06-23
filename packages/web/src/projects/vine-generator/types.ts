@@ -11,6 +11,8 @@ import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafT
  * 'painted', the drawn points become vine roots.
  */
 export interface VineState {
+  /** Selected species preset id, or 'custom'. */
+  species: string;
   mode: VineMode;
   composition: VineComposition;
   fillShape: FillShape;
@@ -80,6 +82,7 @@ export interface VineState {
 }
 
 export const defaultVineState: VineState = {
+  species: 'wild-rose',
   mode: 'growth',
   composition: 'specimen',
   fillShape: 'heart',

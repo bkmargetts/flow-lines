@@ -4,6 +4,7 @@ import { EditableValue } from '../../components/EditableValue';
 import type { ControlsProps } from '../../modules/types';
 import type { VineState } from './types';
 import { VINE_PALETTES, CUSTOM_PALETTE } from './palettes';
+import { VINE_PRESETS, getVinePreset } from './presets';
 
 /** One labelled range slider + its click-to-type value badge. */
 function Slider(props: {
@@ -41,8 +42,34 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
   const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
   const painting = state.seeding === 'painted';
 
+  const selectSpecies = (id: string) => {
+    const preset = getVinePreset(id);
+    update({ species: id, ...(preset ? preset.state : {}) });
+  };
+  const surprise = () => {
+    const pick = VINE_PRESETS[Math.floor(Math.random() * VINE_PRESETS.length)];
+    update({ species: pick.id, ...pick.state, seed: Math.floor(Math.random() * 1000000) });
+  };
+
   return (
     <div className="controls">
+      <h3 className="section-title">Species</h3>
+
+      <div className="control-group">
+        <div className="seed-input">
+          <select value={state.species} onChange={(e) => selectSpecies(e.target.value)} style={{ flex: 1 }}>
+            {VINE_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+            <option value="custom">Custom…</option>
+          </select>
+          <button type="button" className="secondary" onClick={surprise} title="Surprise me">
+            🎲
+          </button>
+        </div>
+        <p className="paint-hint">A starting plant — tweak anything below; sliders fine-tune from here.</p>
+      </div>
+
       <h3 className="section-title">Growth</h3>
 
       <div className="control-group">
