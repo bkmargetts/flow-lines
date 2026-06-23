@@ -87,6 +87,8 @@ export interface VinesOptions {
   sketch?: number;
 
   // — decorations —
+  /** 0..1 overall foliage density (leaf clusters, spacing, bloom frequency). */
+  density?: number;
   leaves?: boolean;
   leafStyle?: LeafStyle;
   leafType?: LeafType;
@@ -384,6 +386,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     stemShade = 'along',
     occlude = true,
     sketch = 0,
+    density = 0.45,
     leaves = true,
     leafStyle = 'shaded',
     leafType = 'ovate',
@@ -446,7 +449,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     {
       leaves, leafStyle, leafType, veins, leafSize, leafWidthRatio, leafSpacing,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
-      focal, focalR,
+      focal, focalR, density,
     },
     rng,
     add
@@ -857,7 +860,7 @@ function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts): { line
   }
 
   const lines: FlowLine[] = [];
-  const thick = baseHalf > penPx * 1.9;
+  const thick = baseHalf > penPx * 1.4;
 
   if (!thick) {
     // Thin stems are a single confident, flowing line — not a doubled rail.
@@ -881,16 +884,18 @@ function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts): { line
   if (stemShade === 'none' || shadeDensity <= 0.01) return { lines, silhouette: [poly] };
 
   if (stemShade === 'along') {
-    // Round the tube with along-axis lines inset from the shadow edge.
-    const shadeSpacing = penPx * (2 + (1 - shadeDensity) * 4);
-    const bands = Math.max(1, Math.round((shadeDensity * baseHalf) / shadeSpacing));
-    for (let b = 0; b < bands; b++) {
-      const inset = (b + 0.6) * shadeSpacing;
+    // Build the shadow side with along-axis lines from the shadow edge inward —
+    // `shadeDensity` sets how far across the tube the shading reaches, so the
+    // lit side stays clean and the form reads as a lit cylinder.
+    const shadeSpacing = penPx * 1.8;
+    const reach = 0.2 + 0.8 * shadeDensity; // fraction of the half-width filled
+    let inset = penPx * 0.6;
+    for (let guard = 0; guard < 12 && inset < baseHalf * 2 * reach; guard++, inset += shadeSpacing) {
       let run: Point[] = [];
       for (let i = 0; i < n; i++) {
         const sideShadow = normals[i].x * light.x + normals[i].y * light.y < 0 ? 1 : -1;
         const dmag = w[i] - inset;
-        if (dmag > w[i] * 0.12 && sideShadow === shadowSign) {
+        if (dmag > w[i] * 0.08 && sideShadow === shadowSign) {
           run.push({ x: samples[i].x + normals[i].x * shadowSign * dmag, y: samples[i].y + normals[i].y * shadowSign * dmag });
         } else if (run.length >= 2) { lines.push({ points: run, layer: 'stem' }); run = []; }
         else run = [];
@@ -898,19 +903,21 @@ function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts): { line
       if (run.length >= 2) lines.push({ points: run, layer: 'stem' });
     }
   } else {
-    // Cross-hatch: short ticks wrapping across the tube on the shadow side.
-    const tickStep = penPx * (3 + (1 - shadeDensity) * 5);
-    let acc = 0;
+    // Cross-hatch: short ticks wrapping across the tube on the shadow side, as
+    // far in as `shadeDensity` dictates.
+    const tickStep = penPx * (2.2 + (1 - shadeDensity) * 4);
+    const reach = 0.3 + 0.7 * shadeDensity;
+    let acc = tickStep;
     for (let i = 1; i < n; i++) {
       acc += cum[i] - cum[i - 1];
       if (acc < tickStep) continue;
       acc = 0;
       const sideShadow = normals[i].x * light.x + normals[i].y * light.y < 0 ? 1 : -1;
-      if (sideShadow !== shadowSign || w[i] < penPx * 1.5) continue;
+      if (sideShadow !== shadowSign || w[i] < penPx * 1.2) continue;
       lines.push({
         points: [
-          { x: samples[i].x - normals[i].x * shadowSign * w[i] * 0.15, y: samples[i].y - normals[i].y * shadowSign * w[i] * 0.15 },
-          { x: samples[i].x + normals[i].x * shadowSign * w[i] * 0.95, y: samples[i].y + normals[i].y * shadowSign * w[i] * 0.95 },
+          { x: samples[i].x + normals[i].x * shadowSign * w[i] * (1 - reach), y: samples[i].y + normals[i].y * shadowSign * w[i] * (1 - reach) },
+          { x: samples[i].x + normals[i].x * shadowSign * w[i] * 0.96, y: samples[i].y + normals[i].y * shadowSign * w[i] * 0.96 },
         ],
         layer: 'stem',
       });
@@ -1014,6 +1021,8 @@ interface DecorParams {
    *  it (the visual "event"); null for free/colonization growth. */
   focal: Point | null;
   focalR: number;
+  /** 0..1 overall foliage density — scales leaf clusters, spacing and blooms. */
+  density: number;
 }
 
 function decorate(
@@ -1029,13 +1038,19 @@ function decorate(
     return smoothstep(1 - dist / d.focalR);
   };
 
+  // Foliage density (0..1) sets how packed the leaves are: low → spread out,
+  // single leaves; high → tight, multi-leaf clusters. Each leaf keeps its full
+  // detail either way.
+  const dens = Math.max(0, Math.min(1, d.density));
+  const spacingFactor = 1.7 - dens; // ~1.7× spacing at 0 → ~0.7× at 1
+
   for (const pts of stems) {
     if (pts.length < 2) continue;
     const stemLen = polylineLength(pts);
     if (stemLen < d.leafSpacing) continue;
 
     let arc = 0;
-    let nextLeaf = d.leafSpacing * (0.5 + rng());
+    let nextLeaf = d.leafSpacing * spacingFactor * (0.5 + rng());
     let side: 1 | -1 = rng() < 0.5 ? 1 : -1;
 
     for (let i = 1; i < pts.length; i++) {
@@ -1047,12 +1062,11 @@ function decorate(
         side = (side === 1 ? -1 : 1) as 1 | -1;
         const along = arc / stemLen;
         const nf = nearFocal(pts[i]);
-        // Leaves swell toward the focal point and stay full elsewhere; they
-        // overlap freely now (occlusion resolves the depth).
-        const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.7 * nf);
+        // Leaves swell gently toward the focal point.
+        const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.4 * nf);
         if (d.leaves) {
-          // Fuller clusters, denser near the focal point.
-          const cluster = 2 + (rng() < 0.6 ? 1 : 0) + (rng() < 0.3 + 0.5 * nf ? 1 : 0);
+          // Cluster size driven by density (and a touch more near the focal).
+          const cluster = 1 + (rng() < dens ? 1 : 0) + (rng() < (dens - 0.4 + 0.6 * nf) ? 1 : 0);
           for (let c = 0; c < cluster; c++) {
             const s: 1 | -1 = c === 0 ? side : ((rng() < 0.5 ? 1 : -1) as 1 | -1);
             const leaf = makeLeaf(pts[i], dir, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, rng);
@@ -1063,8 +1077,7 @@ function decorate(
           const t = makeTendril(pts[i], dir, (-side) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
           add([t], []);
         }
-        // Tighter leaf spacing near the focal point packs the cluster.
-        nextLeaf += d.leafSpacing * (0.7 + rng() * 0.6) * (1 - 0.4 * nf);
+        nextLeaf += d.leafSpacing * spacingFactor * (0.7 + rng() * 0.6) * (1 - 0.3 * nf);
       }
     }
 
@@ -1072,10 +1085,10 @@ function decorate(
     const prev = pts[pts.length - 2];
     const tipDir = Math.atan2(tip.y - prev.y, tip.x - prev.x);
     const nfTip = nearFocal(tip);
-    const flowerChance = Math.min(1, d.flowerProb * (1 + 2.5 * nfTip));
+    const flowerChance = Math.min(1, d.flowerProb * (0.6 + 0.8 * dens) * (1 + 2 * nfTip));
     if (d.flowers && rng() < flowerChance) {
       // A bloom cluster, larger and more numerous toward the focal point.
-      const blooms = 1 + (rng() < 0.45 + 0.4 * nfTip ? 1 : 0) + (rng() < 0.2 + 0.5 * nfTip ? 1 : 0);
+      const blooms = 1 + (rng() < 0.3 * dens + 0.4 * nfTip ? 1 : 0) + (rng() < 0.5 * nfTip ? 1 : 0);
       for (let b = 0; b < blooms; b++) {
         const jx = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
         const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
@@ -1183,7 +1196,7 @@ function makeLeaf(
   lines.push({ points: litIsPlus ? left : right, layer: 'leaf' });
   lines.push({ points: (litIsPlus ? right : left), layer: 'leaf', pen: 'bold' });
 
-  // Veins.
+  // Veins: a midrib plus secondary veins curving toward the tip.
   if (d.veins && d.leafStyle !== 'outline') {
     lines.push({ points: axis.map((p) => ({ ...p })), layer: 'vein' }); // midrib
     const veinN = Math.max(3, Math.round(len / (penPx * 12)));

@@ -118,6 +118,12 @@ describe('generateVines', () => {
     expect(layers(solid.lines, 'leaf').length).toBeGreaterThan(layers(outline.lines, 'leaf').length);
   });
 
+  it('density controls how much foliage is placed', () => {
+    const sparse = generateVines(baseOptions({ density: 0.1, tendrils: false, flowers: false }));
+    const lush = generateVines(baseOptions({ density: 0.95, tendrils: false, flowers: false }));
+    expect(layers(lush.lines, 'leaf').length).toBeGreaterThan(layers(sparse.lines, 'leaf').length);
+  });
+
   it('sketchiness multiplies the line count', () => {
     const plain = generateVines(baseOptions({ sketch: 0 }));
     const sketchy = generateVines(baseOptions({ sketch: 0.8 }));

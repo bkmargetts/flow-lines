@@ -44,6 +44,7 @@ export interface VineState {
   sketch: number;
 
   // decorations
+  density: number;
   leaves: boolean;
   leafStyle: LeafStyle;
   leafType: LeafType;
@@ -101,6 +102,7 @@ export const defaultVineState: VineState = {
   occlude: true,
   sketch: 0,
 
+  density: 0.45,
   leaves: true,
   leafStyle: 'shaded',
   leafType: 'ovate',

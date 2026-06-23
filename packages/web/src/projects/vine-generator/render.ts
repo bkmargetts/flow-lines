@@ -49,6 +49,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     occlude: state.occlude,
     sketch: state.sketch,
 
+    density: state.density,
     leaves: state.leaves,
     leafStyle: state.leafStyle,
     leafType: state.leafType,

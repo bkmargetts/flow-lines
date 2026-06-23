@@ -141,6 +141,16 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
 
       <h3 className="section-title">Elements</h3>
 
+      <Slider
+        label="Density"
+        value={state.density}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ density: v })}
+        format={(v) => v.toFixed(2)}
+      />
+
       <div className="control-group">
         <label className="checkbox-label">
           <input type="checkbox" checked={state.leaves} onChange={(e) => update({ leaves: e.target.checked })} />
