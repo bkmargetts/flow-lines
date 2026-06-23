@@ -3,6 +3,7 @@ import { ColorField } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
 import type { ControlsProps } from '../../modules/types';
 import type { VineState } from './types';
+import { VINE_PALETTES, CUSTOM_PALETTE } from './palettes';
 
 /** One labelled range slider + its click-to-type value badge. */
 function Slider(props: {
@@ -341,12 +342,26 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
 
       <h3 className="section-title">Style</h3>
 
-      <ColorField label="Stem / tendril ink" value={state.strokeColor} onChange={(strokeColor) => update({ strokeColor })} />
-      {state.leaves && (
-        <ColorField label="Leaf ink" value={state.leafColor} onChange={(leafColor) => update({ leafColor })} />
-      )}
-      {state.flowers && (
-        <ColorField label="Flower ink" value={state.flowerColor} onChange={(flowerColor) => update({ flowerColor })} />
+      <div className="control-group">
+        <label className="label-text">Palette</label>
+        <select value={state.palette} onChange={(e) => update({ palette: e.target.value })}>
+          {VINE_PALETTES.map((p) => (
+            <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+          <option value={CUSTOM_PALETTE}>Custom…</option>
+        </select>
+      </div>
+
+      {state.palette === CUSTOM_PALETTE && (
+        <>
+          <ColorField label="Stem / tendril ink" value={state.strokeColor} onChange={(strokeColor) => update({ strokeColor })} />
+          {state.leaves && (
+            <ColorField label="Leaf ink" value={state.leafColor} onChange={(leafColor) => update({ leafColor })} />
+          )}
+          {state.flowers && (
+            <ColorField label="Flower ink" value={state.flowerColor} onChange={(flowerColor) => update({ flowerColor })} />
+          )}
+        </>
       )}
 
       <Slider

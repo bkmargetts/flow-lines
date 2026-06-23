@@ -1,6 +1,7 @@
 import { generateVines, type VinesOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
 import type { VineState } from './types';
+import { getVinePalette } from './palettes';
 
 /**
  * Pure render for the Vine Generator: state + page → lines. mm settings convert
@@ -73,16 +74,17 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
 
   const result = generateVines(options);
 
+  // A curated palette maps each pen layer to its own ink; 'custom' uses the
+  // per-element colour pickers.
+  const pal = getVinePalette(state.palette);
+  const layerColors = pal
+    ? { stem: pal.stem, tendril: pal.stem, leaf: pal.leaf, vein: pal.vein, flower: pal.flower, shadow: pal.shadow }
+    : { stem: state.strokeColor, tendril: state.strokeColor, leaf: state.leafColor, vein: state.leafColor, flower: state.flowerColor, shadow: state.strokeColor };
+
   return {
     lines: result.lines,
-    strokeColor: state.strokeColor,
+    strokeColor: pal ? pal.stem : state.strokeColor,
     strokeWidthPx: state.penWidthMm * mm,
-    layerColors: {
-      stem: state.strokeColor,
-      tendril: state.strokeColor,
-      leaf: state.leafColor,
-      flower: state.flowerColor,
-      shadow: state.strokeColor,
-    },
+    layerColors,
   };
 }

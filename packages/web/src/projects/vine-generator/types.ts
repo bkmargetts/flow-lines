@@ -66,6 +66,8 @@ export interface VineState {
   wobbleMm: number;
 
   seed: number;
+  /** Curated palette id, or 'custom' to use the per-element inks below. */
+  palette: string;
   strokeColor: string;
   /** Optional per-element inks; absent falls back to `strokeColor`. */
   leafColor: string;
@@ -128,6 +130,7 @@ export const defaultVineState: VineState = {
   wobbleMm: 0.2,
 
   seed: Math.floor(Math.random() * 1000000),
+  palette: 'ink',
   strokeColor: '#2a2a26',
   leafColor: '#2a2a26',
   flowerColor: '#5a2238',
