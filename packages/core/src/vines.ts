@@ -2367,6 +2367,51 @@ function ringOutline(center: Point, radius: number, layer: string): FlowLine {
   return { points: ring, layer };
 }
 
+/** A single berry as an engraved sphere rather than a hollow ring: the rim is
+ *  drawn with a small gap on the lit side (a reserved-white catchlight), and
+ *  one or two nested crescent arcs on the shadow side give it volume. Every
+ *  berry jitters its catchlight, gap, crescents and a slight squash+tilt off
+ *  `rng`, so a cluster reads as hand-drawn individuals, not a stamped pattern. */
+function makeBerry(center: Point, radius: number, light: Point, rng: () => number): { lines: FlowLine[]; sil: Point[] } {
+  // Catchlight roughly toward the light, but nudged per berry; the gap and the
+  // berry's squash/tilt vary too.
+  const la = Math.atan2(light.y, light.x) + (rng() - 0.5) * 0.7;
+  const sa = la + Math.PI;
+  const gap = 0.32 + rng() * 0.3;
+  const squash = 0.88 + rng() * 0.2; // minor-axis fraction
+  const tilt = (rng() - 0.5) * 0.8;
+  const ct = Math.cos(tilt);
+  const st = Math.sin(tilt);
+  // Map a unit-circle angle to the tilted, squashed berry surface.
+  const at = (a: number, rr: number): Point => {
+    const ex = Math.cos(a) * rr;
+    const ey = Math.sin(a) * rr * squash;
+    return { x: center.x + ex * ct - ey * st, y: center.y + ex * st + ey * ct };
+  };
+  const segs = Math.max(14, Math.round(radius * 2.6));
+  const lines: FlowLine[] = [];
+  const sil: Point[] = [];
+  const rim: Point[] = [];
+  for (let i = 0; i <= segs; i++) {
+    const a = la + gap + (i / segs) * (2 * Math.PI - 2 * gap);
+    rim.push(at(a, radius));
+  }
+  lines.push({ points: rim, layer: 'flower' });
+  for (let i = 0; i <= segs; i++) sil.push(at((i / segs) * 2 * Math.PI, radius));
+  // One or two shadow-side crescents (riper berries get the second), each a
+  // little different in reach and span.
+  const crescents = rng() < 0.6 ? 2 : 1;
+  for (let k = 1; k <= crescents; k++) {
+    const rr = radius * (0.46 + 0.2 * k + (rng() - 0.5) * 0.1);
+    const span = 1.8 - 0.3 * k + (rng() - 0.5) * 0.4;
+    const arc: Point[] = [];
+    const steps = 8;
+    for (let i = 0; i <= steps; i++) arc.push(at(sa - span / 2 + (i / steps) * span, rr));
+    lines.push({ points: arc, layer: 'flower' });
+  }
+  return { lines, sil };
+}
+
 /** A flower as botanical line-work, varied by species — matching the leaves'
  *  outline-and-detail treatment rather than a solid blob. */
 function makeFlower(
@@ -2579,22 +2624,27 @@ function makeFruit(
   rng: () => number,
   add: (lines: FlowLine[], sil: Point[][]) => void
 ): { lines: FlowLine[]; silhouette: Point[][] } {
-  void light;
   void penPx;
   if (type === 'grape' || type === 'berry') {
     const big = type === 'grape';
     const count = big ? 9 + Math.floor(rng() * 10) : 3 + Math.floor(rng() * 4);
-    const r = size * (big ? 0.34 : 0.4);
+    const r = size * (big ? 0.32 : 0.4);
     const rows = big ? Math.ceil(Math.sqrt(count)) : 2;
+    // Pack snugly (berries kiss and overlap) so the bunch reads as a solid
+    // cluster, not a loose scatter of circles. Each berry is shaded as a sphere
+    // and added as its own element so the front ones occlude those behind.
+    const pitch = r * 1.45;
     let placed = 0;
     for (let row = 0; row < rows && placed < count; row++) {
       const inRow = big ? Math.max(1, rows - row) : Math.max(1, count - placed);
-      const rowW = (inRow - 1) * r * 1.7;
+      const rowW = (inRow - 1) * pitch;
+      // Stagger alternate rows like real bunches.
+      const stagger = row % 2 ? pitch * 0.5 : 0;
       for (let c = 0; c < inRow && placed < count; c++) {
-        const bx = center.x + (c * r * 1.7 - rowW / 2) + (rng() - 0.5) * r * 0.4;
-        const by = center.y + row * r * 1.7 + (rng() - 0.5) * r * 0.4 + size * 0.4;
-        const berry = ringOutline({ x: bx, y: by }, r * (0.85 + rng() * 0.3), 'flower');
-        add([berry], [berry.points]);
+        const bx = center.x + (c * pitch - rowW / 2) + stagger + (rng() - 0.5) * r * 0.25;
+        const by = center.y + row * pitch * 0.92 + (rng() - 0.5) * r * 0.2 + size * 0.4;
+        const berry = makeBerry({ x: bx, y: by }, r * (0.82 + rng() * 0.36), light, rng);
+        add(berry.lines, [berry.sil]);
         placed++;
       }
     }
