@@ -9,6 +9,7 @@ import {
   generateConwayExposure,
   generateFlowLines,
   generateFlowLinesGrid,
+  generateVines,
   grayscaleFromRGBA,
   imageToPenInk,
   limitStrokeDensity,
@@ -26,6 +27,16 @@ import {
   type PaperFit,
   type PenInkOptions,
   type SVGOptions,
+  type VinesOptions,
+  type VineComposition,
+  type VineMode,
+  type VineSeeding,
+  type FillShape,
+  type VineFill,
+  type StemShade,
+  type LeafType,
+  type LeafStyle,
+  type VineFlower,
 } from '@flow-lines/core';
 
 /**
@@ -609,6 +620,183 @@ program
       writeFileSync(outputPath, svg, 'utf-8');
       console.log(`\nSaved to: ${outputPath}`);
     }
+  });
+
+// A few curated multi-pen palettes, duplicated here rather than imported from
+// the web app (the CLI must not depend on packages/web — the same convention
+// scripts/gallery.mjs follows by mirroring the web style presets as flags).
+const VINE_PALETTES: Record<string, Record<string, string>> = {
+  ink: { stem: '#2a2a26', tendril: '#2a2a26', leaf: '#2a2a26', vein: '#2a2a26', flower: '#2a2a26', shadow: '#2a2a26' },
+  botanical: { stem: '#5b4636', tendril: '#5b4636', leaf: '#3f6b3a', vein: '#34602f', flower: '#9c2b52', shadow: '#8a7a60' },
+  rose: { stem: '#4a5d3a', tendril: '#4a5d3a', leaf: '#3f6b3a', vein: '#34602f', flower: '#c0306a', shadow: '#9aa07e' },
+  autumn: { stem: '#6e4326', tendril: '#6e4326', leaf: '#a8662a', vein: '#7d4a1f', flower: '#b23b2e', shadow: '#9b7b53' },
+};
+
+program
+  .command('vines')
+  .description('Grow procedural, plottable botanical-illustration vines')
+  .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
+  .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '1000')
+  .option(
+    '--paper <size>',
+    'Plot to a physical sheet (a6,a5,a4,a3,letter,legal,tabloid); overrides --width/--height and exports the SVG in mm'
+  )
+  .option('--orientation <o>', 'Paper orientation: portrait or landscape', 'portrait')
+  .option('--margin-mm <number>', 'Clear paper border in mm (with --paper)', '12')
+  .option('--pen-width-mm <number>', 'Plotted pen width in mm (with --paper)', '0.3')
+  .option('--resolution <number>', 'Render density in px per mm (with --paper)', '3')
+  .option('-m, --margin <number>', 'Margin from canvas edges in px (without --paper)', '24')
+  .option('-s, --seed <number>', 'Random seed for reproducibility')
+  // composition & seeding
+  .option('--composition <c>', 'specimen | free | wreath | border | bouquet | trellis | fill', 'specimen')
+  .option('--fill-shape <s>', 'circle | oval | heart | diamond | painted (with --composition fill)', 'heart')
+  .option('--mode <m>', 'Growth model: growth | colonization', 'growth')
+  .option('--seeding <s>', 'Root placement: scatter | edges | point | painted', 'scatter')
+  .option('--seed-count <number>', 'Number of roots', '6')
+  // page composition
+  .option('--vessel <v>', 'A drawn container the stems rise from: none | vase | urn | amphora | bud-vase | pot | jar | mason-jar | bowl', 'none')
+  .option('--ground-line', 'Draw a hand-drawn ground line under the arrangement')
+  .option('--negative-space <number>', 'Deliberate notan: hold one region clear, swell the mass (0-1)', '0')
+  // growth model
+  .option('--curl <number>', 'Meandering of the curl field (0-1.5)', '0.5')
+  .option('--gravitropism <number>', 'Upward growth bias (0-1)', '0.4')
+  .option('--branch-prob <number>', 'Side-branch probability per step (0-0.2)', '0.05')
+  .option('--max-depth <number>', 'Branching recursion depth', '5')
+  .option('--max-length <number>', 'Max vine length in px', '320')
+  .option('--step-length <number>', 'Growth step length in px', '6')
+  // colonization
+  .option('--attractor-count <number>', 'Space-colonization attractor points', '600')
+  .option('--attractor-radius <number>', 'Attractor reach in px', '90')
+  .option('--kill-radius <number>', 'Attractor consume distance in px', '16')
+  // vine body & shading
+  .option('--stem-width <number>', 'Base stem width in px', '8')
+  .option('--taper <number>', 'Tapering toward the tip (0-1)', '0.85')
+  .option('--vine-fill <f>', 'Stem rendering: shaded | solid | outline | highlight', 'shaded')
+  .option('--light-angle <number>', 'Light source direction in degrees (0 = +x)', '-130')
+  .option('--shade-density <number>', 'Shadow hatching intensity (0-1)', '0.55')
+  .option('--stem-shade <s>', 'Thick-stem tube shading: none | along | cross', 'along')
+  .option('--no-occlude', 'Skip hidden-line removal (flat overlap)')
+  .option('--cast-shadow <number>', 'Contact-shadow strength (0-1)', '0.35')
+  .option('--sketch <number>', 'Hand-drawn overdraw intensity (0-1)', '0')
+  .option('--sketch-style <s>', 'Overdraw character: loose | fine | gestural | scratchy', 'loose')
+  .option('--wobble <number>', 'Centerline wobble amplitude in px', '0.6')
+  // decorations
+  .option('--density <number>', 'Overall foliage density (0-1)', '0.45')
+  .option('--no-leaves', 'Omit leaves')
+  .option('--leaf-style <s>', 'shaded | veined | outline | solid', 'shaded')
+  .option('--leaf-type <t>', 'ovate | lance | cordate | lobed | serrate | mixed', 'ovate')
+  .option('--no-veins', 'Omit leaf veins')
+  .option('--leaf-size <number>', 'Leaf length in px', '26')
+  .option('--leaf-spacing <number>', 'Arc-length leaf spacing in px', '30')
+  .option('--no-tendrils', 'Omit tendrils')
+  .option('--tendril-prob <number>', 'Tendril probability per site (0-1)', '0.12')
+  .option('--no-flowers', 'Omit flowers')
+  .option('--flower-type <t>', 'rose | daisy | bell | bud | mixed', 'rose')
+  .option('--flower-prob <number>', 'Flower probability at stem tips (0-1)', '0.2')
+  .option('--flower-size <number>', 'Bloom size in px', '12')
+  // ink
+  .option('--palette <p>', 'Multi-pen palette: ink | botanical | rose | autumn', 'ink')
+  .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1')
+  .option('--background', 'Include background rectangle')
+  .option('--background-color <color>', 'Background color', '#ffffff')
+  .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
+  .option('-o, --output <file>', 'Output file path', 'vines.svg')
+  .action((options) => {
+    let width: number;
+    let height: number;
+    let marginPx: number;
+    let paperSvg: Pick<SVGOptions, 'physicalWidth' | 'physicalHeight'> = {};
+    let paperStrokeWidth: number | undefined;
+
+    if (options.paper) {
+      const page = pageMetrics(
+        getPaperSize(String(options.paper).toLowerCase()),
+        options.orientation as Orientation,
+        parseFloat(options.resolution)
+      );
+      width = page.widthPx;
+      height = page.heightPx;
+      marginPx = parseFloat(options.marginMm) * page.pxPerMm;
+      paperSvg = { physicalWidth: `${page.widthMm}mm`, physicalHeight: `${page.heightMm}mm` };
+      paperStrokeWidth = parseFloat(options.penWidthMm) * page.pxPerMm;
+    } else {
+      width = parseInt(options.width, 10);
+      height = parseInt(options.height, 10);
+      marginPx = parseInt(options.margin, 10);
+    }
+
+    const vineOptions: VinesOptions = {
+      width,
+      height,
+      margin: marginPx,
+      seed: options.seed ? parseInt(options.seed, 10) : undefined,
+      composition: options.composition as VineComposition,
+      fillShape: options.fillShape as FillShape,
+      mode: options.mode as VineMode,
+      seeding: options.seeding as VineSeeding,
+      seedCount: parseInt(options.seedCount, 10),
+      vessel: options.vessel as VinesOptions['vessel'],
+      groundLine: options.groundLine ?? false,
+      negativeSpace: parseFloat(options.negativeSpace),
+      curl: parseFloat(options.curl),
+      gravitropism: parseFloat(options.gravitropism),
+      branchProb: parseFloat(options.branchProb),
+      maxDepth: parseInt(options.maxDepth, 10),
+      maxLength: parseFloat(options.maxLength),
+      stepLength: parseFloat(options.stepLength),
+      attractorCount: parseInt(options.attractorCount, 10),
+      attractorRadius: parseFloat(options.attractorRadius),
+      killRadius: parseFloat(options.killRadius),
+      stemWidth: parseFloat(options.stemWidth),
+      taper: parseFloat(options.taper),
+      vineFill: options.vineFill as VineFill,
+      lightAngle: parseFloat(options.lightAngle),
+      shadeDensity: parseFloat(options.shadeDensity),
+      stemShade: options.stemShade as StemShade,
+      occlude: options.occlude,
+      castShadow: parseFloat(options.castShadow),
+      sketch: parseFloat(options.sketch),
+      sketchStyle: options.sketchStyle,
+      wobble: parseFloat(options.wobble),
+      density: parseFloat(options.density),
+      leaves: options.leaves,
+      leafStyle: options.leafStyle as LeafStyle,
+      leafType: options.leafType as LeafType,
+      veins: options.veins,
+      leafSize: parseFloat(options.leafSize),
+      leafSpacing: parseFloat(options.leafSpacing),
+      tendrils: options.tendrils,
+      tendrilProb: parseFloat(options.tendrilProb),
+      flowers: options.flowers,
+      flowerType: options.flowerType as VineFlower,
+      flowerProb: parseFloat(options.flowerProb),
+      flowerSize: parseFloat(options.flowerSize),
+      penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
+    };
+
+    console.log('Growing vines...');
+    console.log(`  Size: ${width}x${height}, composition: ${vineOptions.composition}, mode: ${vineOptions.mode}`);
+
+    const result = generateVines(vineOptions);
+
+    console.log(`  Seed: ${result.seed}`);
+    console.log(`  Generated ${result.lines.length} lines`);
+
+    const palette = VINE_PALETTES[options.palette] ?? VINE_PALETTES.ink;
+    const svgOptions: SVGOptions = {
+      strokeColor: palette.stem,
+      strokeWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
+      includeBackground: options.background ?? false,
+      backgroundColor: options.backgroundColor,
+      optimizePaths: options.optimize,
+      layerColors: palette,
+      ...paperSvg,
+    };
+
+    const svg = toSVG(result, svgOptions);
+    const outputPath = resolve(process.cwd(), options.output);
+    writeFileSync(outputPath, svg, 'utf-8');
+    console.log(`\nSaved to: ${outputPath}`);
   });
 
 program.parse();

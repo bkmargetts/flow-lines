@@ -210,6 +210,56 @@ describe('generateVines', () => {
     expect(layers(along.lines, 'stem').length).toBeGreaterThan(layers(none.lines, 'stem').length);
   });
 
+  it('wreath closes into a full ring (foliage covers every angular sector)', () => {
+    const r = generateVines(
+      baseOptions({ composition: 'wreath', seedCount: 8, leaves: false, flowers: false, tendrils: false })
+    );
+    const stems = layers(r.lines, 'stem');
+    const cx = r.width / 2;
+    const cy = r.height / 2;
+    const sectors = new Array(12).fill(false);
+    for (const s of stems) {
+      for (const p of s.points) {
+        const a = Math.atan2(p.y - cy, p.x - cx);
+        sectors[Math.floor(((a + Math.PI) / (2 * Math.PI)) * 12) % 12] = true;
+      }
+    }
+    // Every 30° sector around the centre carries ring geometry — no gap.
+    expect(sectors.every(Boolean)).toBe(true);
+  });
+
+  it('a vessel and ground line add geometry only when requested', () => {
+    const common = { composition: 'bouquet', mode: 'growth', leaves: false, flowers: false, tendrils: false, occlude: false, castShadow: 0 } as const;
+    const bare = generateVines(baseOptions({ ...common, vessel: 'none', groundLine: false }));
+    const vase = generateVines(baseOptions({ ...common, vessel: 'vase', groundLine: false }));
+    const ground = generateVines(baseOptions({ ...common, vessel: 'none', groundLine: true }));
+    expect(layers(vase.lines, 'stem').length).toBeGreaterThan(layers(bare.lines, 'stem').length);
+    expect(layers(ground.lines, 'stem').length).toBeGreaterThan(layers(bare.lines, 'stem').length);
+  });
+
+  it('renders every vessel style', () => {
+    const styles = ['vase', 'urn', 'amphora', 'bud-vase', 'pot', 'jar', 'mason-jar', 'bowl'] as const;
+    for (const vessel of styles) {
+      const r = generateVines(baseOptions({ composition: 'bouquet', vessel, leaves: false, flowers: false, tendrils: false }));
+      expect(layers(r.lines, 'stem').length).toBeGreaterThan(1);
+    }
+  });
+
+  it('a vessel casts a grounding shadow on the ground only when castShadow is set', () => {
+    const common = { composition: 'bouquet', mode: 'growth', vessel: 'urn', leaves: false, flowers: false, tendrils: false } as const;
+    const off = generateVines(baseOptions({ ...common, castShadow: 0 }));
+    const on = generateVines(baseOptions({ ...common, castShadow: 0.5 }));
+    expect(layers(off.lines, 'shadow').length).toBe(0);
+    expect(layers(on.lines, 'shadow').length).toBeGreaterThan(0);
+  });
+
+  it('negative space thins foliage compared with an evenly-filled page', () => {
+    const common = { composition: 'free', mode: 'growth', seeding: 'scatter', seedCount: 10, density: 0.7, tendrils: false } as const;
+    const filled = generateVines(baseOptions({ ...common, negativeSpace: 0 }));
+    const notan = generateVines(baseOptions({ ...common, negativeSpace: 0.7 }));
+    expect(layers(notan.lines, 'leaf').length).toBeLessThan(layers(filled.lines, 'leaf').length);
+  });
+
   it('colonization produces a connected branching network', () => {
     const result = generateVines(
       baseOptions({

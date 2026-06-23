@@ -30,6 +30,8 @@ import { applyHandDrawnStyle } from './hand-drawn.js';
 export type VineMode = 'growth' | 'colonization';
 export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
 export type VineComposition = 'specimen' | 'free' | 'wreath' | 'border' | 'bouquet' | 'trellis' | 'fill';
+/** A drawn container the arrangement rises out of (bouquet/specimen). */
+export type VineVessel = 'none' | 'vase' | 'pot' | 'jar' | 'urn' | 'amphora' | 'bud-vase' | 'mason-jar' | 'bowl';
 /** Region a `fill` composition grows into. */
 export type FillShape = 'circle' | 'oval' | 'heart' | 'diamond' | 'painted';
 /** How a vine body is inked. */
@@ -57,6 +59,15 @@ export interface VinesOptions {
   seeding?: VineSeeding;
   startPoints?: Point[];
   seedCount?: number;
+
+  // — page composition —
+  /** A drawn container the stems rise out of (bouquet/specimen); 'none' off. */
+  vessel?: VineVessel;
+  /** Draw a hand-drawn ground line under the arrangement. */
+  groundLine?: boolean;
+  /** 0..1 deliberate negative space: hold one region of the page clear and
+   *  swell the mass elsewhere (notan), instead of filling evenly. */
+  negativeSpace?: number;
 
   // — growth model —
   stepLength?: number;
@@ -468,6 +479,9 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     flowerProb = 0.2,
     flowerSize = 12,
     wobble = 0.6,
+    vessel = 'none',
+    groundLine = false,
+    negativeSpace = 0,
   } = options;
 
   const penPx = Math.max(0.6, penWidth);
@@ -481,6 +495,34 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
 
   const growthGrid = new ProximityGrid(width, height, Math.max(1, spacing));
 
+  // Deliberate negative space (notan): hold one third of the page clear and let
+  // the mass swell elsewhere. Null when off, so the rng sequence — and every
+  // existing render — is byte-identical unless `negativeSpace` is dialled up.
+  const weightAt = makeMassWeight(width, height, margin, seed, negativeSpace);
+
+  // A drawn vessel the arrangement rises out of (bouquet/specimen): the stems
+  // are based at its mouth, and it occludes their lower ends.
+  const vesselSpec = vessel !== 'none' ? VESSEL_SPECS[vessel as Exclude<VineVessel, 'none'>] : undefined;
+  const wantsVessel = !!vesselSpec && (composition === 'bouquet' || composition === 'specimen');
+  let baseOverride: Point | undefined;
+  let vesselBuilt: { lines: FlowLine[]; silhouette: Point[][] } | null = null;
+  let vesselShadow: FlowLine[] = [];
+  let vesselBottomY = height - margin;
+  if (wantsVessel) {
+    const spec = vesselSpec!;
+    vesselBottomY = height - margin;
+    // Sized to anchor the arrangement; per-vessel factors keep proportions
+    // (a bowl is wide and low, an amphora tall and narrow).
+    const vesselH = Math.min(height * 0.26, (height - 2 * margin) * 0.34) * spec.h;
+    const topY = vesselBottomY - vesselH;
+    const cx = startPoints[0]?.x ?? width / 2;
+    const mouthHalf = Math.max(20, (width - 2 * margin) * 0.13) * spec.w;
+    baseOverride = { x: cx, y: topY };
+    const v = buildVessel(cx, topY, vesselBottomY, mouthHalf, vessel, light, penPx, shadeDensity, castShadow, seed);
+    vesselBuilt = { lines: v.lines, silhouette: v.silhouette };
+    vesselShadow = v.shadow;
+  }
+
   // Composition routes the growth: `fill` colonizes a region; `free` respects
   // the mode/seeding; everything else grows along composed guide curves.
   let rawStems: Stem[];
@@ -490,13 +532,17 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     const fillRoots: Root[] = region.seeds.map((p) => ({ x: p.x, y: p.y, angle: -Math.PI / 2, half: baseHalf, maxLength }));
     rawStems = colonize(fillRoots, { width, height, margin, stepLength, attractorCount: Math.max(attractorCount, 700), attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, region.inside);
   } else if (composition === 'free' && mode === 'colonization') {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt }, rng);
     rawStems = colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, undefined);
   } else {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt, baseOverride }, rng);
     // The specimen's focal point is the end of its master gesture.
     if (composition === 'specimen' && roots[0]?.guide) focal = roots[0].guide[roots[0].guide.length - 1];
-    rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, avoidOverlap ? growthGrid : null, spacing);
+    // A wreath's arcs are *designed* to overlap into a closed ring, so the
+    // proximity break (which would stop each arc as it nears its neighbour and
+    // tear gaps in the ring) is disabled for it.
+    const useGrid = avoidOverlap && composition !== 'wreath' ? growthGrid : null;
+    rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, useGrid, spacing, weightAt);
   }
 
   // Smooth (heavily, for flowing curves) then add a touch of wobble.
@@ -510,6 +556,37 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   const add = (lines: FlowLine[], silhouette: Point[][]): void => {
     elements.push({ lines, silhouette });
   };
+
+  // Page furniture sits behind everything: the ground line first (no silhouette,
+  // so it's occluded but occludes nothing), then the vessel (a solid the stems
+  // rise out of), then the stems and foliage in front.
+  if (groundLine) {
+    const g = applyHandDrawnStyle(
+      { lines: [buildGround(width, height, margin, wantsVessel ? vesselBottomY : undefined, wobble)], width, height, seed: seed + 511 },
+      { amplitude: wobble, wavelength: 120, seed: seed + 511 }
+    ).lines;
+    add(g, []);
+  }
+  // The vessel's cast shadow lies on the ground behind it (no silhouette, so the
+  // vessel occludes the part beneath its foot) — this grounds the whole
+  // arrangement in space, which is what stops the vines reading as flat.
+  if (vesselShadow.length > 0) {
+    const sl = applyHandDrawnStyle(
+      { lines: vesselShadow, width, height, seed: seed + 911 },
+      { amplitude: Math.max(wobble * 0.5, 0.3), wavelength: 70, seed: seed + 911 }
+    ).lines;
+    add(sl, []);
+  }
+  if (vesselBuilt) {
+    // Run the vessel through the same hand-drawn wobble the vine centerlines
+    // get, so its outline and cross-contour hatching share the vines' line
+    // quality instead of reading as a clean, pasted-in object.
+    const wl = applyHandDrawnStyle(
+      { lines: vesselBuilt.lines, width, height, seed: seed + 701 },
+      { amplitude: Math.max(wobble, 0.5), wavelength: 44, seed: seed + 701 }
+    ).lines;
+    add(wl, vesselBuilt.silhouette);
+  }
 
   // Stems (created first, so they sit behind the foliage).
   wobbled.forEach((center, i) => {
@@ -526,7 +603,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     {
       leaves, leafStyle, leafType, veins, leafSize, leafWidthRatio, leafSpacing,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
-      focal, focalR, density,
+      focal, focalR, density, weightAt,
     },
     rng,
     add
@@ -683,6 +760,40 @@ interface RootOpts {
   seedCount: number;
   baseHalf: number;
   maxLength: number;
+  /** Negative-space mass weight (1 everywhere when off); biases roots away from
+   *  the held-clear region. */
+  weightAt?: ((x: number, y: number) => number) | null;
+  /** When a vessel is drawn, the arrangement is based at its mouth. */
+  baseOverride?: Point;
+}
+
+/** Build the negative-space mass weight: 1 everywhere when off, else low inside
+ *  a deterministically-chosen clear third of the page and 1 well away from it.
+ *  Returns null when off so callers can keep their rng sequence byte-identical. */
+function makeMassWeight(
+  width: number,
+  height: number,
+  margin: number,
+  seed: number,
+  ns: number
+): ((x: number, y: number) => number) | null {
+  if (ns <= 0.001) return null;
+  // A rule-of-thirds intersection, picked from the seed, is held clear.
+  const thirds = [
+    { fx: 1 / 3, fy: 1 / 3 }, { fx: 2 / 3, fy: 1 / 3 },
+    { fx: 1 / 3, fy: 2 / 3 }, { fx: 2 / 3, fy: 2 / 3 },
+  ];
+  const ci = (Math.imul(seed >>> 0, 2654435761) >>> 0) % 4;
+  const cc = {
+    x: margin + thirds[ci].fx * (width - 2 * margin),
+    y: margin + thirds[ci].fy * (height - 2 * margin),
+  };
+  const clearR = 0.5 * Math.min(width, height);
+  const strength = Math.min(1, ns);
+  return (x, y) => {
+    const reduce = smoothstep(1 - Math.hypot(x - cc.x, y - cc.y) / clearR);
+    return 1 - strength * reduce;
+  };
 }
 
 function makeRoots(o: RootOpts, rng: () => number): Root[] {
@@ -698,8 +809,8 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     const fx = margin + (leftFocal ? 1 / 3 : 2 / 3) * (width - 2 * margin);
     const fy = margin + (0.22 + rng() * 0.16) * (height - 2 * margin);
     const baseFromPaint = o.seeding === 'painted' || o.seeding === 'point' ? o.startPoints[0] : undefined;
-    const bx = baseFromPaint?.x ?? margin + (leftFocal ? 0.62 : 0.38) * (width - 2 * margin);
-    const by = baseFromPaint?.y ?? height - margin * 1.3;
+    const bx = o.baseOverride?.x ?? baseFromPaint?.x ?? margin + (leftFocal ? 0.62 : 0.38) * (width - 2 * margin);
+    const by = o.baseOverride?.y ?? baseFromPaint?.y ?? height - margin * 1.3;
     // A bowed guide curve base → focal (control point pushed to one side).
     const mx = (bx + fx) / 2 + (leftFocal ? 1 : -1) * (width * 0.12);
     const my = (by + fy) / 2;
@@ -723,18 +834,21 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
   };
 
   if (o.composition === 'wreath') {
-    // Stems run around a ring, each covering a slightly overlapping arc; side
-    // branches are kept short so the foliage hugs the ring.
+    // Stems run around a ring, each covering an arc that overlaps its
+    // neighbour's start so the ring always closes (no angular jitter — gaps
+    // read as a broken wreath); side branches are kept short so the foliage
+    // hugs the ring. Radius still wobbles slightly for a hand-drawn ring.
     const cx = width / 2;
     const cy = height / 2;
     const R = Math.min(width - 2 * margin, height - 2 * margin) * 0.42;
     const n = Math.max(3, o.seedCount);
+    const step = (2 * Math.PI) / n;
+    const span = step * 1.18; // each arc reaches ~18% into the next, so they meet
     const roots: Root[] = [];
     for (let k = 0; k < n; k++) {
-      const a0 = (k / n) * 2 * Math.PI + jitter() * 0.2;
-      const span = (2 * Math.PI / n) * 1.2;
+      const a0 = k * step;
       const guide: Point[] = [];
-      const steps = 12;
+      const steps = 14;
       for (let s = 0; s <= steps; s++) {
         const a = a0 + span * (s / steps);
         const rr = R * (1 + 0.02 * Math.sin(a * 3));
@@ -768,9 +882,9 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
   }
 
   if (o.composition === 'bouquet') {
-    // A fan of stems from one low base point.
-    const bx = o.startPoints[0]?.x ?? width / 2;
-    const by = o.startPoints[0]?.y ?? height - margin * 1.2;
+    // A fan of stems from one low base point (the vessel mouth when present).
+    const bx = o.baseOverride?.x ?? o.startPoints[0]?.x ?? width / 2;
+    const by = o.baseOverride?.y ?? o.startPoints[0]?.y ?? height - margin * 1.2;
     const n = Math.max(2, o.seedCount);
     const roots: Root[] = [];
     for (let k = 0; k < n; k++) {
@@ -808,20 +922,32 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     const p = o.startPoints[0] ?? { x: width / 2, y: height - margin };
     return [base(p.x, p.y, up)];
   }
+  // Rejection-accept a candidate against the negative-space weight (1 when off,
+  // so the loop below stays byte-identical). A few tries, then take what we got.
+  const accept = (x: number, y: number): boolean =>
+    !o.weightAt || rng() <= o.weightAt(x, y);
   if (o.seeding === 'edges') {
     const roots: Root[] = [];
     for (let i = 0; i < o.seedCount; i++) {
-      const edge = Math.floor(rng() * 4);
-      if (edge === 0) roots.push(base(margin + rng() * (width - 2 * margin), height - margin, up));
-      else if (edge === 1) roots.push(base(margin + rng() * (width - 2 * margin), margin, Math.PI / 2));
-      else if (edge === 2) roots.push(base(margin, margin + rng() * (height - 2 * margin), 0));
-      else roots.push(base(width - margin, margin + rng() * (height - 2 * margin), Math.PI));
+      for (let t = 0; t < 6; t++) {
+        const edge = Math.floor(rng() * 4);
+        let x: number, y: number, ang: number;
+        if (edge === 0) { x = margin + rng() * (width - 2 * margin); y = height - margin; ang = up; }
+        else if (edge === 1) { x = margin + rng() * (width - 2 * margin); y = margin; ang = Math.PI / 2; }
+        else if (edge === 2) { x = margin; y = margin + rng() * (height - 2 * margin); ang = 0; }
+        else { x = width - margin; y = margin + rng() * (height - 2 * margin); ang = Math.PI; }
+        if (t === 5 || accept(x, y)) { roots.push(base(x, y, ang)); break; }
+      }
     }
     return roots;
   }
   const roots: Root[] = [];
   for (let i = 0; i < o.seedCount; i++) {
-    roots.push(base(margin + rng() * (width - 2 * margin), margin + rng() * (height - 2 * margin), up));
+    for (let t = 0; t < 6; t++) {
+      const x = margin + rng() * (width - 2 * margin);
+      const y = margin + rng() * (height - 2 * margin);
+      if (t === 5 || accept(x, y)) { roots.push(base(x, y, up)); break; }
+    }
   }
   return roots;
 }
@@ -846,7 +972,8 @@ function growStems(
   rng: () => number,
   noise: SimplexNoise,
   grid: ProximityGrid | null,
-  spacing: number
+  spacing: number,
+  weightAt: ((x: number, y: number) => number) | null = null
 ): Stem[] {
   const { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth } = p;
   const up = -Math.PI / 2;
@@ -909,7 +1036,12 @@ function growStems(
       pts.push({ x, y });
       if (grid && cleared) toInsert.push({ x, y });
 
-      if (tip.depth < maxDepth && stack.length + stems.length < STEM_CAP && rng() < branchProb) {
+      // Thin growth out as it enters the held-clear region (notan negative
+      // space). Guarded so the rng sequence is untouched when massing is off.
+      if (weightAt && cleared && rng() < (1 - weightAt(x, y)) * 0.5) break;
+
+      const effBranchProb = weightAt ? branchProb * weightAt(x, y) : branchProb;
+      if (tip.depth < maxDepth && stack.length + stems.length < STEM_CAP && rng() < effBranchProb) {
         const childMax = Math.min(tip.branchMaxLen, tip.maxLength * (0.5 + rng() * 0.28));
         // Skip stubby branches — they read as thorns, not growth.
         if (childMax >= minBranchLen) {
@@ -1185,6 +1317,233 @@ function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts): { line
   return { lines, silhouette: [poly] };
 }
 
+// ——— page furniture: ground line & vessel ———
+
+/** A single hand-drawn ground line near the base of the arrangement: a gentle
+ *  undulation that settles flat at the ends. No silhouette (it occludes
+ *  nothing), drawn behind the stems. */
+function buildGround(width: number, height: number, margin: number, baseY: number | undefined, wobble: number): FlowLine {
+  const y0 = baseY ?? height - margin;
+  const x0 = margin * 1.4;
+  const x1 = width - margin * 1.4;
+  const amp = Math.max(0.6, wobble) * 2;
+  const steps = 60;
+  const pts: Point[] = [];
+  for (let s = 0; s <= steps; s++) {
+    const t = s / steps;
+    const env = Math.sin(Math.PI * t); // settle flat at both ends
+    pts.push({ x: x0 + (x1 - x0) * t, y: y0 + Math.sin(t * 7.5 + 1.3) * amp * env });
+  }
+  return { points: pts, layer: 'stem' };
+}
+
+/** Half-width fraction along a vessel profile (top=0 → base=1), smoothstep
+ *  interpolated between control points. */
+function sampleProfile(prof: [number, number][], u: number): number {
+  for (let i = 1; i < prof.length; i++) {
+    if (u <= prof[i][0]) {
+      const [u0, h0] = prof[i - 1];
+      const [u1, h1] = prof[i];
+      return h0 + (h1 - h0) * smoothstep((u - u0) / (u1 - u0 || 1));
+    }
+  }
+  return prof[prof.length - 1][1];
+}
+
+/** Designed vessel silhouettes (control points: [u from mouth→foot, half-width
+ *  fraction of the mouth reference]) plus per-type height/width factors so each
+ *  keeps its proportions (a bowl is wide and low, an amphora tall and narrow). */
+interface VesselSpec { profile: [number, number][]; h: number; w: number; }
+const VESSEL_SPECS: Record<Exclude<VineVessel, 'none'>, VesselSpec> = {
+  vase: { h: 1.0, w: 1.0, profile: [[0, 0.92], [0.06, 0.96], [0.12, 0.76], [0.24, 0.8], [0.44, 1.14], [0.62, 1.24], [0.82, 1.0], [0.94, 0.76], [1, 0.7]] },
+  urn: { h: 1.12, w: 0.95, profile: [[0, 0.96], [0.035, 1.06], [0.085, 0.84], [0.17, 0.72], [0.28, 0.88], [0.44, 1.2], [0.59, 1.36], [0.73, 1.22], [0.86, 0.9], [0.93, 0.6], [0.965, 0.68], [1, 0.58]] },
+  amphora: { h: 1.18, w: 0.9, profile: [[0, 0.62], [0.05, 0.74], [0.12, 0.6], [0.2, 0.66], [0.4, 0.98], [0.57, 1.04], [0.73, 0.82], [0.86, 0.5], [0.93, 0.3], [0.965, 0.22], [0.985, 0.32], [1, 0.26]] },
+  'bud-vase': { h: 1.04, w: 0.72, profile: [[0, 0.52], [0.07, 0.46], [0.2, 0.4], [0.38, 0.52], [0.57, 0.9], [0.75, 1.0], [0.87, 0.84], [0.95, 0.6], [1, 0.5]] },
+  pot: { h: 0.82, w: 1.05, profile: [[0, 1.0], [0.03, 1.08], [0.08, 1.0], [0.5, 0.82], [0.9, 0.64], [0.96, 0.6], [1, 0.64]] },
+  jar: { h: 0.94, w: 1.0, profile: [[0, 0.8], [0.04, 0.84], [0.1, 0.88], [0.16, 0.84], [0.26, 0.96], [0.38, 1.0], [0.84, 1.0], [0.93, 0.9], [1, 0.84]] },
+  'mason-jar': { h: 0.98, w: 0.96, profile: [[0, 0.82], [0.05, 0.88], [0.12, 0.84], [0.2, 0.86], [0.3, 1.0], [0.42, 1.0], [0.86, 1.0], [0.94, 0.94], [1, 0.9]] },
+  bowl: { h: 0.5, w: 1.5, profile: [[0, 1.0], [0.05, 1.06], [0.13, 1.0], [0.5, 0.76], [0.85, 0.5], [1, 0.4]] },
+};
+
+/** A foreshortened latitude/rim ellipse arc on the vessel (a0..a1 radians). */
+function ellipseArc(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, segs: number): Point[] {
+  const out: Point[] = [];
+  for (let i = 0; i <= segs; i++) {
+    const a = a0 + (a1 - a0) * (i / segs);
+    out.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry });
+  }
+  return out;
+}
+
+/** A drawn container the arrangement rises out of, rendered as a real
+ *  pen-and-ink still-life vessel: a designed surface-of-revolution silhouette
+ *  (rim lip, foot ring, a band or two) modelled with a full value structure —
+ *  bare highlight on the lit side, graded cross-contour hatching into a
+ *  cross-hatched core shadow, a reflected-light sliver at the shadow edge — plus
+ *  a contact + cast shadow on the ground. Everything is cross-contour, directional
+ *  hatching keyed to the same `light` as the vines, held in a light value key,
+ *  and the caller wobbles it through the same hand-drawn pass + sketch overdraw,
+ *  so it reads as the same hand and grounds the arrangement instead of flattening
+ *  it. The silhouette occludes the stem bases; the cast shadow is returned
+ *  separately to sit on the ground behind the vessel. */
+function buildVessel(
+  cx: number,
+  topY: number,
+  bottomY: number,
+  mouthHalf: number,
+  type: VineVessel,
+  light: Point,
+  penPx: number,
+  shadeDensity: number,
+  castShadow: number,
+  seed: number
+): { lines: FlowLine[]; silhouette: Point[][]; shadow: FlowLine[] } {
+  const prof = VESSEL_SPECS[type === 'none' ? 'vase' : type].profile;
+  const N = 56;
+  const H = bottomY - topY;
+  const hwAt: number[] = [];
+  const ys: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    hwAt.push(mouthHalf * sampleProfile(prof, u));
+    ys.push(topY + H * u);
+  }
+  // One smoothing pass over the half-widths for a confident silhouette.
+  for (let i = 1; i < N; i++) hwAt[i] = (hwAt[i - 1] + 2 * hwAt[i] + hwAt[i + 1]) / 4;
+  const hwOf = (u: number): number => hwAt[Math.max(0, Math.min(N, Math.round(u * N)))];
+
+  // Profile outline: down the left edge, across the base, up the right edge.
+  const left: Point[] = [];
+  const right: Point[] = [];
+  for (let i = 0; i <= N; i++) {
+    left.push({ x: cx - hwAt[i], y: ys[i] });
+    right.push({ x: cx + hwAt[i], y: ys[i] });
+  }
+  const poly = [...left, ...right.slice().reverse()];
+
+  const lines: FlowLine[] = [];
+  // Drawn outline = just the two side profiles. The mouth ellipse and base arc
+  // close the form; stroking the closed silhouette would draw a chord straight
+  // across the mouth (and base), doubling the rim. `poly` stays for occlusion.
+  lines.push({ points: left, layer: 'stem' });
+  lines.push({ points: right, layer: 'stem' });
+
+  const depth = 0.16; // latitude-ellipse foreshortening (ry/rx)
+
+  // Mouth: one clean opening ellipse. A short arc along the *back* inner edge
+  // reads as wall thickness / an open cavity — without doubling the whole rim
+  // into a stacked "double circle".
+  const rimHalf = hwAt[0];
+  const rimRy = Math.max(2, rimHalf * depth);
+  lines.push({ points: ellipseArc(cx, topY, rimHalf, rimRy, 0, 2 * Math.PI, 28), layer: 'stem' });
+  lines.push({ points: ellipseArc(cx, topY + rimRy * 0.45, rimHalf * 0.84, rimRy * 0.84, Math.PI * 1.12, Math.PI * 1.88, 16), layer: 'stem' });
+
+  // Foot ring: the seated base plus a slightly higher inner edge (the foot's
+  // top), both front (lower) arcs only since the back is hidden.
+  const footHalf = hwAt[N];
+  const footRy = Math.max(2, footHalf * depth);
+  lines.push({ points: ellipseArc(cx, bottomY, footHalf, footRy, 0, Math.PI, 18), layer: 'stem' });
+  lines.push({ points: ellipseArc(cx, bottomY - footRy * 0.85, footHalf * 0.9, footRy * 0.85, 0.12 * Math.PI, 0.88 * Math.PI, 16), layer: 'stem' });
+
+  // A pair of incised bands on the belly — front arcs only — for a bit of
+  // ceramic character. Anchored around the widest point of the body (not fixed
+  // high up, where they'd crowd the neck/mouth on a short-necked vessel).
+  let uWide = 0.5;
+  let widest = 0;
+  for (let i = 0; i <= N; i++) if (hwAt[i] > widest) { widest = hwAt[i]; uWide = i / N; }
+  const b1 = Math.max(0.26, Math.min(0.7, uWide - 0.1));
+  const b2 = Math.min(0.88, Math.max(b1 + 0.14, uWide + 0.16));
+  for (const bu of [b1, b2]) {
+    const hw = hwOf(bu);
+    if (hw < penPx * 3) continue;
+    lines.push({ points: ellipseArc(cx, topY + H * bu, hw, Math.max(1.5, hw * depth), 0.1 * Math.PI, 0.9 * Math.PI, 14), layer: 'stem' });
+  }
+
+  // —— value structure (all cross-contour, light value key) ——
+  if (shadeDensity > 0.01) {
+    const shadowSign = light.x <= 0 ? 1 : -1; // light from the left → shade right
+    const vStep = penPx * (3.0 + (1 - shadeDensity) * 4.2);
+    const jit = makeRandom((seed ^ 0x9e3779b9) >>> 0);
+    const HALF = Math.PI / 2;
+
+    // Layer 1 — form hatch: latitude arcs over the shadow hemisphere. Each row
+    // starts at the terminator (held back to the lit edge on ~a third of rows,
+    // and more near the lit top, so tone grades) and stops shy of the silhouette
+    // so a reflected-light sliver stays bare. The lit side is left as highlight.
+    for (let y = topY + H * 0.06; y < bottomY - penPx; y += vStep) {
+      const u = (y - topY) / H;
+      const hw = hwOf(u);
+      if (hw < penPx * 2) continue;
+      const yj = y + (jit() - 0.5) * penPx;
+      const topLight = u < 0.18 ? 0.45 : 0; // the mouth catches the light
+      const lightRow = jit() < 0.32 + topLight;
+      const psi0 = (lightRow ? 0.36 : 0.12) * HALF;
+      const psi1 = 0.82 * HALF;
+      const steps = 8;
+      const arc: Point[] = [];
+      for (let s = 0; s <= steps; s++) {
+        const psi = psi0 + (psi1 - psi0) * (s / steps);
+        arc.push({ x: cx + hw * shadowSign * Math.sin(psi), y: yj + hw * depth * Math.cos(psi) });
+      }
+      lines.push({ points: arc, layer: 'stem' });
+    }
+
+    // Layer 2 — core shadow: short, steeper cross strokes through the core band
+    // (a slice inside the terminator, away from the reflected-light edge) on
+    // every other row, so the darkest accent reads without going heavy.
+    if (shadeDensity > 0.45) {
+      let row = 0;
+      for (let y = topY + H * 0.12; y < bottomY - penPx * 3; y += vStep) {
+        if (row++ % 2 === 0) continue;
+        const u = (y - topY) / H;
+        const hw = hwOf(u);
+        if (hw < penPx * 3) continue;
+        for (const pf of [0.48, 0.66]) {
+          const psi = pf * HALF;
+          const x = cx + hw * shadowSign * Math.sin(psi);
+          const yc = y + hw * depth * Math.cos(psi);
+          lines.push({ points: [{ x: x - shadowSign * penPx * 0.5, y: yc - vStep * 0.5 }, { x: x + shadowSign * penPx * 0.5, y: yc + vStep * 0.5 }], layer: 'stem' });
+        }
+      }
+    }
+  }
+
+  // —— grounding: contact + cast shadow on the ground ——
+  const shadow: FlowLine[] = [];
+  if (castShadow > 0.01) {
+    const sdir = light.x <= 0 ? 1 : -1; // shadow falls away from the light
+    const reach = footHalf * (1.5 + castShadow * 2.6);
+    const ccx = cx + sdir * reach * 0.4;
+    const gy = bottomY + footRy * 0.5;
+    const rx = reach * 0.6 + footHalf * 0.7;
+    const ry = Math.max(penPx * 2, footHalf * 0.34);
+    const rows = Math.max(2, Math.round((ry * 2) / (penPx * 1.8)));
+    const sj = makeRandom((seed ^ 0x51ed27) >>> 0);
+    for (let r = 0; r < rows; r++) {
+      const yy = gy - ry + (r + 0.5) * ((2 * ry) / rows);
+      const dy = (yy - gy) / ry;
+      const hc = rx * Math.sqrt(Math.max(0, 1 - dy * dy));
+      if (hc < penPx) continue;
+      const xa = ccx - hc;
+      const xb = ccx + hc;
+      let x = xa;
+      while (x < xb) {
+        const t = (x - xa) / (xb - xa || 1);
+        const farT = sdir > 0 ? t : 1 - t; // 0 at the foot, 1 at the far end
+        const inkLen = penPx * (1.4 + (1 - farT) * 3.4);
+        const gap = penPx * (0.7 + farT * 3.0) * (0.6 + sj());
+        // Solid contact near the foot; the cast shadow breaks up with distance.
+        if (farT < 0.18 || sj() > farT * 0.85) {
+          shadow.push({ points: [{ x, y: yy }, { x: Math.min(xb, x + inkLen), y: yy }], layer: 'shadow' });
+        }
+        x += inkLen + gap;
+      }
+    }
+  }
+
+  return { lines, silhouette: [poly], shadow };
+}
+
 /** Offset a polyline perpendicular to its local tangent (pen-ink.ts pattern). */
 function offsetPolyline(points: Point[], distance: number): Point[] {
   if (Math.abs(distance) < 1e-6) return points.map((p) => ({ ...p }));
@@ -1281,6 +1640,9 @@ interface DecorParams {
   focalR: number;
   /** 0..1 overall foliage density — scales leaf clusters, spacing and blooms. */
   density: number;
+  /** Negative-space mass weight (1 everywhere when off); thins foliage in the
+   *  held-clear region. */
+  weightAt?: ((x: number, y: number) => number) | null;
 }
 
 function decorate(
@@ -1324,11 +1686,14 @@ function decorate(
         side = (side === 1 ? -1 : 1) as 1 | -1;
         const along = arc / stemLen;
         const nf = nearFocal(pts[i]);
+        // Negative-space weight (1 when off): foliage shrinks and thins toward
+        // the held-clear region so it reads as a deliberate empty passage.
+        const massW = d.weightAt ? d.weightAt(pts[i].x, pts[i].y) : 1;
         // Leaves swell gently toward the focal point, and with depth.
-        const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.4 * nf);
+        const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.4 * nf) * (0.4 + 0.6 * massW);
         if (d.leaves) {
           // Cluster size driven by density (and a touch more near the focal).
-          const cluster = 1 + (rng() < dens ? 1 : 0) + (rng() < (dens - 0.4 + 0.6 * nf) ? 1 : 0);
+          const cluster = 1 + (rng() < dens * massW ? 1 : 0) + (rng() < (dens - 0.4 + 0.6 * nf) * massW ? 1 : 0);
           for (let c = 0; c < cluster; c++) {
             const s: 1 | -1 = c === 0 ? side : ((rng() < 0.5 ? 1 : -1) as 1 | -1);
             const leaf = makeLeaf(pts[i], dir, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, effStyle, rng);
@@ -1347,7 +1712,8 @@ function decorate(
     const prev = pts[pts.length - 2];
     const tipDir = Math.atan2(tip.y - prev.y, tip.x - prev.x);
     const nfTip = nearFocal(tip);
-    const flowerChance = Math.min(1, d.flowerProb * (0.6 + 0.8 * dens) * (1 + 2 * nfTip));
+    const massWTip = d.weightAt ? d.weightAt(tip.x, tip.y) : 1;
+    const flowerChance = Math.min(1, d.flowerProb * (0.6 + 0.8 * dens) * (1 + 2 * nfTip) * massWTip);
     if (d.flowers && rng() < flowerChance) {
       // A bloom cluster, larger and more numerous toward the focal point.
       const blooms = 1 + (rng() < 0.3 * dens + 0.4 * nfTip ? 1 : 0) + (rng() < 0.5 * nfTip ? 1 : 0);

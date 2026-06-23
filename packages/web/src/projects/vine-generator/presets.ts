@@ -47,6 +47,7 @@ export const VINE_PRESETS: VinePreset[] = [
       composition: 'bouquet', mode: 'growth', leafType: 'ovate', leafStyle: 'shaded', veins: true,
       flowers: true, flowerType: 'bud', flowerProb: 0.6, flowerSizeMm: 5, tendrils: false,
       density: 0.5, curl: 0.5, gravitropism: 0.2, branchProb: 0.05, stemWidthMm: 3.5, seedCount: 5, palette: 'indigo',
+      vessel: 'urn', groundLine: true,
     },
   },
   {
