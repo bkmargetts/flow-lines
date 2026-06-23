@@ -45,7 +45,9 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
 
     lightAngle: state.lightAngle,
     shadeDensity: state.shadeDensity,
+    stemShade: state.stemShade,
     occlude: state.occlude,
+    sketch: state.sketch,
 
     leaves: state.leaves,
     leafStyle: state.leafStyle,
@@ -57,6 +59,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     tendrils: state.tendrils,
     tendrilProb: state.tendrilProb,
     flowers: state.flowers,
+    flowerType: state.flowerType,
     flowerProb: state.flowerProb,
     flowerSize: state.flowerSizeMm * mm,
 

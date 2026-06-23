@@ -1,5 +1,5 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower } from '@flow-lines/core';
 
 /**
  * Vine Generator settings. Lengths are in millimetres (converted to px at the
@@ -39,7 +39,9 @@ export interface VineState {
   // form shading & depth
   lightAngle: number;
   shadeDensity: number;
+  stemShade: StemShade;
   occlude: boolean;
+  sketch: number;
 
   // decorations
   leaves: boolean;
@@ -52,6 +54,7 @@ export interface VineState {
   tendrils: boolean;
   tendrilProb: number;
   flowers: boolean;
+  flowerType: VineFlower;
   flowerProb: number;
   flowerSizeMm: number;
 
@@ -94,22 +97,25 @@ export const defaultVineState: VineState = {
 
   lightAngle: -130,
   shadeDensity: 0.55,
+  stemShade: 'along',
   occlude: true,
+  sketch: 0,
 
   leaves: true,
   leafStyle: 'shaded',
   leafType: 'ovate',
   veins: true,
-  leafSizeMm: 11,
+  leafSizeMm: 12,
   leafWidthRatio: 0.55,
-  leafSpacingMm: 11,
+  leafSpacingMm: 12,
   tendrils: true,
-  tendrilProb: 0.12,
+  tendrilProb: 0.1,
   flowers: true,
-  flowerProb: 0.18,
-  flowerSizeMm: 4,
+  flowerType: 'rose',
+  flowerProb: 0.3,
+  flowerSizeMm: 5,
 
-  wobbleMm: 0.35,
+  wobbleMm: 0.2,
 
   seed: Math.floor(Math.random() * 1000000),
   strokeColor: '#2a2a26',

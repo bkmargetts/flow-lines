@@ -118,6 +118,19 @@ describe('generateVines', () => {
     expect(layers(solid.lines, 'leaf').length).toBeGreaterThan(layers(outline.lines, 'leaf').length);
   });
 
+  it('sketchiness multiplies the line count', () => {
+    const plain = generateVines(baseOptions({ sketch: 0 }));
+    const sketchy = generateVines(baseOptions({ sketch: 0.8 }));
+    expect(sketchy.lines.length).toBeGreaterThan(plain.lines.length);
+  });
+
+  it('tube shading style adds stem hatching only when not "none"', () => {
+    const common = { composition: 'specimen', mode: 'growth', vineFill: 'shaded', stemWidth: 12, shadeDensity: 0.9, leaves: false, tendrils: false, flowers: false } as const;
+    const none = generateVines(baseOptions({ ...common, stemShade: 'none' }));
+    const along = generateVines(baseOptions({ ...common, stemShade: 'along' }));
+    expect(layers(along.lines, 'stem').length).toBeGreaterThan(layers(none.lines, 'stem').length);
+  });
+
   it('colonization produces a connected branching network', () => {
     const result = generateVines(
       baseOptions({

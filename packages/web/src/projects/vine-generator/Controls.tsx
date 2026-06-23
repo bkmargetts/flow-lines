@@ -207,7 +207,29 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </>
       )}
 
+      {state.flowers && (
+        <div className="control-group">
+          <label className="label-text">Flower type</label>
+          <select value={state.flowerType} onChange={(e) => update({ flowerType: e.target.value as VineState['flowerType'] })}>
+            <option value="rose">Rose (5-petal)</option>
+            <option value="daisy">Daisy (composite)</option>
+            <option value="bell">Bell</option>
+            <option value="bud">Bud</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </div>
+      )}
+
       <h3 className="section-title">Form &amp; light</h3>
+
+      <div className="control-group">
+        <label className="label-text">Tube shading</label>
+        <select value={state.stemShade} onChange={(e) => update({ stemShade: e.target.value as VineState['stemShade'] })}>
+          <option value="along">Along the stem</option>
+          <option value="cross">Cross-hatch</option>
+          <option value="none">None</option>
+        </select>
+      </div>
 
       <Slider
         label="Light Angle"
@@ -241,6 +263,15 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </label>
         <p className="paint-hint">Vines stop short of geometry they'd grow into.</p>
       </div>
+      <Slider
+        label="Sketchiness"
+        value={state.sketch}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ sketch: v })}
+        format={(v) => v.toFixed(2)}
+      />
 
       <h3 className="section-title">Style</h3>
 
