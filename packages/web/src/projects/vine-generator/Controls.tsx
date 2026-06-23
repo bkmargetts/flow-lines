@@ -42,7 +42,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
   const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
   // The paint tool seeds roots (seeding=painted) or defines the fill region
   // (composition=fill, shape=painted).
-  const painting = state.seeding === 'painted' || (state.composition === 'fill' && state.fillShape === 'painted');
+  const painting = state.seeding === 'painted' || (state.composition === 'fill' && state.fillShape === 'painted') || state.composition === 'guide';
 
   const selectSpecies = (id: string) => {
     const preset = getVinePreset(id);
@@ -86,6 +86,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           <option value="bouquet">Bouquet</option>
           <option value="trellis">Trellis (climbers)</option>
           <option value="fill">Fill a shape</option>
+          <option value="guide">Along a drawn line</option>
           <option value="free">Free (from roots)</option>
         </select>
         <p className="paint-hint">
@@ -93,11 +94,26 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
             ? 'One designed specimen: a master gesture sweeping to a focal point, with white space.'
             : state.composition === 'fill'
               ? 'Vines colonise and fill the chosen shape.'
-              : state.composition === 'free'
-                ? 'Grow freely from the roots below.'
-                : 'A composed arrangement of vines.'}
+              : state.composition === 'guide'
+                ? 'Draw a line on the canvas and the vine grows along it — a letter, a shape, a flourish.'
+                : state.composition === 'free'
+                  ? 'Grow freely from the roots below.'
+                  : 'A composed arrangement of vines.'}
         </p>
       </div>
+
+      {state.composition === 'trellis' && (
+        <div className="control-group">
+          <label className="label-text">Support</label>
+          <select value={state.support} onChange={(e) => update({ support: e.target.value as VineState['support'] })}>
+            <option value="none">None</option>
+            <option value="lattice">Lattice panel</option>
+            <option value="arch">Arch</option>
+            <option value="obelisk">Obelisk</option>
+          </select>
+          <p className="paint-hint">A drawn garden support the climbers wrap.</p>
+        </div>
+      )}
 
       {(state.composition === 'bouquet' || state.composition === 'specimen') && (
         <div className="control-group">

@@ -32,7 +32,7 @@ const COMPOSITIONS = {
   'specimen+jar': ['--composition', 'specimen', '--vessel', 'jar', '--ground-line'],
   wreath: ['--composition', 'wreath', '--seed-count', '8'],
   'bouquet+vase': ['--composition', 'bouquet', '--vessel', 'vase', '--ground-line', '--seed-count', '6'],
-  trellis: ['--composition', 'trellis', '--seed-count', '4'],
+  trellis: ['--composition', 'trellis', '--support', 'lattice', '--seed-count', '4'],
   border: ['--composition', 'border'],
   'fill-heart': ['--composition', 'fill', '--fill-shape', 'heart', '--mode', 'colonization'],
   'free+notan': ['--composition', 'free', '--seeding', 'scatter', '--seed-count', '10', '--negative-space', '0.6'],

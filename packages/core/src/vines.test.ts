@@ -346,6 +346,58 @@ describe('generateVines', () => {
     expect(pointCount(occ.lines)).toBeLessThan(pointCount(flat.lines) * 0.98);
   });
 
+  it('grows along a supplied guide path (guide composition)', () => {
+    const path = [
+      { x: 60, y: 500 },
+      { x: 120, y: 300 },
+      { x: 220, y: 150 },
+      { x: 320, y: 120 },
+    ];
+    const result = generateVines(
+      baseOptions({
+        composition: 'guide',
+        mode: 'growth',
+        guidePaths: [path],
+        leaves: false,
+        flowers: false,
+        tendrils: false,
+      })
+    );
+    const stems = layers(result.lines, 'stem');
+    expect(stems.length).toBeGreaterThanOrEqual(1);
+    // The main stem should pass near the far end of the guide.
+    const allPts = stems.flatMap((s) => s.points);
+    const nearEnd = allPts.some((p) => Math.hypot(p.x - 320, p.y - 120) < 60);
+    expect(nearEnd).toBe(true);
+  });
+
+  it('falls back to painted startPoints as the guide when no guidePaths given', () => {
+    const result = generateVines(
+      baseOptions({
+        composition: 'guide',
+        mode: 'growth',
+        startPoints: [{ x: 80, y: 520 }, { x: 200, y: 300 }, { x: 320, y: 140 }],
+        leaves: false,
+        flowers: false,
+        tendrils: false,
+      })
+    );
+    expect(layers(result.lines, 'stem').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a trellis support adds drawn structure and is off by default', () => {
+    const common = { composition: 'trellis', mode: 'growth', seedCount: 3, density: 0.2, flowers: false } as const;
+    const bare = generateVines(baseOptions({ ...common, support: 'none' }));
+    const lattice = generateVines(baseOptions({ ...common, support: 'lattice' }));
+    expect(lattice.lines).not.toEqual(bare.lines);
+    expect(layers(lattice.lines, 'stem').length).toBeGreaterThan(layers(bare.lines, 'stem').length);
+  });
+
+  it('is deterministic for the guide composition', () => {
+    const opts = baseOptions({ composition: 'guide', mode: 'growth', seed: 12, guidePaths: [[{ x: 50, y: 500 }, { x: 200, y: 200 }]] });
+    expect(generateVines(opts).lines).toEqual(generateVines(opts).lines);
+  });
+
   it('keeps every botanical feature finite and roughly in bounds', () => {
     const result = generateVines(
       baseOptions({

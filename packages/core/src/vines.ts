@@ -29,7 +29,9 @@ import { applyHandDrawnStyle } from './hand-drawn.js';
 
 export type VineMode = 'growth' | 'colonization';
 export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
-export type VineComposition = 'specimen' | 'free' | 'wreath' | 'border' | 'bouquet' | 'trellis' | 'fill';
+export type VineComposition = 'specimen' | 'free' | 'wreath' | 'border' | 'bouquet' | 'trellis' | 'fill' | 'guide';
+/** A drawn support the climbers wrap (trellis composition). */
+export type VineSupport = 'none' | 'lattice' | 'arch' | 'obelisk';
 /** A drawn container the arrangement rises out of (bouquet/specimen). */
 export type VineVessel = 'none' | 'vase' | 'pot' | 'jar' | 'urn' | 'amphora' | 'bud-vase' | 'mason-jar' | 'bowl';
 /** Region a `fill` composition grows into. */
@@ -69,6 +71,11 @@ export interface VinesOptions {
   seedCount?: number;
 
   // — page composition —
+  /** Guide polylines the stems grow along ('guide' composition). Normalized or
+   *  pixel coordinates accepted; callers pass page-pixel points. */
+  guidePaths?: Point[][];
+  /** A drawn support the climbers wrap, for the 'trellis' composition. */
+  support?: VineSupport;
   /** A drawn container the stems rise out of (bouquet/specimen); 'none' off. */
   vessel?: VineVessel;
   /** Draw a hand-drawn ground line under the arrangement. */
@@ -520,6 +527,8 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     vessel = 'none',
     groundLine = false,
     negativeSpace = 0,
+    guidePaths,
+    support = 'none',
   } = options;
 
   const penPx = Math.max(0.6, penWidth);
@@ -573,13 +582,14 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt }, rng);
     rawStems = colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, undefined);
   } else {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt, baseOverride }, rng);
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt, baseOverride, guidePaths }, rng);
     // The specimen's focal point is the end of its master gesture.
     if (composition === 'specimen' && roots[0]?.guide) focal = roots[0].guide[roots[0].guide.length - 1];
-    // A wreath's arcs are *designed* to overlap into a closed ring, so the
-    // proximity break (which would stop each arc as it nears its neighbour and
-    // tear gaps in the ring) is disabled for it.
-    const useGrid = avoidOverlap && composition !== 'wreath' ? growthGrid : null;
+    // A wreath's arcs — and a 'guide' composition's traced paths — are *designed*
+    // to overlap (a closed ring, a self-crossing letterform), so the proximity
+    // break (which would stop each stem as it nears another and tear the shape)
+    // is disabled for them.
+    const useGrid = avoidOverlap && composition !== 'wreath' && composition !== 'guide' ? growthGrid : null;
     rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, useGrid, spacing, weightAt);
   }
 
@@ -595,9 +605,16 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     elements.push({ lines, silhouette });
   };
 
-  // Page furniture sits behind everything: the ground line first (no silhouette,
-  // so it's occluded but occludes nothing), then the vessel (a solid the stems
-  // rise out of), then the stems and foliage in front.
+  // Page furniture sits behind everything: a trellis support (no silhouette, so
+  // the climbers draw over it), the ground line, then the vessel, then the
+  // stems and foliage in front.
+  if (composition === 'trellis' && support !== 'none') {
+    const sup = applyHandDrawnStyle(
+      { lines: buildSupport(support, width, height, margin), width, height, seed: seed + 333 },
+      { amplitude: Math.max(wobble, 0.4), wavelength: 80, seed: seed + 333 }
+    ).lines;
+    add(sup, []);
+  }
   if (groundLine) {
     const g = applyHandDrawnStyle(
       { lines: [buildGround(width, height, margin, wantsVessel ? vesselBottomY : undefined, wobble)], width, height, seed: seed + 511 },
@@ -808,6 +825,8 @@ interface RootOpts {
   weightAt?: ((x: number, y: number) => number) | null;
   /** When a vessel is drawn, the arrangement is based at its mouth. */
   baseOverride?: Point;
+  /** Guide polylines the stems follow ('guide' composition). */
+  guidePaths?: Point[][];
 }
 
 /** Build the negative-space mass weight: 1 everywhere when off, else low inside
@@ -954,6 +973,25 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
         guide.push({ x: x + Math.sin(t * Math.PI * 2 + k) * width * 0.03, y: (height - margin) + ((margin) - (height - margin)) * t });
       }
       roots.push(guided(guide, baseHalf));
+    }
+    return roots;
+  }
+
+  if (o.composition === 'guide') {
+    // Grow a stem along each supplied guide polyline (a traced SVG path, a
+    // letterform, or the freehand painted stroke). Falls back to the painted
+    // points as one path so the paint tool "just works".
+    const paths = (o.guidePaths && o.guidePaths.length > 0)
+      ? o.guidePaths
+      : o.startPoints.length >= 2
+        ? [o.startPoints]
+        : [];
+    const roots: Root[] = [];
+    for (const path of paths) {
+      if (path.length < 2) continue;
+      // Short side-branches so the foliage hugs the traced shape and the
+      // silhouette stays legible rather than bushing out into a thicket.
+      roots.push(guided(path, baseHalf, maxLength * 0.22));
     }
     return roots;
   }
@@ -1378,6 +1416,80 @@ function buildGround(width: number, height: number, margin: number, baseY: numbe
     pts.push({ x: x0 + (x1 - x0) * t, y: y0 + Math.sin(t * 7.5 + 1.3) * amp * env });
   }
   return { points: pts, layer: 'stem' };
+}
+
+/** A drawn garden support the trellis climbers wrap: a diamond lattice, a round
+ *  arch, or a tapering obelisk. Returned as stem-layer lines, drawn behind the
+ *  vines so they read as climbing it. */
+function buildSupport(support: VineSupport, width: number, height: number, margin: number): FlowLine[] {
+  if (support === 'none') return [];
+  const lines: FlowLine[] = [];
+  const x0 = margin * 1.6;
+  const x1 = width - margin * 1.6;
+  const yTop = margin * 1.6;
+  const yBot = height - margin * 1.4;
+  if (support === 'lattice') {
+    const step = (x1 - x0) / 7;
+    const within = (p: Point) => p.y >= yTop && p.y <= yBot;
+    // Two diagonal families (slope ±1) crossing into diamonds, clipped to the
+    // panel; the offset `c` slides each diagonal across the frame.
+    for (let d = -14; d <= 14; d++) {
+      const c = d * step;
+      const a: Point[] = [];
+      const b: Point[] = [];
+      for (let s = 0; s <= 1.0001; s += 0.05) {
+        const px = x0 + (x1 - x0) * s;
+        a.push({ x: px, y: yTop + (px - x0) + c });
+        b.push({ x: px, y: yBot - (px - x0) - c });
+      }
+      const ca = a.filter(within);
+      const cb = b.filter(within);
+      if (ca.length >= 2) lines.push({ points: ca, layer: 'stem' });
+      if (cb.length >= 2) lines.push({ points: cb, layer: 'stem' });
+    }
+    // A frame.
+    lines.push({ points: [{ x: x0, y: yTop }, { x: x1, y: yTop }, { x: x1, y: yBot }, { x: x0, y: yBot }, { x: x0, y: yTop }], layer: 'stem' });
+    return lines;
+  }
+  if (support === 'arch') {
+    const cx = width / 2;
+    const r = (x1 - x0) / 2;
+    const archTop = yTop + r;
+    // Two uprights and a semicircular crown.
+    lines.push({ points: [{ x: x0, y: yBot }, { x: x0, y: archTop }], layer: 'stem' });
+    lines.push({ points: [{ x: x1, y: yBot }, { x: x1, y: archTop }], layer: 'stem' });
+    const crown: Point[] = [];
+    for (let s = 0; s <= 24; s++) {
+      const a = Math.PI - (s / 24) * Math.PI;
+      crown.push({ x: cx + Math.cos(a) * r, y: archTop - Math.sin(a) * r });
+    }
+    lines.push({ points: crown, layer: 'stem' });
+    // A couple of rungs.
+    for (const fy of [0.45, 0.72]) {
+      const y = archTop + (yBot - archTop) * fy;
+      lines.push({ points: [{ x: x0, y }, { x: x1, y }], layer: 'stem' });
+    }
+    return lines;
+  }
+  // obelisk: a tapering four-leg tepee with horizontal rings.
+  const cx = width / 2;
+  const halfBot = (x1 - x0) / 2;
+  const halfTop = halfBot * 0.12;
+  const legs = [
+    [{ x: cx - halfBot, y: yBot }, { x: cx - halfTop, y: yTop }],
+    [{ x: cx + halfBot, y: yBot }, { x: cx + halfTop, y: yTop }],
+    [{ x: cx - halfBot * 0.5, y: yBot }, { x: cx, y: yTop }],
+    [{ x: cx + halfBot * 0.5, y: yBot }, { x: cx, y: yTop }],
+  ];
+  for (const [a, b] of legs) lines.push({ points: [a, b], layer: 'stem' });
+  for (const fy of [0.25, 0.55, 0.82]) {
+    const half = halfBot + (halfTop - halfBot) * fy;
+    const y = yBot + (yTop - yBot) * fy;
+    lines.push({ points: [{ x: cx - half, y }, { x: cx + half, y }], layer: 'stem' });
+  }
+  // A finial.
+  lines.push({ points: [{ x: cx, y: yTop }, { x: cx, y: yTop - margin * 0.6 }], layer: 'stem' });
+  return lines;
 }
 
 /** Half-width fraction along a vessel profile (top=0 → base=1), smoothstep

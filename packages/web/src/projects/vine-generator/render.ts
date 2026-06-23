@@ -47,6 +47,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     seedCount: state.seedCount,
 
     vessel: state.vessel,
+    support: state.support,
     groundLine: state.groundLine,
     negativeSpace: state.negativeSpace,
 
