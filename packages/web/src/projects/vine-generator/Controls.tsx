@@ -331,6 +331,45 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
               <option value="mixed">Mixed</option>
             </select>
           </div>
+          <div className="control-group">
+            <label className="label-text">Leaf arrangement</label>
+            <select value={state.leafArrangement} onChange={(e) => update({ leafArrangement: e.target.value as VineState['leafArrangement'] })}>
+              <option value="simple">Simple (one blade)</option>
+              <option value="pinnate">Pinnate (leaflets on a rachis)</option>
+              <option value="bipinnate">Bipinnate (fern frond)</option>
+              <option value="palmate">Palmate (radiating)</option>
+              <option value="trifoliate">Trifoliate (three)</option>
+            </select>
+          </div>
+          {state.leafArrangement !== 'simple' && state.leafArrangement !== 'trifoliate' && (
+            <Slider
+              label="Leaflets"
+              value={state.leafletCount}
+              min={3}
+              max={11}
+              step={1}
+              onChange={(v) => update({ leafletCount: Math.round(v) })}
+            />
+          )}
+          <div className="control-group">
+            <label className="label-text">Phyllotaxis</label>
+            <select value={state.phyllotaxis} onChange={(e) => update({ phyllotaxis: e.target.value as VineState['phyllotaxis'] })}>
+              <option value="alternate">Alternate</option>
+              <option value="opposite">Opposite (pairs)</option>
+              <option value="whorled">Whorled (ring)</option>
+              <option value="spiral">Spiral (golden angle)</option>
+            </select>
+          </div>
+          {state.phyllotaxis === 'whorled' && (
+            <Slider
+              label="Leaves per node"
+              value={state.whorlCount}
+              min={2}
+              max={6}
+              step={1}
+              onChange={(v) => update({ whorlCount: Math.round(v) })}
+            />
+          )}
           <label className="checkbox-label">
             <input type="checkbox" checked={state.veins} onChange={(e) => update({ veins: e.target.checked })} />
             Veins
@@ -339,16 +378,76 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       )}
 
       {state.flowers && (
-        <div className="control-group">
-          <label className="label-text">Flower type</label>
-          <select value={state.flowerType} onChange={(e) => update({ flowerType: e.target.value as VineState['flowerType'] })}>
-            <option value="rose">Rose (5-petal)</option>
-            <option value="daisy">Daisy (composite)</option>
-            <option value="bell">Bell</option>
-            <option value="bud">Bud</option>
-            <option value="mixed">Mixed</option>
-          </select>
-        </div>
+        <>
+          <div className="control-group">
+            <label className="label-text">Flower type</label>
+            <select value={state.flowerType} onChange={(e) => update({ flowerType: e.target.value as VineState['flowerType'] })}>
+              <option value="rose">Rose (5-petal)</option>
+              <option value="daisy">Daisy (composite)</option>
+              <option value="bell">Bell</option>
+              <option value="bud">Bud</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </div>
+          <div className="control-group">
+            <label className="label-text">Inflorescence</label>
+            <select value={state.inflorescence} onChange={(e) => update({ inflorescence: e.target.value as VineState['inflorescence'] })}>
+              <option value="none">Single bloom</option>
+              <option value="raceme">Raceme (hanging spike)</option>
+              <option value="umbel">Umbel (radiating)</option>
+              <option value="spike">Spike (stalkless)</option>
+              <option value="corymb">Corymb (flat-topped)</option>
+            </select>
+          </div>
+          {state.inflorescence !== 'none' && (
+            <Slider
+              label="Florets"
+              value={state.floretCount}
+              min={3}
+              max={16}
+              step={1}
+              onChange={(v) => update({ floretCount: Math.round(v) })}
+            />
+          )}
+        </>
+      )}
+
+      <div className="control-group">
+        <label className="label-text">Fruit</label>
+        <select value={state.fruitType} onChange={(e) => update({ fruitType: e.target.value as VineState['fruitType'] })}>
+          <option value="none">None</option>
+          <option value="berry">Berries</option>
+          <option value="grape">Grapes</option>
+          <option value="rosehip">Rosehips</option>
+          <option value="pod">Pods</option>
+          <option value="catkin">Catkins</option>
+        </select>
+      </div>
+      {state.fruitType !== 'none' && (
+        <Slider
+          label="Fruit frequency"
+          value={state.fruitProb}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ fruitProb: v })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+      )}
+      <label className="checkbox-label">
+        <input type="checkbox" checked={state.thorns} onChange={(e) => update({ thorns: e.target.checked })} />
+        Thorns
+      </label>
+      {state.thorns && (
+        <Slider
+          label="Thorn density"
+          value={state.thornProb}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ thornProb: v })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
       )}
 
       <h3 className="section-title">Form &amp; light</h3>

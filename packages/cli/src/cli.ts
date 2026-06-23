@@ -37,6 +37,10 @@ import {
   type LeafType,
   type LeafStyle,
   type VineFlower,
+  type LeafArrangement,
+  type Phyllotaxis,
+  type Inflorescence,
+  type FruitType,
 } from '@flow-lines/core';
 
 /**
@@ -688,12 +692,22 @@ program
   .option('--no-veins', 'Omit leaf veins')
   .option('--leaf-size <number>', 'Leaf length in px', '26')
   .option('--leaf-spacing <number>', 'Arc-length leaf spacing in px', '30')
+  .option('--leaf-arrangement <a>', 'simple | pinnate | bipinnate | palmate | trifoliate', 'simple')
+  .option('--leaflet-count <number>', 'Leaflets per compound leaf', '5')
+  .option('--phyllotaxis <p>', 'alternate | opposite | whorled | spiral', 'alternate')
+  .option('--whorl-count <number>', 'Leaves per node (whorled phyllotaxis)', '3')
   .option('--no-tendrils', 'Omit tendrils')
   .option('--tendril-prob <number>', 'Tendril probability per site (0-1)', '0.12')
   .option('--no-flowers', 'Omit flowers')
   .option('--flower-type <t>', 'rose | daisy | bell | bud | mixed', 'rose')
   .option('--flower-prob <number>', 'Flower probability at stem tips (0-1)', '0.2')
   .option('--flower-size <number>', 'Bloom size in px', '12')
+  .option('--inflorescence <i>', 'none | raceme | umbel | spike | corymb', 'none')
+  .option('--floret-count <number>', 'Florets per inflorescence', '8')
+  .option('--thorns', 'Bear thorns along the stems')
+  .option('--thorn-prob <number>', 'Thorn density along stems (0-1)', '0.15')
+  .option('--fruit-type <f>', 'none | berry | grape | rosehip | pod | catkin', 'none')
+  .option('--fruit-prob <number>', 'Fruit-cluster probability per site (0-1)', '0.2')
   // ink
   .option('--palette <p>', 'Multi-pen palette: ink | botanical | rose | autumn', 'ink')
   .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1')
@@ -765,12 +779,22 @@ program
       veins: options.veins,
       leafSize: parseFloat(options.leafSize),
       leafSpacing: parseFloat(options.leafSpacing),
+      leafArrangement: options.leafArrangement as LeafArrangement,
+      leafletCount: parseInt(options.leafletCount, 10),
+      phyllotaxis: options.phyllotaxis as Phyllotaxis,
+      whorlCount: parseInt(options.whorlCount, 10),
       tendrils: options.tendrils,
       tendrilProb: parseFloat(options.tendrilProb),
       flowers: options.flowers,
       flowerType: options.flowerType as VineFlower,
       flowerProb: parseFloat(options.flowerProb),
       flowerSize: parseFloat(options.flowerSize),
+      inflorescence: options.inflorescence as Inflorescence,
+      floretCount: parseInt(options.floretCount, 10),
+      thorns: options.thorns ?? false,
+      thornProb: parseFloat(options.thornProb),
+      fruitType: options.fruitType as FruitType,
+      fruitProb: parseFloat(options.fruitProb),
       penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
     };
 

@@ -274,4 +274,102 @@ describe('generateVines', () => {
     );
     expect(layers(result.lines, 'stem').length).toBeGreaterThan(1);
   });
+
+  // ——— botanical authenticity (compound leaves, phyllotaxis, inflorescence,
+  //     thorns, fruit) ———
+
+  it('stays deterministic with all botanical features enabled', () => {
+    const opts = baseOptions({
+      seed: 7,
+      composition: 'specimen',
+      mode: 'growth',
+      leafArrangement: 'pinnate',
+      phyllotaxis: 'spiral',
+      inflorescence: 'raceme',
+      thorns: true,
+      fruitType: 'grape',
+    });
+    const a = generateVines(opts);
+    const b = generateVines(opts);
+    const c = generateVines({ ...opts, seed: 8 });
+    expect(b.lines).toEqual(a.lines);
+    expect(c.lines).not.toEqual(a.lines);
+  });
+
+  it('compound (pinnate) leaves change the output and add leaf blades', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.6, tendrils: false, flowers: false } as const;
+    const simple = generateVines(baseOptions({ ...common, leafArrangement: 'simple' }));
+    const pinnate = generateVines(baseOptions({ ...common, leafArrangement: 'pinnate', leafletCount: 5 }));
+    expect(pinnate.lines).not.toEqual(simple.lines);
+    expect(layers(pinnate.lines, 'leaf').length).toBeGreaterThan(layers(simple.lines, 'leaf').length);
+  });
+
+  it('phyllotaxis modes each produce distinct output, opposite adds leaves', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.5, tendrils: false, flowers: false } as const;
+    const alternate = generateVines(baseOptions({ ...common, phyllotaxis: 'alternate' }));
+    const opposite = generateVines(baseOptions({ ...common, phyllotaxis: 'opposite' }));
+    const spiral = generateVines(baseOptions({ ...common, phyllotaxis: 'spiral' }));
+    expect(opposite.lines).not.toEqual(alternate.lines);
+    expect(spiral.lines).not.toEqual(alternate.lines);
+    expect(spiral.lines).not.toEqual(opposite.lines);
+    // Opposite places a blade on both sides at each node.
+    expect(layers(opposite.lines, 'leaf').length).toBeGreaterThanOrEqual(layers(alternate.lines, 'leaf').length);
+  });
+
+  it('an inflorescence changes the tip and adds flower-layer geometry', () => {
+    const common = { composition: 'specimen', mode: 'growth', flowers: true, flowerProb: 0.9, density: 0.4 } as const;
+    const single = generateVines(baseOptions({ ...common, inflorescence: 'none' }));
+    const raceme = generateVines(baseOptions({ ...common, inflorescence: 'raceme', floretCount: 12 }));
+    expect(raceme.lines).not.toEqual(single.lines);
+    expect(layers(raceme.lines, 'flower').length).toBeGreaterThan(layers(single.lines, 'flower').length);
+  });
+
+  it('thorns add stem-layer geometry and are off by default', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.3, flowers: false, tendrils: false } as const;
+    const bare = generateVines(baseOptions({ ...common, thorns: false }));
+    const thorny = generateVines(baseOptions({ ...common, thorns: true, thornProb: 0.5 }));
+    expect(layers(thorny.lines, 'stem').length).toBeGreaterThan(layers(bare.lines, 'stem').length);
+  });
+
+  it('fruit reuses the flower layer and is off by default', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.4, flowers: false, tendrils: false } as const;
+    const none = generateVines(baseOptions({ ...common, fruitType: 'none' }));
+    const grapes = generateVines(baseOptions({ ...common, fruitType: 'grape', fruitProb: 0.8 }));
+    expect(grapes.lines).not.toEqual(none.lines);
+    expect(layers(grapes.lines, 'flower').length).toBeGreaterThan(layers(none.lines, 'flower').length);
+  });
+
+  it('occlusion still removes hidden geometry with compound (palmate) leaves', () => {
+    const common = { composition: 'specimen', mode: 'growth', leafArrangement: 'palmate', density: 0.8, flowers: false } as const;
+    const flat = generateVines(baseOptions({ ...common, occlude: false }));
+    const occ = generateVines(baseOptions({ ...common, occlude: true }));
+    expect(pointCount(occ.lines)).toBeLessThan(pointCount(flat.lines) * 0.98);
+  });
+
+  it('keeps every botanical feature finite and roughly in bounds', () => {
+    const result = generateVines(
+      baseOptions({
+        composition: 'specimen',
+        mode: 'growth',
+        leafArrangement: 'bipinnate',
+        phyllotaxis: 'whorled',
+        whorlCount: 4,
+        inflorescence: 'umbel',
+        thorns: true,
+        fruitType: 'grape',
+        density: 0.6,
+      })
+    );
+    const tol = 80;
+    for (const ln of result.lines) {
+      for (const p of ln.points) {
+        expect(Number.isFinite(p.x)).toBe(true);
+        expect(Number.isFinite(p.y)).toBe(true);
+        expect(p.x).toBeGreaterThanOrEqual(-tol);
+        expect(p.x).toBeLessThanOrEqual(result.width + tol);
+        expect(p.y).toBeGreaterThanOrEqual(-tol);
+        expect(p.y).toBeLessThanOrEqual(result.height + tol);
+      }
+    }
+  });
 });

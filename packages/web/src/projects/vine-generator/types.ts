@@ -1,5 +1,5 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType } from '@flow-lines/core';
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
@@ -73,12 +73,27 @@ export interface VineState {
   leafSizeMm: number;
   leafWidthRatio: number;
   leafSpacingMm: number;
+  /** Compound-leaf arrangement; 'simple' = one blade per site. */
+  leafArrangement: LeafArrangement;
+  leafletCount: number;
+  /** How successive leaves are inserted along a stem. */
+  phyllotaxis: Phyllotaxis;
+  whorlCount: number;
   tendrils: boolean;
   tendrilProb: number;
   flowers: boolean;
   flowerType: VineFlower;
   flowerProb: number;
   flowerSizeMm: number;
+  /** Multi-flower structure at the stem tips; 'none' = single bloom. */
+  inflorescence: Inflorescence;
+  floretCount: number;
+  /** Bear thorns along the stems. */
+  thorns: boolean;
+  thornProb: number;
+  /** Fruiting bodies; 'none' = off. */
+  fruitType: FruitType;
+  fruitProb: number;
 
   wobbleMm: number;
 
@@ -145,12 +160,22 @@ export const defaultVineState: VineState = {
   leafSizeMm: 12,
   leafWidthRatio: 0.55,
   leafSpacingMm: 12,
+  leafArrangement: 'simple',
+  leafletCount: 5,
+  phyllotaxis: 'alternate',
+  whorlCount: 3,
   tendrils: true,
   tendrilProb: 0.1,
   flowers: true,
   flowerType: 'rose',
   flowerProb: 0.3,
   flowerSizeMm: 5,
+  inflorescence: 'none',
+  floretCount: 8,
+  thorns: false,
+  thornProb: 0.15,
+  fruitType: 'none',
+  fruitProb: 0.2,
 
   wobbleMm: 0.2,
 

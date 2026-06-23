@@ -18,12 +18,12 @@ const outputDir = resolve(process.argv[2] ?? join(root, 'vines-gallery'));
 
 // Species character (mirrors presets.ts: leaf/flower/density/palette).
 const SPECIES = {
-  'wild-rose': ['--leaf-type', 'serrate', '--flower-type', 'rose', '--flower-prob', '0.4', '--density', '0.55', '--stem-width', '8', '--palette', 'rose'],
+  'wild-rose': ['--leaf-type', 'serrate', '--leaf-arrangement', 'pinnate', '--leaflet-count', '5', '--thorns', '--thorn-prob', '0.18', '--flower-type', 'rose', '--flower-prob', '0.4', '--density', '0.55', '--stem-width', '8', '--palette', 'rose'],
   ivy: ['--leaf-type', 'lobed', '--no-flowers', '--tendril-prob', '0.06', '--density', '0.7', '--stem-width', '6', '--palette', 'botanical'],
-  fern: ['--leaf-type', 'lance', '--leaf-style', 'veined', '--no-flowers', '--no-tendrils', '--density', '0.9', '--leaf-size', '18', '--leaf-spacing', '16', '--stem-width', '5', '--palette', 'botanical'],
-  wisteria: ['--leaf-type', 'ovate', '--flower-type', 'bud', '--flower-prob', '0.6', '--density', '0.5', '--gravitropism', '0.2', '--stem-width', '7', '--palette', 'botanical'],
-  eucalyptus: ['--leaf-type', 'cordate', '--no-flowers', '--no-tendrils', '--density', '0.5', '--leaf-size', '22', '--stem-width', '6', '--palette', 'botanical'],
-  grapevine: ['--leaf-type', 'lobed', '--flower-type', 'bud', '--flower-prob', '0.3', '--tendril-prob', '0.28', '--density', '0.6', '--stem-width', '8', '--palette', 'autumn'],
+  fern: ['--leaf-type', 'lance', '--leaf-style', 'veined', '--leaf-arrangement', 'bipinnate', '--leaflet-count', '9', '--no-flowers', '--no-tendrils', '--density', '0.5', '--leaf-size', '16', '--leaf-spacing', '18', '--stem-width', '5', '--palette', 'botanical'],
+  wisteria: ['--leaf-type', 'ovate', '--leaf-arrangement', 'pinnate', '--leaflet-count', '9', '--inflorescence', 'raceme', '--floret-count', '12', '--flower-type', 'bell', '--flower-prob', '0.7', '--density', '0.45', '--gravitropism', '0.2', '--stem-width', '7', '--palette', 'botanical'],
+  eucalyptus: ['--leaf-type', 'cordate', '--phyllotaxis', 'opposite', '--no-flowers', '--no-tendrils', '--density', '0.5', '--leaf-size', '22', '--stem-width', '6', '--palette', 'botanical'],
+  grapevine: ['--leaf-type', 'lobed', '--fruit-type', 'grape', '--fruit-prob', '0.4', '--no-flowers', '--tendril-prob', '0.28', '--density', '0.55', '--stem-width', '8', '--palette', 'autumn'],
 };
 
 // Page compositions — exercises wreath closure, vessel/ground, and notan.
