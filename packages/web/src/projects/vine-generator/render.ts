@@ -49,6 +49,9 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     stemShade: state.stemShade,
     occlude: state.occlude,
     sketch: state.sketch,
+    perspective: state.perspective,
+    depthSpread: state.depthSpread,
+    castShadow: state.castShadow,
 
     density: state.density,
     leaves: state.leaves,
@@ -79,6 +82,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
       tendril: state.strokeColor,
       leaf: state.leafColor,
       flower: state.flowerColor,
+      shadow: state.strokeColor,
     },
   };
 }

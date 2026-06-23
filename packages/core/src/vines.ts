@@ -89,6 +89,13 @@ export interface VinesOptions {
   occlude?: boolean;
   /** 0..1 hand-sketched overdraw: repeats every line with small variation. */
   sketch?: number;
+  /** 0..1 atmospheric perspective: near stems grow larger/bolder/in-front,
+   *  far ones smaller/lighter/behind. 0 = flat. */
+  perspective?: number;
+  /** 0..1 how wide the front→back depth range of the stems is. */
+  depthSpread?: number;
+  /** 0..1 contact shadows cast by overlapping elements onto what's behind. */
+  castShadow?: number;
 
   // — decorations —
   /** 0..1 overall foliage density (leaf clusters, spacing, bloom frequency). */
@@ -111,16 +118,17 @@ export interface VinesOptions {
   wobble?: number;
 }
 
-/** A grown stem: a centerline, the half-width it carries at its base, and
- *  whether it's a side-branch (tapered to a point where it joins its parent). */
+/** A grown stem: a centerline, the half-width it carries at its base, whether
+ *  it's a side-branch, and its scene depth (0 far … 1 near) for perspective. */
 interface Stem {
   points: Point[];
   baseHalf: number;
   branch: boolean;
+  zdepth: number;
 }
 
 /** A growth root: position, initial heading, the width/length it starts with,
- *  and an optional guide curve (the composed master gesture). */
+ *  an optional guide curve (the composed master gesture), and scene depth. */
 interface Root {
   x: number;
   y: number;
@@ -128,6 +136,7 @@ interface Root {
   half: number;
   maxLength: number;
   guide?: Point[];
+  zdepth: number;
 }
 
 /** A drawable element: its marks, a closed silhouette for occlusion, and a
@@ -293,6 +302,58 @@ class ZBuffer {
     if (cx < 0 || cx >= this.cols || cy < 0 || cy >= this.rows) return false;
     return this.z[cy * this.cols + cx] > z + 0.5;
   }
+
+  /** The nearest element's z covering a point, or -1 on bare paper. */
+  zAt(x: number, y: number): number {
+    const cx = Math.floor(x / this.cell);
+    const cy = Math.floor(y / this.cell);
+    if (cx < 0 || cx >= this.cols || cy < 0 || cy >= this.rows) return -1;
+    return this.z[cy * this.cols + cx];
+  }
+}
+
+/** Contact shadows: where a nearer element sits between a surface and the light,
+ *  lay short hatch strokes on that surface (the away-from-light side of the
+ *  occluder), so overlapping elements read as casting shadows onto each other. */
+function castShadows(
+  zbuf: ZBuffer,
+  light: Point,
+  width: number,
+  height: number,
+  penPx: number,
+  strength: number,
+  cap: number
+): FlowLine[] {
+  const lines: FlowLine[] = [];
+  const ang = Math.atan2(light.y, light.x) + Math.PI / 2; // strokes run along the shadow edge
+  const dx = Math.cos(ang);
+  const dy = Math.sin(ang);
+  const nx = -dy;
+  const ny = dx;
+  const dist = penPx * (2.5 + strength * 6); // how far an occluder's shadow reaches
+  const spacing = penPx * (1.4 + (1 - strength) * 2.4);
+  const cx = width / 2;
+  const cy = height / 2;
+  const half = Math.hypot(width, height) / 2 + spacing;
+  for (let v = -half; v <= half && lines.length < cap; v += spacing) {
+    let run: Point[] = [];
+    for (let u = -half; u <= half; u += penPx) {
+      const x = cx + dx * u + nx * v;
+      const y = cy + dy * u + ny * v;
+      const zp = zbuf.zAt(x, y);
+      const shadowed = zp >= 0 && zbuf.zAt(x + light.x * dist, y + light.y * dist) > zp + 0.5;
+      if (shadowed) {
+        run.push({ x, y });
+      } else if (run.length >= 2) {
+        lines.push({ points: run, layer: 'shadow' });
+        run = [];
+      } else {
+        run = [];
+      }
+    }
+    if (run.length >= 2) lines.push({ points: run, layer: 'shadow' });
+  }
+  return lines;
 }
 
 /** Resample a polyline to ~`step`-spaced points (endpoints kept). */
@@ -391,6 +452,9 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     stemShade = 'along',
     occlude = true,
     sketch = 0,
+    perspective = 0.4,
+    depthSpread = 0.6,
+    castShadow = 0.35,
     density = 0.45,
     leaves = true,
     leafStyle = 'shaded',
@@ -425,13 +489,13 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   let focal: Point | null = null;
   if (composition === 'fill') {
     const region = buildRegion(fillShape, startPoints, width, height, margin);
-    const fillRoots: Root[] = region.seeds.map((p) => ({ x: p.x, y: p.y, angle: -Math.PI / 2, half: baseHalf, maxLength }));
-    rawStems = colonize(fillRoots, { width, height, margin, stepLength, attractorCount: Math.max(attractorCount, 700), attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, region.inside);
+    const fillRoots: Root[] = region.seeds.map((p) => ({ x: p.x, y: p.y, angle: -Math.PI / 2, half: baseHalf, maxLength, zdepth: 0.5 }));
+    rawStems = colonize(fillRoots, { width, height, margin, stepLength, attractorCount: Math.max(attractorCount, 700), attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, region.inside, depthSpread);
   } else if (composition === 'free' && mode === 'colonization') {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
-    rawStems = colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength);
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, depthSpread }, rng);
+    rawStems = colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, undefined, depthSpread);
   } else {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, depthSpread }, rng);
     // The specimen's focal point is the end of its master gesture.
     if (composition === 'specimen' && roots[0]?.guide) focal = roots[0].guide[roots[0].guide.length - 1];
     rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, avoidOverlap ? growthGrid : null, spacing);
@@ -445,38 +509,49 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   ).lines.map((l) => l.points);
 
   const elements: Element[] = [];
-  const add = (lines: FlowLine[], silhouette: Point[][]): void => {
-    elements.push({ lines, silhouette, z: elements.length + 1 });
+  // Depth → draw order: with perspective, nearer (higher zdepth) elements sit in
+  // front; a small per-add increment breaks ties so a decoration sits over the
+  // stem it grew from. Without perspective, plain creation order (stems behind
+  // foliage). Depth → scale: nearer elements are larger, farther smaller.
+  let zc = 0;
+  const zOf = (zdepth: number): number =>
+    perspective > 0.01 ? zdepth * 1000 + zc++ * 0.001 : zc++;
+  const depthScale = (zdepth: number): number =>
+    perspective > 0.01 ? Math.max(0.4, 1 + perspective * (zdepth - 0.5) * 1.1) : 1;
+  const add = (lines: FlowLine[], silhouette: Point[][], z: number): void => {
+    elements.push({ lines, silhouette, z });
   };
 
-  // Stems (drawn behind the foliage).
+  // Stems (drawn behind the foliage), width scaled by depth.
   wobbled.forEach((center, i) => {
-    const built = buildStem(center, rawStems[i].baseHalf, { penPx, taper, vineFill, light, shadeDensity, stemShade, branch: rawStems[i].branch });
-    add(built.lines, built.silhouette);
+    const st = rawStems[i];
+    const built = buildStem(center, st.baseHalf * depthScale(st.zdepth), { penPx, taper, vineFill, light, shadeDensity, stemShade, branch: st.branch });
+    add(built.lines, built.silhouette, zOf(st.zdepth));
   });
 
   const focalR = Math.min(width, height) * 0.24;
 
-  // Decorations (in front, in placement order).
+  // Decorations (in front of the stem they grew from).
   decorate(
-    wobbled,
+    rawStems.map((s, i) => ({ points: wobbled[i], zdepth: s.zdepth })),
     {
       leaves, leafStyle, leafType, veins, leafSize, leafWidthRatio, leafSpacing,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
-      focal, focalR, density,
+      focal, focalR, density, perspective,
     },
     rng,
-    add
+    add,
+    depthScale,
+    zOf
   );
 
-  // Hidden-line removal: stamp each element's silhouette *edge* (front wins),
-  // then clip lines where a nearer element's edge crosses them — a small clean
-  // break at crossings rather than a large filled hole.
+  // Hidden-line removal: treat every element as a solid object — rasterize its
+  // silhouette into a z-buffer (nearest wins) and drop any line beneath a
+  // covered area, so things in front cleanly hide what's behind them.
   let outLines: FlowLine[];
   if (occlude) {
-    const zbuf = new ZBuffer(width, height, Math.max(1, penPx));
-    const gap = penPx * 1.1;
-    for (const el of elements) for (const poly of el.silhouette) zbuf.stampOutline(poly, el.z, gap);
+    const zbuf = new ZBuffer(width, height, Math.max(1, penPx * 0.75));
+    for (const el of elements) for (const poly of el.silhouette) zbuf.fill(poly, el.z);
     outLines = [];
     for (const el of elements) {
       for (const ln of el.lines) {
@@ -484,6 +559,13 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
           outLines.push({ ...ln, points: run });
           if (outLines.length >= LINE_CAP) break;
         }
+      }
+    }
+    // Contact shadows from overlapping elements, drawn on top of the surfaces
+    // they fall on (they're not themselves occluded).
+    if (castShadow > 0.01 && outLines.length < LINE_CAP) {
+      for (const s of castShadows(zbuf, light, width, height, penPx, castShadow, LINE_CAP - outLines.length)) {
+        outLines.push(s);
       }
     }
   } else {
@@ -595,12 +677,15 @@ interface RootOpts {
   seedCount: number;
   baseHalf: number;
   maxLength: number;
+  depthSpread: number;
 }
 
 function makeRoots(o: RootOpts, rng: () => number): Root[] {
   const { width, height, margin, baseHalf, maxLength } = o;
   const up = -Math.PI / 2;
   const jitter = () => (rng() - 0.5) * 0.5;
+  // A scene depth (0 far … 1 near) spread around the middle by `depthSpread`.
+  const zd = () => Math.max(0, Math.min(1, 0.5 + (rng() - 0.5) * o.depthSpread));
 
   // A designed single specimen: a master gesture from a base in the lower third
   // sweeping to a focal point on a rule-of-thirds intersection, leaving the
@@ -624,13 +709,13 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     ], 1);
     const startAngle = Math.atan2(guide[1].y - by, guide[1].x - bx);
     // A woody trunk that tapers up the gesture.
-    return [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide }];
+    return [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide, zdepth: 0.62 }];
   }
 
   // Build a guided root: a stem that follows a smoothed guide curve.
   const guided = (guide: Point[], half: number): Root => {
     const g = smoothPolyline(guide, 1);
-    return { x: g[0].x, y: g[0].y, angle: Math.atan2(g[1].y - g[0].y, g[1].x - g[0].x), half, maxLength: polylineLength(g) * 1.3, guide: g };
+    return { x: g[0].x, y: g[0].y, angle: Math.atan2(g[1].y - g[0].y, g[1].x - g[0].x), half, maxLength: polylineLength(g) * 1.3, guide: g, zdepth: zd() };
   };
 
   if (o.composition === 'wreath') {
@@ -711,7 +796,7 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     return roots;
   }
 
-  const base = (x: number, y: number, angle: number): Root => ({ x, y, angle: angle + jitter(), half: baseHalf, maxLength });
+  const base = (x: number, y: number, angle: number): Root => ({ x, y, angle: angle + jitter(), half: baseHalf, maxLength, zdepth: zd() });
 
   if (o.seeding === 'painted') return o.startPoints.map((p) => base(p.x, p.y, up));
   if (o.seeding === 'point') {
@@ -772,8 +857,9 @@ function growStems(
     guide?: Point[];
     gi: number;
     branch: boolean;
+    zdepth: number;
   }
-  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false }));
+  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false, zdepth: r.zdepth }));
   const minBranchLen = stepLength * 6;
 
   const inBounds = (x: number, y: number) => x >= margin && x <= width - margin && y >= margin && y <= height - margin;
@@ -835,6 +921,8 @@ function growStems(
             half: Math.max(0.6, parentLocal * 0.82),
             gi: 0,
             branch: true,
+            // Inherit the parent's depth with a small jitter, kept in [0,1].
+            zdepth: Math.max(0, Math.min(1, tip.zdepth + (rng() - 0.5) * 0.2)),
           });
         }
       }
@@ -842,7 +930,7 @@ function growStems(
 
     // Drop stubby branch fragments; keep all trunk/guide stems.
     if (pts.length >= 2 && (!tip.branch || polylineLength(pts) >= minBranchLen * 0.6)) {
-      stems.push({ points: pts, baseHalf: tip.half, branch: tip.branch });
+      stems.push({ points: pts, baseHalf: tip.half, branch: tip.branch, zdepth: tip.zdepth });
       if (grid) for (const q of toInsert) grid.add(q);
     }
   }
@@ -869,7 +957,8 @@ function colonize(
   baseHalf: number,
   penPx: number,
   maxLength: number,
-  region?: (x: number, y: number) => boolean
+  region?: (x: number, y: number) => boolean,
+  depthSpread = 0.6
 ): Stem[] {
   const { width, height, margin, stepLength } = p;
   const attractorCount = Math.min(p.attractorCount, 1500);
@@ -938,14 +1027,16 @@ function colonize(
     }
   }
 
-  return extractChains(nodes, baseHalf, penPx, maxLength);
+  return extractChains(nodes, baseHalf, penPx, maxLength, rng, depthSpread);
 }
 
 function extractChains(
   nodes: { x: number; y: number; parent: number }[],
   baseHalf: number,
   penPx: number,
-  longLen: number
+  longLen: number,
+  rng: () => number,
+  depthSpread: number
 ): Stem[] {
   const childCount = new Array(nodes.length).fill(0);
   for (const nd of nodes) if (nd.parent >= 0) childCount[nd.parent]++;
@@ -971,7 +1062,8 @@ function extractChains(
     if (pts.length >= 2) {
       const len = polylineLength(pts);
       const frac = Math.min(1, Math.sqrt(len / Math.max(1, longLen)));
-      stems.push({ points: pts, baseHalf: penPx + (baseHalf - penPx) * frac, branch: par >= 0 });
+      const zdepth = Math.max(0, Math.min(1, 0.5 + (rng() - 0.5) * depthSpread));
+      stems.push({ points: pts, baseHalf: penPx + (baseHalf - penPx) * frac, branch: par >= 0, zdepth });
     }
   }
   return stems;
@@ -1188,13 +1280,17 @@ interface DecorParams {
   focalR: number;
   /** 0..1 overall foliage density — scales leaf clusters, spacing and blooms. */
   density: number;
+  /** 0..1 atmospheric perspective (drives detail falloff on far foliage). */
+  perspective: number;
 }
 
 function decorate(
-  stems: Point[][],
+  stems: { points: Point[]; zdepth: number }[],
   d: DecorParams,
   rng: () => number,
-  add: (lines: FlowLine[], sil: Point[][]) => void
+  add: (lines: FlowLine[], sil: Point[][], z: number) => void,
+  depthScale: (zdepth: number) => number,
+  zOf: (zdepth: number) => number
 ): void {
   // 0..1 nearness to the composition focal point (0 when there's no focal).
   const nearFocal = (p: Point): number => {
@@ -1209,10 +1305,17 @@ function decorate(
   const dens = Math.max(0, Math.min(1, d.density));
   const spacingFactor = 1.7 - dens; // ~1.7× spacing at 0 → ~0.7× at 1
 
-  for (const pts of stems) {
+  for (const stem of stems) {
+    const pts = stem.points;
     if (pts.length < 2) continue;
     const stemLen = polylineLength(pts);
     if (stemLen < d.leafSpacing) continue;
+
+    // Perspective: nearer foliage is larger; far foliage drops to plain
+    // outlines (detail falloff) and sits behind via its depth-ordered z.
+    const ds = depthScale(stem.zdepth);
+    const z = zOf(stem.zdepth);
+    const effStyle: LeafStyle = d.perspective > 0.01 && stem.zdepth < 0.4 ? 'outline' : d.leafStyle;
 
     let arc = 0;
     let nextLeaf = d.leafSpacing * spacingFactor * (0.5 + rng());
@@ -1227,20 +1330,20 @@ function decorate(
         side = (side === 1 ? -1 : 1) as 1 | -1;
         const along = arc / stemLen;
         const nf = nearFocal(pts[i]);
-        // Leaves swell gently toward the focal point.
-        const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.4 * nf);
+        // Leaves swell gently toward the focal point, and with depth.
+        const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.4 * nf) * ds;
         if (d.leaves) {
           // Cluster size driven by density (and a touch more near the focal).
           const cluster = 1 + (rng() < dens ? 1 : 0) + (rng() < (dens - 0.4 + 0.6 * nf) ? 1 : 0);
           for (let c = 0; c < cluster; c++) {
             const s: 1 | -1 = c === 0 ? side : ((rng() < 0.5 ? 1 : -1) as 1 | -1);
-            const leaf = makeLeaf(pts[i], dir, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, rng);
-            add(leaf.lines, leaf.silhouette);
+            const leaf = makeLeaf(pts[i], dir, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, effStyle, rng);
+            add(leaf.lines, leaf.silhouette, z);
           }
         }
         if (d.tendrils && rng() < d.tendrilProb) {
-          const t = makeTendril(pts[i], dir, (-side) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
-          add([t], []);
+          const t = makeTendril(pts[i], dir, (-side) as 1 | -1, d.leafSize * (0.8 + rng()) * ds, rng);
+          add([t], [], z);
         }
         nextLeaf += d.leafSpacing * spacingFactor * (0.7 + rng() * 0.6) * (1 - 0.3 * nf);
       }
@@ -1257,12 +1360,12 @@ function decorate(
       for (let b = 0; b < blooms; b++) {
         const jx = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
         const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
-        const f = makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng);
-        add(f.lines, f.silhouette);
+        const f = makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip) * ds, d.penPx, d.flowerType, d.light, rng);
+        add(f.lines, f.silhouette, z);
       }
     } else if (d.tendrils && rng() < d.tendrilProb) {
-      const t = makeTendril(tip, tipDir, (rng() < 0.5 ? 1 : -1) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
-      add([t], []);
+      const t = makeTendril(tip, tipDir, (rng() < 0.5 ? 1 : -1) as 1 | -1, d.leafSize * (0.8 + rng()) * ds, rng);
+      add([t], [], z);
     }
   }
 }
@@ -1293,6 +1396,7 @@ function makeLeaf(
   side: 1 | -1,
   len: number,
   d: DecorParams,
+  style: LeafStyle,
   rng: () => number
 ): { lines: FlowLine[]; silhouette: Point[][] } {
   const type: LeafType = d.leafType === 'mixed' ? LEAF_TYPES[Math.floor(rng() * LEAF_TYPES.length)] : d.leafType;
@@ -1349,11 +1453,11 @@ function makeLeaf(
   if (tilt > 0.78) {
     // Edge-on: just a folded sickle (one edge + optional midrib).
     lines.push({ points: left, layer: 'leaf' });
-    if (d.veins && d.leafStyle !== 'outline') lines.push({ points: axis.map((p) => ({ ...p })), layer: 'vein' });
+    if (d.veins && style !== 'outline') lines.push({ points: axis.map((p) => ({ ...p })), layer: 'vein' });
     return { lines, silhouette: [poly] };
   }
 
-  if (d.leafStyle === 'solid') {
+  if (style === 'solid') {
     return { lines: ribbon(densify(axis, penPx), normalsOf(densify(axis, penPx)), densify(axis, penPx).map((_, i, arr) => halfAt(i / (arr.length - 1))), penPx, 'leaf', 'solid'), silhouette: [poly] };
   }
 
@@ -1362,7 +1466,7 @@ function makeLeaf(
   lines.push({ points: (litIsPlus ? right : left), layer: 'leaf', pen: 'bold' });
 
   // Veins: a midrib plus secondary veins curving toward the tip.
-  if (d.veins && d.leafStyle !== 'outline') {
+  if (d.veins && style !== 'outline') {
     lines.push({ points: axis.map((p) => ({ ...p })), layer: 'vein' }); // midrib
     const veinN = Math.max(3, Math.round(len / (penPx * 12)));
     for (let v = 1; v <= veinN; v++) {
@@ -1385,7 +1489,7 @@ function makeLeaf(
   }
 
   // Shadow hatching: fine cross strokes from the midrib to the shadow edge.
-  if (d.leafStyle === 'shaded' && d.shadeDensity > 0.01) {
+  if (style === 'shaded' && d.shadeDensity > 0.01) {
     const hatchStep = penPx * (2 + (1 - d.shadeDensity) * 5);
     let acc = 0;
     for (let i = 1; i < axis.length; i++) {

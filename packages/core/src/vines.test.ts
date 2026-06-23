@@ -142,6 +142,20 @@ describe('generateVines', () => {
     expect(layers(solid.lines, 'leaf').length).toBeGreaterThan(layers(outline.lines, 'leaf').length);
   });
 
+  it('perspective changes the drawing (depth scaling + ordering)', () => {
+    const flat = generateVines(baseOptions({ composition: 'specimen', mode: 'growth', perspective: 0 }));
+    const deep = generateVines(baseOptions({ composition: 'specimen', mode: 'growth', perspective: 0.9, depthSpread: 0.9 }));
+    expect(deep.lines).not.toEqual(flat.lines);
+  });
+
+  it('cast shadows add a shadow layer only when enabled and occluding', () => {
+    const common = { composition: 'specimen', mode: 'growth', occlude: true, perspective: 0.6, density: 0.8 } as const;
+    const off = generateVines(baseOptions({ ...common, castShadow: 0 }));
+    const on = generateVines(baseOptions({ ...common, castShadow: 0.7 }));
+    expect(layers(off.lines, 'shadow').length).toBe(0);
+    expect(layers(on.lines, 'shadow').length).toBeGreaterThan(0);
+  });
+
   it('density controls how much foliage is placed', () => {
     const sparse = generateVines(baseOptions({ density: 0.1, tendrils: false, flowers: false }));
     const lush = generateVines(baseOptions({ density: 0.95, tendrils: false, flowers: false }));

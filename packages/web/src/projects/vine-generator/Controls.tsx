@@ -284,13 +284,44 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         onChange={(v) => update({ shadeDensity: v })}
         format={(v) => v.toFixed(2)}
       />
+      <Slider
+        label="Perspective"
+        value={state.perspective}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ perspective: v })}
+        format={(v) => v.toFixed(2)}
+      />
+      {state.perspective > 0 && (
+        <Slider
+          label="Depth Spread"
+          value={state.depthSpread}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ depthSpread: v })}
+          format={(v) => v.toFixed(2)}
+        />
+      )}
       <div className="control-group">
         <label className="checkbox-label">
           <input type="checkbox" checked={state.occlude} onChange={(e) => update({ occlude: e.target.checked })} />
-          Depth (hide overlapped lines)
+          Solid overlap (hide covered lines)
         </label>
-        <p className="paint-hint">Leaves and stems in front cleanly interrupt what's behind them.</p>
+        <p className="paint-hint">Elements are opaque — those in front hide whatever they cover. Near elements sit in front when Perspective is up.</p>
       </div>
+      {state.occlude && (
+        <Slider
+          label="Cast Shadow"
+          value={state.castShadow}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ castShadow: v })}
+          format={(v) => v.toFixed(2)}
+        />
+      )}
       <div className="control-group">
         <label className="checkbox-label">
           <input type="checkbox" checked={state.avoidOverlap} onChange={(e) => update({ avoidOverlap: e.target.checked })} />

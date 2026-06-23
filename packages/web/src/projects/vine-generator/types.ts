@@ -43,6 +43,9 @@ export interface VineState {
   stemShade: StemShade;
   occlude: boolean;
   sketch: number;
+  perspective: number;
+  depthSpread: number;
+  castShadow: number;
 
   // decorations
   density: number;
@@ -103,6 +106,9 @@ export const defaultVineState: VineState = {
   stemShade: 'along',
   occlude: true,
   sketch: 0,
+  perspective: 0.4,
+  depthSpread: 0.6,
+  castShadow: 0.35,
 
   density: 0.45,
   leaves: true,
