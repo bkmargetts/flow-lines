@@ -1422,16 +1422,21 @@ function buildVessel(
   const poly = [...left, ...right.slice().reverse()];
 
   const lines: FlowLine[] = [];
-  lines.push({ points: [...poly, { ...poly[0] }], layer: 'stem' });
+  // Drawn outline = just the two side profiles. The mouth ellipse and base arc
+  // close the form; stroking the closed silhouette would draw a chord straight
+  // across the mouth (and base), doubling the rim. `poly` stays for occlusion.
+  lines.push({ points: left, layer: 'stem' });
+  lines.push({ points: right, layer: 'stem' });
 
   const depth = 0.16; // latitude-ellipse foreshortening (ry/rx)
 
-  // Mouth: the opening reads as a full ellipse; a slightly smaller, lower inner
-  // ellipse gives the rim a thickness (the lip).
+  // Mouth: one clean opening ellipse. A short arc along the *back* inner edge
+  // reads as wall thickness / an open cavity — without doubling the whole rim
+  // into a stacked "double circle".
   const rimHalf = hwAt[0];
   const rimRy = Math.max(2, rimHalf * depth);
   lines.push({ points: ellipseArc(cx, topY, rimHalf, rimRy, 0, 2 * Math.PI, 28), layer: 'stem' });
-  lines.push({ points: ellipseArc(cx, topY + rimRy * 0.7, rimHalf * 0.82, rimRy * 0.78, 0, 2 * Math.PI, 24), layer: 'stem' });
+  lines.push({ points: ellipseArc(cx, topY + rimRy * 0.45, rimHalf * 0.84, rimRy * 0.84, Math.PI * 1.12, Math.PI * 1.88, 16), layer: 'stem' });
 
   // Foot ring: the seated base plus a slightly higher inner edge (the foot's
   // top), both front (lower) arcs only since the back is hidden.
