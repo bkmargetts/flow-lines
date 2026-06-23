@@ -738,7 +738,95 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     }
   }
 
+  // Keep the margin clear: clip every line to the inner box so foliage, blooms
+  // and wobble that overhang the stems' growth bounds don't spill into the
+  // plotter's clear border. Done last, after wobble/sketch have moved points.
+  if (margin > 0) {
+    const x0 = margin;
+    const y0 = margin;
+    const x1 = width - margin;
+    const y1 = height - margin;
+    const clipped: FlowLine[] = [];
+    for (const ln of outLines) {
+      for (const run of clipPolylineToRect(ln.points, x0, y0, x1, y1)) {
+        clipped.push({ ...ln, points: run });
+      }
+    }
+    outLines = clipped;
+  }
+
   return { lines: outLines, width, height, seed };
+}
+
+/** Liang–Barsky clip of one segment to an axis-aligned rect; null if outside. */
+function clipSegmentToRect(
+  a: Point,
+  b: Point,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number
+): [Point, Point] | null {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const p = [-dx, dx, -dy, dy];
+  const q = [a.x - x0, x1 - a.x, a.y - y0, y1 - a.y];
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) {
+      if (q[i] < 0) return null; // parallel and outside
+    } else {
+      const r = q[i] / p[i];
+      if (p[i] < 0) {
+        if (r > t1) return null;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return null;
+        if (r < t1) t1 = r;
+      }
+    }
+  }
+  return [
+    { x: a.x + t0 * dx, y: a.y + t0 * dy },
+    { x: a.x + t1 * dx, y: a.y + t1 * dy },
+  ];
+}
+
+/** Clip a polyline to a rect, splitting it into the runs that lie inside — so
+ *  the plot keeps the margin clear instead of letting foliage spill past it. */
+function clipPolylineToRect(pts: Point[], x0: number, y0: number, x1: number, y1: number): Point[][] {
+  if (pts.length < 2) return [];
+  const runs: Point[][] = [];
+  let run: Point[] = [];
+  const eps = 1e-6;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = clipSegmentToRect(pts[i - 1], pts[i], x0, y0, x1, y1);
+    if (!seg) {
+      if (run.length >= 2) runs.push(run);
+      run = [];
+      continue;
+    }
+    const [a, b] = seg;
+    if (run.length === 0) {
+      run.push(a);
+    } else {
+      const last = run[run.length - 1];
+      // Segment re-entered the rect somewhere new → start a fresh run.
+      if (Math.hypot(a.x - last.x, a.y - last.y) > eps) {
+        if (run.length >= 2) runs.push(run);
+        run = [a];
+      }
+    }
+    run.push(b);
+    // Segment exited the rect (clipped end ≠ the real vertex) → end the run.
+    if (Math.hypot(b.x - pts[i].x, b.y - pts[i].y) > eps) {
+      if (run.length >= 2) runs.push(run);
+      run = [];
+    }
+  }
+  if (run.length >= 2) runs.push(run);
+  return runs;
 }
 
 /** Split a polyline into the runs whose points are not hidden by nearer ones. */
