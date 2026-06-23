@@ -51,14 +51,39 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           onChange={(e) => update({ composition: e.target.value as VineState['composition'] })}
         >
           <option value="specimen">Specimen (designed sprig)</option>
+          <option value="wreath">Wreath / garland</option>
+          <option value="border">Border / frame</option>
+          <option value="bouquet">Bouquet</option>
+          <option value="trellis">Trellis (climbers)</option>
+          <option value="fill">Fill a shape</option>
           <option value="free">Free (from roots)</option>
         </select>
         <p className="paint-hint">
           {state.composition === 'specimen'
             ? 'One designed specimen: a master gesture sweeping to a focal point, with white space.'
-            : 'Grow freely from the roots below.'}
+            : state.composition === 'fill'
+              ? 'Vines colonise and fill the chosen shape.'
+              : state.composition === 'free'
+                ? 'Grow freely from the roots below.'
+                : 'A composed arrangement of vines.'}
         </p>
       </div>
+
+      {state.composition === 'fill' && (
+        <div className="control-group">
+          <label className="label-text">Shape</label>
+          <select value={state.fillShape} onChange={(e) => update({ fillShape: e.target.value as VineState['fillShape'] })}>
+            <option value="heart">Heart</option>
+            <option value="circle">Circle</option>
+            <option value="oval">Oval</option>
+            <option value="diamond">Diamond</option>
+            <option value="painted">Painted region</option>
+          </select>
+          {state.fillShape === 'painted' && (
+            <p className="paint-hint">Paint a closed outline (Roots → Painted) to define the region.</p>
+          )}
+        </div>
+      )}
 
       <div className="control-group">
         <label className="label-text">Model</label>

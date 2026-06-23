@@ -68,6 +68,30 @@ describe('generateVines', () => {
     expect(layers(result.lines, 'stem').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('produces stems for every composition template', () => {
+    for (const composition of ['wreath', 'border', 'bouquet', 'trellis'] as const) {
+      const r = generateVines(baseOptions({ composition, seedCount: 5 }));
+      expect(layers(r.lines, 'stem').length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('fill composition grows a connected network inside the shape', () => {
+    const r = generateVines(
+      baseOptions({ composition: 'fill', fillShape: 'circle', attractorCount: 500, leaves: false, tendrils: false, flowers: false })
+    );
+    const stems = layers(r.lines, 'stem');
+    expect(stems.length).toBeGreaterThan(1);
+    // Stem centerlines should stay inside the circular region (with tolerance).
+    const cx = r.width / 2;
+    const cy = r.height / 2;
+    const R = Math.min((r.width - 40) * 0.46, (r.height - 40) * 0.46) + 20;
+    for (const s of stems) {
+      for (const p of s.points) {
+        expect(Math.hypot(p.x - cx, p.y - cy)).toBeLessThanOrEqual(R + 1);
+      }
+    }
+  });
+
   it('draws thicker vines as more fill passes (solid)', () => {
     const thin = generateVines(baseOptions({ vineFill: 'solid', stemWidth: 2, leaves: false, tendrils: false, flowers: false }));
     const thick = generateVines(baseOptions({ vineFill: 'solid', stemWidth: 12, leaves: false, tendrils: false, flowers: false }));

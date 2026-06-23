@@ -1,5 +1,5 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape } from '@flow-lines/core';
 
 /**
  * Vine Generator settings. Lengths are in millimetres (converted to px at the
@@ -13,6 +13,7 @@ import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafT
 export interface VineState {
   mode: VineMode;
   composition: VineComposition;
+  fillShape: FillShape;
   seeding: VineSeeding;
   seedCount: number;
 
@@ -76,6 +77,7 @@ export interface VineState {
 export const defaultVineState: VineState = {
   mode: 'growth',
   composition: 'specimen',
+  fillShape: 'heart',
   seeding: 'scatter',
   seedCount: 6,
 

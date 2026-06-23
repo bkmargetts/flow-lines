@@ -20,6 +20,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     seed: state.seed,
     mode: state.mode,
     composition: state.composition,
+    fillShape: state.fillShape,
     seeding: state.seeding,
     startPoints: state.maskPath,
     seedCount: state.seedCount,

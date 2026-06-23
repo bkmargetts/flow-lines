@@ -29,7 +29,9 @@ import { applyHandDrawnStyle } from './hand-drawn.js';
 
 export type VineMode = 'growth' | 'colonization';
 export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
-export type VineComposition = 'specimen' | 'free';
+export type VineComposition = 'specimen' | 'free' | 'wreath' | 'border' | 'bouquet' | 'trellis' | 'fill';
+/** Region a `fill` composition grows into. */
+export type FillShape = 'circle' | 'oval' | 'heart' | 'diamond' | 'painted';
 /** How a vine body is inked. */
 export type VineFill = 'shaded' | 'solid' | 'outline' | 'highlight';
 /** How a leaf is inked. */
@@ -48,6 +50,8 @@ export interface VinesOptions {
   mode?: VineMode;
   /** Page arrangement: a designed single specimen, or free growth from roots. */
   composition?: VineComposition;
+  /** Shape a `fill` composition grows into. */
+  fillShape?: FillShape;
   seeding?: VineSeeding;
   startPoints?: Point[];
   seedCount?: number;
@@ -363,6 +367,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     seed = Math.floor(Math.random() * 1000000),
     mode = 'growth',
     composition = 'specimen',
+    fillShape = 'circle',
     seeding = 'scatter',
     startPoints = [],
     seedCount = 6,
@@ -413,12 +418,24 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   const noise = createNoise(seed);
 
   const growthGrid = new ProximityGrid(width, height, Math.max(1, spacing));
-  const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
 
-  const rawStems: Stem[] =
-    mode === 'colonization'
-      ? colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength)
-      : growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, avoidOverlap ? growthGrid : null, spacing);
+  // Composition routes the growth: `fill` colonizes a region; `free` respects
+  // the mode/seeding; everything else grows along composed guide curves.
+  let rawStems: Stem[];
+  let focal: Point | null = null;
+  if (composition === 'fill') {
+    const region = buildRegion(fillShape, startPoints, width, height, margin);
+    const fillRoots: Root[] = region.seeds.map((p) => ({ x: p.x, y: p.y, angle: -Math.PI / 2, half: baseHalf, maxLength }));
+    rawStems = colonize(fillRoots, { width, height, margin, stepLength, attractorCount: Math.max(attractorCount, 700), attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, region.inside);
+  } else if (composition === 'free' && mode === 'colonization') {
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
+    rawStems = colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength);
+  } else {
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength }, rng);
+    // The specimen's focal point is the end of its master gesture.
+    if (composition === 'specimen' && roots[0]?.guide) focal = roots[0].guide[roots[0].guide.length - 1];
+    rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, avoidOverlap ? growthGrid : null, spacing);
+  }
 
   // Smooth (heavily, for flowing curves) then add a touch of wobble.
   const centerlines = rawStems.map((s) => smoothPolyline(s.points, 3));
@@ -438,9 +455,6 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     add(built.lines, built.silhouette);
   });
 
-  // The composition focal point is the end of the master gesture (specimen).
-  const guide = rawStems.length > 0 ? roots[0]?.guide : undefined;
-  const focal = composition === 'specimen' && mode === 'growth' && guide ? guide[guide.length - 1] : null;
   const focalR = Math.min(width, height) * 0.24;
 
   // Decorations (in front, in placement order).
@@ -511,6 +525,65 @@ function clipHidden(points: Point[], z: number, zbuf: ZBuffer): Point[][] {
 
 // ——— composition & seeding ———
 
+/** Even-odd point-in-polygon test. */
+function pointInPolygon(poly: Point[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i];
+    const b = poly[j];
+    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** An inside-test + interior seed points for a `fill` composition's region:
+ *  a centred built-in shape, or the painted polygon (auto-closed). */
+function buildRegion(
+  shape: FillShape,
+  startPoints: Point[],
+  width: number,
+  height: number,
+  margin: number
+): { inside: (x: number, y: number) => boolean; seeds: Point[] } {
+  const cx = width / 2;
+  const cy = height / 2;
+  const rx = (width - 2 * margin) * 0.46;
+  const ry = (height - 2 * margin) * 0.46;
+
+  let inside: (x: number, y: number) => boolean;
+  if (shape === 'painted' && startPoints.length >= 3) {
+    inside = (x, y) => pointInPolygon(startPoints, x, y);
+  } else if (shape === 'circle' || shape === 'oval') {
+    const ax = shape === 'circle' ? Math.min(rx, ry) : rx;
+    const ay = shape === 'circle' ? Math.min(rx, ry) : ry;
+    inside = (x, y) => ((x - cx) / ax) ** 2 + ((y - cy) / ay) ** 2 <= 1;
+  } else if (shape === 'diamond') {
+    inside = (x, y) => Math.abs(x - cx) / rx + Math.abs(y - cy) / ry <= 1;
+  } else {
+    // Heart curve: (x²+y²−1)³ − x²y³ ≤ 0 in normalised, y-up coordinates.
+    inside = (x, y) => {
+      const nx = (x - cx) / (rx * 1.1);
+      const ny = -(y - cy) / (ry * 1.1) + 0.25;
+      const a = nx * nx + ny * ny - 1;
+      return a * a * a - nx * nx * ny * ny * ny <= 0;
+    };
+  }
+
+  // Seed points inside the region (centre + interior samples for a stable start).
+  const seeds: Point[] = [];
+  if (inside(cx, cy)) seeds.push({ x: cx, y: cy });
+  let s = 12345;
+  for (let i = 0; i < 400 && seeds.length < 4; i++) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const x = margin + (s / 0x7fffffff) * (width - 2 * margin);
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const y = margin + (s / 0x7fffffff) * (height - 2 * margin);
+    if (inside(x, y)) seeds.push({ x, y });
+  }
+  if (seeds.length === 0) seeds.push({ x: cx, y: cy });
+  return { inside, seeds };
+}
+
 interface RootOpts {
   width: number;
   height: number;
@@ -552,6 +625,90 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     const startAngle = Math.atan2(guide[1].y - by, guide[1].x - bx);
     // A woody trunk that tapers up the gesture.
     return [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide }];
+  }
+
+  // Build a guided root: a stem that follows a smoothed guide curve.
+  const guided = (guide: Point[], half: number): Root => {
+    const g = smoothPolyline(guide, 1);
+    return { x: g[0].x, y: g[0].y, angle: Math.atan2(g[1].y - g[0].y, g[1].x - g[0].x), half, maxLength: polylineLength(g) * 1.3, guide: g };
+  };
+
+  if (o.composition === 'wreath') {
+    // Stems run around a ring, each covering an overlapping arc.
+    const cx = width / 2;
+    const cy = height / 2;
+    const R = Math.min(width - 2 * margin, height - 2 * margin) * 0.42;
+    const n = Math.max(3, o.seedCount);
+    const roots: Root[] = [];
+    for (let k = 0; k < n; k++) {
+      const a0 = (k / n) * 2 * Math.PI + jitter() * 0.3;
+      const span = (2 * Math.PI / n) * 1.5;
+      const guide: Point[] = [];
+      const steps = 10;
+      for (let s = 0; s <= steps; s++) {
+        const a = a0 + span * (s / steps);
+        const rr = R * (1 + 0.05 * Math.sin(a * 3));
+        guide.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr });
+      }
+      roots.push(guided(guide, baseHalf));
+    }
+    return roots;
+  }
+
+  if (o.composition === 'border') {
+    // One stem per edge, running just inside the margin (corners meet). Inset a
+    // little extra so the guide stays clear of the in-bounds edge.
+    const pad = margin + baseHalf * 2 + 6;
+    const x0 = pad;
+    const y0 = pad;
+    const x1 = width - pad;
+    const y1 = height - pad;
+    const corners = [
+      [{ x: x0, y: y1 }, { x: x0, y: y0 }],
+      [{ x: x0, y: y0 }, { x: x1, y: y0 }],
+      [{ x: x1, y: y0 }, { x: x1, y: y1 }],
+      [{ x: x1, y: y1 }, { x: x0, y: y1 }],
+    ];
+    return corners.map(([a, b]) => {
+      const guide: Point[] = [];
+      const steps = 10;
+      for (let s = 0; s <= steps; s++) guide.push({ x: a.x + (b.x - a.x) * (s / steps), y: a.y + (b.y - a.y) * (s / steps) });
+      return guided(guide, baseHalf);
+    });
+  }
+
+  if (o.composition === 'bouquet') {
+    // A fan of stems from one low base point.
+    const bx = o.startPoints[0]?.x ?? width / 2;
+    const by = o.startPoints[0]?.y ?? height - margin * 1.2;
+    const n = Math.max(2, o.seedCount);
+    const roots: Root[] = [];
+    for (let k = 0; k < n; k++) {
+      const fx = margin + ((k + 0.5) / n) * (width - 2 * margin);
+      const fy = margin + (0.15 + rng() * 0.25) * (height - 2 * margin);
+      const mx = (bx + fx) / 2 + (rng() - 0.5) * width * 0.1;
+      const my = (by + fy) / 2;
+      const guide = smoothPolyline([{ x: bx, y: by }, { x: mx, y: my }, { x: fx, y: fy }], 1);
+      roots.push(guided(guide, baseHalf * (1.2 - 0.3 * Math.abs(k - (n - 1) / 2) / n)));
+    }
+    return roots;
+  }
+
+  if (o.composition === 'trellis') {
+    // Several vertical climbers on a soft grid.
+    const n = Math.max(2, o.seedCount);
+    const roots: Root[] = [];
+    for (let k = 0; k < n; k++) {
+      const x = margin + ((k + 0.5) / n) * (width - 2 * margin);
+      const guide: Point[] = [];
+      const steps = 8;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        guide.push({ x: x + Math.sin(t * Math.PI * 2 + k) * width * 0.03, y: (height - margin) + ((margin) - (height - margin)) * t });
+      }
+      roots.push(guided(guide, baseHalf));
+    }
+    return roots;
   }
 
   const base = (x: number, y: number, angle: number): Root => ({ x, y, angle: angle + jitter(), half: baseHalf, maxLength });
@@ -711,16 +868,24 @@ function colonize(
   rng: () => number,
   baseHalf: number,
   penPx: number,
-  maxLength: number
+  maxLength: number,
+  region?: (x: number, y: number) => boolean
 ): Stem[] {
   const { width, height, margin, stepLength } = p;
   const attractorCount = Math.min(p.attractorCount, 1500);
   const arSq = p.attractorRadius * p.attractorRadius;
   const krSq = p.killRadius * p.killRadius;
 
+  // Scatter attractors; for a `fill` composition keep only those inside the
+  // target region so the network grows into its shape.
   const attractors: { x: number; y: number; alive: boolean }[] = [];
-  for (let i = 0; i < attractorCount; i++) {
-    attractors.push({ x: margin + rng() * (width - 2 * margin), y: margin + rng() * (height - 2 * margin), alive: true });
+  let tries = 0;
+  while (attractors.length < attractorCount && tries < attractorCount * 20) {
+    tries++;
+    const x = margin + rng() * (width - 2 * margin);
+    const y = margin + rng() * (height - 2 * margin);
+    if (region && !region(x, y)) continue;
+    attractors.push({ x, y, alive: true });
   }
 
   interface Node { x: number; y: number; parent: number; }
