@@ -41,6 +41,8 @@ export type LeafType = 'ovate' | 'lance' | 'cordate' | 'lobed' | 'serrate' | 'mi
 export type StemShade = 'none' | 'along' | 'cross';
 /** Flower species. */
 export type VineFlower = 'rose' | 'daisy' | 'bell' | 'bud' | 'mixed';
+/** Character of the hand-sketched overdraw. */
+export type SketchStyle = 'loose' | 'fine' | 'gestural' | 'scratchy';
 
 export interface VinesOptions {
   width: number;
@@ -89,6 +91,8 @@ export interface VinesOptions {
   occlude?: boolean;
   /** 0..1 hand-sketched overdraw: repeats every line with small variation. */
   sketch?: number;
+  /** Character of the sketch overdraw. */
+  sketchStyle?: SketchStyle;
   /** 0..1 atmospheric perspective: near stems grow larger/bolder/in-front,
    *  far ones smaller/lighter/behind. 0 = flat. */
   perspective?: number;
@@ -137,6 +141,8 @@ interface Root {
   maxLength: number;
   guide?: Point[];
   zdepth: number;
+  /** Cap on side-branch length (keeps wreath foliage hugging the ring). */
+  branchMaxLen?: number;
 }
 
 /** A drawable element: its marks, a closed silhouette for occlusion, and a
@@ -452,6 +458,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     stemShade = 'along',
     occlude = true,
     sketch = 0,
+    sketchStyle = 'loose',
     perspective = 0.4,
     depthSpread = 0.6,
     castShadow = 0.35,
@@ -573,17 +580,32 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   }
 
   // Sketchy overdraw: redraw every line a few times with low-frequency wobble.
-  if (sketch > 0.01 && outLines.length * 3 < LINE_CAP) {
-    const passes = 1 + Math.round(sketch * 2);
-    const acc: FlowLine[] = [];
-    for (let p = 0; p < passes; p++) {
-      const styled = applyHandDrawnStyle(
-        { lines: outLines, width, height, seed: seed + p * 9301 + 7 },
-        { amplitude: 0.5 + sketch * 1.6, wavelength: 28, jitter: sketch * 1.3, seed: seed + p * 9301 + 7 }
-      ).lines;
-      for (const l of styled) acc.push(l);
+  // The style sets the character (passes / wobble wavelength / amplitude /
+  // jitter); `sketch` is the intensity.
+  if (sketch > 0.01) {
+    const s = sketchStyle;
+    const passes =
+      s === 'fine' || s === 'scratchy' ? 1 + Math.round(sketch * 3) :
+      s === 'gestural' ? 1 + Math.round(sketch) :
+      1 + Math.round(sketch * 2);
+    const wavelength = s === 'gestural' ? 70 : s === 'fine' ? 16 : s === 'scratchy' ? 12 : 28;
+    const amplitude =
+      s === 'gestural' ? 0.8 + sketch * 3 :
+      s === 'fine' ? 0.3 + sketch * 0.9 :
+      s === 'scratchy' ? 0.4 + sketch * 1.2 :
+      0.5 + sketch * 1.6;
+    const jitter = s === 'scratchy' ? sketch * 2 : s === 'gestural' ? sketch * 1.6 : sketch * 1.1;
+    if (outLines.length * passes < LINE_CAP) {
+      const acc: FlowLine[] = [];
+      for (let p = 0; p < passes; p++) {
+        const styled = applyHandDrawnStyle(
+          { lines: outLines, width, height, seed: seed + p * 9301 + 7 },
+          { amplitude, wavelength, jitter, seed: seed + p * 9301 + 7 }
+        ).lines;
+        for (const l of styled) acc.push(l);
+      }
+      outLines = acc;
     }
-    outLines = acc;
   }
 
   return { lines: outLines, width, height, seed };
@@ -634,7 +656,9 @@ function buildRegion(
 
   let inside: (x: number, y: number) => boolean;
   if (shape === 'painted' && startPoints.length >= 3) {
-    inside = (x, y) => pointInPolygon(startPoints, x, y);
+    // Smooth the drawn outline; the even-odd test closes it implicitly.
+    const poly = smoothPolyline(startPoints, 2);
+    inside = (x, y) => pointInPolygon(poly, x, y);
   } else if (shape === 'circle' || shape === 'oval') {
     const ax = shape === 'circle' ? Math.min(rx, ry) : rx;
     const ay = shape === 'circle' ? Math.min(rx, ry) : ry;
@@ -712,30 +736,32 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     return [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide, zdepth: 0.62 }];
   }
 
-  // Build a guided root: a stem that follows a smoothed guide curve.
-  const guided = (guide: Point[], half: number): Root => {
+  // Build a guided root: a stem that follows a smoothed guide curve. An
+  // optional branch cap keeps its foliage from shooting off the guide.
+  const guided = (guide: Point[], half: number, branchMaxLen?: number): Root => {
     const g = smoothPolyline(guide, 1);
-    return { x: g[0].x, y: g[0].y, angle: Math.atan2(g[1].y - g[0].y, g[1].x - g[0].x), half, maxLength: polylineLength(g) * 1.3, guide: g, zdepth: zd() };
+    return { x: g[0].x, y: g[0].y, angle: Math.atan2(g[1].y - g[0].y, g[1].x - g[0].x), half, maxLength: polylineLength(g) * 1.3, guide: g, zdepth: zd(), branchMaxLen };
   };
 
   if (o.composition === 'wreath') {
-    // Stems run around a ring, each covering an overlapping arc.
+    // Stems run around a ring, each covering a slightly overlapping arc; side
+    // branches are kept short so the foliage hugs the ring.
     const cx = width / 2;
     const cy = height / 2;
     const R = Math.min(width - 2 * margin, height - 2 * margin) * 0.42;
     const n = Math.max(3, o.seedCount);
     const roots: Root[] = [];
     for (let k = 0; k < n; k++) {
-      const a0 = (k / n) * 2 * Math.PI + jitter() * 0.3;
-      const span = (2 * Math.PI / n) * 1.5;
+      const a0 = (k / n) * 2 * Math.PI + jitter() * 0.2;
+      const span = (2 * Math.PI / n) * 1.2;
       const guide: Point[] = [];
-      const steps = 10;
+      const steps = 12;
       for (let s = 0; s <= steps; s++) {
         const a = a0 + span * (s / steps);
-        const rr = R * (1 + 0.05 * Math.sin(a * 3));
+        const rr = R * (1 + 0.02 * Math.sin(a * 3));
         guide.push({ x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr });
       }
-      roots.push(guided(guide, baseHalf));
+      roots.push(guided(guide, baseHalf, maxLength * 0.4));
     }
     return roots;
   }
@@ -858,8 +884,9 @@ function growStems(
     gi: number;
     branch: boolean;
     zdepth: number;
+    branchMaxLen: number;
   }
-  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false, zdepth: r.zdepth }));
+  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false, zdepth: r.zdepth, branchMaxLen: r.branchMaxLen ?? Infinity }));
   const minBranchLen = stepLength * 6;
 
   const inBounds = (x: number, y: number) => x >= margin && x <= width - margin && y >= margin && y <= height - margin;
@@ -905,7 +932,7 @@ function growStems(
       if (grid && cleared) toInsert.push({ x, y });
 
       if (tip.depth < maxDepth && stack.length + stems.length < STEM_CAP && rng() < branchProb) {
-        const childMax = tip.maxLength * (0.5 + rng() * 0.28);
+        const childMax = Math.min(tip.branchMaxLen, tip.maxLength * (0.5 + rng() * 0.28));
         // Skip stubby branches — they read as thorns, not growth.
         if (childMax >= minBranchLen) {
           // Asymmetric bias gives a more designed, less even branch pattern.
@@ -923,6 +950,7 @@ function growStems(
             branch: true,
             // Inherit the parent's depth with a small jitter, kept in [0,1].
             zdepth: Math.max(0, Math.min(1, tip.zdepth + (rng() - 0.5) * 0.2)),
+            branchMaxLen: tip.branchMaxLen,
           });
         }
       }

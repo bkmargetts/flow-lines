@@ -40,7 +40,9 @@ function Slider(props: {
 /** Sidebar controls for the Vine Generator module. */
 export function VineGeneratorControls({ state, update }: ControlsProps<VineState>) {
   const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
-  const painting = state.seeding === 'painted';
+  // The paint tool seeds roots (seeding=painted) or defines the fill region
+  // (composition=fill, shape=painted).
+  const painting = state.seeding === 'painted' || (state.composition === 'fill' && state.fillShape === 'painted');
 
   const selectSpecies = (id: string) => {
     const preset = getVinePreset(id);
@@ -108,7 +110,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
             <option value="painted">Painted region</option>
           </select>
           {state.fillShape === 'painted' && (
-            <p className="paint-hint">Paint a closed outline (Roots → Painted) to define the region.</p>
+            <p className="paint-hint">Draw a closed outline with the paint tool below to define the region.</p>
           )}
         </div>
       )}
@@ -201,6 +203,26 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         max={1}
         step={0.05}
         onChange={(v) => update({ density: v })}
+        format={(v) => v.toFixed(2)}
+      />
+
+      <div className="control-group">
+        <label className="label-text">Season</label>
+        <select value={state.season} onChange={(e) => update({ season: e.target.value as VineState['season'] })}>
+          <option value="spring">Spring</option>
+          <option value="summer">Summer</option>
+          <option value="autumn">Autumn</option>
+          <option value="winter">Winter</option>
+        </select>
+        <p className="paint-hint">Shifts foliage only (palette stays your choice). Winter goes bare as strength rises.</p>
+      </div>
+      <Slider
+        label="Season Strength"
+        value={state.seasonStrength}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ seasonStrength: v })}
         format={(v) => v.toFixed(2)}
       />
 
@@ -366,6 +388,17 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         onChange={(v) => update({ sketch: v })}
         format={(v) => v.toFixed(2)}
       />
+      {state.sketch > 0 && (
+        <div className="control-group">
+          <label className="label-text">Sketch style</label>
+          <select value={state.sketchStyle} onChange={(e) => update({ sketchStyle: e.target.value as VineState['sketchStyle'] })}>
+            <option value="loose">Loose</option>
+            <option value="fine">Fine</option>
+            <option value="gestural">Gestural</option>
+            <option value="scratchy">Scratchy</option>
+          </select>
+        </div>
+      )}
 
       <h3 className="section-title">Style</h3>
 

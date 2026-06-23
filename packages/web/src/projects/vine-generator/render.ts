@@ -1,7 +1,19 @@
 import { generateVines, type VinesOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
-import type { VineState } from './types';
+import type { VineState, Season } from './types';
 import { getVinePalette } from './palettes';
+
+/** Per-season target multipliers on the foliage knobs (palette is untouched).
+ *  Blended from neutral (1) by `seasonStrength`. Winter rides the strength
+ *  slider from leafy (0) to bare (1). */
+const SEASON_FACTORS: Record<Season, { density: number; leafSize: number; flowerProb: number }> = {
+  spring: { density: 0.9, leafSize: 0.85, flowerProb: 1.1 },
+  summer: { density: 1.15, leafSize: 1.05, flowerProb: 1.0 },
+  autumn: { density: 0.65, leafSize: 1.0, flowerProb: 0.3 },
+  winter: { density: 0.05, leafSize: 0.7, flowerProb: 0.0 },
+};
+
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 /**
  * Pure render for the Vine Generator: state + page → lines. mm settings convert
@@ -13,6 +25,13 @@ import { getVinePalette } from './palettes';
 export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
   const mm = page.pxPerMm;
+
+  // Season modulates foliage amounts/sizes (not colour), blended by strength.
+  const sf = SEASON_FACTORS[state.season];
+  const t = state.seasonStrength;
+  const seasonDensity = state.density * lerp(1, sf.density, t);
+  const seasonLeafSize = state.leafSizeMm * lerp(1, sf.leafSize, t);
+  const seasonFlowerProb = state.flowerProb * lerp(1, sf.flowerProb, t);
 
   const options: VinesOptions = {
     width: page.widthPx,
@@ -50,23 +69,24 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     stemShade: state.stemShade,
     occlude: state.occlude,
     sketch: state.sketch,
+    sketchStyle: state.sketchStyle,
     perspective: state.perspective,
     depthSpread: state.depthSpread,
     castShadow: state.castShadow,
 
-    density: state.density,
+    density: seasonDensity,
     leaves: state.leaves,
     leafStyle: state.leafStyle,
     leafType: state.leafType,
     veins: state.veins,
-    leafSize: state.leafSizeMm * mm,
+    leafSize: seasonLeafSize * mm,
     leafWidthRatio: state.leafWidthRatio,
     leafSpacing: Math.max(1, state.leafSpacingMm * mm),
     tendrils: state.tendrils,
     tendrilProb: state.tendrilProb,
     flowers: state.flowers,
     flowerType: state.flowerType,
-    flowerProb: state.flowerProb,
+    flowerProb: seasonFlowerProb,
     flowerSize: state.flowerSizeMm * mm,
 
     wobble: state.wobbleMm * mm,

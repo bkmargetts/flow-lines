@@ -1,5 +1,7 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle } from '@flow-lines/core';
+
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
 /**
  * Vine Generator settings. Lengths are in millimetres (converted to px at the
@@ -45,9 +47,14 @@ export interface VineState {
   stemShade: StemShade;
   occlude: boolean;
   sketch: number;
+  sketchStyle: SketchStyle;
   perspective: number;
   depthSpread: number;
   castShadow: number;
+
+  // season (foliage only; palette stays manual)
+  season: Season;
+  seasonStrength: number;
 
   // decorations
   density: number;
@@ -111,9 +118,13 @@ export const defaultVineState: VineState = {
   stemShade: 'along',
   occlude: true,
   sketch: 0,
+  sketchStyle: 'loose',
   perspective: 0.4,
   depthSpread: 0.6,
   castShadow: 0.35,
+
+  season: 'summer',
+  seasonStrength: 0,
 
   density: 0.45,
   leaves: true,

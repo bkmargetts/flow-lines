@@ -162,6 +162,33 @@ describe('generateVines', () => {
     expect(layers(lush.lines, 'leaf').length).toBeGreaterThan(layers(sparse.lines, 'leaf').length);
   });
 
+  it('fill-painted grows inside the painted polygon', () => {
+    const poly = [
+      { x: 120, y: 150 }, { x: 280, y: 150 }, { x: 280, y: 430 }, { x: 120, y: 430 },
+    ];
+    const r = generateVines(
+      baseOptions({ composition: 'fill', fillShape: 'painted', startPoints: poly, attractorCount: 500, leaves: false, tendrils: false, flowers: false })
+    );
+    const stems = layers(r.lines, 'stem');
+    expect(stems.length).toBeGreaterThan(1);
+    const tol = 30;
+    for (const s of stems) {
+      for (const p of s.points) {
+        expect(p.x).toBeGreaterThanOrEqual(120 - tol);
+        expect(p.x).toBeLessThanOrEqual(280 + tol);
+        expect(p.y).toBeGreaterThanOrEqual(150 - tol);
+        expect(p.y).toBeLessThanOrEqual(430 + tol);
+      }
+    }
+  });
+
+  it('sketch style changes the overdraw character', () => {
+    const fine = generateVines(baseOptions({ sketch: 0.8, sketchStyle: 'fine' }));
+    const gestural = generateVines(baseOptions({ sketch: 0.8, sketchStyle: 'gestural' }));
+    expect(fine.lines).not.toEqual(gestural.lines);
+    expect(fine.lines.length).toBeGreaterThan(gestural.lines.length);
+  });
+
   it('sketchiness multiplies the line count', () => {
     const plain = generateVines(baseOptions({ sketch: 0 }));
     const sketchy = generateVines(baseOptions({ sketch: 0.8 }));
