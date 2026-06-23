@@ -105,6 +105,19 @@ describe('generateVines', () => {
     expect(pointCount(occluded.lines)).toBeLessThanOrEqual(pointCount(flat.lines));
   });
 
+  it('occludes overlapping foliage even with perspective on (no see-through)', () => {
+    // Regression: with perspective on, sibling leaves must still occlude each
+    // other — they previously shared a near-equal z and showed through.
+    const common = {
+      composition: 'specimen', mode: 'growth', perspective: 0.6, depthSpread: 0.7,
+      density: 0.95, leafStyle: 'solid', leafSize: 40, leafSpacing: 10, castShadow: 0,
+    } as const;
+    const occluded = generateVines(baseOptions({ ...common, occlude: true }));
+    const flat = generateVines(baseOptions({ ...common, occlude: false }));
+    // Occlusion should remove a real amount of covered geometry, not ~nothing.
+    expect(pointCount(occluded.lines)).toBeLessThan(pointCount(flat.lines) * 0.9);
+  });
+
   it('light angle changes the shaded side', () => {
     const common = { composition: 'specimen', mode: 'growth', vineFill: 'shaded', shadeDensity: 0.8, stemWidth: 10 } as const;
     const a = generateVines(baseOptions({ ...common, lightAngle: -135 }));

@@ -145,12 +145,13 @@ interface Root {
   branchMaxLen?: number;
 }
 
-/** A drawable element: its marks, a closed silhouette for occlusion, and a
- *  depth order (higher = nearer the viewer). */
+/** A drawable element: its marks, a closed silhouette for occlusion, and its
+ *  scene depth (0 far … 1 near). A strict integer draw order is derived from
+ *  depth + creation order so every element occludes its neighbours cleanly. */
 interface Element {
   lines: FlowLine[];
   silhouette: Point[][];
-  z: number;
+  depth: number;
 }
 
 /** Deterministic LCG, the same one used across the core generators. */
@@ -516,29 +517,24 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   ).lines.map((l) => l.points);
 
   const elements: Element[] = [];
-  // Depth → draw order: with perspective, nearer (higher zdepth) elements sit in
-  // front; a small per-add increment breaks ties so a decoration sits over the
-  // stem it grew from. Without perspective, plain creation order (stems behind
-  // foliage). Depth → scale: nearer elements are larger, farther smaller.
-  let zc = 0;
-  const zOf = (zdepth: number): number =>
-    perspective > 0.01 ? zdepth * 1000 + zc++ * 0.001 : zc++;
+  // Depth → scale: nearer (higher zdepth) elements are larger, farther smaller.
   const depthScale = (zdepth: number): number =>
     perspective > 0.01 ? Math.max(0.4, 1 + perspective * (zdepth - 0.5) * 1.1) : 1;
-  const add = (lines: FlowLine[], silhouette: Point[][], z: number): void => {
-    elements.push({ lines, silhouette, z });
+  const add = (lines: FlowLine[], silhouette: Point[][], depth: number): void => {
+    elements.push({ lines, silhouette, depth });
   };
 
-  // Stems (drawn behind the foliage), width scaled by depth.
+  // Stems (behind the foliage), width scaled by depth.
   wobbled.forEach((center, i) => {
     const st = rawStems[i];
     const built = buildStem(center, st.baseHalf * depthScale(st.zdepth), { penPx, taper, vineFill, light, shadeDensity, stemShade, branch: st.branch });
-    add(built.lines, built.silhouette, zOf(st.zdepth));
+    add(built.lines, built.silhouette, st.zdepth);
   });
 
   const focalR = Math.min(width, height) * 0.24;
 
-  // Decorations (in front of the stem they grew from).
+  // Decorations (in front of the stem they grew from — created after it, so the
+  // creation-order tiebreak keeps them on top at equal depth).
   decorate(
     rawStems.map((s, i) => ({ points: wobbled[i], zdepth: s.zdepth })),
     {
@@ -548,9 +544,17 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     },
     rng,
     add,
-    depthScale,
-    zOf
+    depthScale
   );
+
+  // Strict back-to-front draw order: by depth when perspective is on (near in
+  // front), else plain creation order; creation index always breaks ties. Each
+  // element gets a distinct integer z (gaps of 1) so neighbours occlude cleanly
+  // — without this, sibling leaves at near-equal depth show through each other.
+  const order = elements.map((_, i) => i);
+  order.sort((a, b) => (perspective > 0.01 ? elements[a].depth - elements[b].depth : 0) || a - b);
+  const zOfIndex = new Array<number>(elements.length);
+  order.forEach((id, rank) => { zOfIndex[id] = rank; });
 
   // Hidden-line removal: treat every element as a solid object — rasterize its
   // silhouette into a z-buffer (nearest wins) and drop any line beneath a
@@ -558,11 +562,12 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   let outLines: FlowLine[];
   if (occlude) {
     const zbuf = new ZBuffer(width, height, Math.max(1, penPx * 0.75));
-    for (const el of elements) for (const poly of el.silhouette) zbuf.fill(poly, el.z);
+    for (let id = 0; id < elements.length; id++) for (const poly of elements[id].silhouette) zbuf.fill(poly, zOfIndex[id]);
     outLines = [];
-    for (const el of elements) {
+    for (const id of order) {
+      const el = elements[id];
       for (const ln of el.lines) {
-        for (const run of clipHidden(ln.points, el.z, zbuf)) {
+        for (const run of clipHidden(ln.points, zOfIndex[id], zbuf)) {
           outLines.push({ ...ln, points: run });
           if (outLines.length >= LINE_CAP) break;
         }
@@ -576,7 +581,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
       }
     }
   } else {
-    outLines = elements.flatMap((el) => el.lines);
+    outLines = order.flatMap((id) => elements[id].lines);
   }
 
   // Sketchy overdraw: redraw every line a few times with low-frequency wobble.
@@ -1316,9 +1321,8 @@ function decorate(
   stems: { points: Point[]; zdepth: number }[],
   d: DecorParams,
   rng: () => number,
-  add: (lines: FlowLine[], sil: Point[][], z: number) => void,
-  depthScale: (zdepth: number) => number,
-  zOf: (zdepth: number) => number
+  add: (lines: FlowLine[], sil: Point[][], depth: number) => void,
+  depthScale: (zdepth: number) => number
 ): void {
   // 0..1 nearness to the composition focal point (0 when there's no focal).
   const nearFocal = (p: Point): number => {
@@ -1340,9 +1344,9 @@ function decorate(
     if (stemLen < d.leafSpacing) continue;
 
     // Perspective: nearer foliage is larger; far foliage drops to plain
-    // outlines (detail falloff) and sits behind via its depth-ordered z.
+    // outlines (detail falloff). Depth feeds the element draw order.
     const ds = depthScale(stem.zdepth);
-    const z = zOf(stem.zdepth);
+    const z = stem.zdepth;
     const effStyle: LeafStyle = d.perspective > 0.01 && stem.zdepth < 0.4 ? 'outline' : d.leafStyle;
 
     let arc = 0;
