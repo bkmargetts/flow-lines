@@ -2696,24 +2696,49 @@ function makeFruit(
     const seam: Point[] = [{ x: center.x, y: center.y }, { x: center.x + dx * L, y: center.y + dy * L }];
     return { lines: [{ points: pod, layer: 'flower' }, { points: seam, layer: 'flower' }], silhouette: [pod] };
   }
-  // catkin: a drooping fuzzy spike — a curved axis with many short ticks.
-  const a = Math.PI / 2 + (rng() - 0.5) * 0.5;
+  // catkin: a soft drooping lozenge — narrow at the stalk, swelling, then
+  // tapering to the tip — textured with short diagonal scales. (The old version
+  // was a bare axis with symmetric perpendicular ticks, which read as a stiff
+  // ladder rather than a fuzzy catkin.)
+  const a = Math.PI / 2 + (rng() - 0.5) * 0.5; // droops downward
   const dx = Math.cos(a);
   const dy = Math.sin(a);
   const px = -dy;
   const py = dx;
-  const L = size * 2.2;
-  const N = 14;
+  const L = size * 2.0;
+  const N = 16;
+  const bend = (rng() - 0.5) * 0.4;
   const axis: Point[] = [];
-  const bend = (rng() - 0.5) * 0.5;
   for (let i = 0; i <= N; i++) {
     const t = i / N;
     axis.push({ x: center.x + dx * L * t + px * bend * L * t * t, y: center.y + dy * L * t + py * bend * L * t * t });
   }
-  const lines: FlowLine[] = [{ points: smoothPolyline(axis, 1), layer: 'flower' }];
-  for (let i = 1; i < axis.length; i++) {
-    for (const s of [1, -1] as const) lines.push({ points: [axis[i], { x: axis[i].x + px * s * size * 0.18, y: axis[i].y + py * s * size * 0.18 }], layer: 'flower' });
+  const ax = smoothPolyline(axis, 1);
+  const halfAt = (t: number): number => Math.sin(Math.PI * Math.pow(t, 0.6)) * size * 0.3 * (1 - 0.35 * t);
+  const left: Point[] = [];
+  const right: Point[] = [];
+  for (let i = 0; i < ax.length; i++) {
+    const t = i / (ax.length - 1);
+    const h = halfAt(t);
+    left.push({ x: ax[i].x + px * h, y: ax[i].y + py * h });
+    right.push({ x: ax[i].x - px * h, y: ax[i].y - py * h });
   }
-  return { lines, silhouette: [] };
+  const outline = [...left, ...right.slice().reverse()];
+  const lines: FlowLine[] = [{ points: outline, layer: 'flower' }];
+  // Short diagonal scale-ticks, alternating sides, angled toward the tip.
+  for (let i = 1; i < ax.length - 1; i++) {
+    const t = i / (ax.length - 1);
+    const h = halfAt(t);
+    if (h < size * 0.06) continue;
+    const s = i % 2 ? 1 : -1;
+    lines.push({
+      points: [
+        { x: ax[i].x, y: ax[i].y },
+        { x: ax[i].x + px * s * h * 0.85 + dx * h * 0.4, y: ax[i].y + py * s * h * 0.85 + dy * h * 0.4 },
+      ],
+      layer: 'flower',
+    });
+  }
+  return { lines, silhouette: [outline] };
 }
 

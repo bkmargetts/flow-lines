@@ -200,5 +200,8 @@ export function crossVinePresets(a: VinePreset, b: VinePreset, rnd: () => number
   // Tasteful density — lighter when the plant is already structurally busy.
   const busy = (out.leafArrangement && out.leafArrangement !== 'simple') || (out.inflorescence && out.inflorescence !== 'none');
   out.density = Math.min(a.state.density ?? 0.45, 0.55) * (busy ? 0.7 : 1);
+  // Never drop a bare garden scaffold (lattice / arch / obelisk) into a random
+  // sprig — a support is a deliberate choice, not a trait to inherit by chance.
+  out.support = 'none';
   return out;
 }
