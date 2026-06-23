@@ -1357,7 +1357,7 @@ interface VesselSpec { profile: [number, number][]; h: number; w: number; }
 const VESSEL_SPECS: Record<Exclude<VineVessel, 'none'>, VesselSpec> = {
   vase: { h: 1.0, w: 1.0, profile: [[0, 0.92], [0.06, 0.96], [0.12, 0.76], [0.24, 0.8], [0.44, 1.14], [0.62, 1.24], [0.82, 1.0], [0.94, 0.76], [1, 0.7]] },
   urn: { h: 1.12, w: 0.95, profile: [[0, 0.96], [0.035, 1.06], [0.085, 0.84], [0.17, 0.72], [0.28, 0.88], [0.44, 1.2], [0.59, 1.36], [0.73, 1.22], [0.86, 0.9], [0.93, 0.6], [0.965, 0.68], [1, 0.58]] },
-  amphora: { h: 1.18, w: 0.9, profile: [[0, 0.62], [0.05, 0.74], [0.12, 0.6], [0.2, 0.66], [0.4, 0.98], [0.57, 1.04], [0.73, 0.84], [0.87, 0.48], [1, 0.16]] },
+  amphora: { h: 1.18, w: 0.9, profile: [[0, 0.62], [0.05, 0.74], [0.12, 0.6], [0.2, 0.66], [0.4, 0.98], [0.57, 1.04], [0.73, 0.82], [0.86, 0.5], [0.93, 0.3], [0.965, 0.22], [0.985, 0.32], [1, 0.26]] },
   'bud-vase': { h: 1.04, w: 0.72, profile: [[0, 0.52], [0.07, 0.46], [0.2, 0.4], [0.38, 0.52], [0.57, 0.9], [0.75, 1.0], [0.87, 0.84], [0.95, 0.6], [1, 0.5]] },
   pot: { h: 0.82, w: 1.05, profile: [[0, 1.0], [0.03, 1.08], [0.08, 1.0], [0.5, 0.82], [0.9, 0.64], [0.96, 0.6], [1, 0.64]] },
   jar: { h: 0.94, w: 1.0, profile: [[0, 0.8], [0.04, 0.84], [0.1, 0.88], [0.16, 0.84], [0.26, 0.96], [0.38, 1.0], [0.84, 1.0], [0.93, 0.9], [1, 0.84]] },
@@ -1445,9 +1445,15 @@ function buildVessel(
   lines.push({ points: ellipseArc(cx, bottomY, footHalf, footRy, 0, Math.PI, 18), layer: 'stem' });
   lines.push({ points: ellipseArc(cx, bottomY - footRy * 0.85, footHalf * 0.9, footRy * 0.85, 0.12 * Math.PI, 0.88 * Math.PI, 16), layer: 'stem' });
 
-  // One or two incised bands at the shoulder/neck — front arcs only — for a bit
-  // of ceramic character.
-  for (const bu of [0.2, 0.34]) {
+  // A pair of incised bands on the belly — front arcs only — for a bit of
+  // ceramic character. Anchored around the widest point of the body (not fixed
+  // high up, where they'd crowd the neck/mouth on a short-necked vessel).
+  let uWide = 0.5;
+  let widest = 0;
+  for (let i = 0; i <= N; i++) if (hwAt[i] > widest) { widest = hwAt[i]; uWide = i / N; }
+  const b1 = Math.max(0.26, Math.min(0.7, uWide - 0.1));
+  const b2 = Math.min(0.88, Math.max(b1 + 0.14, uWide + 0.16));
+  for (const bu of [b1, b2]) {
     const hw = hwOf(bu);
     if (hw < penPx * 3) continue;
     lines.push({ points: ellipseArc(cx, topY + H * bu, hw, Math.max(1.5, hw * depth), 0.1 * Math.PI, 0.9 * Math.PI, 14), layer: 'stem' });
