@@ -1,0 +1,214 @@
+import type { ReactNode } from 'react';
+import { ColorField } from '../../components/ColorField';
+import { EditableValue } from '../../components/EditableValue';
+import type { ControlsProps } from '../../modules/types';
+import type { VineState } from './types';
+
+/** One labelled range slider + its click-to-type value badge. */
+function Slider(props: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  format?: (v: number) => ReactNode;
+}) {
+  const { label, value, min, max, step, onChange, format } = props;
+  return (
+    <div className="control-group">
+      <label>
+        {label}{' '}
+        <EditableValue value={value} min={min} max={max} step={step} onChange={onChange}>
+          {format ? format(value) : value}
+        </EditableValue>
+      </label>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+      />
+    </div>
+  );
+}
+
+/** Sidebar controls for the Vine Generator module. */
+export function VineGeneratorControls({ state, update }: ControlsProps<VineState>) {
+  const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
+  const painting = state.seeding === 'painted';
+
+  return (
+    <div className="controls">
+      <h3 className="section-title">Growth</h3>
+
+      <div className="control-group">
+        <label className="label-text">Model</label>
+        <div className="paint-controls">
+          <button
+            type="button"
+            className={state.mode === 'growth' ? 'primary active' : 'secondary'}
+            onClick={() => update({ mode: 'growth' })}
+          >
+            Climbing
+          </button>
+          <button
+            type="button"
+            className={state.mode === 'colonization' ? 'primary active' : 'secondary'}
+            onClick={() => update({ mode: 'colonization' })}
+          >
+            Colonize
+          </button>
+        </div>
+        <p className="paint-hint">
+          {state.mode === 'growth'
+            ? 'Stems meander and branch upward — the classic climbing vine.'
+            : 'Branches grow to fill the page — a space-filling ivy/venation network.'}
+        </p>
+      </div>
+
+      <div className="control-group">
+        <label className="label-text">Roots from</label>
+        <select
+          value={state.seeding}
+          onChange={(e) => update({ seeding: e.target.value as VineState['seeding'] })}
+        >
+          <option value="scatter">Random scatter</option>
+          <option value="edges">Frame edges (climbing)</option>
+          <option value="point">Single point (centre-bottom)</option>
+          <option value="painted">Painted points</option>
+        </select>
+      </div>
+
+      {painting ? (
+        <div className="paint-section">
+          <div className="control-group">
+            <div className="paint-controls">
+              <button
+                type="button"
+                className={state.drawMode ? 'primary active' : 'primary'}
+                onClick={() => update({ drawMode: !state.drawMode })}
+              >
+                {state.drawMode ? 'Stop Painting' : 'Paint Roots'}
+              </button>
+              {state.maskPath.length > 0 && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => update({ maskPath: [] })}
+                >
+                  Clear ({state.maskPath.length})
+                </button>
+              )}
+            </div>
+            <p className="paint-hint">
+              {state.drawMode
+                ? 'Click or drag on the canvas to place vine roots.'
+                : state.maskPath.length > 0
+                  ? `${state.maskPath.length} roots placed.`
+                  : 'Paint where the vines should sprout from.'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <Slider
+          label="Roots"
+          value={state.seedCount}
+          min={1}
+          max={40}
+          step={1}
+          onChange={(v) => update({ seedCount: v })}
+        />
+      )}
+
+      <h3 className="section-title">Elements</h3>
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input type="checkbox" checked={state.leaves} onChange={(e) => update({ leaves: e.target.checked })} />
+          Leaves
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" checked={state.tendrils} onChange={(e) => update({ tendrils: e.target.checked })} />
+          Tendrils
+        </label>
+        <label className="checkbox-label">
+          <input type="checkbox" checked={state.flowers} onChange={(e) => update({ flowers: e.target.checked })} />
+          Flowers
+        </label>
+      </div>
+
+      <h3 className="section-title">Style</h3>
+
+      <ColorField label="Stem / tendril ink" value={state.strokeColor} onChange={(strokeColor) => update({ strokeColor })} />
+      {state.leaves && (
+        <ColorField label="Leaf ink" value={state.leafColor} onChange={(leafColor) => update({ leafColor })} />
+      )}
+      {state.flowers && (
+        <ColorField label="Flower ink" value={state.flowerColor} onChange={(flowerColor) => update({ flowerColor })} />
+      )}
+
+      <Slider
+        label="Pen Width"
+        value={state.penWidthMm}
+        min={0.1}
+        max={1.5}
+        step={0.05}
+        onChange={(v) => update({ penWidthMm: v })}
+        format={(v) => `${v}mm`}
+      />
+
+      <h3 className="section-title">Seed</h3>
+      <div className="control-group">
+        <div className="seed-input">
+          <input
+            type="number"
+            value={state.seed}
+            onChange={(e) => update({ seed: parseInt(e.target.value, 10) || 0 })}
+          />
+          <button type="button" className="secondary" onClick={randomizeSeed}>
+            🎲
+          </button>
+        </div>
+      </div>
+
+      <details className="advanced">
+        <summary>Advanced</summary>
+
+        <details className="adv-group" open={state.mode === 'growth'}>
+          <summary>Climbing growth</summary>
+          <Slider label="Step Length" value={state.stepLengthMm} min={0.5} max={6} step={0.5} onChange={(v) => update({ stepLengthMm: v })} format={(v) => `${v}mm`} />
+          <Slider label="Max Length" value={state.maxLengthMm} min={20} max={300} step={5} onChange={(v) => update({ maxLengthMm: v })} format={(v) => `${v}mm`} />
+          <Slider label="Curl" value={state.curl} min={0} max={1.5} step={0.05} onChange={(v) => update({ curl: v })} format={(v) => v.toFixed(2)} />
+          <Slider label="Noise Scale" value={state.noiseScale} min={0.001} max={0.02} step={0.001} onChange={(v) => update({ noiseScale: v })} format={(v) => v.toFixed(3)} />
+          <Slider label="Climb (gravitropism)" value={state.gravitropism} min={0} max={1} step={0.05} onChange={(v) => update({ gravitropism: v })} format={(v) => v.toFixed(2)} />
+          <Slider label="Branchiness" value={state.branchProb} min={0} max={0.2} step={0.005} onChange={(v) => update({ branchProb: v })} format={(v) => v.toFixed(3)} />
+          <Slider label="Max Branch Depth" value={state.maxDepth} min={0} max={8} step={1} onChange={(v) => update({ maxDepth: v })} />
+        </details>
+
+        <details className="adv-group" open={state.mode === 'colonization'}>
+          <summary>Colonization</summary>
+          <Slider label="Attractors" value={state.attractorCount} min={50} max={1500} step={50} onChange={(v) => update({ attractorCount: v })} />
+          <Slider label="Reach" value={state.attractorRadiusMm} min={5} max={80} step={1} onChange={(v) => update({ attractorRadiusMm: v })} format={(v) => `${v}mm`} />
+          <Slider label="Kill Radius" value={state.killRadiusMm} min={1} max={20} step={0.5} onChange={(v) => update({ killRadiusMm: v })} format={(v) => `${v}mm`} />
+        </details>
+
+        <details className="adv-group">
+          <summary>Decoration detail</summary>
+          <Slider label="Leaf Size" value={state.leafSizeMm} min={1} max={15} step={0.5} onChange={(v) => update({ leafSizeMm: v })} format={(v) => `${v}mm`} />
+          <Slider label="Leaf Spacing" value={state.leafSpacingMm} min={2} max={30} step={1} onChange={(v) => update({ leafSpacingMm: v })} format={(v) => `${v}mm`} />
+          <Slider label="Tendril Chance" value={state.tendrilProb} min={0} max={1} step={0.05} onChange={(v) => update({ tendrilProb: v })} format={(v) => v.toFixed(2)} />
+          <Slider label="Flower Chance" value={state.flowerProb} min={0} max={1} step={0.05} onChange={(v) => update({ flowerProb: v })} format={(v) => v.toFixed(2)} />
+          <Slider label="Flower Size" value={state.flowerSizeMm} min={1} max={15} step={0.5} onChange={(v) => update({ flowerSizeMm: v })} format={(v) => `${v}mm`} />
+        </details>
+
+        <details className="adv-group">
+          <summary>Hand</summary>
+          <Slider label="Wobble" value={state.wobbleMm} min={0} max={2} step={0.05} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v}mm`} />
+        </details>
+      </details>
+    </div>
+  );
+}

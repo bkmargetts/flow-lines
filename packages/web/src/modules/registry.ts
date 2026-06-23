@@ -5,6 +5,7 @@ import { gratingTexture } from '../textures/grating';
 import { blankTexture } from '../textures/blank';
 import { imageInkModule } from '../projects/image-ink';
 import { flowFieldModule } from '../projects/flow-field';
+import { vineGeneratorModule } from '../projects/vine-generator';
 import { conwayModule } from '../projects/conway';
 import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
@@ -26,6 +27,7 @@ import { colorFieldModule } from '../projects/color-field';
 export const MODULES: Module<any>[] = [
   imageInkModule,
   flowFieldModule,
+  vineGeneratorModule,
   conwayModule,
   complexFlowModule,
   reactionDiffusionModule,
