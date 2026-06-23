@@ -46,6 +46,10 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     startPoints: state.maskPath,
     seedCount: state.seedCount,
 
+    vessel: state.vessel,
+    groundLine: state.groundLine,
+    negativeSpace: state.negativeSpace,
+
     stepLength: Math.max(1, state.stepLengthMm * mm),
     maxLength: state.maxLengthMm * mm,
     curl: state.curl,

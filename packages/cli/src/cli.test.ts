@@ -23,4 +23,28 @@ describe('CLI', () => {
     expect(svg).toContain('<svg');
     expect(svg).toContain('</svg>');
   });
+
+  it('exposes the vine generator and renders a multi-pen botanical SVG', async () => {
+    const { generateVines, toSVG } = await import('@flow-lines/core');
+    expect(generateVines).toBeDefined();
+
+    const result = generateVines({
+      width: 444,
+      height: 630,
+      seed: 42,
+      composition: 'bouquet',
+      vessel: 'vase',
+      groundLine: true,
+    });
+
+    const svg = toSVG(result, {
+      physicalWidth: '148mm',
+      physicalHeight: '210mm',
+      layerColors: { stem: '#2a2a26', leaf: '#3f6b3a', vein: '#34602f', flower: '#9c2b52' },
+    });
+
+    expect(svg).toContain('<path');
+    expect(svg).toContain('width="148mm"');
+    expect(svg).toContain('height="210mm"');
+  });
 });

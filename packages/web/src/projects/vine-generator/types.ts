@@ -1,5 +1,5 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel } from '@flow-lines/core';
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
@@ -20,6 +20,14 @@ export interface VineState {
   fillShape: FillShape;
   seeding: VineSeeding;
   seedCount: number;
+
+  // page composition
+  /** A drawn container the stems rise out of (bouquet/specimen). */
+  vessel: VineVessel;
+  /** Draw a hand-drawn ground line under the arrangement. */
+  groundLine: boolean;
+  /** 0..1 deliberate negative space (notan): hold a region clear, swell the mass. */
+  negativeSpace: number;
 
   // growth model
   stepLengthMm: number;
@@ -95,6 +103,10 @@ export const defaultVineState: VineState = {
   fillShape: 'heart',
   seeding: 'scatter',
   seedCount: 6,
+
+  vessel: 'none',
+  groundLine: false,
+  negativeSpace: 0,
 
   stepLengthMm: 2.2,
   maxLengthMm: 90,

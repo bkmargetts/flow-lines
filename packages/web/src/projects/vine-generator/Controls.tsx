@@ -99,6 +99,42 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </p>
       </div>
 
+      {(state.composition === 'bouquet' || state.composition === 'specimen') && (
+        <div className="control-group">
+          <label className="label-text">Vessel</label>
+          <select value={state.vessel} onChange={(e) => update({ vessel: e.target.value as VineState['vessel'] })}>
+            <option value="none">None</option>
+            <option value="vase">Vase</option>
+            <option value="urn">Urn</option>
+            <option value="amphora">Amphora</option>
+            <option value="bud-vase">Bud vase</option>
+            <option value="pot">Pot (terracotta)</option>
+            <option value="jar">Jar</option>
+            <option value="mason-jar">Mason jar</option>
+            <option value="bowl">Bowl</option>
+          </select>
+          <p className="paint-hint">A drawn container the stems rise out of, shaded as a rounded form.</p>
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input type="checkbox" checked={state.groundLine} onChange={(e) => update({ groundLine: e.target.checked })} />
+          Ground line
+        </label>
+      </div>
+
+      <Slider
+        label="Negative space"
+        value={state.negativeSpace}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ negativeSpace: v })}
+        format={(v) => v.toFixed(2)}
+      />
+      <p className="paint-hint">Notan: holds one region of the page clear and swells the mass elsewhere.</p>
+
       <Slider
         label="Zoom"
         value={state.zoom}
