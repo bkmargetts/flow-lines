@@ -75,6 +75,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     lightAngle: state.lightAngle,
     shadeDensity: state.shadeDensity,
     stemShade: state.stemShade,
+    stemTexture: state.stemTexture,
     occlude: state.occlude,
     sketch: state.sketch,
     sketchStyle: state.sketchStyle,
@@ -104,6 +105,8 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     thornProb: state.thornProb,
     fruitType: state.fruitType,
     fruitProb: state.fruitProb,
+    dewdrops: state.dewdrops,
+    dewdropProb: state.dewdropProb,
 
     wobble: state.wobbleMm * mm,
   };

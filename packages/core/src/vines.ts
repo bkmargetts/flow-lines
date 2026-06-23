@@ -43,6 +43,8 @@ export type LeafStyle = 'shaded' | 'veined' | 'outline' | 'solid';
 export type LeafType = 'ovate' | 'lance' | 'cordate' | 'lobed' | 'serrate' | 'mixed';
 /** How a (thick) stem's tube is shaded. */
 export type StemShade = 'none' | 'along' | 'cross';
+/** Surface texture drawn on thick (woody) stems. */
+export type StemTexture = 'none' | 'bark';
 /** Flower species. */
 export type VineFlower = 'rose' | 'daisy' | 'bell' | 'bud' | 'mixed';
 /** Character of the hand-sketched overdraw. */
@@ -113,6 +115,8 @@ export interface VinesOptions {
   shadeDensity?: number;
   /** Tube shading style on thick stems. */
   stemShade?: StemShade;
+  /** Surface texture on thick (woody) stems: 'none' or 'bark' striations. */
+  stemTexture?: StemTexture;
   /** Allow overlap and remove hidden lines for depth (vs flat). */
   occlude?: boolean;
   /** 0..1 hand-sketched overdraw: repeats every line with small variation. */
@@ -158,6 +162,10 @@ export interface VinesOptions {
   fruitType?: FruitType;
   /** Per-site probability a fruit cluster is borne when `fruitType` is set. */
   fruitProb?: number;
+  /** Scatter dewdrop highlights on the foliage. */
+  dewdrops?: boolean;
+  /** Per-site dewdrop probability when `dewdrops` is on. */
+  dewdropProb?: number;
 
   /** Hand-drawn wobble amplitude applied to stem centerlines, px (0 = off). */
   wobble?: number;
@@ -495,6 +503,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     lightAngle = -135,
     shadeDensity = 0.5,
     stemShade = 'along',
+    stemTexture = 'none',
     occlude = true,
     sketch = 0,
     sketchStyle = 'loose',
@@ -523,6 +532,8 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     thornProb = 0.15,
     fruitType = 'none',
     fruitProb = 0.2,
+    dewdrops = false,
+    dewdropProb = 0.15,
     wobble = 0.6,
     vessel = 'none',
     groundLine = false,
@@ -648,7 +659,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   // the rng sequence is otherwise byte-identical to a thornless render).
   wobbled.forEach((center, i) => {
     const st = rawStems[i];
-    const built = buildStem(center, st.baseHalf, { penPx, taper, vineFill, light, shadeDensity, stemShade, branch: st.branch });
+    const built = buildStem(center, st.baseHalf, { penPx, taper, vineFill, light, shadeDensity, stemShade, stemTexture, branch: st.branch });
     const thornLines = thorns ? makeThorns(center, st.baseHalf, thornProb, penPx, rng) : [];
     add([...built.lines, ...thornLines], built.silhouette);
   });
@@ -662,7 +673,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
       leaves, leafStyle, leafType, veins, leafSize, leafWidthRatio, leafSpacing,
       leafArrangement, leafletCount, phyllotaxis, whorlCount,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
-      inflorescence, floretCount, fruitType, fruitProb,
+      inflorescence, floretCount, fruitType, fruitProb, dewdrops, dewdropProb,
       focal, focalR, density, weightAt,
     },
     rng,
@@ -1243,7 +1254,7 @@ function colonize(
     }
   }
 
-  return extractChains(nodes, baseHalf, penPx, maxLength, rng);
+  return extractChains(nodes, baseHalf, penPx, maxLength, stepLength, rng);
 }
 
 function extractChains(
@@ -1251,6 +1262,7 @@ function extractChains(
   baseHalf: number,
   penPx: number,
   longLen: number,
+  stepLength: number,
   rng: () => number
 ): Stem[] {
   const childCount = new Array(nodes.length).fill(0);
@@ -1260,6 +1272,11 @@ function extractChains(
     const par = nodes[i].parent;
     if (par >= 0) firstChild[par] = i;
   }
+
+  // Terminal spurs shorter than this read as spiky noise on the network rather
+  // than growth, so they're dropped — the single biggest legibility win for the
+  // colonized 'fill' shapes (the heart was a thicket of stubs).
+  const minTerminal = stepLength * 3;
 
   const stems: Stem[] = [];
   for (let i = 0; i < nodes.length; i++) {
@@ -1276,6 +1293,8 @@ function extractChains(
     }
     if (pts.length >= 2) {
       const len = polylineLength(pts);
+      const terminal = childCount[cur] === 0;
+      if (terminal && par >= 0 && len < minTerminal) continue;
       const frac = Math.min(1, Math.sqrt(len / Math.max(1, longLen)));
       stems.push({ points: pts, baseHalf: penPx + (baseHalf - penPx) * frac, branch: par >= 0 });
     }
@@ -1292,6 +1311,7 @@ interface StemRenderOpts {
   light: Point;
   shadeDensity: number;
   stemShade: StemShade;
+  stemTexture?: StemTexture;
   branch: boolean;
 }
 
@@ -1389,6 +1409,44 @@ function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts): { line
         points: [
           { x: samples[i].x + normals[i].x * shadowSign * w[i] * (1 - reach), y: samples[i].y + normals[i].y * shadowSign * w[i] * (1 - reach) },
           { x: samples[i].x + normals[i].x * shadowSign * w[i] * 0.96, y: samples[i].y + normals[i].y * shadowSign * w[i] * 0.96 },
+        ],
+        layer: 'stem',
+      });
+    }
+  }
+
+  // Bark: broken striations running along a thick, woody cane (with occasional
+  // short cross-dashes — lenticels). Deterministic from sample index, so no rng
+  // is threaded in. Only the thickest part of the stem reads as old wood.
+  if (o.stemTexture === 'bark') {
+    const hash = (k: number) => {
+      const s = Math.sin(k * 12.9898 + 4.1) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    const lanes = 3;
+    for (let lane = 0; lane < lanes; lane++) {
+      const frac = (lane + 1) / (lanes + 1); // across the tube, lit→shadow
+      let run: Point[] = [];
+      for (let i = 0; i < n; i++) {
+        // Only on stout sections; furrows break up (pen lifts) pseudo-randomly.
+        const woody = w[i] > penPx * 2.2;
+        const gap = hash(i * 0.7 + lane * 31.3) < 0.22;
+        const off = (frac - 0.5) * 2 * w[i] * 0.8 + (hash(i + lane * 7) - 0.5) * penPx * 0.6;
+        if (woody && !gap) {
+          run.push({ x: samples[i].x + normals[i].x * off, y: samples[i].y + normals[i].y * off });
+        } else if (run.length >= 2) { lines.push({ points: run, layer: 'stem' }); run = []; }
+        else run = [];
+      }
+      if (run.length >= 2) lines.push({ points: run, layer: 'stem' });
+    }
+    // Lenticels: a few short horizontal dashes across the cane.
+    for (let i = 2; i < n - 2; i++) {
+      if (w[i] <= penPx * 2.4 || hash(i * 2.3) > 0.06) continue;
+      const h = w[i] * 0.5;
+      lines.push({
+        points: [
+          { x: samples[i].x - normals[i].x * h, y: samples[i].y - normals[i].y * h },
+          { x: samples[i].x + normals[i].x * h, y: samples[i].y + normals[i].y * h },
         ],
         layer: 'stem',
       });
@@ -1794,6 +1852,8 @@ interface DecorParams {
   floretCount: number;
   fruitType: FruitType;
   fruitProb: number;
+  dewdrops: boolean;
+  dewdropProb: number;
   penPx: number;
   light: Point;
   shadeDensity: number;
@@ -1947,6 +2007,14 @@ function decorate(
         if (d.fruitType !== 'none' && rng() < d.fruitProb * 0.35 * (0.5 + dens) * massW) {
           const fr = makeFruit(pts[i], d.fruitType, d.flowerSize * (0.9 + rng() * 0.5), d.penPx, d.light, rng, add);
           add(fr.lines, fr.silhouette);
+        }
+        // A dewdrop catching the light, near the leaf base. Gated, so it never
+        // perturbs a dewless render's rng sequence.
+        if (d.dewdrops && rng() < d.dewdropProb) {
+          const r = d.penPx * (1.6 + rng() * 1.6);
+          const ox = pts[i].x + (rng() - 0.5) * d.leafSize * 0.3;
+          const oy = pts[i].y + (rng() - 0.5) * d.leafSize * 0.3;
+          add(makeDewdrop({ x: ox, y: oy }, r, d.light), []);
         }
         nextLeaf += d.leafSpacing * spacingFactor * (0.7 + rng() * 0.6) * (1 - 0.3 * nf);
         theta += GOLDEN_ANGLE;
@@ -2220,6 +2288,24 @@ function makeCompoundLeaf(
 }
 
 // ——— tendrils & flowers ———
+
+/** A dewdrop: a small ring with the lit quadrant left open and a short
+ *  highlight tick inside, so it reads as a glistening bead of water. */
+function makeDewdrop(center: Point, r: number, light: Point): FlowLine[] {
+  const la = Math.atan2(light.y, light.x);
+  const ring: Point[] = [];
+  // Leave a ~70° gap on the lit side (the rim catches the light).
+  for (let s = 0; s <= 28; s++) {
+    const a = la + 0.6 + (s / 28) * (2 * Math.PI - 1.2);
+    ring.push({ x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r });
+  }
+  const hx = center.x + Math.cos(la) * r * 0.4;
+  const hy = center.y + Math.sin(la) * r * 0.4;
+  return [
+    { points: ring, layer: 'vein' },
+    { points: [{ x: hx - Math.cos(la) * r * 0.15, y: hy - Math.sin(la) * r * 0.15 }, { x: hx + Math.cos(la) * r * 0.15, y: hy + Math.sin(la) * r * 0.15 }], layer: 'vein' },
+  ];
+}
 
 function makeTendril(base: Point, stemDir: number, side: 1 | -1, size: number, rng: () => number): FlowLine {
   // A graceful tendril: a straight lead-in off the stem easing into an open

@@ -398,6 +398,22 @@ describe('generateVines', () => {
     expect(generateVines(opts).lines).toEqual(generateVines(opts).lines);
   });
 
+  it('bark texture adds stem-layer striations on thick canes and is off by default', () => {
+    const common = { composition: 'specimen', mode: 'growth', stemWidth: 16, density: 0.2, flowers: false } as const;
+    const smooth = generateVines(baseOptions({ ...common, stemTexture: 'none' }));
+    const bark = generateVines(baseOptions({ ...common, stemTexture: 'bark' }));
+    expect(bark.lines).not.toEqual(smooth.lines);
+    expect(layers(bark.lines, 'stem').length).toBeGreaterThan(layers(smooth.lines, 'stem').length);
+  });
+
+  it('dewdrops add highlight geometry and are off by default', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.5, flowers: false } as const;
+    const dry = generateVines(baseOptions({ ...common, dewdrops: false }));
+    const dewy = generateVines(baseOptions({ ...common, dewdrops: true, dewdropProb: 0.9 }));
+    expect(dewy.lines).not.toEqual(dry.lines);
+    expect(dewy.lines.length).toBeGreaterThan(dry.lines.length);
+  });
+
   it('keeps every botanical feature finite and roughly in bounds', () => {
     const result = generateVines(
       baseOptions({

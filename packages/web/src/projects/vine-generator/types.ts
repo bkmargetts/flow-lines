@@ -1,5 +1,5 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from '@flow-lines/core';
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
@@ -55,6 +55,8 @@ export interface VineState {
   lightAngle: number;
   shadeDensity: number;
   stemShade: StemShade;
+  /** Woody-stem surface texture. */
+  stemTexture: StemTexture;
   occlude: boolean;
   sketch: number;
   sketchStyle: SketchStyle;
@@ -96,6 +98,9 @@ export interface VineState {
   /** Fruiting bodies; 'none' = off. */
   fruitType: FruitType;
   fruitProb: number;
+  /** Scatter dewdrop highlights on the foliage. */
+  dewdrops: boolean;
+  dewdropProb: number;
 
   wobbleMm: number;
 
@@ -146,6 +151,7 @@ export const defaultVineState: VineState = {
   lightAngle: -130,
   shadeDensity: 0.55,
   stemShade: 'along',
+  stemTexture: 'none',
   occlude: true,
   sketch: 0,
   sketchStyle: 'loose',
@@ -179,6 +185,8 @@ export const defaultVineState: VineState = {
   thornProb: 0.15,
   fruitType: 'none',
   fruitProb: 0.2,
+  dewdrops: false,
+  dewdropProb: 0.15,
 
   wobbleMm: 0.2,
 

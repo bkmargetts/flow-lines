@@ -465,6 +465,21 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           format={(v) => `${Math.round(v * 100)}%`}
         />
       )}
+      <label className="checkbox-label">
+        <input type="checkbox" checked={state.dewdrops} onChange={(e) => update({ dewdrops: e.target.checked })} />
+        Dewdrops
+      </label>
+      {state.dewdrops && (
+        <Slider
+          label="Dewdrop frequency"
+          value={state.dewdropProb}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ dewdropProb: v })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+      )}
 
       <h3 className="section-title">Form &amp; light</h3>
 
@@ -475,6 +490,15 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           <option value="cross">Cross-hatch</option>
           <option value="none">None</option>
         </select>
+      </div>
+
+      <div className="control-group">
+        <label className="label-text">Stem texture</label>
+        <select value={state.stemTexture} onChange={(e) => update({ stemTexture: e.target.value as VineState['stemTexture'] })}>
+          <option value="none">Smooth</option>
+          <option value="bark">Bark (woody)</option>
+        </select>
+        <p className="paint-hint">Broken striations on thick canes — old wood reads differently from new growth.</p>
       </div>
 
       <Slider

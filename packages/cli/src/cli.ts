@@ -42,6 +42,7 @@ import {
   type Inflorescence,
   type FruitType,
   type VineSupport,
+  type StemTexture,
   type Point,
 } from '@flow-lines/core';
 
@@ -816,6 +817,7 @@ program
   .option('--light-angle <number>', 'Light source direction in degrees (0 = +x)', '-130')
   .option('--shade-density <number>', 'Shadow hatching intensity (0-1)', '0.55')
   .option('--stem-shade <s>', 'Thick-stem tube shading: none | along | cross', 'along')
+  .option('--stem-texture <t>', 'Woody-stem surface texture: none | bark', 'none')
   .option('--no-occlude', 'Skip hidden-line removal (flat overlap)')
   .option('--cast-shadow <number>', 'Contact-shadow strength (0-1)', '0.35')
   .option('--sketch <number>', 'Hand-drawn overdraw intensity (0-1)', '0')
@@ -845,6 +847,8 @@ program
   .option('--thorn-prob <number>', 'Thorn density along stems (0-1)', '0.15')
   .option('--fruit-type <f>', 'none | berry | grape | rosehip | pod | catkin', 'none')
   .option('--fruit-prob <number>', 'Fruit-cluster probability per site (0-1)', '0.2')
+  .option('--dewdrops', 'Scatter dewdrop highlights on the foliage')
+  .option('--dewdrop-prob <number>', 'Dewdrop probability per site (0-1)', '0.15')
   // ink
   .option('--palette <p>', 'Multi-pen palette: ink | botanical | rose | autumn', 'ink')
   .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1')
@@ -906,6 +910,7 @@ program
       lightAngle: parseFloat(options.lightAngle),
       shadeDensity: parseFloat(options.shadeDensity),
       stemShade: options.stemShade as StemShade,
+      stemTexture: options.stemTexture as StemTexture,
       occlude: options.occlude,
       castShadow: parseFloat(options.castShadow),
       sketch: parseFloat(options.sketch),
@@ -934,6 +939,8 @@ program
       thornProb: parseFloat(options.thornProb),
       fruitType: options.fruitType as FruitType,
       fruitProb: parseFloat(options.fruitProb),
+      dewdrops: options.dewdrops ?? false,
+      dewdropProb: parseFloat(options.dewdropProb),
       penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
     };
 
