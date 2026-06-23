@@ -140,6 +140,46 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </label>
       </div>
 
+      <h3 className="section-title">Vine body</h3>
+
+      <Slider
+        label="Vine Width"
+        value={state.stemWidthMm}
+        min={0.3}
+        max={8}
+        step={0.1}
+        onChange={(v) => update({ stemWidthMm: v })}
+        format={(v) => `${v}mm`}
+      />
+
+      <div className="control-group">
+        <label className="label-text">Fill</label>
+        <select value={state.vineFill} onChange={(e) => update({ vineFill: e.target.value as VineState['vineFill'] })}>
+          <option value="solid">Solid</option>
+          <option value="outline">Hollow outline</option>
+          <option value="highlight">Solid + highlight</option>
+        </select>
+      </div>
+
+      {state.leaves && (
+        <div className="control-group">
+          <label className="label-text">Leaf style</label>
+          <select value={state.leafStyle} onChange={(e) => update({ leafStyle: e.target.value as VineState['leafStyle'] })}>
+            <option value="solid">Solid</option>
+            <option value="veined">Outline + veins</option>
+            <option value="outline">Outline only</option>
+          </select>
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input type="checkbox" checked={state.avoidOverlap} onChange={(e) => update({ avoidOverlap: e.target.checked })} />
+          Avoid overlap
+        </label>
+        <p className="paint-hint">Vines stop short of geometry they'd grow into, and leaves won't sit on top of each other.</p>
+      </div>
+
       <h3 className="section-title">Style</h3>
 
       <ColorField label="Stem / tendril ink" value={state.strokeColor} onChange={(strokeColor) => update({ strokeColor })} />
@@ -196,8 +236,14 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </details>
 
         <details className="adv-group">
+          <summary>Vine taper</summary>
+          <Slider label="Taper" value={state.taper} min={0} max={1} step={0.05} onChange={(v) => update({ taper: v })} format={(v) => v.toFixed(2)} />
+        </details>
+
+        <details className="adv-group">
           <summary>Decoration detail</summary>
-          <Slider label="Leaf Size" value={state.leafSizeMm} min={1} max={15} step={0.5} onChange={(v) => update({ leafSizeMm: v })} format={(v) => `${v}mm`} />
+          <Slider label="Leaf Size" value={state.leafSizeMm} min={1} max={20} step={0.5} onChange={(v) => update({ leafSizeMm: v })} format={(v) => `${v}mm`} />
+          <Slider label="Leaf Width" value={state.leafWidthRatio} min={0.2} max={1} step={0.05} onChange={(v) => update({ leafWidthRatio: v })} format={(v) => v.toFixed(2)} />
           <Slider label="Leaf Spacing" value={state.leafSpacingMm} min={2} max={30} step={1} onChange={(v) => update({ leafSpacingMm: v })} format={(v) => `${v}mm`} />
           <Slider label="Tendril Chance" value={state.tendrilProb} min={0} max={1} step={0.05} onChange={(v) => update({ tendrilProb: v })} format={(v) => v.toFixed(2)} />
           <Slider label="Flower Chance" value={state.flowerProb} min={0} max={1} step={0.05} onChange={(v) => update({ flowerProb: v })} format={(v) => v.toFixed(2)} />

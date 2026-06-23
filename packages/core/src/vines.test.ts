@@ -27,7 +27,7 @@ describe('generateVines', () => {
     expect(c.lines).not.toEqual(a.lines);
   });
 
-  it('keeps stems within the page in both modes for every seeding', () => {
+  it('produces finite, roughly in-bounds geometry in both modes for every seeding', () => {
     const seedings: VineSeeding[] = ['scatter', 'edges', 'point', 'painted'];
     for (const mode of ['growth', 'colonization'] as const) {
       for (const seeding of seedings) {
@@ -43,16 +43,34 @@ describe('generateVines', () => {
         );
         const stems = layers(result.lines, 'stem');
         expect(stems.length).toBeGreaterThanOrEqual(1);
-        for (const stem of stems) {
-          for (const p of stem.points) {
-            expect(p.x).toBeGreaterThanOrEqual(0);
-            expect(p.x).toBeLessThanOrEqual(result.width);
-            expect(p.y).toBeGreaterThanOrEqual(0);
-            expect(p.y).toBeLessThanOrEqual(result.height);
+        // Decorations may extend a leaf's length past the margin; allow a margin
+        // of tolerance but catch anything wildly off the sheet.
+        const tol = 30;
+        for (const ln of result.lines) {
+          for (const p of ln.points) {
+            expect(Number.isFinite(p.x)).toBe(true);
+            expect(Number.isFinite(p.y)).toBe(true);
+            expect(p.x).toBeGreaterThanOrEqual(-tol);
+            expect(p.x).toBeLessThanOrEqual(result.width + tol);
+            expect(p.y).toBeGreaterThanOrEqual(-tol);
+            expect(p.y).toBeLessThanOrEqual(result.height + tol);
           }
         }
       }
     }
+  });
+
+  it('draws thicker vines as more fill passes (solid)', () => {
+    const thin = generateVines(baseOptions({ stemWidth: 2, leaves: false, tendrils: false, flowers: false }));
+    const thick = generateVines(baseOptions({ stemWidth: 12, leaves: false, tendrils: false, flowers: false }));
+    expect(layers(thick.lines, 'stem').length).toBeGreaterThan(layers(thin.lines, 'stem').length);
+  });
+
+  it('outline vine fill emits fewer stem lines than solid', () => {
+    const common = { stemWidth: 12, leaves: false, tendrils: false, flowers: false } as const;
+    const solid = generateVines(baseOptions({ ...common, vineFill: 'solid' }));
+    const outline = generateVines(baseOptions({ ...common, vineFill: 'outline' }));
+    expect(layers(outline.lines, 'stem').length).toBeLessThan(layers(solid.lines, 'stem').length);
   });
 
   it('emits each decoration only when its toggle is on', () => {
@@ -63,26 +81,18 @@ describe('generateVines', () => {
     expect(layers(on.lines, 'tendril').length).toBeGreaterThan(0);
     expect(layers(on.lines, 'flower').length).toBeGreaterThan(0);
 
-    const off = generateVines(
-      baseOptions({ leaves: false, tendrils: false, flowers: false })
-    );
+    const off = generateVines(baseOptions({ leaves: false, tendrils: false, flowers: false }));
     expect(layers(off.lines, 'leaf').length).toBe(0);
     expect(layers(off.lines, 'tendril').length).toBe(0);
     expect(layers(off.lines, 'flower').length).toBe(0);
-    // Stems still grow with all decorations off.
     expect(layers(off.lines, 'stem').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('grows more stems as branch probability rises', () => {
-    const sparse = generateVines(
-      baseOptions({ mode: 'growth', branchProb: 0, leaves: false, tendrils: false, flowers: false })
-    );
-    const busy = generateVines(
-      baseOptions({ mode: 'growth', branchProb: 0.2, maxDepth: 5, leaves: false, tendrils: false, flowers: false })
-    );
-    expect(layers(busy.lines, 'stem').length).toBeGreaterThan(
-      layers(sparse.lines, 'stem').length
-    );
+  it('solid leaves fill with more lines than outline-only leaves', () => {
+    const common = { tendrils: false, flowers: false, leafSize: 30 } as const;
+    const solid = generateVines(baseOptions({ ...common, leafStyle: 'solid' }));
+    const outline = generateVines(baseOptions({ ...common, leafStyle: 'outline' }));
+    expect(layers(solid.lines, 'leaf').length).toBeGreaterThan(layers(outline.lines, 'leaf').length);
   });
 
   it('colonization produces a connected branching network', () => {

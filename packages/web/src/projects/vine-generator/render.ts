@@ -35,8 +35,17 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     attractorRadius: state.attractorRadiusMm * mm,
     killRadius: state.killRadiusMm * mm,
 
+    stemWidth: state.stemWidthMm * mm,
+    // Fill passes pack at the plotted pen width so the body inks solid.
+    penWidth: state.penWidthMm * mm,
+    taper: state.taper,
+    vineFill: state.vineFill,
+    avoidOverlap: state.avoidOverlap,
+
     leaves: state.leaves,
+    leafStyle: state.leafStyle,
     leafSize: state.leafSizeMm * mm,
+    leafWidthRatio: state.leafWidthRatio,
     leafSpacing: Math.max(1, state.leafSpacingMm * mm),
     tendrils: state.tendrils,
     tendrilProb: state.tendrilProb,

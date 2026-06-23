@@ -107,7 +107,7 @@ export type { HandDrawnOptions } from './hand-drawn.js';
 
 // Vine generator (organic procedural vines)
 export { generateVines } from './vines.js';
-export type { VinesOptions, VineMode, VineSeeding } from './vines.js';
+export type { VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle } from './vines.js';
 
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
