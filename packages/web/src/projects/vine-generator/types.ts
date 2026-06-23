@@ -48,8 +48,8 @@ export interface VineState {
   occlude: boolean;
   sketch: number;
   sketchStyle: SketchStyle;
-  perspective: number;
-  depthSpread: number;
+  /** How zoomed in/out the plot is (1 = fit; >1 magnifies, <1 shrinks). */
+  zoom: number;
   castShadow: number;
 
   // season (foliage only; palette stays manual)
@@ -119,8 +119,7 @@ export const defaultVineState: VineState = {
   occlude: true,
   sketch: 0,
   sketchStyle: 'loose',
-  perspective: 0.4,
-  depthSpread: 0.6,
+  zoom: 1,
   castShadow: 0.35,
 
   season: 'summer',

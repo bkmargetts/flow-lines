@@ -540,7 +540,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     {
       leaves, leafStyle, leafType, veins, leafSize, leafWidthRatio, leafSpacing,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
-      focal, focalR, density, perspective,
+      focal, focalR, density,
     },
     rng,
     add,
@@ -1313,8 +1313,6 @@ interface DecorParams {
   focalR: number;
   /** 0..1 overall foliage density — scales leaf clusters, spacing and blooms. */
   density: number;
-  /** 0..1 atmospheric perspective (drives detail falloff on far foliage). */
-  perspective: number;
 }
 
 function decorate(
@@ -1343,11 +1341,10 @@ function decorate(
     const stemLen = polylineLength(pts);
     if (stemLen < d.leafSpacing) continue;
 
-    // Perspective: nearer foliage is larger; far foliage drops to plain
-    // outlines (detail falloff). Depth feeds the element draw order.
+    // Every leaf keeps its full style/detail; depth only feeds draw order.
     const ds = depthScale(stem.zdepth);
     const z = stem.zdepth;
-    const effStyle: LeafStyle = d.perspective > 0.01 && stem.zdepth < 0.4 ? 'outline' : d.leafStyle;
+    const effStyle: LeafStyle = d.leafStyle;
 
     let arc = 0;
     let nextLeaf = d.leafSpacing * spacingFactor * (0.5 + rng());
@@ -1616,14 +1613,19 @@ function makeFlower(
 ): { lines: FlowLine[]; silhouette: Point[][] } {
   const t: VineFlower = type === 'mixed' ? FLOWER_TYPES[Math.floor(rng() * FLOWER_TYPES.length)] : type;
   const lines: FlowLine[] = [];
+  // The silhouette is the union of the flower's *actual* closed shapes (petals
+  // / cup / bud), not a bounding disc — so occlusion hides exactly the bloom
+  // and the gaps between petals stay open (no circular halo behind it).
+  const sils: Point[][] = [];
   const rot = rng() * Math.PI * 2;
-  let reach = size;
 
   if (t === 'rose') {
     const petals = 5 + Math.floor(rng() * 2);
     for (let k = 0; k < petals; k++) {
       const ang = rot + (k / petals) * 2 * Math.PI;
-      lines.push(petalOutline(center, ang, size, size * 0.42, penPx));
+      const pl = petalOutline(center, ang, size, size * 0.42, penPx);
+      lines.push(pl);
+      sils.push(pl.points);
     }
     // A few short stamen ticks at the centre.
     for (let k = 0; k < 4; k++) {
@@ -1634,10 +1636,13 @@ function makeFlower(
     const petals = 11 + Math.floor(rng() * 5);
     for (let k = 0; k < petals; k++) {
       const ang = rot + (k / petals) * 2 * Math.PI;
-      lines.push(petalOutline(center, ang, size, size * 0.12, penPx));
+      const pl = petalOutline(center, ang, size, size * 0.12, penPx);
+      lines.push(pl);
+      sils.push(pl.points);
     }
-    lines.push(ringOutline(center, size * 0.28, 'flower'));
-    reach = size * 1.05;
+    const ring = ringOutline(center, size * 0.28, 'flower');
+    lines.push(ring);
+    sils.push(ring.points);
   } else if (t === 'bell') {
     // One or two hanging bells: a tapered cup with a scalloped rim.
     const bells = 1 + (rng() < 0.5 ? 1 : 0);
@@ -1663,8 +1668,8 @@ function makeFlower(
         cup.push({ x: center.x + dx * L * u - px * (wmouth + scallop), y: center.y + dy * L * u - py * (wmouth + scallop) });
       }
       lines.push({ points: cup, layer: 'flower' });
+      sils.push(cup);
     }
-    reach = size * 1.2;
   } else {
     // bud: a closed teardrop with two sepal strokes at its base.
     const a = rot;
@@ -1686,19 +1691,13 @@ function makeFlower(
       bud.push({ x: center.x + dx * L * u - px * wb, y: center.y + dy * L * u - py * wb });
     }
     lines.push({ points: bud, layer: 'flower' });
+    sils.push(bud);
     for (const s of [1, -1] as const) {
       lines.push({ points: [{ x: center.x, y: center.y }, { x: center.x + dx * size * 0.4 + px * s * size * 0.22, y: center.y + dy * size * 0.4 + py * s * size * 0.22 }], layer: 'flower' });
     }
-    reach = size * 0.7;
   }
   void light;
 
-  // Tight silhouette (no oversized occlusion halo around the bloom).
-  const sil: Point[] = [];
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * 2 * Math.PI;
-    sil.push({ x: center.x + Math.cos(a) * reach, y: center.y + Math.sin(a) * reach });
-  }
-  return { lines, silhouette: [sil] };
+  return { lines, silhouette: sils };
 }
 

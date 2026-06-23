@@ -25,6 +25,7 @@ const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
   const mm = page.pxPerMm;
+  const zoom = Math.max(0.2, state.zoom);
 
   // Season modulates foliage amounts/sizes (not colour), blended by strength.
   const sf = SEASON_FACTORS[state.season];
@@ -58,8 +59,10 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     killRadius: state.killRadiusMm * mm,
 
     stemWidth: state.stemWidthMm * mm,
-    // Fill passes pack at the plotted pen width so the body inks solid.
-    penWidth: state.penWidthMm * mm,
+    // Fill passes pack at the plotted pen width so the body inks solid. The
+    // generator works in "world" units divided by zoom, so after the zoom
+    // transform below the on-page fill spacing lands back at the real pen.
+    penWidth: (state.penWidthMm * mm) / zoom,
     taper: state.taper,
     vineFill: state.vineFill,
     avoidOverlap: state.avoidOverlap,
@@ -70,8 +73,6 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     occlude: state.occlude,
     sketch: state.sketch,
     sketchStyle: state.sketchStyle,
-    perspective: state.perspective,
-    depthSpread: state.depthSpread,
     castShadow: state.castShadow,
 
     density: seasonDensity,
@@ -94,6 +95,20 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
 
   const result = generateVines(options);
 
+  // Zoom: scale the whole plot about the page centre. >1 magnifies (and the
+  // sheet crops to it); <1 shrinks it within the page. The pen width was
+  // pre-divided by zoom so fills land back at the true pen after this scale.
+  const lines =
+    zoom === 1
+      ? result.lines
+      : result.lines.map((ln) => ({
+          ...ln,
+          points: ln.points.map((p) => ({
+            x: page.widthPx / 2 + (p.x - page.widthPx / 2) * zoom,
+            y: page.heightPx / 2 + (p.y - page.heightPx / 2) * zoom,
+          })),
+        }));
+
   // A curated palette maps each pen layer to its own ink; 'custom' uses the
   // per-element colour pickers.
   const pal = getVinePalette(state.palette);
@@ -102,7 +117,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     : { stem: state.strokeColor, tendril: state.strokeColor, leaf: state.leafColor, vein: state.leafColor, flower: state.flowerColor, shadow: state.strokeColor };
 
   return {
-    lines: result.lines,
+    lines,
     strokeColor: pal ? pal.stem : state.strokeColor,
     strokeWidthPx: state.penWidthMm * mm,
     layerColors,
