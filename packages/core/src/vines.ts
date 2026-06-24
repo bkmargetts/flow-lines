@@ -2145,7 +2145,7 @@ function decorate(
         for (let b = 0; b < blooms; b++) {
           const jx = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
           const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
-          const f = makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng);
+          const f = makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, tipDir);
           add(f.lines, f.silhouette);
         }
       } else if (d.tendrils && rng() < d.tendrilProb) {
@@ -2159,7 +2159,7 @@ function decorate(
           makeInflorescence(d.inflorescence, tip, tipDir, d.flowerSize * (1.4 + 1.2 * nfTip), d, rng, add);
         }
       } else if (d.flowers && rng() < flowerChance) {
-        const f = makeFlower(tip, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng);
+        const f = makeFlower(tip, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, tipDir);
         add(f.lines, f.silhouette);
       }
       if (d.fruitType !== 'none' && rng() < Math.min(1, d.fruitProb * (0.6 + 0.8 * dens) * massWTip)) {
@@ -2529,7 +2529,8 @@ function makeFlower(
   penPx: number,
   type: VineFlower,
   light: Point,
-  rng: () => number
+  rng: () => number,
+  dir?: number
 ): { lines: FlowLine[]; silhouette: Point[][] } {
   const t: VineFlower = type === 'mixed' ? FLOWER_TYPES[Math.floor(rng() * FLOWER_TYPES.length)] : type;
   const lines: FlowLine[] = [];
@@ -2568,10 +2569,13 @@ function makeFlower(
     // primitive as the rose) flaring from a common throat, with the throat set
     // back from the centre so the petals form a deep cupped trumpet rather than
     // a flat star. Petals read as a soft flower — not a geometric pentagon.
-    const face = rot;                       // direction the bloom opens toward
+    // Open along the stem (away from where it joins) when a direction is given,
+    // so the throat sits on the stem tip and the petals flare outward — not a
+    // bloom floating off to one side.
+    const face = dir ?? rot;                 // direction the bloom opens toward
     const petals = 5;
     const spread = 2.0;                      // fan of the petal lobes (radians)
-    // Throat behind the centre, so petals splay forward out of a cup.
+    // Throat behind the centre (back toward the stem), so petals splay forward.
     const throat = { x: center.x - Math.cos(face) * size * 0.5, y: center.y - Math.sin(face) * size * 0.5 };
     for (let k = 0; k < petals; k++) {
       const f = k / (petals - 1);
@@ -2584,8 +2588,9 @@ function makeFlower(
     // A short calyx/tube where it joins the pedicel.
     lines.push({ points: [throat, { x: throat.x - Math.cos(face) * size * 0.35, y: throat.y - Math.sin(face) * size * 0.35 }], layer: 'flower' });
   } else {
-    // bud: a closed teardrop with two sepal strokes at its base.
-    const a = rot;
+    // bud: a closed teardrop with two sepal strokes at its base; points along
+    // the stem (away from the join) when a direction is given.
+    const a = dir ?? rot;
     const dx = Math.cos(a);
     const dy = Math.sin(a);
     const px = -dy;
@@ -2657,7 +2662,7 @@ function makeInflorescence(
       const my = (base.y + fy) / 2 + Math.sin(a + Math.PI / 2) * len * bow;
       const ped = smoothPolyline([base, { x: mx, y: my }, { x: fx, y: fy }], 1);
       add([{ points: ped, layer: 'stem' }], []);
-      const fl = makeFlower({ x: fx, y: fy }, size * (0.4 + rng() * 0.2), penPx, d.flowerType, d.light, rng);
+      const fl = makeFlower({ x: fx, y: fy }, size * (0.4 + rng() * 0.2), penPx, d.flowerType, d.light, rng, a);
       add(fl.lines, fl.silhouette);
     }
     return;
@@ -2685,10 +2690,10 @@ function makeInflorescence(
       const fx = at.x + px * (k % 2 ? 1 : -1) * ped * 0.4 + dx * ped * 0.3;
       const fy = at.y + py * (k % 2 ? 1 : -1) * ped * 0.4 + dy * ped * 0.3;
       add([{ points: [at, { x: fx, y: fy }], layer: 'stem' }], []);
-      const fl = makeFlower({ x: fx, y: fy }, fsize, penPx, ftype, d.light, rng);
+      const fl = makeFlower({ x: fx, y: fy }, fsize, penPx, ftype, d.light, rng, Math.atan2(fy - at.y, fx - at.x));
       add(fl.lines, fl.silhouette);
     } else {
-      const fl = makeFlower(at, fsize * 0.8, penPx, ftype, d.light, rng);
+      const fl = makeFlower(at, fsize * 0.8, penPx, ftype, d.light, rng, axisDir + Math.PI / 2);
       add(fl.lines, fl.silhouette);
     }
   }
