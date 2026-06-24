@@ -85,6 +85,14 @@ export interface VinesOptions {
   /** 0..1 deliberate negative space: hold one region of the page clear and
    *  swell the mass elsewhere (notan), instead of filling evenly. */
   negativeSpace?: number;
+  /** 0..1 light-driven tonal massing: commit the arrangement into a few value
+   *  masses — foliage gathers and hatches heavier on the shadow side (away from
+   *  `lightAngle`) and opens on the lit side — so it reads as a lit illustration
+   *  rather than an evenly-filled diagram. 0 = off (byte-identical). */
+  tonalMassing?: number;
+  /** Posterize the tonal-massing field into this many value bands (>= 2) so the
+   *  canopy reads as a few decisive shapes; 0/1 = smooth (no banding). */
+  valueBands?: number;
 
   // — growth model —
   stepLength?: number;
@@ -538,6 +546,8 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     vessel = 'none',
     groundLine = false,
     negativeSpace = 0,
+    tonalMassing = 0,
+    valueBands = 0,
     guidePaths,
     support = 'none',
   } = options;
@@ -553,10 +563,21 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
 
   const growthGrid = new ProximityGrid(width, height, Math.max(1, spacing));
 
-  // Deliberate negative space (notan): hold one third of the page clear and let
-  // the mass swell elsewhere. Null when off, so the rng sequence — and every
-  // existing render — is byte-identical unless `negativeSpace` is dialled up.
-  const weightAt = makeMassWeight(width, height, margin, seed, negativeSpace);
+  // The scene value field: one scalar mass-weight over the page (1 = full mass /
+  // dense / dark, →0 = thin / open / lit). It folds together deliberate negative
+  // space (notan: hold a third clear) and light-driven tonal massing (swell the
+  // shadow side, open the lit side, commit a few value masses). Null when both
+  // are off, so the rng sequence — and every existing render — is byte-identical
+  // unless one is dialled up.
+  const weightAt = makeValueField(width, height, margin, seed, light, negativeSpace, tonalMassing, valueBands);
+  // Growth and root placement follow *only* the notan component, not the light
+  // gradient: tonal massing concentrates foliage and tone, but the architecture
+  // (stem length, branching, where roots start) stays even — as in real
+  // botanical drawing, where the canopy masses tonally while the branches don't
+  // retreat from the lit side. A broad light gradient driving the growth
+  // early-stop would otherwise truncate the whole gesture on its lit half. Null
+  // when negative space is off, so this is byte-identical to a non-notan render.
+  const growthWeightAt = makeMassWeight(width, height, margin, seed, negativeSpace);
 
   // A drawn vessel the arrangement rises out of (bouquet/specimen): the stems
   // are based at its mouth, and it occludes their lower ends.
@@ -590,10 +611,10 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     const fillRoots: Root[] = region.seeds.map((p) => ({ x: p.x, y: p.y, angle: -Math.PI / 2, half: baseHalf, maxLength }));
     rawStems = colonize(fillRoots, { width, height, margin, stepLength, attractorCount: Math.max(attractorCount, 700), attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, region.inside);
   } else if (composition === 'free' && mode === 'colonization') {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt }, rng);
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt: growthWeightAt }, rng);
     rawStems = colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, undefined);
   } else {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt, baseOverride, guidePaths }, rng);
+    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt: growthWeightAt, baseOverride, guidePaths }, rng);
     // The specimen's focal point is the end of its master gesture.
     if (composition === 'specimen' && roots[0]?.guide) focal = roots[0].guide[roots[0].guide.length - 1];
     // A wreath's arcs — and a 'guide' composition's traced paths — are *designed*
@@ -601,7 +622,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     // break (which would stop each stem as it nears another and tear the shape)
     // is disabled for them.
     const useGrid = avoidOverlap && composition !== 'wreath' && composition !== 'guide' ? growthGrid : null;
-    rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, useGrid, spacing, weightAt);
+    rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, useGrid, spacing, growthWeightAt);
   }
 
   // Smooth (heavily, for flowing curves) then add a touch of wobble.
@@ -674,7 +695,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
       leafArrangement, leafletCount, phyllotaxis, whorlCount,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
       inflorescence, floretCount, fruitType, fruitProb, dewdrops, dewdropProb,
-      focal, focalR, density, weightAt,
+      focal, focalR, density, weightAt, shadeMass: tonalMassing,
     },
     rng,
     add
@@ -954,6 +975,73 @@ function makeMassWeight(
   return (x, y) => {
     const reduce = smoothstep(1 - Math.hypot(x - cc.x, y - cc.y) / clearR);
     return 1 - strength * reduce;
+  };
+}
+
+/** The lit side never goes fully bald — it keeps this fraction of the mass so
+ *  airy passages still carry a few marks. */
+const LIT_FLOOR = 0.15;
+
+/**
+ * The scene value field: one scalar mass-weight closure (1 = full mass / dense /
+ * dark, →`LIT_FLOOR` = thin / open / lit) that every density, size and
+ * shade-intensity site reads from. It folds two illustrator controls into one
+ * field so they compose without doubling the rng-gated plumbing:
+ *
+ *  - **Negative space** (notan) — hold a deterministically-chosen third clear.
+ *  - **Tonal massing** — a light-driven gradient (swell the shadow side away
+ *    from `light`, open the lit side), then a contrast-commit + optional
+ *    posterize borrowed in spirit from the image pipeline's `composeMassPlan`,
+ *    so the canopy reads as a few decisive value masses instead of an even veil.
+ *
+ * Returns null when both are off, so the rng sequence stays byte-identical to a
+ * render that never asked for either. When only negative space is on it returns
+ * the *exact* legacy notan closure (`makeMassWeight`), so existing notan seeds
+ * reproduce. Pure analytic closures — no per-pixel raster/blur — so it's O(1)
+ * per query and cheap to rebuild on every render.
+ */
+function makeValueField(
+  width: number,
+  height: number,
+  margin: number,
+  seed: number,
+  light: Point,
+  negativeSpace: number,
+  tonalMassing: number,
+  valueBands: number
+): ((x: number, y: number) => number) | null {
+  const notan = makeMassWeight(width, height, margin, seed, negativeSpace);
+  // Massing off → the field is exactly the legacy notan closure (or null). This
+  // is what guarantees every existing render is byte-identical.
+  if (tonalMassing <= 0.001) return notan;
+
+  const tm = Math.min(1, tonalMassing);
+  const cx = width / 2;
+  const cy = height / 2;
+  // Project page position onto the light axis, normalized by the page half-span,
+  // so the centre is tonally neutral and the corners commit. dot > 0 is the lit
+  // side (toward `light`), dot < 0 the shadow side.
+  const halfSpan = 0.5 * Math.hypot(width - 2 * margin, height - 2 * margin) || 1;
+  const bands = Math.round(valueBands);
+  const posterize = bands >= 2;
+
+  return (x, y) => {
+    const proj = Math.max(-1, Math.min(1, ((x - cx) * light.x + (y - cy) * light.y) / halfSpan));
+    // 1 deep in shadow, 0 in full light.
+    const shadowBias = smoothstep(0.5 - proj * 0.5);
+    // Open the lit side toward the floor; the shadow side stays at full mass.
+    let w = 1 - tm * (1 - shadowBias) * (1 - LIT_FLOOR);
+    // Commit values: push apart from the mid so a few decisive masses read,
+    // rather than a continuous gradation (mirrors composeMassPlan).
+    w = 0.5 + (w - 0.5) * (1 + 0.45 * tm);
+    if (posterize) {
+      const band = Math.max(0, Math.min(bands - 1, Math.floor(w * bands)));
+      w = band / (bands - 1);
+    }
+    w = Math.max(LIT_FLOOR, Math.min(1, w));
+    // A held-clear notan region still clears, even under massing.
+    if (notan) w *= notan(x, y);
+    return w;
   };
 }
 
@@ -1965,6 +2053,10 @@ interface DecorParams {
   /** Negative-space mass weight (1 everywhere when off); thins foliage in the
    *  held-clear region. */
   weightAt?: ((x: number, y: number) => number) | null;
+  /** 0..1 tonal-massing strength. >0 couples leaf shade-intensity to the value
+   *  field (the shadow side hatches heavier); 0 leaves hatching untouched so
+   *  non-massed renders (incl. notan-only) stay byte-identical. */
+  shadeMass: number;
 }
 
 /** The golden angle (≈137.5°), the divergence of spiral phyllotaxis. */
@@ -2290,7 +2382,17 @@ function makeLeaf(
 
   // Shadow hatching: fine cross strokes from the midrib to the shadow edge.
   if (style === 'shaded' && d.shadeDensity > 0.01) {
-    const hatchStep = penPx * (2 + (1 - d.shadeDensity) * 5);
+    // Couple hatch density to the scene value field: leaves on the shadow side
+    // (high mass) hatch tighter, the lit side opens up — so the canopy carries a
+    // committed value structure, not a flat even tone. Purely deterministic
+    // geometry (no rng), and inert (effShade === d.shadeDensity) when massing is
+    // off, so non-massed renders stay byte-identical.
+    let effShade = d.shadeDensity;
+    if (d.shadeMass > 0 && d.weightAt) {
+      const m = d.weightAt(base.x, base.y); // 1 = dense/shadow, →LIT_FLOOR = lit
+      effShade = Math.max(0, Math.min(1, d.shadeDensity * (1 + 0.5 * d.shadeMass * (m - 0.6))));
+    }
+    const hatchStep = penPx * (2 + (1 - effShade) * 5);
     let acc = 0;
     for (let i = 1; i < axis.length; i++) {
       acc += Math.hypot(axis[i].x - axis[i - 1].x, axis[i].y - axis[i - 1].y);

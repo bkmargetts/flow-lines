@@ -443,3 +443,75 @@ describe('generateVines', () => {
     }
   });
 });
+
+describe('scene value & light (tonal massing)', () => {
+  // Default-inert: an unset / zeroed value field must not perturb the rng
+  // sequence, so every existing seed reproduces byte-for-byte.
+  it('is byte-identical to the legacy render when massing is off', () => {
+    for (const seed of [1, 7, 99]) {
+      const legacy = generateVines(baseOptions({ seed, composition: 'specimen', mode: 'growth' }));
+      const explicitOff = generateVines(
+        baseOptions({ seed, composition: 'specimen', mode: 'growth', tonalMassing: 0, valueBands: 0 })
+      );
+      expect(explicitOff.lines).toEqual(legacy.lines);
+    }
+  });
+
+  // The negative-space (notan) path is folded into the same field; turning
+  // massing off must leave it exactly as it was before this feature existed.
+  it('leaves the negative-space path byte-identical when massing is off', () => {
+    const notan = generateVines(baseOptions({ seed: 5, composition: 'specimen', mode: 'growth', negativeSpace: 0.6 }));
+    const notanTm0 = generateVines(
+      baseOptions({ seed: 5, composition: 'specimen', mode: 'growth', negativeSpace: 0.6, tonalMassing: 0 })
+    );
+    expect(notanTm0.lines).toEqual(notan.lines);
+  });
+
+  it('changes the canopy when massing is on, staying finite and in-bounds', () => {
+    const base = baseOptions({ seed: 7, composition: 'specimen', mode: 'growth' });
+    const off = generateVines(base);
+    const on = generateVines({ ...base, tonalMassing: 0.85, valueBands: 3 });
+    expect(on.lines).not.toEqual(off.lines);
+    const tol = 80;
+    for (const ln of on.lines) {
+      for (const p of ln.points) {
+        expect(Number.isFinite(p.x)).toBe(true);
+        expect(Number.isFinite(p.y)).toBe(true);
+        expect(p.x).toBeGreaterThanOrEqual(-tol);
+        expect(p.x).toBeLessThanOrEqual(on.width + tol);
+        expect(p.y).toBeGreaterThanOrEqual(-tol);
+        expect(p.y).toBeLessThanOrEqual(on.height + tol);
+      }
+    }
+  });
+
+  // The architecture follows only the notan component, not the light gradient.
+  // With a light-independent fill (so the stem layer is pure geometry), flipping
+  // the light must leave the stems untouched.
+  it('keeps the stem architecture identical when the light flips', () => {
+    const g = baseOptions({
+      seed: 7, composition: 'specimen', mode: 'growth', tonalMassing: 0.85, valueBands: 3,
+      vineFill: 'outline', leaves: false, flowers: false, tendrils: false,
+    });
+    const lit = generateVines({ ...g, lightAngle: -135 });
+    const flip = generateVines({ ...g, lightAngle: 45 });
+    expect(layers(flip.lines, 'stem')).toEqual(layers(lit.lines, 'stem'));
+  });
+
+  // Foliage masses toward the shadow side, so flipping the light shifts the
+  // canopy's centre of mass across the page.
+  it('re-masses the foliage toward the shadow side when the light flips', () => {
+    const base = baseOptions({ seed: 7, composition: 'specimen', mode: 'growth', tonalMassing: 0.9, valueBands: 0 });
+    const leafCentroidX = (lines: FlowLine[]): number => {
+      let sum = 0;
+      let n = 0;
+      for (const l of layers(lines, 'leaf')) for (const p of l.points) { sum += p.x; n++; }
+      return n ? sum / n : 0;
+    };
+    const lit = leafCentroidX(generateVines({ ...base, lightAngle: -135 }).lines); // shadow lower-right
+    const flip = leafCentroidX(generateVines({ ...base, lightAngle: 45 }).lines); // shadow upper-left
+    // The canopy's horizontal centre of mass moves with the light (which way it
+    // moves depends on the gesture, but it must move).
+    expect(Math.abs(lit - flip)).toBeGreaterThan(3);
+  });
+});

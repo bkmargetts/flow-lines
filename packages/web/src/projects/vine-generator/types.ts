@@ -30,6 +30,13 @@ export interface VineState {
   groundLine: boolean;
   /** 0..1 deliberate negative space (notan): hold a region clear, swell the mass. */
   negativeSpace: number;
+  /** 0..1 light-driven tonal massing: foliage gathers and hatches heavier on the
+   *  shadow side (away from the light), opening the lit side — a committed value
+   *  structure instead of an even fill. 0 = off. */
+  tonalMassing: number;
+  /** Posterize the tonal-massing field into this many value bands (>= 2) for a
+   *  few decisive masses; 0 = smooth. */
+  valueBands: number;
 
   // growth model
   stepLengthMm: number;
@@ -130,6 +137,8 @@ export const defaultVineState: VineState = {
   support: 'none',
   groundLine: false,
   negativeSpace: 0,
+  tonalMassing: 0,
+  valueBands: 0,
 
   stepLengthMm: 2.2,
   maxLengthMm: 90,

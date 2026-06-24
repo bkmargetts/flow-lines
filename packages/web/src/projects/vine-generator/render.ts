@@ -50,6 +50,8 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     support: state.support,
     groundLine: state.groundLine,
     negativeSpace: state.negativeSpace,
+    tonalMassing: state.tonalMassing,
+    valueBands: state.valueBands,
 
     stepLength: Math.max(1, state.stepLengthMm * mm),
     maxLength: state.maxLengthMm * mm,

@@ -15,13 +15,14 @@ function Slider(props: {
   step: number;
   onChange: (v: number) => void;
   format?: (v: number) => ReactNode;
+  disabled?: boolean;
 }) {
-  const { label, value, min, max, step, onChange, format } = props;
+  const { label, value, min, max, step, onChange, format, disabled } = props;
   return (
     <div className="control-group">
       <label>
         {label}{' '}
-        <EditableValue value={value} min={min} max={max} step={step} onChange={onChange}>
+        <EditableValue value={value} min={min} max={max} step={step} onChange={onChange} disabled={disabled}>
           {format ? format(value) : value}
         </EditableValue>
       </label>
@@ -31,6 +32,7 @@ function Slider(props: {
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(parseFloat(e.target.value))}
       />
     </div>
@@ -152,6 +154,29 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         format={(v) => v.toFixed(2)}
       />
       <p className="paint-hint">Notan: holds one region of the page clear and swells the mass elsewhere.</p>
+
+      <Slider
+        label="Tonal massing"
+        value={state.tonalMassing}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ tonalMassing: v })}
+        format={(v) => v.toFixed(2)}
+      />
+      <p className="paint-hint">Light-driven value massing: foliage gathers and hatches heavier on the shadow side (away from the light angle), opening the lit side.</p>
+
+      <Slider
+        label="Value bands"
+        value={state.valueBands}
+        min={0}
+        max={6}
+        step={1}
+        onChange={(v) => update({ valueBands: v })}
+        format={(v) => (v < 2 ? 'smooth' : String(v))}
+        disabled={state.tonalMassing <= 0}
+      />
+      <p className="paint-hint">Posterize the massing into a few committed value masses (3–4 is the sweet spot); smooth = continuous.</p>
 
       <Slider
         label="Zoom"
