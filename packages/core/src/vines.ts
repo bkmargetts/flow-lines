@@ -2564,39 +2564,25 @@ function makeFlower(
     lines.push(ring);
     sils.push(ring.points);
   } else if (t === 'bell') {
-    // A trumpet / morning-glory bloom seen near-front: a softly pentagonal
-    // flared mouth (foreshortened to an ellipse) with radial pleats running in
-    // to a small throat, on a short tube — reads as a flower rather than the
-    // flat triangular funnel a side-profile cup produced.
-    const R = size * 0.85;
-    const squash = 0.58 + rng() * 0.22; // foreshortening of the round mouth
-    const ct = Math.cos(rot);
-    const st = Math.sin(rot);
-    const lobes = 5;
-    const at = (ang: number, r: number): Point => {
-      const ex = Math.cos(ang) * r;
-      const ey = Math.sin(ang) * r * squash;
-      return { x: center.x + ex * ct - ey * st, y: center.y + ex * st + ey * ct };
-    };
-    const M = 48;
-    const mouth: Point[] = [];
-    for (let i = 0; i <= M; i++) {
-      const ang = (i / M) * 2 * Math.PI;
-      // Rounded petal-lobes (smoothstep-ish via cos), shallow, so the rim reads
-      // as a soft five-petalled face rather than a hard pentagon.
-      const r = R * (1 + 0.07 * Math.cos(lobes * ang));
-      mouth.push(at(ang, r));
+    // A bell / foxglove bloom built from rounded petal lobes (the same
+    // primitive as the rose) flaring from a common throat, with the throat set
+    // back from the centre so the petals form a deep cupped trumpet rather than
+    // a flat star. Petals read as a soft flower — not a geometric pentagon.
+    const face = rot;                       // direction the bloom opens toward
+    const petals = 5;
+    const spread = 2.0;                      // fan of the petal lobes (radians)
+    // Throat behind the centre, so petals splay forward out of a cup.
+    const throat = { x: center.x - Math.cos(face) * size * 0.5, y: center.y - Math.sin(face) * size * 0.5 };
+    for (let k = 0; k < petals; k++) {
+      const f = k / (petals - 1);
+      const ang = face + (f - 0.5) * spread;
+      const plen = size * (0.95 + 0.2 * Math.sin(f * Math.PI)); // centre petals longer
+      const pl = petalOutline(throat, ang, plen, size * 0.3, penPx);
+      lines.push(pl);
+      sils.push(pl.points);
     }
-    lines.push({ points: mouth, layer: 'flower' });
-    sils.push(mouth);
-    // The throat sits a little below the mouth centre (into the tube); pleats
-    // run only partway in, so the centre stays open rather than a spoked web.
-    const throat = { x: center.x - st * R * 0.2, y: center.y + ct * R * 0.2 };
-    for (let k = 0; k < lobes; k++) {
-      const ang = (k / lobes) * 2 * Math.PI + Math.PI / lobes; // scallop troughs
-      const rim = at(ang, R * 0.95);
-      lines.push({ points: [rim, { x: rim.x + (throat.x - rim.x) * 0.55, y: rim.y + (throat.y - rim.y) * 0.55 }], layer: 'flower' });
-    }
+    // A short calyx/tube where it joins the pedicel.
+    lines.push({ points: [throat, { x: throat.x - Math.cos(face) * size * 0.35, y: throat.y - Math.sin(face) * size * 0.35 }], layer: 'flower' });
   } else {
     // bud: a closed teardrop with two sepal strokes at its base.
     const a = rot;
