@@ -1,5 +1,5 @@
 import { type Point } from '@flow-lines/core';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel } from '@flow-lines/core';
+import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from '@flow-lines/core';
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
@@ -24,6 +24,8 @@ export interface VineState {
   // page composition
   /** A drawn container the stems rise out of (bouquet/specimen). */
   vessel: VineVessel;
+  /** A drawn support the climbers wrap (trellis composition). */
+  support: VineSupport;
   /** Draw a hand-drawn ground line under the arrangement. */
   groundLine: boolean;
   /** 0..1 deliberate negative space (notan): hold a region clear, swell the mass. */
@@ -53,6 +55,8 @@ export interface VineState {
   lightAngle: number;
   shadeDensity: number;
   stemShade: StemShade;
+  /** Woody-stem surface texture. */
+  stemTexture: StemTexture;
   occlude: boolean;
   sketch: number;
   sketchStyle: SketchStyle;
@@ -73,12 +77,30 @@ export interface VineState {
   leafSizeMm: number;
   leafWidthRatio: number;
   leafSpacingMm: number;
+  /** Compound-leaf arrangement; 'simple' = one blade per site. */
+  leafArrangement: LeafArrangement;
+  leafletCount: number;
+  /** How successive leaves are inserted along a stem. */
+  phyllotaxis: Phyllotaxis;
+  whorlCount: number;
   tendrils: boolean;
   tendrilProb: number;
   flowers: boolean;
   flowerType: VineFlower;
   flowerProb: number;
   flowerSizeMm: number;
+  /** Multi-flower structure at the stem tips; 'none' = single bloom. */
+  inflorescence: Inflorescence;
+  floretCount: number;
+  /** Bear thorns along the stems. */
+  thorns: boolean;
+  thornProb: number;
+  /** Fruiting bodies; 'none' = off. */
+  fruitType: FruitType;
+  fruitProb: number;
+  /** Scatter dewdrop highlights on the foliage. */
+  dewdrops: boolean;
+  dewdropProb: number;
 
   wobbleMm: number;
 
@@ -105,6 +127,7 @@ export const defaultVineState: VineState = {
   seedCount: 6,
 
   vessel: 'none',
+  support: 'none',
   groundLine: false,
   negativeSpace: 0,
 
@@ -128,6 +151,7 @@ export const defaultVineState: VineState = {
   lightAngle: -130,
   shadeDensity: 0.55,
   stemShade: 'along',
+  stemTexture: 'none',
   occlude: true,
   sketch: 0,
   sketchStyle: 'loose',
@@ -145,12 +169,24 @@ export const defaultVineState: VineState = {
   leafSizeMm: 12,
   leafWidthRatio: 0.55,
   leafSpacingMm: 12,
+  leafArrangement: 'simple',
+  leafletCount: 5,
+  phyllotaxis: 'alternate',
+  whorlCount: 3,
   tendrils: true,
   tendrilProb: 0.1,
   flowers: true,
   flowerType: 'rose',
   flowerProb: 0.3,
   flowerSizeMm: 5,
+  inflorescence: 'none',
+  floretCount: 8,
+  thorns: false,
+  thornProb: 0.15,
+  fruitType: 'none',
+  fruitProb: 0.2,
+  dewdrops: false,
+  dewdropProb: 0.15,
 
   wobbleMm: 0.2,
 

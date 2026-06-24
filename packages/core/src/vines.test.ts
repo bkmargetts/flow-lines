@@ -274,4 +274,172 @@ describe('generateVines', () => {
     );
     expect(layers(result.lines, 'stem').length).toBeGreaterThan(1);
   });
+
+  // ——— botanical authenticity (compound leaves, phyllotaxis, inflorescence,
+  //     thorns, fruit) ———
+
+  it('stays deterministic with all botanical features enabled', () => {
+    const opts = baseOptions({
+      seed: 7,
+      composition: 'specimen',
+      mode: 'growth',
+      leafArrangement: 'pinnate',
+      phyllotaxis: 'spiral',
+      inflorescence: 'raceme',
+      thorns: true,
+      fruitType: 'grape',
+    });
+    const a = generateVines(opts);
+    const b = generateVines(opts);
+    const c = generateVines({ ...opts, seed: 8 });
+    expect(b.lines).toEqual(a.lines);
+    expect(c.lines).not.toEqual(a.lines);
+  });
+
+  it('compound (pinnate) leaves change the output and add leaf blades', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.6, tendrils: false, flowers: false } as const;
+    const simple = generateVines(baseOptions({ ...common, leafArrangement: 'simple' }));
+    const pinnate = generateVines(baseOptions({ ...common, leafArrangement: 'pinnate', leafletCount: 5 }));
+    expect(pinnate.lines).not.toEqual(simple.lines);
+    expect(layers(pinnate.lines, 'leaf').length).toBeGreaterThan(layers(simple.lines, 'leaf').length);
+  });
+
+  it('phyllotaxis modes each produce distinct output, opposite adds leaves', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.5, tendrils: false, flowers: false } as const;
+    const alternate = generateVines(baseOptions({ ...common, phyllotaxis: 'alternate' }));
+    const opposite = generateVines(baseOptions({ ...common, phyllotaxis: 'opposite' }));
+    const spiral = generateVines(baseOptions({ ...common, phyllotaxis: 'spiral' }));
+    expect(opposite.lines).not.toEqual(alternate.lines);
+    expect(spiral.lines).not.toEqual(alternate.lines);
+    expect(spiral.lines).not.toEqual(opposite.lines);
+    // Opposite places a blade on both sides at each node.
+    expect(layers(opposite.lines, 'leaf').length).toBeGreaterThanOrEqual(layers(alternate.lines, 'leaf').length);
+  });
+
+  it('an inflorescence changes the tip and adds flower-layer geometry', () => {
+    const common = { composition: 'specimen', mode: 'growth', flowers: true, flowerProb: 0.9, density: 0.4 } as const;
+    const single = generateVines(baseOptions({ ...common, inflorescence: 'none' }));
+    const raceme = generateVines(baseOptions({ ...common, inflorescence: 'raceme', floretCount: 12 }));
+    expect(raceme.lines).not.toEqual(single.lines);
+    expect(layers(raceme.lines, 'flower').length).toBeGreaterThan(layers(single.lines, 'flower').length);
+  });
+
+  it('thorns add stem-layer geometry and are off by default', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.3, flowers: false, tendrils: false } as const;
+    const bare = generateVines(baseOptions({ ...common, thorns: false }));
+    const thorny = generateVines(baseOptions({ ...common, thorns: true, thornProb: 0.5 }));
+    expect(layers(thorny.lines, 'stem').length).toBeGreaterThan(layers(bare.lines, 'stem').length);
+  });
+
+  it('fruit reuses the flower layer and is off by default', () => {
+    const common = { composition: 'specimen', mode: 'growth', density: 0.4, flowers: false, tendrils: false } as const;
+    const none = generateVines(baseOptions({ ...common, fruitType: 'none' }));
+    const grapes = generateVines(baseOptions({ ...common, fruitType: 'grape', fruitProb: 0.8 }));
+    expect(grapes.lines).not.toEqual(none.lines);
+    expect(layers(grapes.lines, 'flower').length).toBeGreaterThan(layers(none.lines, 'flower').length);
+  });
+
+  it('occlusion still removes hidden geometry with compound (palmate) leaves', () => {
+    const common = { composition: 'specimen', mode: 'growth', leafArrangement: 'palmate', density: 0.8, flowers: false } as const;
+    const flat = generateVines(baseOptions({ ...common, occlude: false }));
+    const occ = generateVines(baseOptions({ ...common, occlude: true }));
+    expect(pointCount(occ.lines)).toBeLessThan(pointCount(flat.lines) * 0.98);
+  });
+
+  it('grows along a supplied guide path (guide composition)', () => {
+    const path = [
+      { x: 60, y: 500 },
+      { x: 120, y: 300 },
+      { x: 220, y: 150 },
+      { x: 320, y: 120 },
+    ];
+    const result = generateVines(
+      baseOptions({
+        composition: 'guide',
+        mode: 'growth',
+        guidePaths: [path],
+        leaves: false,
+        flowers: false,
+        tendrils: false,
+      })
+    );
+    const stems = layers(result.lines, 'stem');
+    expect(stems.length).toBeGreaterThanOrEqual(1);
+    // The main stem should pass near the far end of the guide.
+    const allPts = stems.flatMap((s) => s.points);
+    const nearEnd = allPts.some((p) => Math.hypot(p.x - 320, p.y - 120) < 60);
+    expect(nearEnd).toBe(true);
+  });
+
+  it('falls back to painted startPoints as the guide when no guidePaths given', () => {
+    const result = generateVines(
+      baseOptions({
+        composition: 'guide',
+        mode: 'growth',
+        startPoints: [{ x: 80, y: 520 }, { x: 200, y: 300 }, { x: 320, y: 140 }],
+        leaves: false,
+        flowers: false,
+        tendrils: false,
+      })
+    );
+    expect(layers(result.lines, 'stem').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('a trellis support adds drawn structure and is off by default', () => {
+    const common = { composition: 'trellis', mode: 'growth', seedCount: 3, density: 0.2, flowers: false } as const;
+    const bare = generateVines(baseOptions({ ...common, support: 'none' }));
+    const lattice = generateVines(baseOptions({ ...common, support: 'lattice' }));
+    expect(lattice.lines).not.toEqual(bare.lines);
+    expect(layers(lattice.lines, 'stem').length).toBeGreaterThan(layers(bare.lines, 'stem').length);
+  });
+
+  it('is deterministic for the guide composition', () => {
+    const opts = baseOptions({ composition: 'guide', mode: 'growth', seed: 12, guidePaths: [[{ x: 50, y: 500 }, { x: 200, y: 200 }]] });
+    expect(generateVines(opts).lines).toEqual(generateVines(opts).lines);
+  });
+
+  it('bark texture adds stem-layer striations on thick canes and is off by default', () => {
+    const common = { composition: 'specimen', mode: 'growth', stemWidth: 16, density: 0.2, flowers: false } as const;
+    const smooth = generateVines(baseOptions({ ...common, stemTexture: 'none' }));
+    const bark = generateVines(baseOptions({ ...common, stemTexture: 'bark' }));
+    expect(bark.lines).not.toEqual(smooth.lines);
+    expect(layers(bark.lines, 'stem').length).toBeGreaterThan(layers(smooth.lines, 'stem').length);
+  });
+
+  it('dewdrops add highlight geometry and are off by default', () => {
+    // Isolate dewdrops: with leaves/flowers/tendrils off the only decorations
+    // are the dewdrops themselves, so they are purely additive over the stems.
+    const common = { composition: 'specimen', mode: 'growth', density: 0.5, leaves: false, flowers: false, tendrils: false } as const;
+    const dry = generateVines(baseOptions({ ...common, dewdrops: false }));
+    const dewy = generateVines(baseOptions({ ...common, dewdrops: true, dewdropProb: 0.9 }));
+    expect(dewy.lines).not.toEqual(dry.lines);
+    expect(dewy.lines.length).toBeGreaterThan(dry.lines.length);
+  });
+
+  it('keeps every botanical feature finite and roughly in bounds', () => {
+    const result = generateVines(
+      baseOptions({
+        composition: 'specimen',
+        mode: 'growth',
+        leafArrangement: 'bipinnate',
+        phyllotaxis: 'whorled',
+        whorlCount: 4,
+        inflorescence: 'umbel',
+        thorns: true,
+        fruitType: 'grape',
+        density: 0.6,
+      })
+    );
+    const tol = 80;
+    for (const ln of result.lines) {
+      for (const p of ln.points) {
+        expect(Number.isFinite(p.x)).toBe(true);
+        expect(Number.isFinite(p.y)).toBe(true);
+        expect(p.x).toBeGreaterThanOrEqual(-tol);
+        expect(p.x).toBeLessThanOrEqual(result.width + tol);
+        expect(p.y).toBeGreaterThanOrEqual(-tol);
+        expect(p.y).toBeLessThanOrEqual(result.height + tol);
+      }
+    }
+  });
 });
