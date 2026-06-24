@@ -407,7 +407,9 @@ describe('generateVines', () => {
   });
 
   it('dewdrops add highlight geometry and are off by default', () => {
-    const common = { composition: 'specimen', mode: 'growth', density: 0.5, flowers: false } as const;
+    // Isolate dewdrops: with leaves/flowers/tendrils off the only decorations
+    // are the dewdrops themselves, so they are purely additive over the stems.
+    const common = { composition: 'specimen', mode: 'growth', density: 0.5, leaves: false, flowers: false, tendrils: false } as const;
     const dry = generateVines(baseOptions({ ...common, dewdrops: false }));
     const dewy = generateVines(baseOptions({ ...common, dewdrops: true, dewdropProb: 0.9 }));
     expect(dewy.lines).not.toEqual(dry.lines);

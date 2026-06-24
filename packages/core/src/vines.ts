@@ -1201,8 +1201,19 @@ function growStems(
         angle += noise.noise2D(x * noiseScale, y * noiseScale) * curl * 0.18;
         if (gi >= tip.guide.length - 1 && Math.hypot(target.x - x, target.y - y) < stepLength * 1.5) break;
       } else {
-        angle += noise.noise2D(x * noiseScale, y * noiseScale) * curl * 0.3;
-        angle = steer(angle, up, 0.04 + gravitropism * 0.13);
+        // Steer with two noise octaves offset per-branch by its start position,
+        // so each cane wanders on its own slice of the field (neighbours don't
+        // bend alike) — a low-frequency sweep plus a higher-frequency meander
+        // that keeps short side-branches from reading as straight twigs.
+        // Deterministic: derived from geometry, no new rng draws.
+        const ox = startX * 0.013;
+        const oy = startY * 0.017;
+        const lf = noise.noise2D(x * noiseScale + ox, y * noiseScale + oy);
+        const hf = noise.noise2D(x * noiseScale * 6.5 + ox + 50, y * noiseScale * 6.5 + oy + 50);
+        angle += lf * curl * 0.28 + hf * curl * 0.5;
+        // Gentle upward habit, softened — and weaker still on side-branches, so
+        // they curl and wander instead of being pulled straight to vertical.
+        angle = steer(angle, up, (0.03 + gravitropism * 0.09) * (tip.branch ? 0.5 : 1));
       }
 
       const nx = x + Math.cos(angle) * stepLength;
@@ -2061,21 +2072,28 @@ function decorate(
         const massW = d.weightAt ? d.weightAt(pts[i].x, pts[i].y) : 1;
         // Leaves swell gently toward the focal point, and with depth.
         const sizeScale = (0.7 + 0.4 * (1 - along)) * (1 + 0.4 * nf) * (0.4 + 0.6 * massW);
-        if (d.leaves && legacyLeaves) {
-          // Cluster size driven by density (and a touch more near the focal).
+        // Leaf *presence* now scales with density (it used to only affect
+        // clustering, so a node always bore a leaf — which left winter / density-0
+        // plants fully leafed). Below ~0.45 density, sites drop out toward bare;
+        // at/above it the canopy is full. A small per-leaf angle jitter further
+        // breaks the regular fishbone.
+        const present = d.leaves && rng() < Math.min(1, dens * 2.2) * massW;
+        const jit = (rng() - 0.5) * 0.5;
+        if (present && legacyLeaves) {
+          // Extra leaves cluster the canopy near the focal point.
           const cluster = 1 + (rng() < dens * massW ? 1 : 0) + (rng() < (dens - 0.4 + 0.6 * nf) * massW ? 1 : 0);
           for (let c = 0; c < cluster; c++) {
             const s: 1 | -1 = c === 0 ? side : ((rng() < 0.5 ? 1 : -1) as 1 | -1);
-            const leaf = makeLeaf(pts[i], dir, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, effStyle, rng);
+            const leaf = makeLeaf(pts[i], dir + jit, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, effStyle, rng);
             add(leaf.lines, leaf.silhouette);
           }
-        } else if (d.leaves) {
+        } else if (present) {
           // Phyllotaxis places one or more insertions at this node; each is a
           // single blade or a whole compound leaf.
           const sites = phyllotaxisSites(d.phyllotaxis, node, side, d.whorlCount, theta);
           const compound = d.leafArrangement !== 'simple';
           for (const ins of sites) {
-            const ldir = dir + ins.angOff;
+            const ldir = dir + ins.angOff + jit;
             if (compound) {
               const clen = d.leafSize * sizeScale * 2.2 * ins.fore * (0.85 + rng() * 0.3);
               makeCompoundLeaf(pts[i], ldir, ins.side, clen, d, effStyle, rng, add, 0);
@@ -2104,7 +2122,10 @@ function decorate(
           const oy = pts[i].y + (rng() - 0.5) * d.leafSize * 0.3;
           add(makeDewdrop({ x: ox, y: oy }, r, d.light), []);
         }
-        nextLeaf += d.leafSpacing * spacingFactor * (0.7 + rng() * 0.6) * (1 - 0.3 * nf);
+        // Internodes vary widely and lengthen toward the base (foliage gathers
+        // near the growing tip, longer bare stretches lower down) so the rhythm
+        // reads hand-grown rather than metronomic.
+        nextLeaf += d.leafSpacing * spacingFactor * (0.5 + rng() * 1.0) * (1.3 - 0.5 * along) * (1 - 0.25 * nf);
         theta += GOLDEN_ANGLE;
         node++;
       }
@@ -2551,20 +2572,22 @@ function makeFlower(
       const dy = Math.sin(a);
       const px = -dy;
       const py = dx;
-      const L = size * 1.1;
+      const L = size * 1.2;
       const cup: Point[] = [];
-      const N = 12;
+      const N = 16;
+      // Curved trumpet flare: a narrow tube that bells out at the mouth on
+      // convex (pow > 1) walls, so it reads as a rounded bell rather than a
+      // straight-sided angular cup.
+      const wAt = (u: number): number => size * 0.5 * (0.16 + 0.9 * Math.pow(u, 1.7));
       for (let i = 0; i <= N; i++) {
         const u = i / N;
-        const wmouth = size * 0.5 * (0.25 + 0.75 * u); // narrow at base, wide at mouth
-        const scallop = u > 0.92 ? Math.sin(i * 2.5) * size * 0.08 : 0;
-        cup.push({ x: center.x + dx * L * u + px * (wmouth + scallop), y: center.y + dy * L * u + py * (wmouth + scallop) });
+        const scallop = u > 0.9 ? Math.sin(i * 2.2) * size * 0.07 : 0;
+        cup.push({ x: center.x + dx * L * u + px * (wAt(u) + scallop), y: center.y + dy * L * u + py * (wAt(u) + scallop) });
       }
       for (let i = N; i >= 0; i--) {
         const u = i / N;
-        const wmouth = size * 0.5 * (0.25 + 0.75 * u);
-        const scallop = u > 0.92 ? Math.sin(i * 2.5) * size * 0.08 : 0;
-        cup.push({ x: center.x + dx * L * u - px * (wmouth + scallop), y: center.y + dy * L * u - py * (wmouth + scallop) });
+        const scallop = u > 0.9 ? Math.sin(i * 2.2) * size * 0.07 : 0;
+        cup.push({ x: center.x + dx * L * u - px * (wAt(u) + scallop), y: center.y + dy * L * u - py * (wAt(u) + scallop) });
       }
       lines.push({ points: cup, layer: 'flower' });
       sils.push(cup);

@@ -197,9 +197,14 @@ export function crossVinePresets(a: VinePreset, b: VinePreset, rnd: () => number
   if (b.state.thorns) showy.push(() => { out.thorns = true; });
   if (showy.length > 0) showy[Math.floor(rnd() * showy.length)]();
 
-  // Tasteful density — lighter when the plant is already structurally busy.
-  const busy = (out.leafArrangement && out.leafArrangement !== 'simple') || (out.inflorescence && out.inflorescence !== 'none');
-  out.density = Math.min(a.state.density ?? 0.45, 0.55) * (busy ? 0.7 : 1);
+  // Tasteful density — capped, and lighter still when the plant is already
+  // structurally busy (compound leaves alone multiply blade count ~5×), so a
+  // random hybrid lands calm and legible rather than a wall of foliage.
+  const compound = out.leafArrangement && out.leafArrangement !== 'simple';
+  const busy = compound || (out.inflorescence && out.inflorescence !== 'none');
+  out.density = Math.min(a.state.density ?? 0.45, 0.5) * (compound ? 0.5 : busy ? 0.65 : 1);
+  // Keep blooms sane — a hybrid shouldn't scale flowers into big angular masses.
+  out.flowerSizeMm = Math.min(a.state.flowerSizeMm ?? 5, 7);
   // Never drop a bare garden scaffold (lattice / arch / obelisk) into a random
   // sprig — a support is a deliberate choice, not a trait to inherit by chance.
   out.support = 'none';
