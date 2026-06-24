@@ -799,6 +799,8 @@ program
   .option('--vessel <v>', 'A drawn container the stems rise from: none | vase | urn | amphora | bud-vase | pot | jar | mason-jar | bowl', 'none')
   .option('--ground-line', 'Draw a hand-drawn ground line under the arrangement')
   .option('--negative-space <number>', 'Deliberate notan: hold one region clear, swell the mass (0-1)', '0')
+  .option('--tonal-massing <number>', 'Light-driven value massing: foliage gathers/hatches on the shadow side, opens the lit side (0-1)', '0')
+  .option('--value-bands <number>', 'Posterize the tonal massing into N value masses (>=2; 0 = smooth)', '0')
   // growth model
   .option('--curl <number>', 'Meandering of the curl field (0-1.5)', '0.5')
   .option('--gravitropism <number>', 'Upward growth bias (0-1)', '0.4')
@@ -895,6 +897,8 @@ program
       vessel: options.vessel as VinesOptions['vessel'],
       groundLine: options.groundLine ?? false,
       negativeSpace: parseFloat(options.negativeSpace),
+      tonalMassing: parseFloat(options.tonalMassing),
+      valueBands: parseInt(options.valueBands, 10),
       curl: parseFloat(options.curl),
       gravitropism: parseFloat(options.gravitropism),
       branchProb: parseFloat(options.branchProb),

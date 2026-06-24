@@ -28,9 +28,11 @@ const SPECIES = {
   oak: ['--leaf-type', 'lobed', '--phyllotaxis', 'spiral', '--fruit-type', 'catkin', '--fruit-prob', '0.25', '--no-flowers', '--density', '0.55', '--leaf-size', '16', '--stem-width', '12', '--stem-texture', 'bark', '--palette', 'botanical'],
 };
 
-// Page compositions — exercises wreath closure, vessel/ground, and notan.
+// Page compositions — exercises wreath closure, vessel/ground, notan and the
+// light-driven tonal massing.
 const COMPOSITIONS = {
   specimen: ['--composition', 'specimen'],
+  'specimen+tonal': ['--composition', 'specimen', '--tonal-massing', '0.85', '--value-bands', '3'],
   'specimen+jar': ['--composition', 'specimen', '--vessel', 'jar', '--ground-line'],
   wreath: ['--composition', 'wreath', '--seed-count', '8'],
   'bouquet+vase': ['--composition', 'bouquet', '--vessel', 'vase', '--ground-line', '--seed-count', '6'],
