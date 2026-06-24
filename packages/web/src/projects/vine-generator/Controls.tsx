@@ -4,7 +4,7 @@ import { EditableValue } from '../../components/EditableValue';
 import type { ControlsProps } from '../../modules/types';
 import type { VineState } from './types';
 import { VINE_PALETTES, CUSTOM_PALETTE } from './palettes';
-import { VINE_PRESETS, getVinePreset, crossVinePresets } from './presets';
+import { VINE_PRESETS, getVinePreset, randomVineGenome } from './presets';
 
 /** One labelled range slider + its click-to-type value badge. */
 function Slider(props: {
@@ -49,15 +49,10 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
     update({ species: id, ...(preset ? preset.state : {}) });
   };
   const surprise = () => {
-    const a = VINE_PRESETS[Math.floor(Math.random() * VINE_PRESETS.length)];
-    const b = VINE_PRESETS[Math.floor(Math.random() * VINE_PRESETS.length)];
-    if (a.id === b.id) {
-      // Pure species.
-      update({ species: a.id, ...a.state, seed: Math.floor(Math.random() * 1000000) });
-    } else {
-      // A coherent hybrid of two species.
-      update({ species: 'custom', ...crossVinePresets(a, b, Math.random), seed: Math.floor(Math.random() * 1000000) });
-    }
+    // A coherent random genome: a species cross plus randomised page elements
+    // (palette, vessel, ground, stem count) so every press varies everything,
+    // not just the foliage.
+    update({ species: 'custom', ...randomVineGenome(Math.random), seed: Math.floor(Math.random() * 1000000) });
   };
 
   return (

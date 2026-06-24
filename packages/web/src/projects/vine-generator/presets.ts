@@ -5,6 +5,7 @@
  * the fields that define the species' character are set.
  */
 import type { VineState } from './types';
+import { VINE_PALETTES } from './palettes';
 
 export interface VinePreset {
   id: string;
@@ -209,4 +210,45 @@ export function crossVinePresets(a: VinePreset, b: VinePreset, rnd: () => number
   // sprig — a support is a deliberate choice, not a trait to inherit by chance.
   out.support = 'none';
   return out;
+}
+
+/** Every drawn vessel the arrangement can stand in. */
+const RANDOM_VESSELS: VineState['vessel'][] = ['vase', 'urn', 'amphora', 'bud-vase', 'pot', 'jar', 'mason-jar', 'bowl'];
+
+/**
+ * A fully random — but still coherent — genome for the "surprise" button. It
+ * crosses two species (crossVinePresets) and then rolls the *page* elements the
+ * cross can't reach: the ink palette (any curated set), and, for arrangements
+ * that stand on a surface, a random vessel + ground line. So every press varies
+ * the pot, the colours and the stem count, not just the foliage.
+ */
+export function randomVineGenome(rnd: () => number): Partial<VineState> {
+  const pick = <T>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)];
+  const a = pick(VINE_PRESETS);
+  const b = pick(VINE_PRESETS);
+  const genome: Partial<VineState> = a.id === b.id ? { ...a.state } : crossVinePresets(a, b, rnd);
+
+  // Colour: any curated palette, for real variety beyond the two parents'.
+  genome.palette = pick(VINE_PALETTES).id;
+
+  // Vessel + ground: only compositions that actually render a container get one
+  // (a random type, or none); everything else stays free-standing.
+  const comp = genome.composition ?? 'specimen';
+  if (comp === 'bouquet' || comp === 'specimen') {
+    if (rnd() < 0.55) {
+      genome.vessel = pick(RANDOM_VESSELS);
+      genome.groundLine = true;
+    } else {
+      genome.vessel = 'none';
+    }
+  } else {
+    genome.vessel = 'none';
+  }
+
+  // A little stem-count variety for the multi-stem arrangements.
+  if (comp === 'bouquet' || comp === 'trellis' || comp === 'wreath') {
+    genome.seedCount = 3 + Math.floor(rnd() * 5);
+  }
+
+  return genome;
 }
