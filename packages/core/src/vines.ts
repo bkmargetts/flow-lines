@@ -2564,33 +2564,38 @@ function makeFlower(
     lines.push(ring);
     sils.push(ring.points);
   } else if (t === 'bell') {
-    // One or two hanging bells: a tapered cup with a scalloped rim.
-    const bells = 1 + (rng() < 0.5 ? 1 : 0);
-    for (let bnum = 0; bnum < bells; bnum++) {
-      const a = rot + (bnum - (bells - 1) / 2) * 0.5 + Math.PI / 2; // hang downward-ish
-      const dx = Math.cos(a);
-      const dy = Math.sin(a);
-      const px = -dy;
-      const py = dx;
-      const L = size * 1.2;
-      const cup: Point[] = [];
-      const N = 16;
-      // Curved trumpet flare: a narrow tube that bells out at the mouth on
-      // convex (pow > 1) walls, so it reads as a rounded bell rather than a
-      // straight-sided angular cup.
-      const wAt = (u: number): number => size * 0.5 * (0.16 + 0.9 * Math.pow(u, 1.7));
-      for (let i = 0; i <= N; i++) {
-        const u = i / N;
-        const scallop = u > 0.9 ? Math.sin(i * 2.2) * size * 0.07 : 0;
-        cup.push({ x: center.x + dx * L * u + px * (wAt(u) + scallop), y: center.y + dy * L * u + py * (wAt(u) + scallop) });
-      }
-      for (let i = N; i >= 0; i--) {
-        const u = i / N;
-        const scallop = u > 0.9 ? Math.sin(i * 2.2) * size * 0.07 : 0;
-        cup.push({ x: center.x + dx * L * u - px * (wAt(u) + scallop), y: center.y + dy * L * u - py * (wAt(u) + scallop) });
-      }
-      lines.push({ points: cup, layer: 'flower' });
-      sils.push(cup);
+    // A trumpet / morning-glory bloom seen near-front: a softly pentagonal
+    // flared mouth (foreshortened to an ellipse) with radial pleats running in
+    // to a small throat, on a short tube — reads as a flower rather than the
+    // flat triangular funnel a side-profile cup produced.
+    const R = size * 0.85;
+    const squash = 0.58 + rng() * 0.22; // foreshortening of the round mouth
+    const ct = Math.cos(rot);
+    const st = Math.sin(rot);
+    const lobes = 5;
+    const at = (ang: number, r: number): Point => {
+      const ex = Math.cos(ang) * r;
+      const ey = Math.sin(ang) * r * squash;
+      return { x: center.x + ex * ct - ey * st, y: center.y + ex * st + ey * ct };
+    };
+    const M = 48;
+    const mouth: Point[] = [];
+    for (let i = 0; i <= M; i++) {
+      const ang = (i / M) * 2 * Math.PI;
+      // Rounded petal-lobes (smoothstep-ish via cos), shallow, so the rim reads
+      // as a soft five-petalled face rather than a hard pentagon.
+      const r = R * (1 + 0.07 * Math.cos(lobes * ang));
+      mouth.push(at(ang, r));
+    }
+    lines.push({ points: mouth, layer: 'flower' });
+    sils.push(mouth);
+    // The throat sits a little below the mouth centre (into the tube); pleats
+    // run only partway in, so the centre stays open rather than a spoked web.
+    const throat = { x: center.x - st * R * 0.2, y: center.y + ct * R * 0.2 };
+    for (let k = 0; k < lobes; k++) {
+      const ang = (k / lobes) * 2 * Math.PI + Math.PI / lobes; // scallop troughs
+      const rim = at(ang, R * 0.95);
+      lines.push({ points: [rim, { x: rim.x + (throat.x - rim.x) * 0.55, y: rim.y + (throat.y - rim.y) * 0.55 }], layer: 'flower' });
     }
   } else {
     // bud: a closed teardrop with two sepal strokes at its base.
