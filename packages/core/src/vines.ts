@@ -564,6 +564,19 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   const lr = (lightAngle * Math.PI) / 180;
   const light: Point = { x: Math.cos(lr), y: Math.sin(lr) };
 
+  // Reserve a decoration border: leaves/flowers are placed *at* stem points and
+  // reach outward from them, so the skeleton (roots, guides, growth bounds) is
+  // composed inside `growMargin` — far enough from the true margin that the
+  // foliage hung off it lands inside the page rather than being clipped at the
+  // edge on every plot. Sized for the typical leaf / single bloom (compound
+  // leaves reach further); capped so small pages aren't over-inset. Rare large
+  // inflorescences / focal-boosted blooms may still touch and get clipped by the
+  // final margin clip — the accepted edge case. Deterministic (no rng).
+  const leafReach = leaves ? leafSize * (leafArrangement === 'simple' ? 1.5 : 2.0) : 0;
+  const flowerReach = flowers ? flowerSize * 1.6 : 0;
+  const decorReserve = Math.min(Math.max(leafReach, flowerReach), Math.min(width, height) * 0.15);
+  const growMargin = margin + decorReserve;
+
   const rng = makeRandom(seed);
   const noise = createNoise(seed);
 
@@ -613,14 +626,14 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   let rawStems: Stem[];
   let focal: Point | null = null;
   if (composition === 'fill') {
-    const region = buildRegion(fillShape, startPoints, width, height, margin);
+    const region = buildRegion(fillShape, startPoints, width, height, growMargin);
     const fillRoots: Root[] = region.seeds.map((p) => ({ x: p.x, y: p.y, angle: -Math.PI / 2, half: baseHalf, maxLength }));
-    rawStems = colonize(fillRoots, { width, height, margin, stepLength, attractorCount: Math.max(attractorCount, 700), attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, region.inside);
+    rawStems = colonize(fillRoots, { width, height, margin: growMargin, stepLength, attractorCount: Math.max(attractorCount, 700), attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, region.inside);
   } else if (composition === 'free' && mode === 'colonization') {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt: growthWeightAt }, rng);
-    rawStems = colonize(roots, { width, height, margin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, undefined);
+    const roots = makeRoots({ width, height, margin: growMargin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt: growthWeightAt }, rng);
+    rawStems = colonize(roots, { width, height, margin: growMargin, stepLength, attractorCount, attractorRadius, killRadius }, rng, baseHalf, penPx, maxLength, undefined);
   } else {
-    const roots = makeRoots({ width, height, margin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt: growthWeightAt, baseOverride, guidePaths }, rng);
+    const roots = makeRoots({ width, height, margin: growMargin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt: growthWeightAt, baseOverride, guidePaths }, rng);
     // The specimen's focal point is the end of its master gesture.
     if (composition === 'specimen' && roots[0]?.guide) focal = roots[0].guide[roots[0].guide.length - 1];
     // A wreath's arcs — and a 'guide' composition's traced paths — are *designed*
@@ -628,7 +641,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     // break (which would stop each stem as it nears another and tear the shape)
     // is disabled for them.
     const useGrid = avoidOverlap && composition !== 'wreath' && composition !== 'guide' ? growthGrid : null;
-    rawStems = growStems(roots, { width, height, margin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, useGrid, spacing, growthWeightAt);
+    rawStems = growStems(roots, { width, height, margin: growMargin, stepLength, curl, noiseScale, gravitropism, branchProb, maxDepth }, rng, noise, useGrid, spacing, growthWeightAt);
   }
 
   // Smooth (heavily, for flowing curves) then add a touch of wobble.
