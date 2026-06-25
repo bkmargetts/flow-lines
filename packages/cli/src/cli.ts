@@ -842,7 +842,7 @@ program
   .option('--no-flowers', 'Omit flowers')
   .option('--flower-type <t>', 'rose | daisy | bell | bud | mixed', 'rose')
   .option('--flower-prob <number>', 'Flower probability at stem tips (0-1)', '0.2')
-  .option('--flower-size <number>', 'Bloom size in px', '12')
+  .option('--flower-size <number>', 'Bloom size in px', '18')
   .option('--inflorescence <i>', 'none | raceme | umbel | spike | corymb', 'none')
   .option('--floret-count <number>', 'Florets per inflorescence', '8')
   .option('--thorns', 'Bear thorns along the stems')

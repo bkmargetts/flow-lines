@@ -477,6 +477,12 @@ function polylineLength(pts: Point[]): number {
   return len;
 }
 
+/** Close a blade/body silhouette from its two offset edges: down one edge and
+ *  back up the other (left forward, right reversed). */
+function outlineFromEdges(left: Point[], right: Point[]): Point[] {
+  return [...left, ...right.slice().reverse()];
+}
+
 /** Total fill lines we'll ever emit — keeps dense presets bounded & fast. */
 const STEM_CAP = 4000;
 const LINE_CAP = 90000;
@@ -533,7 +539,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     flowers = true,
     flowerType = 'rose',
     flowerProb = 0.2,
-    flowerSize = 12,
+    flowerSize = 18,
     inflorescence = 'none',
     floretCount = 8,
     thorns = false,
@@ -925,6 +931,27 @@ function buildRegion(
     const y = margin + (s / 0x7fffffff) * (height - 2 * margin);
     if (inside(x, y)) seeds.push({ x, y });
   }
+  // Also seed the region's extremities so colonization grows *into* its lobes
+  // and points — a heart's two top lobes and bottom tip, a diamond's corners —
+  // instead of radiating from a central cluster and rounding the silhouette off
+  // into a blob. A coarse grid scan finds the topmost point of each half plus
+  // the four cardinal extremes. (Deterministic; no shared rng touched.)
+  const GRID = 48;
+  let top: Point | null = null, bottom: Point | null = null, leftP: Point | null = null, rightP: Point | null = null, lobeL: Point | null = null, lobeR: Point | null = null;
+  for (let iy = 0; iy <= GRID; iy++) {
+    const y = margin + (iy / GRID) * (height - 2 * margin);
+    for (let ix = 0; ix <= GRID; ix++) {
+      const x = margin + (ix / GRID) * (width - 2 * margin);
+      if (!inside(x, y)) continue;
+      if (!top || y < top.y) top = { x, y };
+      if (!bottom || y > bottom.y) bottom = { x, y };
+      if (!leftP || x < leftP.x) leftP = { x, y };
+      if (!rightP || x > rightP.x) rightP = { x, y };
+      if (x < cx && (!lobeL || y < lobeL.y)) lobeL = { x, y };
+      if (x > cx && (!lobeR || y < lobeR.y)) lobeR = { x, y };
+    }
+  }
+  for (const e of [top, bottom, leftP, rightP, lobeL, lobeR]) if (e) seeds.push(e);
   if (seeds.length === 0) seeds.push({ x: cx, y: cy });
   return { inside, seeds };
 }
@@ -1072,7 +1099,19 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     ], 1);
     const startAngle = Math.atan2(guide[1].y - by, guide[1].x - bx);
     // A woody trunk that tapers up the gesture.
-    return [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide }];
+    const roots: Root[] = [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide }];
+    // A shorter subordinate cane from the same base sweeping into the opposite
+    // (weak) quadrant, so the frame reads as a balanced specimen rather than one
+    // gesture beside a bare void. Capped shorter and thinner so it stays
+    // subordinate to the master gesture, and held back from the focal side.
+    const sfx = margin + (leftFocal ? 0.74 : 0.26) * (width - 2 * margin);
+    const sfy = margin + (0.5 + rng() * 0.16) * (height - 2 * margin);
+    const smx = (bx + sfx) / 2 + (leftFocal ? -1 : 1) * width * 0.06;
+    const smy = (by + sfy) / 2;
+    const subGuide = smoothPolyline([{ x: bx, y: by }, { x: smx, y: smy }, { x: sfx, y: sfy }], 1);
+    const subAngle = Math.atan2(subGuide[1].y - by, subGuide[1].x - bx);
+    roots.push({ x: bx, y: by, angle: subAngle, half: baseHalf * 1.05, maxLength: maxLength * 0.9, guide: subGuide, branchMaxLen: maxLength * 0.5 });
+    return roots;
   }
 
   // Build a guided root: a stem that follows a smoothed guide curve. An
@@ -1092,7 +1131,7 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     const R = Math.min(width - 2 * margin, height - 2 * margin) * 0.42;
     const n = Math.max(3, o.seedCount);
     const step = (2 * Math.PI) / n;
-    const span = step * 1.18; // each arc reaches ~18% into the next, so they meet
+    const span = step * 1.34; // each arc reaches ~34% into the next, so they meet with even overlap
     const roots: Root[] = [];
     for (let k = 0; k < n; k++) {
       const a0 = k * step;
@@ -1258,9 +1297,14 @@ function growStems(
     gi: number;
     branch: boolean;
     branchMaxLen: number;
+    /** A child branch starts tangent to its parent and curves away over the
+     *  first few steps; this is the per-step turn applied during that ease-in,
+     *  so the fork reads as a smooth crotch instead of a sharp angular V. */
+    easeTurn: number;
   }
-  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false, branchMaxLen: r.branchMaxLen ?? Infinity }));
+  const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false, branchMaxLen: r.branchMaxLen ?? Infinity, easeTurn: 0 }));
   const minBranchLen = stepLength * 6;
+  const EASE_STEPS = 5; // steps over which a new branch eases away from its parent
 
   const inBounds = (x: number, y: number) => x >= margin && x <= width - margin && y >= margin && y <= height - margin;
   const clearDist = spacing * 1.6;
@@ -1304,6 +1348,10 @@ function growStems(
         angle = steer(angle, up, (0.03 + gravitropism * 0.09) * (tip.branch ? 0.5 : 1));
       }
 
+      // Ease a new branch away from its parent: spread its divergence over the
+      // first few steps so the fork is a smooth crotch, not a sharp angular kink.
+      if (tip.easeTurn !== 0 && i < EASE_STEPS) angle += tip.easeTurn;
+
       const nx = x + Math.cos(angle) * stepLength;
       const ny = y + Math.sin(angle) * stepLength;
       if (!inBounds(nx, ny)) break;
@@ -1325,19 +1373,24 @@ function growStems(
         // Skip stubby branches — they read as thorns, not growth.
         if (childMax >= minBranchLen) {
           // Asymmetric bias gives a more designed, less even branch pattern.
+          // A shallow fork angle (~18°–42°) so branches diverge gently and the
+          // junction flows — a wide kink reads as a snapped twig, not growth.
           const dir = rng() < 0.62 ? 1 : -1;
-          const turn = dir * (0.5 + rng() * 0.6);
+          const turn = dir * (0.32 + rng() * 0.42);
           // Continuous taper: a branch starts near the parent's *local* width.
           const parentLocal = tip.half * (1 - 0.5 * (i / steps));
           stack.push({
             x, y,
-            angle: angle + turn,
+            // Start tangent to the parent; the divergence is spread over the
+            // first EASE_STEPS via easeTurn, so the crotch curves rather than kinks.
+            angle,
             depth: tip.depth + 1,
             maxLength: childMax,
             half: Math.max(0.6, parentLocal * 0.82),
             gi: 0,
             branch: true,
             branchMaxLen: tip.branchMaxLen,
+            easeTurn: turn / EASE_STEPS,
           });
         }
       }
@@ -1762,7 +1815,7 @@ const VESSEL_SPECS: Record<Exclude<VineVessel, 'none'>, VesselSpec> = {
   pot: { h: 0.82, w: 1.05, profile: [[0, 1.0], [0.03, 1.08], [0.08, 1.0], [0.5, 0.82], [0.9, 0.64], [0.96, 0.6], [1, 0.64]] },
   jar: { h: 0.94, w: 1.0, profile: [[0, 0.8], [0.04, 0.84], [0.1, 0.88], [0.16, 0.84], [0.26, 0.96], [0.38, 1.0], [0.84, 1.0], [0.93, 0.9], [1, 0.84]] },
   'mason-jar': { h: 0.98, w: 0.96, profile: [[0, 0.82], [0.05, 0.88], [0.12, 0.84], [0.2, 0.86], [0.3, 1.0], [0.42, 1.0], [0.86, 1.0], [0.94, 0.94], [1, 0.9]] },
-  bowl: { h: 0.5, w: 1.5, profile: [[0, 1.0], [0.05, 1.06], [0.13, 1.0], [0.5, 0.76], [0.85, 0.5], [1, 0.4]] },
+  bowl: { h: 0.62, w: 1.4, profile: [[0, 1.0], [0.05, 1.06], [0.14, 1.0], [0.45, 0.82], [0.74, 0.54], [0.9, 0.36], [1, 0.44]] },
 };
 
 /** A foreshortened latitude/rim ellipse arc on the vessel (a0..a1 radians). */
@@ -1819,7 +1872,7 @@ function buildVessel(
     left.push({ x: cx - hwAt[i], y: ys[i] });
     right.push({ x: cx + hwAt[i], y: ys[i] });
   }
-  const poly = [...left, ...right.slice().reverse()];
+  const poly = outlineFromEdges(left, right);
 
   const lines: FlowLine[] = [];
   // Drawn outline = just the two side profiles. The mouth ellipse and base arc
@@ -1859,51 +1912,53 @@ function buildVessel(
     lines.push({ points: ellipseArc(cx, topY + H * bu, hw, Math.max(1.5, hw * depth), 0.1 * Math.PI, 0.9 * Math.PI, 14), layer: 'stem' });
   }
 
-  // —— value structure (all cross-contour, light value key) ——
+  // —— value structure: meridian form-lines down the shadow hemisphere ——
+  // Vertical strokes that hug the profile — each offset inward from the silhouette
+  // by a fixed *longitude* fraction of the local half-width — so they swell with
+  // the belly and pinch at the neck, reading as a curved, lit ceramic surface
+  // instead of a stack of flat horizontal bands. Packed from just inside the
+  // terminator toward the silhouette, leaving a reflected-light sliver bare at the
+  // edge and the whole lit hemisphere clean. (Vessel uses its own seeded jitter,
+  // independent of the vine rng.)
   if (shadeDensity > 0.01) {
     const shadowSign = light.x <= 0 ? 1 : -1; // light from the left → shade right
-    const vStep = penPx * (3.0 + (1 - shadeDensity) * 4.2);
     const jit = makeRandom((seed ^ 0x9e3779b9) >>> 0);
     const HALF = Math.PI / 2;
-
-    // Layer 1 — form hatch: latitude arcs over the shadow hemisphere. Each row
-    // starts at the terminator (held back to the lit edge on ~a third of rows,
-    // and more near the lit top, so tone grades) and stops shy of the silhouette
-    // so a reflected-light sliver stays bare. The lit side is left as highlight.
-    for (let y = topY + H * 0.06; y < bottomY - penPx; y += vStep) {
-      const u = (y - topY) / H;
-      const hw = hwOf(u);
-      if (hw < penPx * 2) continue;
-      const yj = y + (jit() - 0.5) * penPx;
-      const topLight = u < 0.18 ? 0.45 : 0; // the mouth catches the light
-      const lightRow = jit() < 0.32 + topLight;
-      const psi0 = (lightRow ? 0.36 : 0.12) * HALF;
-      const psi1 = 0.82 * HALF;
-      const steps = 8;
-      const arc: Point[] = [];
-      for (let s = 0; s <= steps; s++) {
-        const psi = psi0 + (psi1 - psi0) * (s / steps);
-        arc.push({ x: cx + hw * shadowSign * Math.sin(psi), y: yj + hw * depth * Math.cos(psi) });
-      }
-      lines.push({ points: arc, layer: 'stem' });
-    }
-
-    // Layer 2 — core shadow: short, steeper cross strokes through the core band
-    // (a slice inside the terminator, away from the reflected-light edge) on
-    // every other row, so the darkest accent reads without going heavy.
-    if (shadeDensity > 0.45) {
-      let row = 0;
-      for (let y = topY + H * 0.12; y < bottomY - penPx * 3; y += vStep) {
-        if (row++ % 2 === 0) continue;
+    // A meridian at longitude `psi` (0 = terminator, π/2 = silhouette edge):
+    // a vertical stroke offset inward from the silhouette by sin(psi) of the
+    // local half-width, so it hugs the belly and pinches at the neck. Broken
+    // where the form is too narrow to carry a line.
+    const meridian = (psi: number, u0: number): void => {
+      const f = Math.sin(psi);
+      let run: Point[] = [];
+      for (let y = topY + H * u0; y <= bottomY - penPx; y += penPx) {
         const u = (y - topY) / H;
         const hw = hwOf(u);
-        if (hw < penPx * 3) continue;
-        for (const pf of [0.48, 0.66]) {
-          const psi = pf * HALF;
-          const x = cx + hw * shadowSign * Math.sin(psi);
-          const yc = y + hw * depth * Math.cos(psi);
-          lines.push({ points: [{ x: x - shadowSign * penPx * 0.5, y: yc - vStep * 0.5 }, { x: x + shadowSign * penPx * 0.5, y: yc + vStep * 0.5 }], layer: 'stem' });
+        if (hw < penPx * 1.6) {
+          if (run.length >= 2) lines.push({ points: run, layer: 'stem' });
+          run = [];
+          continue;
         }
+        const jx = (jit() - 0.5) * penPx * 0.4;
+        run.push({ x: cx + shadowSign * hw * f + jx, y });
+      }
+      if (run.length >= 2) lines.push({ points: run, layer: 'stem' });
+    };
+    // Layer 1 — meridians stepped in equal longitude so they sit sparse near the
+    // terminator and naturally crowd toward the silhouette (the core-shadow
+    // band), reading as a rounded turned form. The last sliver before the edge
+    // (psi → π/2) is left bare for reflected light, and the lit hemisphere stays
+    // clean. The mouth catches the light, so terminator-side lines start lower.
+    const psi0 = 0.12 * HALF;
+    const psi1 = 0.84 * HALF;
+    const dpsi = 0.085 + (1 - shadeDensity) * 0.13;
+    for (let psi = psi0; psi <= psi1; psi += dpsi) meridian(psi, 0.04 + 0.05 * (1 - Math.sin(psi)));
+    // Layer 2 — core shadow: extra meridians interleaved in the outer band
+    // deepen the darkest accent just inside the reflected-light edge.
+    if (shadeDensity > 0.45) {
+      for (let psi = psi0 + dpsi * 0.5; psi <= psi1; psi += dpsi) {
+        if (Math.sin(psi) < 0.55) continue;
+        meridian(psi, 0.1);
       }
     }
   }
@@ -2127,6 +2182,27 @@ function decorate(
   // detail either way.
   const dens = Math.max(0, Math.min(1, d.density));
   const spacingFactor = 1.7 - dens; // ~1.7× spacing at 0 → ~0.7× at 1
+  // Compound leaves carry many blades per node, so a compound canopy needs the
+  // *nodes* spread further apart or it packs into a solid mass (a bipinnate fern
+  // at simple-leaf spacing renders ~63 blades per node into a black blob).
+  // Exactly 1 for the legacy `simple` arrangement, so that path stays byte-identical.
+  const arrSpacing =
+    d.leafArrangement === 'bipinnate' ? 3.2 :
+    d.leafArrangement === 'pinnate' ? 1.5 :
+    d.leafArrangement === 'palmate' || d.leafArrangement === 'trifoliate' ? 1.2 :
+    1;
+  // Reserve the very end of each cane for the terminal bloom/fruit, so a leaf
+  // isn't grown right where the flower opens and then pokes out through the gaps
+  // between its petals. Only when a tip decoration is actually in play.
+  const hasTipBloom = d.flowers || d.inflorescence !== 'none' || d.fruitType !== 'none';
+  const tipReserve = hasTipBloom ? d.flowerSize * 1.4 : 0;
+
+  // Terminal blooms/fruit are buffered and emitted AFTER every cane's foliage,
+  // so a flower always sits on top of leaves — a leaf from another cane can't
+  // poke through the gaps between its petals. The geometry (and its rng draws)
+  // is still computed inline, so only the draw/z order changes, not the stream.
+  const deferredBlooms: { lines: FlowLine[]; sils: Point[][] }[] = [];
+  const bloomAdd = (lines: FlowLine[], sils: Point[][]): void => { deferredBlooms.push({ lines, sils }); };
 
   for (const stem of stems) {
     const pts = stem.points;
@@ -2143,7 +2219,7 @@ function decorate(
     const legacyLeaves = d.leafArrangement === 'simple' && d.phyllotaxis === 'alternate';
 
     let arc = 0;
-    let nextLeaf = d.leafSpacing * spacingFactor * (0.5 + rng());
+    let nextLeaf = d.leafSpacing * spacingFactor * (0.5 + rng()) * arrSpacing;
     let side: 1 | -1 = rng() < 0.5 ? 1 : -1;
     // Spiral phyllotaxis carries a rotating insertion phase; only drawn (so the
     // rng sequence only shifts) when spiral is actually selected.
@@ -2169,7 +2245,9 @@ function decorate(
         // plants fully leafed). Below ~0.45 density, sites drop out toward bare;
         // at/above it the canopy is full. A small per-leaf angle jitter further
         // breaks the regular fishbone.
-        const present = d.leaves && rng() < Math.min(1, dens * 2.2) * massW;
+        // rng() is drawn first (left-to-right) so the reserve only flips the
+        // result, never the random stream.
+        const present = d.leaves && rng() < Math.min(1, dens * 2.2) * massW && (stemLen - arc) > tipReserve;
         const jit = (rng() - 0.5) * 0.5;
         if (present && legacyLeaves) {
           // Extra leaves cluster the canopy near the focal point.
@@ -2217,7 +2295,7 @@ function decorate(
         // Internodes vary widely and lengthen toward the base (foliage gathers
         // near the growing tip, longer bare stretches lower down) so the rhythm
         // reads hand-grown rather than metronomic.
-        nextLeaf += d.leafSpacing * spacingFactor * (0.5 + rng() * 1.0) * (1.3 - 0.5 * along) * (1 - 0.25 * nf);
+        nextLeaf += d.leafSpacing * spacingFactor * (0.5 + rng() * 1.0) * (1.3 - 0.5 * along) * (1 - 0.25 * nf) * arrSpacing;
         theta += GOLDEN_ANGLE;
         node++;
       }
@@ -2237,8 +2315,7 @@ function decorate(
         for (let b = 0; b < blooms; b++) {
           const jx = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
           const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
-          const f = makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, tipDir);
-          add(f.lines, f.silhouette);
+          makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, bloomAdd, tipDir);
         }
       } else if (d.tendrils && rng() < d.tendrilProb) {
         const t = makeTendril(tip, tipDir, (rng() < 0.5 ? 1 : -1) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
@@ -2248,18 +2325,20 @@ function decorate(
       // New tip path: an inflorescence and/or a fruit cluster.
       if (d.inflorescence !== 'none') {
         if (d.flowers && rng() < flowerChance) {
-          makeInflorescence(d.inflorescence, tip, tipDir, d.flowerSize * (1.4 + 1.2 * nfTip), d, rng, add);
+          makeInflorescence(d.inflorescence, tip, tipDir, d.flowerSize * (1.4 + 1.2 * nfTip), d, rng, bloomAdd);
         }
       } else if (d.flowers && rng() < flowerChance) {
-        const f = makeFlower(tip, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, tipDir);
-        add(f.lines, f.silhouette);
+        makeFlower(tip, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, bloomAdd, tipDir);
       }
       if (d.fruitType !== 'none' && rng() < Math.min(1, d.fruitProb * (0.6 + 0.8 * dens) * massWTip)) {
-        const fr = makeFruit(tip, d.fruitType, d.flowerSize * 1.15 * (0.85 + 0.4 * nfTip), d.penPx, d.light, rng, add);
-        add(fr.lines, fr.silhouette);
+        const fr = makeFruit(tip, d.fruitType, d.flowerSize * 1.15 * (0.85 + 0.4 * nfTip), d.penPx, d.light, rng, bloomAdd);
+        bloomAdd(fr.lines, fr.silhouette);
       }
     }
   }
+
+  // Emit every terminal bloom on top of the whole canopy (see deferredBlooms).
+  for (const b of deferredBlooms) add(b.lines, b.sils);
 }
 
 // ——— leaves ———
@@ -2274,7 +2353,9 @@ function leafProfile(type: LeafType, u: number, lobes: number): number {
     case 'cordate':
       return Math.pow(Math.sin(Math.PI * Math.pow(u, 0.5)), 0.7);
     case 'lobed':
-      return Math.pow(Math.sin(Math.PI * Math.pow(u, 0.7)), 0.85) * (0.72 + 0.28 * Math.cos(lobes * Math.PI * u));
+      // Deeper sinuses between broader lobes so ivy/maple/grape read as palmate
+      // lobed blades, not faintly rippled ovals.
+      return Math.pow(Math.sin(Math.PI * Math.pow(u, 0.7)), 0.85) * (0.58 + 0.42 * Math.cos(lobes * Math.PI * u));
     case 'ovate':
     case 'serrate':
     default:
@@ -2336,11 +2417,11 @@ function makeLeaf(
   for (let i = 0; i < axis.length; i++) {
     const t = i / (axis.length - 1);
     let h = halfAt(t);
-    if (serrate && t > pet) h *= 1 + 0.16 * Math.sin(i * 1.7);
+    if (serrate && t > pet) h *= 1 + 0.24 * Math.sin(i * 2.2);
     left.push({ x: axis[i].x + normals[i].x * h, y: axis[i].y + normals[i].y * h });
     right.push({ x: axis[i].x - normals[i].x * h, y: axis[i].y - normals[i].y * h });
   }
-  const poly = [...left, ...right.slice().reverse()];
+  const poly = outlineFromEdges(left, right);
 
   if (tilt > 0.78) {
     // Edge-on: just a folded sickle (one edge + optional midrib).
@@ -2468,6 +2549,11 @@ function makeCompoundLeaf(
   const pairs = Math.max(1, Math.floor((total - 1) / 2));
   const leafletLen = len * (depth === 0 ? 0.4 : 0.5);
   const recurse = depth === 0 && arrangement === 'bipinnate';
+  // A bipinnate frond's pinnules read as small simple blades; drawing each as a
+  // full veined/shaded leaf packs them into a black mass. Render the sub-pinnae's
+  // leaflets as light outlines and thin their count so a fern reads as fronds.
+  const SUB_LEAFLETS = 5;
+  const subStyle: LeafStyle = 'outline';
   for (let p = 1; p <= pairs; p++) {
     const t = p / (pairs + 1);
     const idx = Math.max(1, Math.min(rachis.length - 1, Math.round(t * (rachis.length - 1))));
@@ -2478,7 +2564,7 @@ function makeCompoundLeaf(
     for (const s of [1, -1] as const) {
       const ll = leafletLen * sizeGrad * (0.85 + rng() * 0.3);
       if (recurse) {
-        makeCompoundLeaf(rachis[idx], tang, s, ll * 1.6, { ...d, leafArrangement: 'pinnate', leafletCount: 7 }, style, rng, add, 1);
+        makeCompoundLeaf(rachis[idx], tang, s, ll * 1.6, { ...d, leafArrangement: 'pinnate', leafletCount: SUB_LEAFLETS }, subStyle, rng, add, 1);
       } else {
         const lf = makeLeaf(rachis[idx], tang, s, ll, d, style, rng);
         add(lf.lines, lf.silhouette);
@@ -2491,7 +2577,7 @@ function makeCompoundLeaf(
   const tdir = Math.atan2(tip.y - tprev.y, tip.x - tprev.x);
   const tl = leafletLen * (0.85 + rng() * 0.3);
   if (recurse) {
-    makeCompoundLeaf(tip, tdir, 1, tl * 1.6, { ...d, leafArrangement: 'pinnate', leafletCount: 7 }, style, rng, add, 1);
+    makeCompoundLeaf(tip, tdir, 1, tl * 1.6, { ...d, leafArrangement: 'pinnate', leafletCount: SUB_LEAFLETS }, subStyle, rng, add, 1);
   } else {
     const lf = makeLeaf(tip, tdir, 1, tl, d, style, rng);
     add(lf.lines, lf.silhouette);
@@ -2519,26 +2605,36 @@ function makeDewdrop(center: Point, r: number, light: Point): FlowLine[] {
 }
 
 function makeTendril(base: Point, stemDir: number, side: 1 | -1, size: number, rng: () => number): FlowLine {
-  // A graceful tendril: a straight lead-in off the stem easing into an open
-  // coil that gently tightens — not a mechanical bullseye.
-  const lead = size * (0.5 + rng() * 0.4);
-  const lx = Math.cos(stemDir + side * 0.5);
-  const ly = Math.sin(stemDir + side * 0.5);
-  const pts: Point[] = [{ x: base.x, y: base.y }];
+  // A graceful tendril: a tangent lead-in off the cane easing into an open coil
+  // that spirals *inward* to a tight centre — a climbing-vine curl, not a
+  // detached bullseye ring floating beside the stem.
+  const lead = size * (0.7 + rng() * 0.5);
+  const leadAng = stemDir + side * 0.5;
+  const lx = Math.cos(leadAng);
+  const ly = Math.sin(leadAng);
   const tipX = base.x + lx * lead;
   const tipY = base.y + ly * lead;
-  pts.push({ x: tipX, y: tipY });
+  // Lead-in carries a midpoint so, once smoothed, the coil reads as growing out
+  // of the cane rather than as a ring dropped next to it.
+  const pts: Point[] = [
+    { x: base.x, y: base.y },
+    { x: base.x + lx * lead * 0.5, y: base.y + ly * lead * 0.5 },
+    { x: tipX, y: tipY },
+  ];
 
-  const coils = 1.1 + rng() * 0.9;
+  const coils = 0.55 + rng() * 0.6; // ~0.55–1.15 turns: an open hook, never a full O
   const steps = 40;
-  const baseR = size * 0.55;
-  const cx = tipX + Math.cos(stemDir + side * (Math.PI / 2)) * baseR;
-  const cy = tipY + Math.sin(stemDir + side * (Math.PI / 2)) * baseR;
+  const baseR = size * 0.42;
+  // Coil centre sits perpendicular to the lead so the first arc leaves the tip
+  // tangentially (no kink at the junction).
+  const perpAng = leadAng + side * (Math.PI / 2);
+  const cx = tipX + Math.cos(perpAng) * baseR;
+  const cy = tipY + Math.sin(perpAng) * baseR;
   const phi0 = Math.atan2(tipY - cy, tipX - cx);
   for (let i = 1; i <= steps; i++) {
     const t = i / steps;
     const phi = phi0 + side * coils * 2 * Math.PI * t;
-    const r = baseR * (1 - 0.45 * t); // tightens gently, stays open
+    const r = baseR * Math.pow(1 - t, 1.3); // spirals in to a tight centre
     pts.push({ x: cx + Math.cos(phi) * r, y: cy + Math.sin(phi) * r });
   }
   return { points: smoothPolyline(pts, 2), layer: 'tendril' };
@@ -2624,7 +2720,12 @@ function makeBerry(center: Point, radius: number, light: Point, rng: () => numbe
 }
 
 /** A flower as botanical line-work, varied by species — matching the leaves'
- *  outline-and-detail treatment rather than a solid blob. */
+ *  outline-and-detail treatment rather than a solid blob. Each petal (and the
+ *  centre detail) is `add`ed as its OWN occluding element, in draw order, so a
+ *  front petal hides the part of the petal behind it — the overlap reads as
+ *  layered petals, not transparent crossing loops. The petal silhouettes are the
+ *  actual closed shapes (not a bounding disc), so the gaps between petals stay
+ *  open (no circular halo) while the bloom still occludes the foliage behind. */
 function makeFlower(
   center: Point,
   size: number,
@@ -2632,40 +2733,46 @@ function makeFlower(
   type: VineFlower,
   light: Point,
   rng: () => number,
+  add: (lines: FlowLine[], sil: Point[][]) => void,
   dir?: number
-): { lines: FlowLine[]; silhouette: Point[][] } {
+): void {
   const t: VineFlower = type === 'mixed' ? FLOWER_TYPES[Math.floor(rng() * FLOWER_TYPES.length)] : type;
-  const lines: FlowLine[] = [];
-  // The silhouette is the union of the flower's *actual* closed shapes (petals
-  // / cup / bud), not a bounding disc — so occlusion hides exactly the bloom
-  // and the gaps between petals stay open (no circular halo behind it).
-  const sils: Point[][] = [];
   const rot = rng() * Math.PI * 2;
 
   if (t === 'rose') {
     const petals = 5 + Math.floor(rng() * 2);
+    // A silhouette-only central disc (no drawn line) so foliage or stem sitting
+    // behind the bloom's centre is occluded instead of poking through the gaps
+    // between petals. Added before the petals so it occludes earlier elements
+    // (the leaves/stem) without clipping the petals drawn over it.
+    const hub: Point[] = [];
+    for (let i = 0; i <= 16; i++) {
+      const a = (i / 16) * 2 * Math.PI;
+      hub.push({ x: center.x + Math.cos(a) * size * 0.6, y: center.y + Math.sin(a) * size * 0.6 });
+    }
+    add([], [hub]);
+    // Each petal its own element, so the next overlapping petal occludes it.
     for (let k = 0; k < petals; k++) {
       const ang = rot + (k / petals) * 2 * Math.PI;
       const pl = petalOutline(center, ang, size, size * 0.42, penPx);
-      lines.push(pl);
-      sils.push(pl.points);
+      add([pl], [pl.points]);
     }
-    // A few short stamen ticks at the centre.
+    // A few short stamen ticks at the centre, on top of the petals.
+    const stamens: FlowLine[] = [];
     for (let k = 0; k < 4; k++) {
       const a = rot + rng() * Math.PI * 2;
-      lines.push({ points: [{ x: center.x, y: center.y }, { x: center.x + Math.cos(a) * size * 0.22, y: center.y + Math.sin(a) * size * 0.22 }], layer: 'flower' });
+      stamens.push({ points: [{ x: center.x, y: center.y }, { x: center.x + Math.cos(a) * size * 0.22, y: center.y + Math.sin(a) * size * 0.22 }], layer: 'flower' });
     }
+    add(stamens, []);
   } else if (t === 'daisy') {
     const petals = 11 + Math.floor(rng() * 5);
     for (let k = 0; k < petals; k++) {
       const ang = rot + (k / petals) * 2 * Math.PI;
       const pl = petalOutline(center, ang, size, size * 0.12, penPx);
-      lines.push(pl);
-      sils.push(pl.points);
+      add([pl], [pl.points]);
     }
     const ring = ringOutline(center, size * 0.28, 'flower');
-    lines.push(ring);
-    sils.push(ring.points);
+    add([ring], [ring.points]);
   } else if (t === 'bell') {
     // A bell / foxglove bloom built from rounded petal lobes (the same
     // primitive as the rose) flaring from a common throat, with the throat set
@@ -2684,11 +2791,10 @@ function makeFlower(
       const ang = face + (f - 0.5) * spread;
       const plen = size * (0.95 + 0.2 * Math.sin(f * Math.PI)); // centre petals longer
       const pl = petalOutline(throat, ang, plen, size * 0.3, penPx);
-      lines.push(pl);
-      sils.push(pl.points);
+      add([pl], [pl.points]);
     }
-    // A short calyx/tube where it joins the pedicel.
-    lines.push({ points: [throat, { x: throat.x - Math.cos(face) * size * 0.35, y: throat.y - Math.sin(face) * size * 0.35 }], layer: 'flower' });
+    // A short calyx/tube where it joins the pedicel, on top of the petal bases.
+    add([{ points: [throat, { x: throat.x - Math.cos(face) * size * 0.35, y: throat.y - Math.sin(face) * size * 0.35 }], layer: 'flower' }], []);
   } else {
     // bud: a closed teardrop with two sepal strokes at its base; points along
     // the stem (away from the join) when a direction is given.
@@ -2710,15 +2816,15 @@ function makeFlower(
       const wb = Math.sin(Math.PI * Math.pow(u, 0.7)) * size * 0.4;
       bud.push({ x: center.x + dx * L * u - px * wb, y: center.y + dy * L * u - py * wb });
     }
-    lines.push({ points: bud, layer: 'flower' });
-    sils.push(bud);
+    // A bud is one closed teardrop with two sepal strokes — no internal petal
+    // overlap, so it's a single element.
+    const budLines: FlowLine[] = [{ points: bud, layer: 'flower' }];
     for (const s of [1, -1] as const) {
-      lines.push({ points: [{ x: center.x, y: center.y }, { x: center.x + dx * size * 0.4 + px * s * size * 0.22, y: center.y + dy * size * 0.4 + py * s * size * 0.22 }], layer: 'flower' });
+      budLines.push({ points: [{ x: center.x, y: center.y }, { x: center.x + dx * size * 0.4 + px * s * size * 0.22, y: center.y + dy * size * 0.4 + py * s * size * 0.22 }], layer: 'flower' });
     }
+    add(budLines, [bud]);
   }
   void light;
-
-  return { lines, silhouette: sils };
 }
 
 // ——— inflorescences, thorns & fruit ———
@@ -2764,8 +2870,7 @@ function makeInflorescence(
       const my = (base.y + fy) / 2 + Math.sin(a + Math.PI / 2) * len * bow;
       const ped = smoothPolyline([base, { x: mx, y: my }, { x: fx, y: fy }], 1);
       add([{ points: ped, layer: 'stem' }], []);
-      const fl = makeFlower({ x: fx, y: fy }, size * (0.4 + rng() * 0.2), penPx, d.flowerType, d.light, rng, a);
-      add(fl.lines, fl.silhouette);
+      makeFlower({ x: fx, y: fy }, size * (0.5 + rng() * 0.25), penPx, d.flowerType, d.light, rng, add, a);
     }
     return;
   }
@@ -2785,18 +2890,16 @@ function makeInflorescence(
     const idx = Math.max(1, Math.min(ax.length - 1, Math.round(t * (ax.length - 1))));
     const at = ax[idx];
     const maturity = 1 - t; // base most open, tip still in bud
-    const fsize = size * (0.45 + 0.45 * maturity);
+    const fsize = size * (0.55 + 0.5 * maturity);
     const ftype: VineFlower = maturity > 0.5 ? d.flowerType : 'bud';
     if (type === 'raceme') {
       const ped = size * 0.7;
       const fx = at.x + px * (k % 2 ? 1 : -1) * ped * 0.4 + dx * ped * 0.3;
       const fy = at.y + py * (k % 2 ? 1 : -1) * ped * 0.4 + dy * ped * 0.3;
       add([{ points: [at, { x: fx, y: fy }], layer: 'stem' }], []);
-      const fl = makeFlower({ x: fx, y: fy }, fsize, penPx, ftype, d.light, rng, Math.atan2(fy - at.y, fx - at.x));
-      add(fl.lines, fl.silhouette);
+      makeFlower({ x: fx, y: fy }, fsize, penPx, ftype, d.light, rng, add, Math.atan2(fy - at.y, fx - at.x));
     } else {
-      const fl = makeFlower(at, fsize * 0.8, penPx, ftype, d.light, rng, axisDir + Math.PI / 2);
-      add(fl.lines, fl.silhouette);
+      makeFlower(at, fsize * 0.8, penPx, ftype, d.light, rng, add, axisDir + Math.PI / 2);
     }
   }
 }
@@ -2847,12 +2950,16 @@ function makeFruit(
   if (type === 'grape' || type === 'berry') {
     const big = type === 'grape';
     const count = big ? 9 + Math.floor(rng() * 10) : 3 + Math.floor(rng() * 4);
-    const r = size * (big ? 0.32 : 0.4);
+    const r = size * (big ? 0.36 : 0.42);
     const rows = big ? Math.ceil(Math.sqrt(count)) : 2;
-    // Pack snugly (berries kiss and overlap) so the bunch reads as a solid
-    // cluster, not a loose scatter of circles. Each berry is shaded as a sphere
-    // and added as its own element so the front ones occlude those behind.
-    const pitch = r * 1.45;
+    // Pack snugly so the berries kiss and overlap into a solid hanging bunch
+    // (widest at the shoulders, tapering to a point) rather than a loose bead
+    // ladder. Each berry is shaded as a sphere and added as its own element so
+    // the front ones occlude those behind. Tighter pitch + row spacing than a
+    // bounding grid; the per-berry rng draws (bx, by, radius) are unchanged in
+    // order and count so determinism holds.
+    const pitch = r * 1.12;
+    const rowPitch = pitch * 0.8;
     let placed = 0;
     for (let row = 0; row < rows && placed < count; row++) {
       const inRow = big ? Math.max(1, rows - row) : Math.max(1, count - placed);
@@ -2861,7 +2968,7 @@ function makeFruit(
       const stagger = row % 2 ? pitch * 0.5 : 0;
       for (let c = 0; c < inRow && placed < count; c++) {
         const bx = center.x + (c * pitch - rowW / 2) + stagger + (rng() - 0.5) * r * 0.25;
-        const by = center.y + row * pitch * 0.92 + (rng() - 0.5) * r * 0.2 + size * 0.4;
+        const by = center.y + row * rowPitch + (rng() - 0.5) * r * 0.2 + size * 0.4;
         const berry = makeBerry({ x: bx, y: by }, r * (0.82 + rng() * 0.36), light, rng);
         add(berry.lines, [berry.sil]);
         placed++;
@@ -2870,18 +2977,44 @@ function makeFruit(
     return { lines: [{ points: [center, { x: center.x, y: center.y + size * 0.4 }], layer: 'stem' }], silhouette: [] };
   }
   if (type === 'rosehip') {
-    const N = 14;
-    const w = size * 0.5;
-    const h = size * 0.7;
-    const loop: Point[] = [];
+    // An engraved hip, not a hollow ring: the rim breaks for a lit-side
+    // catchlight, shadow-side crescents give it volume, and a little sepal crown
+    // at the calyx end reads it as a rosehip (so it never reads as a stray O).
+    // Deterministic (catchlight follows the light) so it perturbs no rng stream.
+    const N = 18;
+    const w = size * 0.55;
+    const h = size * 0.78;
+    const la = Math.atan2(light.y, light.x);
+    const sil: Point[] = [];
     for (let i = 0; i <= N; i++) {
       const a = (i / N) * 2 * Math.PI;
-      loop.push({ x: center.x + Math.cos(a) * w, y: center.y + Math.sin(a) * h });
+      sil.push({ x: center.x + Math.cos(a) * w, y: center.y + Math.sin(a) * h });
     }
-    const lines: FlowLine[] = [{ points: loop, layer: 'flower' }];
-    const by = center.y + h;
-    for (const s of [-1, 1] as const) lines.push({ points: [{ x: center.x, y: by }, { x: center.x + s * w * 0.4, y: by + h * 0.25 }], layer: 'flower' });
-    return { lines, silhouette: [loop] };
+    const gap = 0.5; // catchlight on the lit side
+    const rim: Point[] = [];
+    for (let i = 0; i <= N; i++) {
+      const a = la + gap + (i / N) * (2 * Math.PI - 2 * gap);
+      rim.push({ x: center.x + Math.cos(a) * w, y: center.y + Math.sin(a) * h });
+    }
+    const lines: FlowLine[] = [{ points: rim, layer: 'flower' }];
+    const sa = la + Math.PI; // shadow side
+    for (let k = 1; k <= 2; k++) {
+      const span = 1.7 - 0.3 * k;
+      const rr = 0.5 + 0.18 * k;
+      const arc: Point[] = [];
+      for (let i = 0; i <= 8; i++) {
+        const a = sa - span / 2 + (i / 8) * span;
+        arc.push({ x: center.x + Math.cos(a) * w * rr, y: center.y + Math.sin(a) * h * rr });
+      }
+      lines.push({ points: arc, layer: 'flower' });
+    }
+    // Sepal crown: a small fan of ticks radiating from the calyx (lower) end.
+    const by = center.y + h * 0.95;
+    for (let s = -2; s <= 2; s++) {
+      const ta = Math.PI / 2 + s * 0.34;
+      lines.push({ points: [{ x: center.x, y: by }, { x: center.x + Math.cos(ta) * w * 0.55, y: by + Math.sin(ta) * h * 0.3 }], layer: 'flower' });
+    }
+    return { lines, silhouette: [sil] };
   }
   if (type === 'pod') {
     const a = -Math.PI / 2 + (rng() - 0.5) * 0.6;
@@ -2889,17 +3022,17 @@ function makeFruit(
     const dy = Math.sin(a);
     const px = -dy;
     const py = dx;
-    const L = size * 1.6;
+    const L = size * 2.1;
     const N = 12;
     const pod: Point[] = [];
     for (let i = 0; i <= N; i++) {
       const u = i / N;
-      const wb = Math.sin(Math.PI * Math.pow(u, 0.7)) * size * 0.28;
+      const wb = Math.sin(Math.PI * Math.pow(u, 0.7)) * size * 0.36;
       pod.push({ x: center.x + dx * L * u + px * wb, y: center.y + dy * L * u + py * wb });
     }
     for (let i = N; i >= 0; i--) {
       const u = i / N;
-      const wb = Math.sin(Math.PI * Math.pow(u, 0.7)) * size * 0.28;
+      const wb = Math.sin(Math.PI * Math.pow(u, 0.7)) * size * 0.36;
       pod.push({ x: center.x + dx * L * u - px * wb, y: center.y + dy * L * u - py * wb });
     }
     const seam: Point[] = [{ x: center.x, y: center.y }, { x: center.x + dx * L, y: center.y + dy * L }];
@@ -2914,7 +3047,7 @@ function makeFruit(
   const dy = Math.sin(a);
   const px = -dy;
   const py = dx;
-  const L = size * 2.0;
+  const L = size * 2.5;
   const N = 16;
   const bend = (rng() - 0.5) * 0.4;
   const axis: Point[] = [];
@@ -2923,7 +3056,7 @@ function makeFruit(
     axis.push({ x: center.x + dx * L * t + px * bend * L * t * t, y: center.y + dy * L * t + py * bend * L * t * t });
   }
   const ax = smoothPolyline(axis, 1);
-  const halfAt = (t: number): number => Math.sin(Math.PI * Math.pow(t, 0.6)) * size * 0.3 * (1 - 0.35 * t);
+  const halfAt = (t: number): number => Math.sin(Math.PI * Math.pow(t, 0.6)) * size * 0.36 * (1 - 0.35 * t);
   const left: Point[] = [];
   const right: Point[] = [];
   for (let i = 0; i < ax.length; i++) {
@@ -2932,7 +3065,7 @@ function makeFruit(
     left.push({ x: ax[i].x + px * h, y: ax[i].y + py * h });
     right.push({ x: ax[i].x - px * h, y: ax[i].y - py * h });
   }
-  const outline = [...left, ...right.slice().reverse()];
+  const outline = outlineFromEdges(left, right);
   const lines: FlowLine[] = [{ points: outline, layer: 'flower' }];
   // Short diagonal scale-ticks, alternating sides, angled toward the tip.
   for (let i = 1; i < ax.length - 1; i++) {

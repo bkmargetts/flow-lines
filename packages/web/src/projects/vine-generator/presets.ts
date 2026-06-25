@@ -20,7 +20,7 @@ export const VINE_PRESETS: VinePreset[] = [
     state: {
       composition: 'specimen', mode: 'growth', leafType: 'serrate', leafStyle: 'shaded', veins: true,
       leafArrangement: 'pinnate', leafletCount: 5, thorns: true, thornProb: 0.18,
-      flowers: true, flowerType: 'rose', flowerProb: 0.4, flowerSizeMm: 6, tendrils: true, tendrilProb: 0.12,
+      flowers: true, flowerType: 'rose', flowerProb: 0.4, flowerSizeMm: 9, tendrils: true, tendrilProb: 0.12,
       density: 0.55, curl: 0.55, gravitropism: 0.4, branchProb: 0.06, stemWidthMm: 4, palette: 'rose',
     },
   },
@@ -49,7 +49,7 @@ export const VINE_PRESETS: VinePreset[] = [
     state: {
       composition: 'bouquet', mode: 'growth', leafType: 'ovate', leafStyle: 'shaded', veins: true,
       leafArrangement: 'pinnate', leafletCount: 9, inflorescence: 'raceme', floretCount: 12,
-      flowers: true, flowerType: 'bell', flowerProb: 0.7, flowerSizeMm: 6, tendrils: false,
+      flowers: true, flowerType: 'bell', flowerProb: 0.7, flowerSizeMm: 8, tendrils: false,
       density: 0.45, curl: 0.5, gravitropism: 0.2, branchProb: 0.05, stemWidthMm: 3.5, seedCount: 5, palette: 'indigo',
       vessel: 'urn', groundLine: true,
     },
@@ -79,7 +79,7 @@ export const VINE_PRESETS: VinePreset[] = [
     label: 'Clematis',
     state: {
       composition: 'trellis', mode: 'growth', support: 'lattice', leafType: 'ovate', leafArrangement: 'trifoliate',
-      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'daisy', flowerProb: 0.5, flowerSizeMm: 9,
+      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'daisy', flowerProb: 0.5, flowerSizeMm: 11,
       tendrils: true, tendrilProb: 0.18, density: 0.5, curl: 0.55, gravitropism: 0.45, branchProb: 0.06,
       stemWidthMm: 3, seedCount: 4, palette: 'indigo',
     },
@@ -89,7 +89,7 @@ export const VINE_PRESETS: VinePreset[] = [
     label: 'Jasmine',
     state: {
       composition: 'specimen', mode: 'growth', leafType: 'ovate', leafArrangement: 'pinnate', leafletCount: 5,
-      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'daisy', flowerProb: 0.5, flowerSizeMm: 5,
+      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'daisy', flowerProb: 0.5, flowerSizeMm: 7,
       inflorescence: 'corymb', floretCount: 6, tendrils: false, density: 0.45, curl: 0.5, gravitropism: 0.35,
       branchProb: 0.06, stemWidthMm: 2.8, palette: 'botanical',
     },
@@ -99,7 +99,7 @@ export const VINE_PRESETS: VinePreset[] = [
     label: 'Morning glory',
     state: {
       composition: 'trellis', mode: 'growth', support: 'obelisk', leafType: 'cordate', phyllotaxis: 'spiral',
-      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'bell', flowerProb: 0.45, flowerSizeMm: 11,
+      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'bell', flowerProb: 0.45, flowerSizeMm: 13,
       tendrils: true, tendrilProb: 0.2, density: 0.5, curl: 0.7, gravitropism: 0.5, branchProb: 0.05,
       stemWidthMm: 2.6, seedCount: 3, palette: 'indigo',
     },
@@ -120,7 +120,7 @@ export const VINE_PRESETS: VinePreset[] = [
     state: {
       composition: 'specimen', mode: 'growth', leafType: 'serrate', leafArrangement: 'palmate', leafletCount: 5,
       leafStyle: 'shaded', veins: true, thorns: true, thornProb: 0.25, fruitType: 'berry', fruitProb: 0.35,
-      flowers: true, flowerType: 'rose', flowerProb: 0.2, flowerSizeMm: 5, tendrils: false,
+      flowers: true, flowerType: 'rose', flowerProb: 0.2, flowerSizeMm: 7, tendrils: false,
       density: 0.55, curl: 0.65, gravitropism: 0.3, branchProb: 0.07, stemWidthMm: 3.5, palette: 'autumn',
     },
   },
@@ -129,7 +129,7 @@ export const VINE_PRESETS: VinePreset[] = [
     label: 'Honeysuckle',
     state: {
       composition: 'bouquet', mode: 'growth', leafType: 'ovate', phyllotaxis: 'opposite',
-      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'bell', flowerProb: 0.6, flowerSizeMm: 7,
+      leafStyle: 'shaded', veins: true, flowers: true, flowerType: 'bell', flowerProb: 0.6, flowerSizeMm: 9,
       inflorescence: 'umbel', floretCount: 6, tendrils: false, density: 0.45, curl: 0.55, gravitropism: 0.35,
       branchProb: 0.05, stemWidthMm: 3, seedCount: 4, palette: 'sepia',
     },

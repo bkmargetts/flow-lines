@@ -187,7 +187,7 @@ export const defaultVineState: VineState = {
   flowers: true,
   flowerType: 'rose',
   flowerProb: 0.3,
-  flowerSizeMm: 5,
+  flowerSizeMm: 7,
   inflorescence: 'none',
   floretCount: 8,
   thorns: false,
