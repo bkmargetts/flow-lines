@@ -109,6 +109,10 @@ export type { HandDrawnOptions } from './hand-drawn.js';
 export { generateVines } from './vines.js';
 export type { VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from './vines.js';
 
+// Planet generator (procedural pen-and-ink planets)
+export { generatePlanet } from './planet.js';
+export type { PlanetOptions, PlanetType } from './planet.js';
+
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
 

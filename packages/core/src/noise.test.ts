@@ -51,6 +51,48 @@ describe('SimplexNoise', () => {
   });
 });
 
+describe('noise3D', () => {
+  it('is deterministic with the same seed and varies across seeds', () => {
+    const a = new SimplexNoise(12345);
+    const b = new SimplexNoise(12345);
+    const c = new SimplexNoise(999);
+    expect(a.noise3D(0.37, 1.21, 2.83)).toBe(b.noise3D(0.37, 1.21, 2.83));
+    expect(c.noise3D(0.37, 1.21, 2.83)).not.toBe(a.noise3D(0.37, 1.21, 2.83));
+  });
+
+  it('returns finite values in roughly [-1, 1]', () => {
+    const noise = new SimplexNoise(42);
+    let s = 1;
+    for (let i = 0; i < 200; i++) {
+      // deterministic sample points (no Math.random in the assertion path)
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      const x = (s % 1000) / 7;
+      const y = ((s >> 5) % 1000) / 11;
+      const z = ((s >> 10) % 1000) / 13;
+      const v = noise.noise3D(x, y, z);
+      expect(Number.isFinite(v)).toBe(true);
+      expect(v).toBeGreaterThanOrEqual(-1.001);
+      expect(v).toBeLessThanOrEqual(1.001);
+    }
+  });
+
+  it('is continuous (small steps give small changes)', () => {
+    const noise = new SimplexNoise(42);
+    const v1 = noise.noise3D(3, 3, 3);
+    const v2 = noise.noise3D(3.01, 3, 3);
+    expect(Math.abs(v2 - v1)).toBeLessThan(0.1);
+  });
+
+  it('fbm3D is deterministic and bounded', () => {
+    const a = new SimplexNoise(7);
+    const b = new SimplexNoise(7);
+    const v = a.fbm3D(0.3, 0.7, 1.1, 4, 0.5, 2, 1.3);
+    expect(v).toBe(b.fbm3D(0.3, 0.7, 1.1, 4, 0.5, 2, 1.3));
+    expect(v).toBeGreaterThanOrEqual(-1.001);
+    expect(v).toBeLessThanOrEqual(1.001);
+  });
+});
+
 describe('createNoise', () => {
   it('should create a SimplexNoise instance', () => {
     const noise = createNoise(42);

@@ -9,6 +9,7 @@ import {
   generateConwayExposure,
   generateFlowLines,
   generateFlowLinesGrid,
+  generatePlanet,
   generateVines,
   grayscaleFromRGBA,
   imageToPenInk,
@@ -44,6 +45,8 @@ import {
   type VineSupport,
   type StemTexture,
   type Point,
+  type PlanetOptions,
+  type PlanetType,
 } from '@flow-lines/core';
 
 /**
@@ -968,6 +971,179 @@ program
     };
 
     const svg = toSVG(result, svgOptions);
+    const outputPath = resolve(process.cwd(), options.output);
+    writeFileSync(outputPath, svg, 'utf-8');
+    console.log(`\nSaved to: ${outputPath}`);
+  });
+
+// Multi-pen ink palettes for the planet command (subset of the web app's).
+const PLANET_PALETTES: Record<string, Record<string, string>> = {
+  ink: { limb: '#2a2a26', hatch: '#2a2a26', feature: '#2a2a26', stipple: '#2a2a26', ring: '#2a2a26', star: '#2a2a26', atmosphere: '#2a2a26' },
+  astronomical: { limb: '#3a2f25', hatch: '#3b3a36', feature: '#4a3320', stipple: '#3b3a36', ring: '#5b4636', star: '#2b3a55', atmosphere: '#566b86' },
+  saturn: { limb: '#4a3a23', hatch: '#5a4a32', feature: '#6e5326', stipple: '#5a4a32', ring: '#8a6a36', star: '#6b5a44', atmosphere: '#b89a5a' },
+  lunar: { limb: '#2c2c2c', hatch: '#3c3c3c', feature: '#222222', stipple: '#3c3c3c', ring: '#3c3c3c', star: '#4a4a4a', atmosphere: '#6a6a6a' },
+  mars: { limb: '#6e2f1f', hatch: '#8a3b2e', feature: '#5a2418', stipple: '#8a3b2e', ring: '#8a3b2e', star: '#7a5a4a', atmosphere: '#b5715a' },
+};
+
+program
+  .command('planet')
+  .description('Generate procedural, plottable pen-and-ink planets')
+  .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
+  .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '800')
+  .option('--paper <size>', 'Plot to a physical sheet (a6,a5,a4,a3,letter,legal,tabloid); exports the SVG in mm')
+  .option('--orientation <o>', 'Paper orientation: portrait or landscape', 'portrait')
+  .option('--margin-mm <number>', 'Clear paper border in mm (with --paper)', '12')
+  .option('--pen-width-mm <number>', 'Plotted pen width in mm (with --paper)', '0.3')
+  .option('--resolution <number>', 'Render density in px per mm (with --paper)', '3')
+  .option('-m, --margin <number>', 'Margin from canvas edges in px (without --paper)', '24')
+  .option('-s, --seed <number>', 'Random seed for reproducibility')
+  .option('--type <t>', 'terrestrial | gas-giant | ringed | moon | ice | lava | star | barren', 'terrestrial')
+  .option('--radius-frac <number>', 'Disk radius as a fraction of the usable half-frame', '0.7')
+  // light
+  .option('--light-angle <number>', 'Light azimuth in degrees', '-35')
+  .option('--light-elevation <number>', 'Light elevation: 0 grazing (crescent) .. 90 full face', '32')
+  .option('--ambient <number>', 'Shadow-side fill light (0-1)', '0.12')
+  .option('--limb-darkening <number>', 'Darkening toward the disk edge (0-1)', '0')
+  // surface
+  .option('--noise-scale <number>', 'Surface noise frequency', '1.7')
+  .option('--octaves <number>', 'Surface noise octaves', '5')
+  .option('--contrast <number>', 'Sharpen coastlines / cracks', '1.4')
+  .option('--sea-level <number>', 'Terrestrial land/sea threshold (-1..1)', '0')
+  .option('--mare-level <number>', 'Lunar dark-plain threshold (-1..1)', '-0.12')
+  .option('--no-coastlines', 'Skip traced feature outlines')
+  // gas
+  .option('--bands', 'Banded zones (gas giants)')
+  .option('--band-count <number>', 'Number of banded zones', '9')
+  .option('--band-turbulence <number>', 'Band wobble (0-1.2)', '0.5')
+  .option('--storms <number>', 'Oval storm spots', '0')
+  // ice
+  .option('--ice-caps', 'Draw polar ice caps')
+  .option('--cap-latitude <number>', 'Latitude where caps begin (deg)', '68')
+  // marks
+  .option('--hatch-spacing <number>', 'Form-hatch spacing in px', '6')
+  .option('--cross-hatch-layers <number>', 'Cross-hatch layers (1-5)', '3')
+  .option('--stipple <number>', 'Shadow/texture stipple (0-1)', '0')
+  .option('--atmosphere <number>', 'Glow rings (corona for stars)', '0')
+  // rings
+  .option('--rings', 'Draw a tilted ring system')
+  .option('--ring-inner <number>', 'Inner ring radius in disk radii', '1.35')
+  .option('--ring-outer <number>', 'Outer ring radius in disk radii', '2.2')
+  .option('--ring-tilt <number>', 'Ring tilt in degrees', '22')
+  .option('--ring-yaw <number>', 'Ring yaw in degrees', '12')
+  .option('--ring-gap <number>', 'Cassini gap fraction (0-1)', '0.14')
+  .option('--ring-count <number>', 'Concentric ring bands', '6')
+  .option('--no-ring-shadow', 'Do not cut the planet shadow into the rings')
+  // craters
+  .option('--craters', 'Scatter craters')
+  .option('--crater-count <number>', 'Number of craters', '80')
+  .option('--crater-min-r <number>', 'Min crater radius (fraction of disk)', '0.02')
+  .option('--crater-max-r <number>', 'Max crater radius (fraction of disk)', '0.14')
+  // scene
+  .option('--starfield', 'Scatter a background starfield')
+  .option('--star-count <number>', 'Number of stars', '120')
+  .option('--moon', 'Draw a companion moon')
+  .option('--moon-dist <number>', 'Moon distance in disk radii', '1.9')
+  .option('--moon-angle <number>', 'Moon angle in degrees', '-35')
+  .option('--moon-radius-frac <number>', 'Moon radius as fraction of the planet', '0.28')
+  // ink
+  .option('--palette <p>', 'Multi-pen palette: ink | astronomical | saturn | lunar | mars', 'ink')
+  .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1')
+  .option('--wobble <number>', 'Hand-drawn wobble amplitude in px', '0.6')
+  .option('--background', 'Include background rectangle')
+  .option('--background-color <color>', 'Background color', '#ffffff')
+  .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
+  .option('-o, --output <file>', 'Output file path', 'planet.svg')
+  .action((options) => {
+    let width: number;
+    let height: number;
+    let marginPx: number;
+    let paperSvg: Pick<SVGOptions, 'physicalWidth' | 'physicalHeight'> = {};
+    let paperStrokeWidth: number | undefined;
+
+    if (options.paper) {
+      const page = pageMetrics(
+        getPaperSize(String(options.paper).toLowerCase()),
+        options.orientation as Orientation,
+        parseFloat(options.resolution)
+      );
+      width = page.widthPx;
+      height = page.heightPx;
+      marginPx = parseFloat(options.marginMm) * page.pxPerMm;
+      paperSvg = { physicalWidth: `${page.widthMm}mm`, physicalHeight: `${page.heightMm}mm` };
+      paperStrokeWidth = parseFloat(options.penWidthMm) * page.pxPerMm;
+    } else {
+      width = parseInt(options.width, 10);
+      height = parseInt(options.height, 10);
+      marginPx = parseInt(options.margin, 10);
+    }
+
+    const planetOptions: PlanetOptions = {
+      width,
+      height,
+      margin: marginPx,
+      seed: options.seed ? parseInt(options.seed, 10) : undefined,
+      radiusFrac: parseFloat(options.radiusFrac),
+      planetType: options.type as PlanetType,
+      lightAngle: parseFloat(options.lightAngle),
+      lightElevation: parseFloat(options.lightElevation),
+      ambient: parseFloat(options.ambient),
+      limbDarkening: parseFloat(options.limbDarkening),
+      noiseScale: parseFloat(options.noiseScale),
+      octaves: parseInt(options.octaves, 10),
+      contrast: parseFloat(options.contrast),
+      seaLevel: parseFloat(options.seaLevel),
+      mareLevel: parseFloat(options.mareLevel),
+      coastlines: options.coastlines,
+      bands: options.bands ?? false,
+      bandCount: parseInt(options.bandCount, 10),
+      bandTurbulence: parseFloat(options.bandTurbulence),
+      storms: parseInt(options.storms, 10),
+      iceCaps: options.iceCaps ?? false,
+      capLatitude: parseFloat(options.capLatitude),
+      hatchSpacing: paperStrokeWidth ? (parseFloat(options.hatchSpacing) * paperStrokeWidth) / parseFloat(options.penWidthMm) : parseFloat(options.hatchSpacing),
+      crossHatchLayers: parseInt(options.crossHatchLayers, 10),
+      stipple: parseFloat(options.stipple),
+      atmosphere: parseInt(options.atmosphere, 10),
+      rings: options.rings ?? false,
+      ringInner: parseFloat(options.ringInner),
+      ringOuter: parseFloat(options.ringOuter),
+      ringTilt: parseFloat(options.ringTilt),
+      ringYaw: parseFloat(options.ringYaw),
+      ringGap: parseFloat(options.ringGap),
+      ringCount: parseInt(options.ringCount, 10),
+      ringShadow: options.ringShadow,
+      craters: options.craters ?? false,
+      craterCount: parseInt(options.craterCount, 10),
+      craterMinR: parseFloat(options.craterMinR),
+      craterMaxR: parseFloat(options.craterMaxR),
+      starfield: options.starfield ?? false,
+      starCount: parseInt(options.starCount, 10),
+      moon: options.moon ?? false,
+      moonDist: parseFloat(options.moonDist),
+      moonAngle: parseFloat(options.moonAngle),
+      moonRadiusFrac: parseFloat(options.moonRadiusFrac),
+      penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
+      wobble: parseFloat(options.wobble),
+    };
+
+    console.log('Generating planet...');
+    console.log(`  Size: ${width}x${height}, type: ${planetOptions.planetType}`);
+
+    const result = generatePlanet(planetOptions);
+    console.log(`  Generated ${result.lines.length} lines`);
+
+    const palette = PLANET_PALETTES[options.palette] ?? PLANET_PALETTES.ink;
+    const svgOptions: SVGOptions = {
+      strokeColor: palette.limb,
+      strokeWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
+      includeBackground: options.background ?? false,
+      backgroundColor: options.backgroundColor,
+      optimizePaths: options.optimize,
+      layerColors: palette,
+      ...paperSvg,
+    };
+
+    const svg = toSVG({ ...result, seed: planetOptions.seed ?? 0 }, svgOptions);
     const outputPath = resolve(process.cwd(), options.output);
     writeFileSync(outputPath, svg, 'utf-8');
     console.log(`\nSaved to: ${outputPath}`);

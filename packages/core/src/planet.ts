@@ -1,0 +1,767 @@
+import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { createNoise, SimplexNoise } from './noise.js';
+import { traceIsoContours } from './iso-contours.js';
+import { GrayscaleImage } from './image.js';
+import { applyHandDrawnStyle } from './hand-drawn.js';
+
+/**
+ * Procedural planets drawn as plottable pen-and-ink: a sphere shaded by
+ * form-following cross-contour hatching (curved strokes that wrap the globe and
+ * thicken into the shadow), confident traced contours for coastlines / band
+ * edges / crater rims, stipple texture, and optional rings, craters, a
+ * starfield and a companion moon. Everything is single-pen stroked polylines,
+ * deterministic per seed — no fills, no stroke-width tricks. Mirrors the Vine
+ * Generator: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
+ */
+
+export type PlanetType =
+  | 'terrestrial'
+  | 'gas-giant'
+  | 'ringed'
+  | 'moon'
+  | 'ice'
+  | 'lava'
+  | 'star'
+  | 'barren';
+
+export interface PlanetOptions {
+  width: number;
+  height: number;
+  margin: number;
+  seed?: number;
+
+  /** Disk radius as a fraction of the usable half-frame (0..1). */
+  radiusFrac?: number;
+  planetType?: PlanetType;
+
+  // Light
+  lightAngle?: number; // degrees, azimuth in the screen plane
+  lightElevation?: number; // degrees, 0 = grazing (crescent) .. 90 = full face
+  ambient?: number; // 0..1 fill so the shadow side never goes pure white
+  limbDarkening?: number; // 0..1 darkening toward the disk edge (star/gas)
+
+  // Surface noise
+  noiseScale?: number;
+  octaves?: number;
+  persistence?: number;
+  contrast?: number; // >1 sharpens coast/cracks
+  seaLevel?: number; // terrestrial land/sea threshold on noise (-1..1)
+  mareLevel?: number; // moon dark-plain threshold
+  coastlines?: boolean; // trace feature outlines
+
+  // Gas giant
+  bands?: boolean;
+  bandCount?: number;
+  bandTurbulence?: number;
+  storms?: number; // count of oval spots (Great Red Spot)
+
+  // Ice caps
+  iceCaps?: boolean;
+  capLatitude?: number; // degrees from the equator where caps begin
+  capRaggedness?: number; // 0..1 noisy cap edge
+
+  // Mark-making
+  hatchSpacing?: number; // base stroke spacing in px
+  crossHatchLayers?: number; // 1..5
+  lightWeight?: number; // tone = darkness*lightWeight + albedo*albedoWeight
+  albedoWeight?: number;
+  stipple?: number; // 0..1 shadow/texture dots
+  atmosphere?: number; // 0..n glow rings (star: corona)
+
+  // Rings
+  rings?: boolean;
+  ringInner?: number; // in disk radii
+  ringOuter?: number;
+  ringTilt?: number; // degrees
+  ringYaw?: number; // degrees
+  ringGap?: number; // 0..1 fraction of the span left as a Cassini gap
+  ringCount?: number; // concentric stroke bands
+  ringShadow?: boolean; // cut the planet's shadow into the rings
+
+  // Craters
+  craters?: boolean;
+  craterCount?: number;
+  craterMinR?: number; // fraction of disk radius
+  craterMaxR?: number;
+
+  // Extras
+  starfield?: boolean;
+  starCount?: number;
+  moon?: boolean;
+  moonDist?: number; // in disk radii from centre
+  moonAngle?: number; // degrees
+  moonRadiusFrac?: number; // of the primary radius
+
+  // Pen / finishing
+  penWidth?: number; // px
+  wobble?: number; // px wobble amplitude
+}
+
+interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+const TAU = Math.PI * 2;
+const DEG = Math.PI / 180;
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+const cross = (a: Vec3, b: Vec3): Vec3 => ({
+  x: a.y * b.z - a.z * b.y,
+  y: a.z * b.x - a.x * b.z,
+  z: a.x * b.y - a.y * b.x,
+});
+const norm = (a: Vec3): Vec3 => {
+  const l = Math.hypot(a.x, a.y, a.z) || 1;
+  return { x: a.x / l, y: a.y / l, z: a.z / l };
+};
+
+/** Repo-standard LCG: deterministic [0,1) stream from an integer seed. */
+function makeRandom(seed: number): () => number {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+}
+
+/** A fixed 3-axis rotation built from a seed, so each seed shows a different
+ *  face of the surface noise without any non-determinism. */
+function makeRotation(rng: () => number): (v: Vec3) => Vec3 {
+  const a = rng() * TAU;
+  const b = rng() * TAU;
+  const c = rng() * TAU;
+  const ca = Math.cos(a), sa = Math.sin(a);
+  const cb = Math.cos(b), sb = Math.sin(b);
+  const cc = Math.cos(c), sc = Math.sin(c);
+  return (v: Vec3): Vec3 => {
+    // Rz then Ry then Rx
+    let x = v.x * ca - v.y * sa;
+    let y = v.x * sa + v.y * ca;
+    let z = v.z;
+    let x2 = x * cb + z * sb;
+    const z2 = -x * sb + z * cb;
+    x = x2;
+    z = z2;
+    const y2 = y * cc - z * sc;
+    const z3 = y * sc + z * cc;
+    y = y2;
+    z = z3;
+    x2 = x;
+    return { x: x2, y, z };
+  };
+}
+
+const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
+  radiusFrac: 0.7,
+  planetType: 'terrestrial',
+  lightAngle: -35,
+  lightElevation: 35,
+  ambient: 0.12,
+  limbDarkening: 0,
+  noiseScale: 1.7,
+  octaves: 5,
+  persistence: 0.5,
+  contrast: 1.4,
+  seaLevel: 0,
+  mareLevel: -0.12,
+  coastlines: true,
+  bands: false,
+  bandCount: 9,
+  bandTurbulence: 0.5,
+  storms: 0,
+  iceCaps: false,
+  capLatitude: 68,
+  capRaggedness: 0.5,
+  hatchSpacing: 6,
+  crossHatchLayers: 3,
+  lightWeight: 0.85,
+  albedoWeight: 0.7,
+  stipple: 0,
+  atmosphere: 0,
+  rings: false,
+  ringInner: 1.35,
+  ringOuter: 2.2,
+  ringTilt: 22,
+  ringYaw: 12,
+  ringGap: 0.14,
+  ringCount: 6,
+  ringShadow: true,
+  craters: false,
+  craterCount: 80,
+  craterMinR: 0.02,
+  craterMaxR: 0.14,
+  starfield: false,
+  starCount: 120,
+  moon: false,
+  moonDist: 1.9,
+  moonAngle: -35,
+  moonRadiusFrac: 0.28,
+  penWidth: 1,
+  wobble: 0.6,
+};
+
+/** Append `pts` as a FlowLine if it has enough points to draw. */
+function pushRun(out: FlowLine[], pts: Point[], layer: string, pen?: 'fine' | 'bold'): void {
+  if (pts.length >= 2) out.push({ points: pts, layer, ...(pen ? { pen } : {}) });
+}
+
+interface BodyParams {
+  cx: number;
+  cy: number;
+  R: number;
+  bodyType: PlanetType;
+  bodySeed: number;
+  craters: boolean;
+  /** A disk that hides any sample falling inside it (the primary, for the moon). */
+  occluder: { cx: number; cy: number; R: number } | null;
+}
+
+export function generatePlanet(options: PlanetOptions): {
+  lines: FlowLine[];
+  width: number;
+  height: number;
+} {
+  const o = { ...DEFAULTS, ...options };
+  const seed = options.seed ?? Math.floor(Math.random() * 1000000);
+  const { width, height, margin } = options;
+  const cx = width / 2;
+  const cy = height / 2;
+  const usableR = Math.min(width, height) / 2 - margin;
+  const R = Math.max(10, o.radiusFrac * usableR);
+
+  // Light direction (shared by every body in the scene).
+  const la = o.lightAngle * DEG;
+  const le = o.lightElevation * DEG;
+  const L: Vec3 = norm({
+    x: Math.cos(le) * Math.cos(la),
+    y: Math.cos(le) * Math.sin(la),
+    z: Math.sin(le),
+  });
+  // Orthonormal frame around the light axis, for form-following hatch families.
+  const A = L;
+  let U = cross(A, { x: 0, y: 0, z: 1 });
+  if (U.x * U.x + U.y * U.y + U.z * U.z < 1e-6) U = cross(A, { x: 0, y: 1, z: 0 });
+  U = norm(U);
+  const V = cross(A, U);
+
+  const lines: FlowLine[] = [];
+
+  /** Render one spherical body (planet or moon) into `lines`. */
+  function renderBody(b: BodyParams): void {
+    const { cx: bx, cy: by, R: br, bodyType, bodySeed } = b;
+    const nSurf = createNoise(bodySeed);
+    const nBand = createNoise(bodySeed + 101);
+    const nStorm = createNoise(bodySeed + 202);
+    const nCap = createNoise(bodySeed + 303);
+    const rot = makeRotation(makeRandom(bodySeed + 404));
+    const scale = o.noiseScale;
+
+    // Storm spots (gas giants): a few oval high-contrast cells.
+    const storms: { dir: Vec3; rad: number; dark: number }[] = [];
+    if ((bodyType === 'gas-giant' || bodyType === 'ringed') && o.storms > 0) {
+      const sr = makeRandom(bodySeed + 505);
+      for (let i = 0; i < o.storms; i++) {
+        const lat = (sr() - 0.5) * 1.1; // keep away from the poles
+        const lon = sr() * TAU;
+        const cl = Math.cos(lat);
+        storms.push({
+          dir: { x: cl * Math.cos(lon), y: Math.sin(lat), z: cl * Math.sin(lon) },
+          rad: 0.18 + sr() * 0.16,
+          dark: 0.45 + sr() * 0.2,
+        });
+      }
+    }
+
+    const occluded = (sx: number, sy: number): boolean => {
+      const occ = b.occluder;
+      if (!occ) return false;
+      const dx = sx - occ.cx;
+      const dy = sy - occ.cy;
+      return dx * dx + dy * dy < occ.R * occ.R;
+    };
+
+    // --- Surface fields, sampled at the 3D normal so features wrap the sphere.
+    const surface = (N: Vec3): { n: number; lat: number; band: number } => {
+      const r = rot(N);
+      let n = nSurf.fbm3D(r.x * scale, r.y * scale, r.z * scale, o.octaves, o.persistence, 2, 1);
+      n = Math.sign(n) * Math.pow(Math.abs(n), 1 / Math.max(0.2, o.contrast));
+      const lat = Math.asin(Math.max(-1, Math.min(1, N.y)));
+      let band = 0;
+      if (bodyType === 'gas-giant' || bodyType === 'ringed') {
+        const warp =
+          o.bandTurbulence *
+          nBand.fbm3D(r.x * 1.3, r.y * 0.6, r.z * 1.3, 3, 0.55, 2, 1);
+        band = Math.sin((lat + warp * 0.5) * o.bandCount);
+      }
+      return { n, lat, band };
+    };
+
+    const capLatRad = o.capLatitude * DEG;
+    const isCap = (N: Vec3, lat: number): boolean => {
+      if (!o.iceCaps) return false;
+      const r = rot(N);
+      const ragged = o.capRaggedness * 0.4 * nCap.fbm3D(r.x * 2.4, r.y * 2.4, r.z * 2.4, 2, 0.5, 2, 1);
+      return Math.abs(lat) > capLatRad - ragged;
+    };
+
+    const stormDark = (N: Vec3): number => {
+      let d = 0;
+      for (const s of storms) {
+        const ang = Math.acos(Math.max(-1, Math.min(1, dot(N, s.dir))));
+        if (ang < s.rad) d = Math.max(d, s.dark * (1 - ang / s.rad));
+      }
+      return d;
+    };
+
+    // Surface albedo expressed as added darkness (0 bright .. 1 inky).
+    const albedoDarkness = (N: Vec3, f: { n: number; lat: number; band: number }): number => {
+      if (isCap(N, f.lat)) return 0;
+      switch (bodyType) {
+        case 'terrestrial':
+          return f.n < o.seaLevel ? 0.5 : 0.08;
+        case 'moon':
+        case 'barren':
+          return f.n < o.mareLevel ? 0.42 : 0.16;
+        case 'gas-giant':
+        case 'ringed': {
+          const dark = 0.5 - 0.5 * f.band; // dark zones where band is negative
+          return Math.max(0.15 + 0.32 * dark, stormDark(N));
+        }
+        case 'ice':
+          return 0.06 + (f.n < 0 ? 0.12 : 0);
+        case 'lava': {
+          const ridge = 1 - Math.abs(f.n); // ridged crust network
+          return ridge > 0.62 ? 0.52 : 0.04; // dark crust vs unhatched glow
+        }
+        case 'star':
+          return 0;
+        default:
+          return 0.1;
+      }
+    };
+
+    // Lit-ness → darkness, with optional limb darkening.
+    const darknessAt = (N: Vec3): number => {
+      const lam = Math.max(0, dot(N, L));
+      let shade = o.ambient + (1 - o.ambient) * lam;
+      if (o.limbDarkening > 0) shade *= 1 - o.limbDarkening * (1 - N.z);
+      return 1 - clamp01(shade);
+    };
+
+    const toneAt = (N: Vec3): number => {
+      const f = surface(N);
+      const dk = darknessAt(N);
+      const al = albedoDarkness(N, f);
+      return clamp01(dk * o.lightWeight + al * o.albedoWeight);
+    };
+
+    // Where we keep clean paper rather than lay line hatch.
+    const hatchMask = (N: Vec3): boolean => {
+      if (bodyType === 'star') return false; // granulation is stipple, not line
+      const f = surface(N);
+      if (isCap(N, f.lat)) return false;
+      if (bodyType === 'lava') {
+        const ridge = 1 - Math.abs(f.n);
+        if (ridge <= 0.62) return false; // glow cells stay open
+      }
+      return true;
+    };
+
+    // --- Form-following cross-contour hatching.
+    // The lit cap is held clean (tone below the base threshold gets no marks),
+    // so curved single-direction hatch carries the midtones and cross-hatch only
+    // builds in the shadow — a tonal sphere, not a wireframe globe. Keeping the
+    // base threshold up also blanks the sub-light point, avoiding a bullseye.
+    const PASSES: { kind: 'ring' | 'meridian'; phase: number; thr: number }[] = [
+      { kind: 'ring', phase: 0, thr: 0.2 },
+      { kind: 'ring', phase: 0.5, thr: 0.44 },
+      { kind: 'meridian', phase: 0, thr: 0.6 },
+      { kind: 'ring', phase: 0.25, thr: 0.74 },
+      { kind: 'meridian', phase: 0.5, thr: 0.86 },
+    ];
+    const layerCount = Math.max(1, Math.min(PASSES.length, Math.round(o.crossHatchLayers)));
+    const dt = Math.max(0.01, o.hatchSpacing / br); // angular step ≈ hatchSpacing px
+
+    const sampleAndEmit = (N: Vec3, thr: number, run: Point[]): boolean => {
+      // returns whether the point was kept (continues the run)
+      if (N.z <= 0) return false;
+      const sx = bx + br * N.x;
+      const sy = by + br * N.y;
+      if (occluded(sx, sy)) return false;
+      if (!hatchMask(N)) return false;
+      if (toneAt(N) < thr) return false;
+      run.push({ x: sx, y: sy });
+      return true;
+    };
+
+    for (let p = 0; p < layerCount; p++) {
+      const pass = PASSES[p];
+      if (pass.kind === 'ring') {
+        // Circles of constant colatitude around the light axis (parallel to the
+        // terminator) — concentric shading that bunches into the shadow.
+        for (let m = 1; (m + pass.phase) * dt < Math.PI; m++) {
+          const t0 = (m + pass.phase) * dt;
+          const sinT = Math.sin(t0);
+          const cosT = Math.cos(t0);
+          const ns = Math.max(16, Math.ceil((TAU * br * sinT) / o.hatchSpacing));
+          let run: Point[] = [];
+          for (let s = 0; s <= ns; s++) {
+            const ss = (s / ns) * TAU;
+            const dir = Math.cos(ss);
+            const dir2 = Math.sin(ss);
+            const N: Vec3 = {
+              x: A.x * cosT + (U.x * dir + V.x * dir2) * sinT,
+              y: A.y * cosT + (U.y * dir + V.y * dir2) * sinT,
+              z: A.z * cosT + (U.z * dir + V.z * dir2) * sinT,
+            };
+            if (!sampleAndEmit(N, pass.thr, run)) {
+              pushRun(lines, run, 'hatch');
+              run = [];
+            }
+          }
+          pushRun(lines, run, 'hatch');
+        }
+      } else {
+        // Meridian arcs from the lit pole to the anti-lit pole — the cross-hatch.
+        const dPhi = dt;
+        for (let m = 0; (m + pass.phase) * dPhi < TAU; m++) {
+          const phi = (m + pass.phase) * dPhi;
+          const cphi = Math.cos(phi);
+          const sphi = Math.sin(phi);
+          const dirU = { x: U.x * cphi + V.x * sphi, y: U.y * cphi + V.y * sphi, z: U.z * cphi + V.z * sphi };
+          const nt = Math.max(24, Math.ceil(Math.PI / dt));
+          let run: Point[] = [];
+          for (let s = 0; s <= nt; s++) {
+            const t = (s / nt) * Math.PI;
+            const sinT = Math.sin(t);
+            const cosT = Math.cos(t);
+            const N: Vec3 = {
+              x: A.x * cosT + dirU.x * sinT,
+              y: A.y * cosT + dirU.y * sinT,
+              z: A.z * cosT + dirU.z * sinT,
+            };
+            if (!sampleAndEmit(N, pass.thr, run)) {
+              pushRun(lines, run, 'hatch');
+              run = [];
+            }
+          }
+          pushRun(lines, run, 'hatch');
+        }
+      }
+    }
+
+    // --- Traced feature contours from a screen-space raster of the field.
+    const traceField = (fieldFn: (N: Vec3) => number, iso: number, pen?: 'fine' | 'bold'): void => {
+      const grid = Math.max(48, Math.min(220, Math.round(br * 1.5)));
+      const data = new Float32Array(grid * grid);
+      const step = (2 * br) / (grid - 1);
+      const SENT = iso - 1000;
+      for (let gy = 0; gy < grid; gy++) {
+        for (let gx = 0; gx < grid; gx++) {
+          const sx = bx - br + gx * step;
+          const sy = by - br + gy * step;
+          const dx = sx - bx;
+          const dy = sy - by;
+          const r2 = dx * dx + dy * dy;
+          if (r2 <= br * br) {
+            const z = Math.sqrt(br * br - r2);
+            data[gy * grid + gx] = fieldFn({ x: dx / br, y: dy / br, z: z / br });
+          } else {
+            data[gy * grid + gx] = SENT;
+          }
+        }
+      }
+      const raster: GrayscaleImage = { width: grid, height: grid, data };
+      const polys = traceIsoContours(raster, iso);
+      const lim2 = (br * 0.985) * (br * 0.985);
+      for (const poly of polys) {
+        let run: Point[] = [];
+        for (const gp of poly) {
+          const sx = bx - br + gp.x * step;
+          const sy = by - br + gp.y * step;
+          const dx = sx - bx;
+          const dy = sy - by;
+          if (dx * dx + dy * dy > lim2 || occluded(sx, sy)) {
+            pushRun(lines, run, 'feature', pen);
+            run = [];
+            continue;
+          }
+          run.push({ x: sx, y: sy });
+        }
+        pushRun(lines, run, 'feature', pen);
+      }
+    };
+
+    if (o.coastlines) {
+      if (bodyType === 'terrestrial') traceField((N) => surface(N).n, o.seaLevel);
+      else if (bodyType === 'moon' || bodyType === 'barren') traceField((N) => surface(N).n, o.mareLevel);
+      else if (bodyType === 'gas-giant' || bodyType === 'ringed') traceField((N) => surface(N).band, 0);
+      else if (bodyType === 'lava') traceField((N) => 1 - Math.abs(surface(N).n), 0.62);
+    }
+    if (o.iceCaps) {
+      traceField((N) => {
+        const f = surface(N);
+        const r = rot(N);
+        const ragged = o.capRaggedness * 0.4 * nCap.fbm3D(r.x * 2.4, r.y * 2.4, r.z * 2.4, 2, 0.5, 2, 1);
+        return Math.abs(f.lat) - (capLatRad - ragged);
+      }, 0);
+    }
+
+    // --- Stipple (shadow / texture dots), gated by tone.
+    if (o.stipple > 0) {
+      const sr = makeRandom(bodySeed + 707);
+      const cell = Math.max(2.2, o.hatchSpacing * 0.7);
+      for (let sy = by - br; sy <= by + br; sy += cell) {
+        for (let sx = bx - br; sx <= bx + br; sx += cell) {
+          const jx = sx + (sr() - 0.5) * cell;
+          const jy = sy + (sr() - 0.5) * cell;
+          const dx = jx - bx;
+          const dy = jy - by;
+          const r2 = dx * dx + dy * dy;
+          if (r2 > br * br) continue;
+          if (occluded(jx, jy)) continue;
+          const z = Math.sqrt(br * br - r2);
+          const N: Vec3 = { x: dx / br, y: dy / br, z: z / br };
+          const tone = bodyType === 'star' ? clamp01(0.35 + 0.5 * (1 - N.z)) : toneAt(N);
+          if (sr() < tone * o.stipple) {
+            const rr = o.penWidth * 0.55;
+            lines.push({ points: dot4(jx, jy, rr), layer: 'stipple' });
+          }
+        }
+      }
+    }
+
+    // --- Craters: foreshortened rim ellipses + a shaded inner cup.
+    if (b.craters) {
+      const cr = makeRandom(bodySeed + 808);
+      const crot = makeRotation(makeRandom(bodySeed + 909));
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      const Ls = norm({ x: L.x, y: L.y, z: 0.0001 });
+      const antiAng = Math.atan2(-Ls.y, -Ls.x);
+      for (let i = 0; i < o.craterCount; i++) {
+        const yy = 1 - ((i + 0.5) / o.craterCount) * 2;
+        const rad = Math.sqrt(Math.max(0, 1 - yy * yy));
+        const th = i * golden;
+        let d: Vec3 = { x: Math.cos(th) * rad, y: yy, z: Math.sin(th) * rad };
+        d = crot(d);
+        if (d.z <= 0.14) continue; // front-facing only
+        const sz = (o.craterMinR + (o.craterMaxR - o.craterMinR) * cr() * cr()) * br;
+        const ccx = bx + br * d.x;
+        const ccy = by + br * d.y;
+        if (occluded(ccx, ccy)) continue;
+        const radialAng = Math.atan2(d.y, d.x);
+        const major = sz;
+        const minor = Math.max(0.16, d.z) * sz;
+        const orient = radialAng + Math.PI / 2; // major axis tangent to the limb
+        pushRun(lines, ellipse(ccx, ccy, major, minor, orient, 0, TAU), 'feature', sz > br * 0.09 ? 'bold' : undefined);
+        // Inner shaded cup: nested partial arcs on the anti-light side.
+        const a0 = antiAng - orient - 1.9;
+        const a1 = antiAng - orient + 1.9;
+        for (const k of [0.78, 0.56, 0.36]) {
+          pushRun(lines, ellipse(ccx, ccy, major * k, minor * k, orient, a0, a1), 'feature');
+        }
+      }
+    }
+
+    // --- Limb: a bold silhouette built from concentric single-pen passes.
+    const limbPasses = Math.max(2, Math.round(o.penWidth > 0 ? 3 : 2));
+    for (let k = 0; k < limbPasses; k++) {
+      const rr = br - k * o.penWidth * 0.9;
+      if (rr < 2) break;
+      let run: Point[] = [];
+      const n = 110;
+      for (let i = 0; i <= n; i++) {
+        const t = (i / n) * TAU;
+        const sx = bx + Math.cos(t) * rr;
+        const sy = by + Math.sin(t) * rr;
+        if (occluded(sx, sy)) {
+          pushRun(lines, run, 'limb', 'bold');
+          run = [];
+          continue;
+        }
+        run.push({ x: sx, y: sy });
+      }
+      pushRun(lines, run, 'limb', 'bold');
+    }
+  }
+
+  // Helper: a small closed dot polygon.
+  function dot4(x: number, y: number, r: number): Point[] {
+    return ellipse(x, y, r, r, 0, 0, TAU);
+  }
+
+  // Helper: ellipse (or arc) polyline.
+  function ellipse(
+    x: number,
+    y: number,
+    a: number,
+    bb: number,
+    rot: number,
+    start: number,
+    end: number
+  ): Point[] {
+    const span = end - start;
+    const n = Math.max(10, Math.ceil((Math.abs(span) / TAU) * 48));
+    const cr = Math.cos(rot);
+    const sr = Math.sin(rot);
+    const pts: Point[] = [];
+    for (let i = 0; i <= n; i++) {
+      const t = start + (i / n) * span;
+      const lx = Math.cos(t) * a;
+      const ly = Math.sin(t) * bb;
+      pts.push({ x: x + lx * cr - ly * sr, y: y + lx * sr + ly * cr });
+    }
+    return pts;
+  }
+
+  // --- Scene background: starfield (behind everything).
+  if (o.starfield) {
+    const sr = makeRandom(seed + 1001);
+    const x0 = margin;
+    const y0 = margin;
+    const w = width - 2 * margin;
+    const h = height - 2 * margin;
+    const reach = R * 1.06;
+    for (let i = 0; i < o.starCount; i++) {
+      const sx = x0 + sr() * w;
+      const sy = y0 + sr() * h;
+      const dx = sx - cx;
+      const dy = sy - cy;
+      if (dx * dx + dy * dy < reach * reach) continue; // keep the disk clear
+      const big = sr();
+      if (big > 0.9) {
+        // a sparkle cross
+        const r = o.penWidth * 1.8;
+        lines.push({ points: [{ x: sx - r, y: sy }, { x: sx + r, y: sy }], layer: 'star' });
+        lines.push({ points: [{ x: sx, y: sy - r }, { x: sx, y: sy + r }], layer: 'star' });
+      } else {
+        const r = o.penWidth * (0.45 + big * 0.4);
+        lines.push({ points: dot4(sx, sy, r), layer: 'star' });
+      }
+    }
+  }
+
+  // --- Atmosphere / corona around the limb (behind the body strokes).
+  if (o.atmosphere > 0) {
+    if (o.planetType === 'star') {
+      // Corona: short radial flares of varying length.
+      const sr = makeRandom(seed + 1313);
+      const flares = Math.round(120 * o.atmosphere);
+      for (let i = 0; i < flares; i++) {
+        const t = (i / flares) * TAU + (sr() - 0.5) * 0.05;
+        const len = R * (0.04 + sr() * 0.12 * o.atmosphere);
+        const c = Math.cos(t);
+        const s = Math.sin(t);
+        lines.push({
+          points: [
+            { x: cx + c * R, y: cy + s * R },
+            { x: cx + c * (R + len), y: cy + s * (R + len) },
+          ],
+          layer: 'atmosphere',
+        });
+      }
+    } else {
+      const rings = Math.max(1, Math.round(o.atmosphere));
+      for (let i = 0; i < rings; i++) {
+        const rr = R * (1.02 + i * 0.035);
+        lines.push({ points: dot4(cx, cy, rr), layer: 'atmosphere' });
+      }
+    }
+  }
+
+  // --- The primary planet.
+  renderBody({
+    cx,
+    cy,
+    R,
+    bodyType: o.planetType,
+    bodySeed: seed,
+    craters: o.craters,
+    occluder: null,
+  });
+
+  // --- Rings (Saturn): a flat disc of bands tilted toward edge-on, occluded
+  //  where it passes behind the sphere. The ring lies in a plane tilted about
+  //  the screen x-axis by `ringTilt` (small ⇒ thin ellipse, the classic look)
+  //  then spun in-plane by `ringYaw`.
+  if (o.rings) {
+    const tau = o.ringTilt * DEG; // opening angle from edge-on
+    const sinTau = Math.sin(tau);
+    const cosTau = Math.cos(tau);
+    const yaw = o.ringYaw * DEG;
+    const cosYaw = Math.cos(yaw);
+    const sinYaw = Math.sin(yaw);
+    const inner = o.ringInner * R;
+    const outer = o.ringOuter * R;
+    const span = Math.max(1, outer - inner);
+    const gapStart = inner + span * (0.5 - o.ringGap / 2);
+    const gapEnd = inner + span * (0.5 + o.ringGap / 2);
+    const N = 540;
+    for (let bandi = 0; bandi < o.ringCount; bandi++) {
+      const rr = inner + (span * (bandi + 0.5)) / o.ringCount;
+      if (o.ringGap > 0 && rr >= gapStart && rr <= gapEnd) continue; // Cassini gap
+      let run: Point[] = [];
+      for (let i = 0; i <= N; i++) {
+        const th = (i / N) * TAU;
+        const ex = rr * Math.cos(th);
+        const ey = rr * Math.sin(th) * sinTau; // foreshortened minor axis
+        const ez = rr * Math.sin(th) * cosTau; // depth toward the viewer
+        const px = ex * cosYaw - ey * sinYaw;
+        const py = ex * sinYaw + ey * cosYaw;
+        const sx = cx + px;
+        const sy = cy + py;
+        const rd2 = px * px + py * py;
+        // Hidden where it lies within the disk silhouette but behind the front
+        // surface of the (opaque) sphere.
+        let hidden = rd2 < R * R && ez < Math.sqrt(R * R - rd2);
+        // Planet shadow cast across the rings.
+        if (!hidden && o.ringShadow) {
+          const p: Vec3 = { x: px, y: py, z: ez };
+          const d = dot(p, L);
+          if (d < 0) {
+            const qx = p.x - d * L.x;
+            const qy = p.y - d * L.y;
+            const qz = p.z - d * L.z;
+            if (qx * qx + qy * qy + qz * qz < R * R) hidden = true;
+          }
+        }
+        if (hidden) {
+          pushRun(lines, run, 'ring');
+          run = [];
+          continue;
+        }
+        run.push({ x: sx, y: sy });
+      }
+      pushRun(lines, run, 'ring');
+    }
+  }
+
+  // --- Companion moon.
+  if (o.moon) {
+    const ma = o.moonAngle * DEG;
+    const mx = cx + Math.cos(ma) * o.moonDist * R;
+    const my = cy + Math.sin(ma) * o.moonDist * R;
+    renderBody({
+      cx: mx,
+      cy: my,
+      R: Math.max(6, o.moonRadiusFrac * R),
+      bodyType: 'moon',
+      bodySeed: seed + 4242,
+      craters: true,
+      occluder: { cx, cy, R },
+    });
+  }
+
+  // --- Hand-drawn finishing wobble over the whole plate.
+  const result: FlowLinesResult = { lines, width, height, seed };
+  const wobbled = applyHandDrawnStyle(result, {
+    amplitude: o.wobble,
+    wavelength: 42,
+    seed,
+  });
+
+  return { lines: wobbled.lines, width, height };
+}

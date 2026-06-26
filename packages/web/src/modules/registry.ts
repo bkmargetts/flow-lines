@@ -6,6 +6,7 @@ import { blankTexture } from '../textures/blank';
 import { imageInkModule } from '../projects/image-ink';
 import { flowFieldModule } from '../projects/flow-field';
 import { vineGeneratorModule } from '../projects/vine-generator';
+import { planetGeneratorModule } from '../projects/planet-generator';
 import { conwayModule } from '../projects/conway';
 import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
@@ -28,6 +29,7 @@ export const MODULES: Module<any>[] = [
   imageInkModule,
   flowFieldModule,
   vineGeneratorModule,
+  planetGeneratorModule,
   conwayModule,
   complexFlowModule,
   reactionDiffusionModule,
