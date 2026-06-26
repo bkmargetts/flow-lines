@@ -1,9 +1,10 @@
-import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { FlowLine, Point } from './flow-lines.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { traceIsoContours } from './iso-contours.js';
 import { GrayscaleImage } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import { textToStrokes, textWidth } from './stroke-font.js';
+import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
 
 /**
  * Procedural planets drawn as plottable pen-and-ink: a sphere shaded by
@@ -118,6 +119,8 @@ export interface PlanetOptions {
   // Pen / finishing
   penWidth?: number; // px
   wobble?: number; // px wobble amplitude
+  sketch?: number; // 0..1 hand-drawn overdraw intensity (multi-pass)
+  sketchStyle?: SketchStyle; // character of the overdraw
 }
 
 interface Vec3 {
@@ -240,6 +243,8 @@ const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'se
   moonRadiusFrac: 0.28,
   penWidth: 1,
   wobble: 0.6,
+  sketch: 0,
+  sketchStyle: 'loose',
 };
 
 /** Append `pts` as a FlowLine if it has enough points to draw. */
@@ -254,8 +259,9 @@ interface BodyParams {
   bodyType: PlanetType;
   bodySeed: number;
   craters: boolean;
-  /** A disk that hides any sample falling inside it (the primary, for the moon). */
-  occluder: { cx: number; cy: number; R: number } | null;
+  /** Disks that hide any sample falling inside them (the primary for a moon; the
+   *  star + nearer bodies for the orbital diagram). */
+  occluders?: { cx: number; cy: number; R: number }[];
   /** Per-body light direction; falls back to the scene light when absent (only
    *  phase strips need a different light per body). */
   light?: Vec3;
@@ -333,11 +339,13 @@ export function generatePlanet(options: PlanetOptions): {
     }
 
     const occluded = (sx: number, sy: number): boolean => {
-      const occ = b.occluder;
-      if (!occ) return false;
-      const dx = sx - occ.cx;
-      const dy = sy - occ.cy;
-      return dx * dx + dy * dy < occ.R * occ.R;
+      if (!b.occluders) return false;
+      for (const occ of b.occluders) {
+        const dx = sx - occ.cx;
+        const dy = sy - occ.cy;
+        if (dx * dx + dy * dy < occ.R * occ.R) return true;
+      }
+      return false;
     };
 
     // --- Surface fields, sampled at the 3D normal so features wrap the sphere.
@@ -852,6 +860,66 @@ export function generatePlanet(options: PlanetOptions): {
     return pts;
   }
 
+  /** Tilted ring system around a body at (rcx, rcy) of disk radius rR, lit by rL;
+   *  occluded behind the sphere and cut by the planet's shadow. */
+  function renderRings(rcx: number, rcy: number, rR: number, rL: Vec3): void {
+    const tau = o.ringTilt * DEG; // opening angle from edge-on
+    const sinTau = Math.sin(tau);
+    const cosTau = Math.cos(tau);
+    const yaw = o.ringYaw * DEG;
+    const cosYaw = Math.cos(yaw);
+    const sinYaw = Math.sin(yaw);
+    const inner = o.ringInner * rR;
+    const outer = o.ringOuter * rR;
+    const span = Math.max(1, outer - inner);
+    const gapStart = inner + span * (0.5 - o.ringGap / 2);
+    const gapEnd = inner + span * (0.5 + o.ringGap / 2);
+    const N = 540;
+    const traceRing = (rr: number): void => {
+      let run: Point[] = [];
+      for (let i = 0; i <= N; i++) {
+        const th = (i / N) * TAU;
+        const ex = rr * Math.cos(th);
+        const ey = rr * Math.sin(th) * sinTau; // foreshortened minor axis
+        const ez = rr * Math.sin(th) * cosTau; // depth toward the viewer
+        const px = ex * cosYaw - ey * sinYaw;
+        const py = ex * sinYaw + ey * cosYaw;
+        const sx = rcx + px;
+        const sy = rcy + py;
+        const rd2 = px * px + py * py;
+        let hidden = rd2 < rR * rR && ez < Math.sqrt(rR * rR - rd2);
+        if (!hidden && o.ringShadow) {
+          const p: Vec3 = { x: px, y: py, z: ez };
+          const d = dot(p, rL);
+          if (d < 0) {
+            const qx = p.x - d * rL.x;
+            const qy = p.y - d * rL.y;
+            const qz = p.z - d * rL.z;
+            if (qx * qx + qy * qy + qz * qz < rR * rR) hidden = true;
+          }
+        }
+        if (hidden) {
+          pushRun(lines, run, 'ring');
+          run = [];
+          continue;
+        }
+        run.push({ x: sx, y: sy });
+      }
+      pushRun(lines, run, 'ring');
+    };
+    const sub = Math.max(1, Math.round(o.ringDensity));
+    const subSpacing = Math.max(1.2, o.penWidth * 1.6);
+    for (let bandi = 0; bandi < o.ringCount; bandi++) {
+      const rrC = inner + (span * (bandi + 0.5)) / o.ringCount;
+      if (o.ringGap > 0 && rrC >= gapStart && rrC <= gapEnd) continue; // Cassini gap
+      const subN = Math.max(1, Math.round(sub * (1.35 - 0.6 * (bandi / o.ringCount))));
+      for (let k = 0; k < subN; k++) {
+        const rr = rrC + (k - (subN - 1) / 2) * subSpacing;
+        traceRing(rr);
+      }
+    }
+  }
+
   /** Multi-body plates: a phase strip, a size-comparison row, or an orbital
    *  diagram. Each body is a normal renderBody at a computed centre/radius. */
   function composeLayout(): void {
@@ -870,7 +938,8 @@ export function generatePlanet(options: PlanetOptions): {
         const f = n === 1 ? 0.5 : i / (n - 1);
         const theta = -Math.PI * 0.92 + 1.84 * Math.PI * f;
         const light: Vec3 = { x: Math.sin(theta), y: 0.12, z: Math.cos(theta) };
-        renderBody({ cx: bxp, cy, R: br, bodyType: o.planetType, bodySeed: seed, craters: o.craters, occluder: null, light });
+        renderBody({ cx: bxp, cy, R: br, bodyType: o.planetType, bodySeed: seed, craters: o.craters, light });
+        if (o.rings) renderRings(bxp, cy, br, norm(light)); // ring each phase
       }
     } else if (o.layout === 'comparison') {
       // A baseline row of different worlds at decreasing radii.
@@ -882,26 +951,66 @@ export function generatePlanet(options: PlanetOptions): {
         const br = Math.max(usableR * 0.08, maxR * frac);
         const bxp = margin + slotW * (i + 0.5);
         const bt = pool[i % pool.length];
-        renderBody({ cx: bxp, cy: baseline - br, R: br, bodyType: bt, bodySeed: seed + i * 131, craters: bt === 'moon' || bt === 'barren', occluder: null });
+        renderBody({ cx: bxp, cy: baseline - br, R: br, bodyType: bt, bodySeed: seed + i * 131, craters: bt === 'moon' || bt === 'barren' });
       }
     } else {
       // Orbital diagram: a central star ringed by concentric foreshortened
-      // orbits, a small world riding each one.
+      // orbits, a small world riding each one. Nearer bodies occlude the ones
+      // (and orbit arcs) behind them, and everything behind the star is hidden.
       const tilt = 20 * DEG;
       const sT = Math.sin(tilt);
+      const cT = Math.cos(tilt);
       const maxOrb = usableR * 0.95;
-      renderBody({ cx, cy, R: Math.max(8, usableR * 0.12), bodyType: 'star', bodySeed: seed, craters: false, occluder: null });
+      const starR = Math.max(8, usableR * 0.12);
+      // Lay out every body first so we know each one's screen disk + depth.
+      type Orb = { cx: number; cy: number; R: number; ez: number; orbR: number };
+      const star: Orb = { cx, cy, R: starR, ez: 0, orbR: 0 };
+      const planets: Orb[] = [];
       for (let k = 0; k < n; k++) {
         const orbR = (maxOrb * (k + 1.5)) / (n + 0.5);
-        lines.push({ points: ellipse(cx, cy, orbR, orbR * sT, 0, 0, TAU), layer: 'orbit' });
-        // Spread the worlds around the orbits (even base angle + a jitter) so
-        // they don't bunch up on one side.
         const a = (k / n) * TAU + (lrng() - 0.5) * 0.9;
         const px = orbR * Math.cos(a);
         const py = orbR * Math.sin(a) * sT;
-        const bt = pool[k % pool.length];
+        const ez = orbR * Math.sin(a) * cT; // depth toward the viewer
         const br = Math.max(usableR * 0.05, usableR * (0.13 - 0.006 * k));
-        renderBody({ cx: cx + px, cy: cy + py, R: br, bodyType: bt, bodySeed: seed + k * 257, craters: bt === 'moon' || bt === 'barren', occluder: null });
+        planets.push({ cx: cx + px, cy: cy + py, R: br, ez, orbR });
+      }
+      const bodies = [star, ...planets];
+      // Orbit ellipses, cut where they pass behind the star or a nearer body.
+      for (let k = 0; k < n; k++) {
+        const orbR = planets[k].orbR;
+        const M = Math.max(64, Math.ceil((TAU * orbR) / 6));
+        let run: Point[] = [];
+        for (let i = 0; i <= M; i++) {
+          const th = (i / M) * TAU;
+          const px = orbR * Math.cos(th);
+          const py = orbR * Math.sin(th) * sT;
+          const ez = orbR * Math.sin(th) * cT;
+          const sx = cx + px;
+          const sy = cy + py;
+          const rd2 = px * px + py * py;
+          let hidden = rd2 < starR * starR && ez < Math.sqrt(starR * starR - rd2);
+          if (!hidden) {
+            for (const pl of planets) {
+              if (pl.ez <= ez) continue; // only nearer bodies occlude
+              const dx = sx - pl.cx;
+              const dy = sy - pl.cy;
+              if (dx * dx + dy * dy < pl.R * pl.R) { hidden = true; break; }
+            }
+          }
+          if (hidden) { pushRun(lines, run, 'orbit'); run = []; continue; }
+          run.push({ x: sx, y: sy });
+        }
+        pushRun(lines, run, 'orbit');
+      }
+      const starOcc = planets.filter((pl) => pl.ez > 0).map((pl) => ({ cx: pl.cx, cy: pl.cy, R: pl.R }));
+      renderBody({ cx, cy, R: starR, bodyType: 'star', bodySeed: seed, craters: false, occluders: starOcc });
+      for (let k = 0; k < n; k++) {
+        const pl = planets[k];
+        const bt = pool[k % pool.length];
+        // Every body nearer than this one (plus the star) hides its far side.
+        const occluders = bodies.filter((o2) => o2 !== pl && o2.ez > pl.ez).map((o2) => ({ cx: o2.cx, cy: o2.cy, R: o2.R }));
+        renderBody({ cx: pl.cx, cy: pl.cy, R: pl.R, bodyType: bt, bodySeed: seed + k * 257, craters: bt === 'moon' || bt === 'barren', occluders });
       }
     }
   }
@@ -972,78 +1081,12 @@ export function generatePlanet(options: PlanetOptions): {
     bodyType: o.planetType,
     bodySeed: seed,
     craters: o.craters,
-    occluder: null,
   });
 
   // --- Rings (Saturn): a flat disc of bands tilted toward edge-on, occluded
-  //  where it passes behind the sphere. The ring lies in a plane tilted about
-  //  the screen x-axis by `ringTilt` (small ⇒ thin ellipse, the classic look)
-  //  then spun in-plane by `ringYaw`.
-  if (o.rings) {
-    const tau = o.ringTilt * DEG; // opening angle from edge-on
-    const sinTau = Math.sin(tau);
-    const cosTau = Math.cos(tau);
-    const yaw = o.ringYaw * DEG;
-    const cosYaw = Math.cos(yaw);
-    const sinYaw = Math.sin(yaw);
-    const inner = o.ringInner * R;
-    const outer = o.ringOuter * R;
-    const span = Math.max(1, outer - inner);
-    const gapStart = inner + span * (0.5 - o.ringGap / 2);
-    const gapEnd = inner + span * (0.5 + o.ringGap / 2);
-    const N = 540;
-    // Trace one concentric ring stroke at radius rr, occluded behind the sphere
-    // and cut by the planet's shadow.
-    const traceRing = (rr: number): void => {
-      let run: Point[] = [];
-      for (let i = 0; i <= N; i++) {
-        const th = (i / N) * TAU;
-        const ex = rr * Math.cos(th);
-        const ey = rr * Math.sin(th) * sinTau; // foreshortened minor axis
-        const ez = rr * Math.sin(th) * cosTau; // depth toward the viewer
-        const px = ex * cosYaw - ey * sinYaw;
-        const py = ex * sinYaw + ey * cosYaw;
-        const sx = cx + px;
-        const sy = cy + py;
-        const rd2 = px * px + py * py;
-        // Hidden where it lies within the disk silhouette but behind the front
-        // surface of the (opaque) sphere.
-        let hidden = rd2 < R * R && ez < Math.sqrt(R * R - rd2);
-        // Planet shadow cast across the rings.
-        if (!hidden && o.ringShadow) {
-          const p: Vec3 = { x: px, y: py, z: ez };
-          const d = dot(p, L);
-          if (d < 0) {
-            const qx = p.x - d * L.x;
-            const qy = p.y - d * L.y;
-            const qz = p.z - d * L.z;
-            if (qx * qx + qy * qy + qz * qz < R * R) hidden = true;
-          }
-        }
-        if (hidden) {
-          pushRun(lines, run, 'ring');
-          run = [];
-          continue;
-        }
-        run.push({ x: sx, y: sy });
-      }
-      pushRun(lines, run, 'ring');
-    };
-    // Each band is several closely-spaced strokes so its tone comes from
-    // spacing (real ring systems are densest just inside the Cassini gap).
-    const sub = Math.max(1, Math.round(o.ringDensity));
-    const subSpacing = Math.max(1.2, o.penWidth * 1.6);
-    for (let bandi = 0; bandi < o.ringCount; bandi++) {
-      const rrC = inner + (span * (bandi + 0.5)) / o.ringCount;
-      if (o.ringGap > 0 && rrC >= gapStart && rrC <= gapEnd) continue; // Cassini gap
-      // Denser toward the inner edge, thinning outward — the classic B→A falloff.
-      const subN = Math.max(1, Math.round(sub * (1.35 - 0.6 * (bandi / o.ringCount))));
-      for (let k = 0; k < subN; k++) {
-        const rr = rrC + (k - (subN - 1) / 2) * subSpacing;
-        traceRing(rr);
-      }
-    }
-  }
+  //  where it passes behind the sphere. `renderRings` is defined at scene scope
+  //  (below) so phase strips can ring each body too.
+  if (o.rings) renderRings(cx, cy, R, L);
 
   // --- Companion moon.
   if (o.moon) {
@@ -1057,7 +1100,7 @@ export function generatePlanet(options: PlanetOptions): {
       bodyType: 'moon',
       bodySeed: seed + 4242,
       craters: true,
-      occluder: { cx, cy, R },
+      occluders: [{ cx, cy, R }],
     });
   }
   }
@@ -1120,13 +1163,55 @@ export function generatePlanet(options: PlanetOptions): {
     for (const stroke of textToStrokes(o.caption, cxs, cyy, size)) lines.push({ points: stroke, layer: 'label' });
   }
 
-  // --- Hand-drawn finishing wobble over the whole plate.
-  const result: FlowLinesResult = { lines, width, height, seed };
-  const wobbled = applyHandDrawnStyle(result, {
-    amplitude: o.wobble,
-    wavelength: 42,
-    seed,
-  });
+  // --- Hand-drawn finish: a multi-pass sketch overdraw (shared with the Vine
+  // Generator) when `sketch` is set, otherwise a single low-frequency wobble.
+  let finished: FlowLine[];
+  if (o.sketch > 0.01) {
+    const { passes, wavelength, amplitude, jitter } = getSketchStyleConfig(o.sketchStyle, o.sketch);
+    const acc: FlowLine[] = [];
+    for (let p = 0; p < passes; p++) {
+      const pseed = seed + p * 9301 + 7;
+      const styled = applyHandDrawnStyle({ lines, width, height, seed: pseed }, { amplitude, wavelength, jitter, seed: pseed }).lines;
+      for (const l of styled) acc.push(l);
+    }
+    finished = acc;
+  } else {
+    finished = applyHandDrawnStyle({ lines, width, height, seed }, { amplitude: o.wobble, wavelength: 42, seed }).lines;
+  }
 
-  return { lines: wobbled.lines, width, height };
+  // --- Scale the planetary body to fit inside the page margin. Plate furniture
+  // (frame, scale bar, labels, background starfield) is already margin-bound and
+  // stays pinned; only the body (disk, rings, moon, orbits, …) is fitted, so a
+  // ringed planet shrinks to fit rather than spilling past the margin.
+  finished = fitBodyToMargin(finished);
+
+  return { lines: finished, width, height };
+
+  /** Uniformly scale the non-furniture lines about the page centre so their
+   *  bounding box fits within the margin box. */
+  function fitBodyToMargin(all: FlowLine[]): FlowLine[] {
+    const isFurniture = (layer?: string): boolean =>
+      layer === 'annotation' || layer === 'label' || layer === 'star';
+    const halfW = width / 2 - margin;
+    const halfH = height / 2 - margin;
+    if (halfW <= 0 || halfH <= 0) return all;
+    let maxDx = 0;
+    let maxDy = 0;
+    for (const ln of all) {
+      if (isFurniture(ln.layer)) continue;
+      for (const p of ln.points) {
+        const ax = Math.abs(p.x - cx);
+        const ay = Math.abs(p.y - cy);
+        if (ax > maxDx) maxDx = ax;
+        if (ay > maxDy) maxDy = ay;
+      }
+    }
+    const scale = Math.min(1, maxDx > 0 ? halfW / maxDx : 1, maxDy > 0 ? halfH / maxDy : 1);
+    if (scale >= 0.999) return all;
+    return all.map((ln) =>
+      isFurniture(ln.layer)
+        ? ln
+        : { ...ln, points: ln.points.map((p) => ({ x: cx + (p.x - cx) * scale, y: cy + (p.y - cy) * scale })) }
+    );
+  }
 }

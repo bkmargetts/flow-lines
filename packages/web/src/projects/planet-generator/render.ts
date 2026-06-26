@@ -92,6 +92,8 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
 
     penWidth: (state.penWidthMm * mm) / zoom,
     wobble: (state.wobbleMm * mm) / zoom,
+    sketch: state.sketch,
+    sketchStyle: state.sketchStyle,
   };
 
   const result = generatePlanet(options);

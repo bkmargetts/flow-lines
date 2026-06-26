@@ -195,6 +195,52 @@ describe('generatePlanet', () => {
     }
   });
 
+  it('keeps a ringed, moon-bearing plate inside the page margin', () => {
+    const r = generatePlanet(baseOptions({
+      planetType: 'ringed', radiusFrac: 0.7, rings: true, ringOuter: 2.6, ringCount: 6,
+      moon: true, moonDist: 2.6, atmosphere: 2,
+    }));
+    const halfW = r.width / 2 - 20; // margin = 20 in baseOptions
+    const halfH = r.height / 2 - 20;
+    for (const ln of r.lines) {
+      if (ln.layer === 'star' || ln.layer === 'annotation' || ln.layer === 'label') continue;
+      for (const p of ln.points) {
+        expect(Math.abs(p.x - center.x)).toBeLessThanOrEqual(halfW + 1);
+        expect(Math.abs(p.y - center.y)).toBeLessThanOrEqual(halfH + 1);
+      }
+    }
+  });
+
+  it('rings each body of a ringed phase strip', () => {
+    const noRing = generatePlanet(baseOptions({ planetType: 'ringed', layout: 'phases', layoutCount: 4, rings: false }));
+    const ringed = generatePlanet(baseOptions({ planetType: 'ringed', layout: 'phases', layoutCount: 4, rings: true }));
+    expect(layer(noRing.lines, 'ring')).toHaveLength(0);
+    // Ring strokes appear across the strip, not just one body.
+    const ringXs = new Set(layer(ringed.lines, 'ring').map((l) => Math.round(l.points[0].x / 40)));
+    expect(layer(ringed.lines, 'ring').length).toBeGreaterThan(0);
+    expect(ringXs.size).toBeGreaterThan(1);
+  });
+
+  it('occludes orbit lines behind the central star (broken into arcs)', () => {
+    const r = generatePlanet(baseOptions({ layout: 'orbital', layoutCount: 5 }));
+    const orbits = layer(r.lines, 'orbit');
+    expect(orbits.length).toBeGreaterThan(0);
+    // With hidden-line removal at least one orbit is cut into a partial arc
+    // (first and last point far apart), not a closed loop.
+    const open = orbits.some((l) => {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return Math.hypot(a.x - b.x, a.y - b.y) > 20;
+    });
+    expect(open).toBe(true);
+  });
+
+  it('multiplies strokes for a sketch overdraw', () => {
+    const plain = generatePlanet(baseOptions({ planetType: 'terrestrial', sketch: 0 }));
+    const sketched = generatePlanet(baseOptions({ planetType: 'terrestrial', sketch: 0.8, sketchStyle: 'scratchy' }));
+    expect(sketched.lines.length).toBeGreaterThan(plain.lines.length);
+  });
+
   it('draws a companion moon beside the planet when enabled', () => {
     const r = generatePlanet(baseOptions({ moon: true, moonAngle: 0, moonDist: 1.9, moonRadiusFrac: 0.3 }));
     // Some limb strokes sit out near the moon centre, far from the primary disk.

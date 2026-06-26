@@ -1,4 +1,4 @@
-import type { PlanetType } from '@flow-lines/core';
+import type { PlanetType, SketchStyle } from '@flow-lines/core';
 
 /**
  * UI state for the Planet Generator (mm / degrees / 0..1 units). `render.ts`
@@ -89,6 +89,8 @@ export interface PlanetState {
   // Pen / finishing
   penWidthMm: number;
   wobbleMm: number;
+  sketch: number; // 0..1 hand-drawn overdraw
+  sketchStyle: SketchStyle;
 
   // Ink
   palette: string;
@@ -172,6 +174,8 @@ export const defaultPlanetState: PlanetState = {
 
   penWidthMm: 0.3,
   wobbleMm: 0.18,
+  sketch: 0,
+  sketchStyle: 'loose',
 
   palette: 'astronomical',
   limbColor: '#2a2a26',

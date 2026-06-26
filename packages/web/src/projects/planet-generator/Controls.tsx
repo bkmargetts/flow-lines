@@ -266,6 +266,18 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         <Slider label="Crater min size" value={state.craterMinR} min={0.01} max={0.1} step={0.005} onChange={(v) => update({ craterMinR: v })} format={(v) => v.toFixed(3)} disabled={!state.craters} />
         <Slider label="Pen width" value={state.penWidthMm} min={0.1} max={1} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
         <Slider label="Wobble" value={state.wobbleMm} min={0} max={0.8} step={0.02} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
+        <Slider label="Sketchiness" value={state.sketch} min={0} max={1} step={0.05} onChange={(v) => update({ sketch: v })} format={(v) => v.toFixed(2)} />
+        {state.sketch > 0 && (
+          <div className="control-group">
+            <label className="label-text">Sketch style</label>
+            <select value={state.sketchStyle} onChange={(e) => update({ sketchStyle: e.target.value as PlanetState['sketchStyle'] })}>
+              <option value="loose">Loose</option>
+              <option value="fine">Fine</option>
+              <option value="gestural">Gestural</option>
+              <option value="scratchy">Scratchy</option>
+            </select>
+          </div>
+        )}
       </details>
     </div>
   );

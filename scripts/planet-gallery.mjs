@@ -54,6 +54,11 @@ const SECTIONS = {
     mountains: ['--type', 'terrestrial', '--sea-level', '0.1', '--ice-caps', '--mountains', '--contrast', '1.6', '--palette', 'astronomical'],
     clouds: ['--type', 'terrestrial', '--sea-level', '0.05', '--ice-caps', '--clouds', '--palette', 'astronomical'],
   },
+  'Hand-drawn': {
+    loose: ['--type', 'terrestrial', '--sea-level', '0.1', '--ice-caps', '--sketch', '0.5', '--sketch-style', 'loose', '--palette', 'astronomical'],
+    gestural: ['--type', 'moon', '--mare-level', '-0.04', '--craters', '--crater-count', '40', '--stipple', '0.4', '--sketch', '0.6', '--sketch-style', 'gestural', '--palette', 'lunar'],
+    scratchy: ['--type', 'terrestrial', '--sea-level', '0.1', '--ice-caps', '--sketch', '0.7', '--sketch-style', 'scratchy', '--palette', 'astronomical'],
+  },
 };
 
 const sections = [];

@@ -1069,6 +1069,8 @@ program
   .option('--palette <p>', 'Multi-pen palette: ink | astronomical | saturn | lunar | mars | cyanotype', 'ink')
   .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1')
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px', '0.6')
+  .option('--sketch <number>', 'Hand-drawn sketch overdraw intensity (0-1)', '0')
+  .option('--sketch-style <s>', 'Sketch character: loose | fine | gestural | scratchy', 'loose')
   .option('--background', 'Include background rectangle')
   .option('--background-color <color>', 'Background color', '#ffffff')
   .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
@@ -1160,6 +1162,8 @@ program
       moonRadiusFrac: parseFloat(options.moonRadiusFrac),
       penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
       wobble: parseFloat(options.wobble),
+      sketch: parseFloat(options.sketch),
+      sketchStyle: options.sketchStyle as PlanetOptions['sketchStyle'],
     };
 
     console.log('Generating planet...');
