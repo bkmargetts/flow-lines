@@ -502,16 +502,18 @@ describe('scene value & light (tonal massing)', () => {
   // canopy's centre of mass across the page.
   it('re-masses the foliage toward the shadow side when the light flips', () => {
     const base = baseOptions({ seed: 7, composition: 'specimen', mode: 'growth', tonalMassing: 0.9, valueBands: 0 });
-    const leafCentroidX = (lines: FlowLine[]): number => {
-      let sum = 0;
+    const leafCentroid = (lines: FlowLine[]): { x: number; y: number } => {
+      let sx = 0;
+      let sy = 0;
       let n = 0;
-      for (const l of layers(lines, 'leaf')) for (const p of l.points) { sum += p.x; n++; }
-      return n ? sum / n : 0;
+      for (const l of layers(lines, 'leaf')) for (const p of l.points) { sx += p.x; sy += p.y; n++; }
+      return n ? { x: sx / n, y: sy / n } : { x: 0, y: 0 };
     };
-    const lit = leafCentroidX(generateVines({ ...base, lightAngle: -135 }).lines); // shadow lower-right
-    const flip = leafCentroidX(generateVines({ ...base, lightAngle: 45 }).lines); // shadow upper-left
-    // The canopy's horizontal centre of mass moves with the light (which way it
-    // moves depends on the gesture, but it must move).
-    expect(Math.abs(lit - flip)).toBeGreaterThan(3);
+    const lit = leafCentroid(generateVines({ ...base, lightAngle: -135 }).lines); // shadow lower-right
+    const flip = leafCentroid(generateVines({ ...base, lightAngle: 45 }).lines); // shadow upper-left
+    // The canopy's centre of mass moves with the light. The flip is diagonal
+    // (lower-right → upper-left), so the shift can land on either axis depending
+    // on the gesture — measure the full 2-D displacement, not just one component.
+    expect(Math.hypot(lit.x - flip.x, lit.y - flip.y)).toBeGreaterThan(3);
   });
 });
