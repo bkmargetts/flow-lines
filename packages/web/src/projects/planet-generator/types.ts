@@ -69,6 +69,8 @@ export interface PlanetState {
   scaleBar: boolean;
   plateTitle: string;
   plateCaption: string;
+  layout: 'single' | 'phases' | 'comparison' | 'orbital';
+  layoutCount: number;
 
   // Scene extras
   starfield: boolean;
@@ -146,6 +148,8 @@ export const defaultPlanetState: PlanetState = {
   scaleBar: false,
   plateTitle: '',
   plateCaption: '',
+  layout: 'single',
+  layoutCount: 5,
 
   // Default composition: a planet sitting in a field of stars.
   starfield: true,

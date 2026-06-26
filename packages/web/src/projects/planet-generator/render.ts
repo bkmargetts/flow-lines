@@ -75,6 +75,8 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     scaleBar: state.scaleBar,
     title: state.plateTitle,
     caption: state.plateCaption,
+    layout: state.layout,
+    layoutCount: state.layoutCount,
 
     starfield: state.starfield,
     starCount: state.starCount,
@@ -114,6 +116,7 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
         graticule: pal.graticule,
         annotation: pal.annotation,
         label: pal.labelInk,
+        orbit: pal.graticule,
       }
     : {
         limb: state.limbColor,
@@ -126,6 +129,7 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
         graticule: state.featureColor,
         annotation: state.featureColor,
         label: state.featureColor,
+        orbit: state.featureColor,
       };
 
   return {

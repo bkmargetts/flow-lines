@@ -97,6 +97,10 @@ export interface PlanetOptions {
   title?: string; // engraved plate title, centred along the top
   caption?: string; // engraved caption, centred along the bottom
 
+  // Composition (multi-body plates)
+  layout?: 'single' | 'phases' | 'comparison' | 'orbital';
+  layoutCount?: number; // bodies in the plate
+
   // Extras
   starfield?: boolean;
   starCount?: number;
@@ -216,6 +220,8 @@ const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'se
   scaleBar: false,
   title: '',
   caption: '',
+  layout: 'single',
+  layoutCount: 5,
   starfield: false,
   starCount: 120,
   moon: false,
@@ -240,6 +246,9 @@ interface BodyParams {
   craters: boolean;
   /** A disk that hides any sample falling inside it (the primary, for the moon). */
   occluder: { cx: number; cy: number; R: number } | null;
+  /** Per-body light direction; falls back to the scene light when absent (only
+   *  phase strips need a different light per body). */
+  light?: Vec3;
 }
 
 export function generatePlanet(options: PlanetOptions): {
@@ -282,6 +291,14 @@ export function generatePlanet(options: PlanetOptions): {
   /** Render one spherical body (planet or moon) into `lines`. */
   function renderBody(b: BodyParams): void {
     const { cx: bx, cy: by, R: br, bodyType, bodySeed } = b;
+    // Per-body light + its form-following hatch frame (defaults to the scene
+    // light; phase strips override it so each disk shows a different phase).
+    const bL = b.light ? norm(b.light) : L;
+    const bA = bL;
+    let bU = cross(bA, { x: 0, y: 0, z: 1 });
+    if (bU.x * bU.x + bU.y * bU.y + bU.z * bU.z < 1e-6) bU = cross(bA, { x: 0, y: 1, z: 0 });
+    bU = norm(bU);
+    const bV = cross(bA, bU);
     const nSurf = createNoise(bodySeed);
     const nBand = createNoise(bodySeed + 101);
     const nStorm = createNoise(bodySeed + 202);
@@ -377,7 +394,7 @@ export function generatePlanet(options: PlanetOptions): {
 
     // Lit-ness → darkness, with optional limb darkening.
     const darknessAt = (N: Vec3): number => {
-      const lam = Math.max(0, dot(N, L));
+      const lam = Math.max(0, dot(N, bL));
       let shade = o.ambient + (1 - o.ambient) * lam;
       if (o.limbDarkening > 0) shade *= 1 - o.limbDarkening * (1 - N.z);
       return 1 - clamp01(shade);
@@ -421,9 +438,9 @@ export function generatePlanet(options: PlanetOptions): {
     // shading bunches toward the terminator. Tone gating (which folds the belt
     // albedo) still tightens the shadow side in both frames.
     const beltHatch = bodyType === 'gas-giant' || bodyType === 'ringed';
-    const HA = beltHatch ? SPIN : A;
-    const HU = beltHatch ? US : U;
-    const HV = beltHatch ? VS : V;
+    const HA = beltHatch ? SPIN : bA;
+    const HU = beltHatch ? US : bU;
+    const HV = beltHatch ? VS : bV;
 
     const sampleAndEmit = (N: Vec3, thr: number, run: Point[]): boolean => {
       // returns whether the point was kept (continues the run)
@@ -607,7 +624,7 @@ export function generatePlanet(options: PlanetOptions): {
       const cr = makeRandom(bodySeed + 808);
       const crot = makeRotation(makeRandom(bodySeed + 909));
       const golden = Math.PI * (3 - Math.sqrt(5));
-      const Ls = norm({ x: L.x, y: L.y, z: 0.0001 });
+      const Ls = norm({ x: bL.x, y: bL.y, z: 0.0001 });
       const antiAng = Math.atan2(-Ls.y, -Ls.x);
       for (let i = 0; i < o.craterCount; i++) {
         const yy = 1 - ((i + 0.5) / o.craterCount) * 2;
@@ -740,6 +757,60 @@ export function generatePlanet(options: PlanetOptions): {
     return pts;
   }
 
+  /** Multi-body plates: a phase strip, a size-comparison row, or an orbital
+   *  diagram. Each body is a normal renderBody at a computed centre/radius. */
+  function composeLayout(): void {
+    const n = Math.max(2, Math.min(12, Math.round(o.layoutCount)));
+    const usableW = width - 2 * margin;
+    const lrng = makeRandom(seed + 9100);
+    const pool: PlanetType[] = ['terrestrial', 'gas-giant', 'ice', 'barren', 'moon', 'lava'];
+
+    if (o.layout === 'phases') {
+      // One body, lit from a sweep of directions: full at the centre, thinning
+      // to crescents at both ends — the classic phase strip.
+      const slotW = usableW / n;
+      const br = Math.min(slotW * 0.42, usableR * 0.5);
+      for (let i = 0; i < n; i++) {
+        const bxp = margin + slotW * (i + 0.5);
+        const f = n === 1 ? 0.5 : i / (n - 1);
+        const theta = -Math.PI * 0.92 + 1.84 * Math.PI * f;
+        const light: Vec3 = { x: Math.sin(theta), y: 0.12, z: Math.cos(theta) };
+        renderBody({ cx: bxp, cy, R: br, bodyType: o.planetType, bodySeed: seed, craters: o.craters, occluder: null, light });
+      }
+    } else if (o.layout === 'comparison') {
+      // A baseline row of different worlds at decreasing radii.
+      const slotW = usableW / n;
+      const baseline = cy + usableR * 0.5;
+      const maxR = Math.min(slotW * 0.46, usableR * 0.52);
+      for (let i = 0; i < n; i++) {
+        const frac = n === 1 ? 1 : 1 - 0.62 * (i / (n - 1));
+        const br = Math.max(usableR * 0.08, maxR * frac);
+        const bxp = margin + slotW * (i + 0.5);
+        const bt = pool[i % pool.length];
+        renderBody({ cx: bxp, cy: baseline - br, R: br, bodyType: bt, bodySeed: seed + i * 131, craters: bt === 'moon' || bt === 'barren', occluder: null });
+      }
+    } else {
+      // Orbital diagram: a central star ringed by concentric foreshortened
+      // orbits, a small world riding each one.
+      const tilt = 20 * DEG;
+      const sT = Math.sin(tilt);
+      const maxOrb = usableR * 0.95;
+      renderBody({ cx, cy, R: Math.max(8, usableR * 0.12), bodyType: 'star', bodySeed: seed, craters: false, occluder: null });
+      for (let k = 0; k < n; k++) {
+        const orbR = (maxOrb * (k + 1.5)) / (n + 0.5);
+        lines.push({ points: ellipse(cx, cy, orbR, orbR * sT, 0, 0, TAU), layer: 'orbit' });
+        // Spread the worlds around the orbits (even base angle + a jitter) so
+        // they don't bunch up on one side.
+        const a = (k / n) * TAU + (lrng() - 0.5) * 0.9;
+        const px = orbR * Math.cos(a);
+        const py = orbR * Math.sin(a) * sT;
+        const bt = pool[k % pool.length];
+        const br = Math.max(usableR * 0.05, usableR * (0.13 - 0.006 * k));
+        renderBody({ cx: cx + px, cy: cy + py, R: br, bodyType: bt, bodySeed: seed + k * 257, craters: bt === 'moon' || bt === 'barren', occluder: null });
+      }
+    }
+  }
+
   // --- Scene background: starfield (behind everything).
   if (o.starfield) {
     const sr = makeRandom(seed + 1001);
@@ -768,7 +839,7 @@ export function generatePlanet(options: PlanetOptions): {
   }
 
   // --- Atmosphere / corona around the limb (behind the body strokes).
-  if (o.atmosphere > 0) {
+  if (o.atmosphere > 0 && o.layout === 'single') {
     if (o.planetType === 'star') {
       // Corona: short radial flares of varying length.
       const sr = makeRandom(seed + 1313);
@@ -795,6 +866,9 @@ export function generatePlanet(options: PlanetOptions): {
     }
   }
 
+  if (o.layout !== 'single') {
+    composeLayout();
+  } else {
   // --- The primary planet.
   renderBody({
     cx,
@@ -890,6 +964,7 @@ export function generatePlanet(options: PlanetOptions): {
       craters: true,
       occluder: { cx, cy, R },
     });
+  }
   }
 
   // --- Graduated neatline just inside the margin: an outer rule, an inner

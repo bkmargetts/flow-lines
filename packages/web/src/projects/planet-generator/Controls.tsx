@@ -100,6 +100,20 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
       <Slider label="Size" value={state.radiusFrac} min={0.3} max={0.95} step={0.01} onChange={(v) => update({ radiusFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Zoom" value={state.zoom} min={0.3} max={3} step={0.05} onChange={(v) => update({ zoom: v })} format={(v) => `${v.toFixed(2)}×`} />
 
+      <h3 className="section-title">Composition</h3>
+      <div className="control-group">
+        <label className="label-text">Layout</label>
+        <select value={state.layout} onChange={(e) => update({ layout: e.target.value as PlanetState['layout'] })}>
+          <option value="single">Single planet</option>
+          <option value="phases">Phase strip</option>
+          <option value="comparison">Size comparison</option>
+          <option value="orbital">Orbital diagram</option>
+        </select>
+      </div>
+      {state.layout !== 'single' && (
+        <Slider label="Bodies" value={state.layoutCount} min={2} max={12} step={1} onChange={(v) => update({ layoutCount: v })} />
+      )}
+
       <h3 className="section-title">Light</h3>
       <Slider label="Direction" value={state.lightAngle} min={-180} max={180} step={1} onChange={(v) => update({ lightAngle: v })} format={(v) => `${v}°`} />
       <Slider label="Elevation" value={state.lightElevation} min={0} max={90} step={1} onChange={(v) => update({ lightElevation: v })} format={(v) => `${v}°`} />
