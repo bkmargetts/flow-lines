@@ -1,0 +1,220 @@
+import type { ReactNode } from 'react';
+import { ColorField } from '../../components/ColorField';
+import { EditableValue } from '../../components/EditableValue';
+import type { ControlsProps } from '../../modules/types';
+import type { PlanetState } from './types';
+import { PLANET_PALETTES, CUSTOM_PALETTE } from './palettes';
+import { PLANET_PRESETS, getPlanetPreset, randomPlanetGenome } from './presets';
+
+/** One labelled range slider + its click-to-type value badge. */
+function Slider(props: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  format?: (v: number) => ReactNode;
+  disabled?: boolean;
+}) {
+  const { label, value, min, max, step, onChange, format, disabled } = props;
+  return (
+    <div className="control-group">
+      <label>
+        {label}{' '}
+        <EditableValue value={value} min={min} max={max} step={step} onChange={onChange} disabled={disabled}>
+          {format ? format(value) : value}
+        </EditableValue>
+      </label>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+      />
+    </div>
+  );
+}
+
+function Toggle(props: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="toggle-row">
+      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
+      {props.label}
+    </label>
+  );
+}
+
+/** Sidebar controls for the Planet Generator module. */
+export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetState>) {
+  const t = state.planetType;
+  const isTerrestrial = t === 'terrestrial' || t === 'ice' || t === 'lava';
+  const isGas = t === 'gas-giant' || t === 'ringed';
+  const isRocky = t === 'moon' || t === 'barren';
+  const isStar = t === 'star';
+
+  const selectType = (id: string) => {
+    const preset = getPlanetPreset(id);
+    update(preset ? preset.state : { planetType: id as PlanetState['planetType'] });
+  };
+  const surprise = () => {
+    update({ ...randomPlanetGenome(Math.random), seed: Math.floor(Math.random() * 1000000) });
+  };
+
+  return (
+    <div className="controls">
+      <h3 className="section-title">Planet</h3>
+
+      <div className="control-group">
+        <div className="seed-input">
+          <select value={t} onChange={(e) => selectType(e.target.value)} style={{ flex: 1 }}>
+            {PLANET_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+          <button type="button" className="secondary" onClick={surprise} title="Surprise me">
+            🎲
+          </button>
+        </div>
+        <p className="paint-hint">Pick a world, then tune anything below.</p>
+      </div>
+
+      <div className="control-group">
+        <div className="seed-input">
+          <label className="label-text" style={{ flex: 1 }}>Seed</label>
+          <input
+            type="number"
+            value={state.seed}
+            onChange={(e) => update({ seed: parseInt(e.target.value, 10) || 0 })}
+            style={{ width: 110 }}
+          />
+          <button type="button" className="secondary" onClick={() => update({ seed: Math.floor(Math.random() * 1000000) })} title="Random seed">
+            🎲
+          </button>
+        </div>
+      </div>
+
+      <Slider label="Size" value={state.radiusFrac} min={0.3} max={0.95} step={0.01} onChange={(v) => update({ radiusFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      <Slider label="Zoom" value={state.zoom} min={0.3} max={3} step={0.05} onChange={(v) => update({ zoom: v })} format={(v) => `${v.toFixed(2)}×`} />
+
+      <h3 className="section-title">Light</h3>
+      <Slider label="Direction" value={state.lightAngle} min={-180} max={180} step={1} onChange={(v) => update({ lightAngle: v })} format={(v) => `${v}°`} />
+      <Slider label="Elevation" value={state.lightElevation} min={0} max={90} step={1} onChange={(v) => update({ lightElevation: v })} format={(v) => `${v}°`} />
+      <Slider label="Ambient" value={state.ambient} min={0} max={1} step={0.02} onChange={(v) => update({ ambient: v })} format={(v) => v.toFixed(2)} />
+      <Slider label="Limb darkening" value={state.limbDarkening} min={0} max={1} step={0.05} onChange={(v) => update({ limbDarkening: v })} format={(v) => v.toFixed(2)} />
+
+      <h3 className="section-title">Surface</h3>
+      {isTerrestrial && t === 'terrestrial' && (
+        <Slider label="Ocean" value={state.ocean} min={0} max={1} step={0.02} onChange={(v) => update({ ocean: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      )}
+      {isRocky && (
+        <Slider label="Dark plains" value={state.mareAmount} min={0} max={1} step={0.02} onChange={(v) => update({ mareAmount: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      )}
+      {!isStar && (
+        <>
+          <Slider label="Terrain scale" value={state.terrainScale} min={0.6} max={3.5} step={0.05} onChange={(v) => update({ terrainScale: v })} format={(v) => v.toFixed(2)} />
+          <Slider label="Contrast" value={state.terrainContrast} min={0.6} max={2.5} step={0.05} onChange={(v) => update({ terrainContrast: v })} format={(v) => v.toFixed(2)} />
+          <Toggle label="Trace coastlines / edges" checked={state.coastlines} onChange={(v) => update({ coastlines: v })} />
+        </>
+      )}
+      {!isStar && (
+        <Toggle label="Ice caps" checked={state.iceCaps} onChange={(v) => update({ iceCaps: v })} />
+      )}
+      {state.iceCaps && !isStar && (
+        <Slider label="Cap latitude" value={state.capLatitude} min={20} max={85} step={1} onChange={(v) => update({ capLatitude: v })} format={(v) => `${v}°`} />
+      )}
+
+      {isGas && (
+        <>
+          <h3 className="section-title">Bands</h3>
+          <Toggle label="Banded zones" checked={state.bands} onChange={(v) => update({ bands: v })} />
+          <Slider label="Band count" value={state.bandCount} min={3} max={20} step={1} onChange={(v) => update({ bandCount: v })} disabled={!state.bands} />
+          <Slider label="Turbulence" value={state.bandTurbulence} min={0} max={1.2} step={0.05} onChange={(v) => update({ bandTurbulence: v })} disabled={!state.bands} format={(v) => v.toFixed(2)} />
+          <Slider label="Storms" value={state.storms} min={0} max={4} step={1} onChange={(v) => update({ storms: v })} />
+        </>
+      )}
+
+      <h3 className="section-title">Hatching</h3>
+      <Slider label="Spacing" value={state.hatchSpacingMm} min={0.8} max={4} step={0.1} onChange={(v) => update({ hatchSpacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      <Slider label="Cross-hatch layers" value={state.crossHatchLayers} min={1} max={5} step={1} onChange={(v) => update({ crossHatchLayers: v })} />
+      <Slider label="Stipple" value={state.stipple} min={0} max={1} step={0.05} onChange={(v) => update({ stipple: v })} format={(v) => v.toFixed(2)} />
+
+      {(isGas || isRocky) && (
+        <>
+          <h3 className="section-title">Rings</h3>
+          <Toggle label="Rings" checked={state.rings} onChange={(v) => update({ rings: v })} />
+          {state.rings && (
+            <>
+              <Slider label="Tilt" value={state.ringTilt} min={2} max={45} step={1} onChange={(v) => update({ ringTilt: v })} format={(v) => `${v}°`} />
+              <Slider label="Yaw" value={state.ringYaw} min={-45} max={45} step={1} onChange={(v) => update({ ringYaw: v })} format={(v) => `${v}°`} />
+              <Slider label="Bands" value={state.ringCount} min={2} max={14} step={1} onChange={(v) => update({ ringCount: v })} />
+              <Slider label="Gap" value={state.ringGap} min={0} max={0.5} step={0.02} onChange={(v) => update({ ringGap: v })} format={(v) => v.toFixed(2)} />
+              <Toggle label="Cast shadow on rings" checked={state.ringShadow} onChange={(v) => update({ ringShadow: v })} />
+            </>
+          )}
+        </>
+      )}
+
+      {isRocky && (
+        <>
+          <h3 className="section-title">Craters</h3>
+          <Toggle label="Craters" checked={state.craters} onChange={(v) => update({ craters: v })} />
+          {state.craters && (
+            <>
+              <Slider label="Count" value={state.craterCount} min={0} max={200} step={5} onChange={(v) => update({ craterCount: v })} />
+              <Slider label="Max size" value={state.craterMaxR} min={0.03} max={0.3} step={0.01} onChange={(v) => update({ craterMaxR: v })} format={(v) => v.toFixed(2)} />
+            </>
+          )}
+        </>
+      )}
+
+      <h3 className="section-title">Scene</h3>
+      <Toggle label="Starfield" checked={state.starfield} onChange={(v) => update({ starfield: v })} />
+      {state.starfield && (
+        <Slider label="Stars" value={state.starCount} min={0} max={400} step={10} onChange={(v) => update({ starCount: v })} />
+      )}
+      <Slider label="Atmosphere / corona" value={state.atmosphere} min={0} max={3} step={1} onChange={(v) => update({ atmosphere: v })} />
+      <Toggle label="Companion moon" checked={state.moon} onChange={(v) => update({ moon: v })} />
+      {state.moon && (
+        <>
+          <Slider label="Moon distance" value={state.moonDist} min={1.3} max={3} step={0.05} onChange={(v) => update({ moonDist: v })} format={(v) => `${v.toFixed(2)}×`} />
+          <Slider label="Moon angle" value={state.moonAngle} min={-180} max={180} step={1} onChange={(v) => update({ moonAngle: v })} format={(v) => `${v}°`} />
+          <Slider label="Moon size" value={state.moonRadiusFrac} min={0.1} max={0.6} step={0.02} onChange={(v) => update({ moonRadiusFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
+        </>
+      )}
+
+      <h3 className="section-title">Ink</h3>
+      <div className="control-group">
+        <label className="label-text">Palette</label>
+        <select value={state.palette} onChange={(e) => update({ palette: e.target.value })}>
+          {PLANET_PALETTES.map((p) => (
+            <option key={p.id} value={p.id}>{p.label}</option>
+          ))}
+          <option value={CUSTOM_PALETTE}>Custom…</option>
+        </select>
+      </div>
+      {state.palette === CUSTOM_PALETTE && (
+        <>
+          <ColorField label="Limb ink" value={state.limbColor} onChange={(v) => update({ limbColor: v })} />
+          <ColorField label="Hatch ink" value={state.hatchColor} onChange={(v) => update({ hatchColor: v })} />
+          <ColorField label="Feature ink" value={state.featureColor} onChange={(v) => update({ featureColor: v })} />
+          <ColorField label="Accent ink (rings / stars)" value={state.accentColor} onChange={(v) => update({ accentColor: v })} />
+        </>
+      )}
+
+      <details className="advanced">
+        <summary>Advanced</summary>
+        <Slider label="Terrain detail (octaves)" value={state.terrainDetail} min={1} max={7} step={1} onChange={(v) => update({ terrainDetail: v })} />
+        <Slider label="Cap raggedness" value={state.capRaggedness} min={0} max={1} step={0.05} onChange={(v) => update({ capRaggedness: v })} format={(v) => v.toFixed(2)} disabled={!state.iceCaps} />
+        <Slider label="Ring inner" value={state.ringInner} min={1.05} max={2} step={0.05} onChange={(v) => update({ ringInner: v })} format={(v) => `${v.toFixed(2)}×`} disabled={!state.rings} />
+        <Slider label="Ring outer" value={state.ringOuter} min={1.4} max={3} step={0.05} onChange={(v) => update({ ringOuter: v })} format={(v) => `${v.toFixed(2)}×`} disabled={!state.rings} />
+        <Slider label="Crater min size" value={state.craterMinR} min={0.01} max={0.1} step={0.005} onChange={(v) => update({ craterMinR: v })} format={(v) => v.toFixed(3)} disabled={!state.craters} />
+        <Slider label="Pen width" value={state.penWidthMm} min={0.1} max={1} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
+        <Slider label="Wobble" value={state.wobbleMm} min={0} max={0.8} step={0.02} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
+      </details>
+    </div>
+  );
+}
