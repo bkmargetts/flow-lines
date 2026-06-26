@@ -194,6 +194,22 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         </>
       )}
 
+      <h3 className="section-title">Plate</h3>
+      <Toggle label="Graticule (lat/long)" checked={state.graticule} onChange={(v) => update({ graticule: v })} />
+      {state.graticule && (
+        <Slider label="Graticule spacing" value={state.graticuleSpacingDeg} min={10} max={45} step={5} onChange={(v) => update({ graticuleSpacingDeg: v })} format={(v) => `${v}°`} />
+      )}
+      <Toggle label="Graduated frame" checked={state.plateFrame} onChange={(v) => update({ plateFrame: v })} />
+      <Toggle label="Scale bar" checked={state.scaleBar} onChange={(v) => update({ scaleBar: v })} />
+      <div className="control-group">
+        <label className="label-text">Title</label>
+        <input type="text" value={state.plateTitle} placeholder="e.g. TERRA INCOGNITA" onChange={(e) => update({ plateTitle: e.target.value })} />
+      </div>
+      <div className="control-group">
+        <label className="label-text">Caption</label>
+        <input type="text" value={state.plateCaption} placeholder="e.g. PLATE I" onChange={(e) => update({ plateCaption: e.target.value })} />
+      </div>
+
       <h3 className="section-title">Ink</h3>
       <div className="control-group">
         <label className="label-text">Palette</label>

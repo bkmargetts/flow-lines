@@ -3,6 +3,7 @@ import { createNoise, SimplexNoise } from './noise.js';
 import { traceIsoContours } from './iso-contours.js';
 import { GrayscaleImage } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
+import { textToStrokes, textWidth } from './stroke-font.js';
 
 /**
  * Procedural planets drawn as plottable pen-and-ink: a sphere shaded by
@@ -87,6 +88,14 @@ export interface PlanetOptions {
   craterCount?: number;
   craterMinR?: number; // fraction of disk radius
   craterMaxR?: number;
+
+  // Engraved-plate annotation
+  graticule?: boolean; // lat/long lines on the globe
+  graticuleSpacingDeg?: number; // degrees between lines
+  plateFrame?: boolean; // graduated neatline just inside the margin
+  scaleBar?: boolean; // divided scale bar along the bottom
+  title?: string; // engraved plate title, centred along the top
+  caption?: string; // engraved caption, centred along the bottom
 
   // Extras
   starfield?: boolean;
@@ -201,6 +210,12 @@ const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'se
   craterCount: 80,
   craterMinR: 0.02,
   craterMaxR: 0.14,
+  graticule: false,
+  graticuleSpacingDeg: 30,
+  plateFrame: false,
+  scaleBar: false,
+  title: '',
+  caption: '',
   starfield: false,
   starCount: 120,
   moon: false,
@@ -619,6 +634,61 @@ export function generatePlanet(options: PlanetOptions): {
       }
     }
 
+    // --- Graticule: latitude/longitude lines on the globe, front hemisphere
+    // only, stopping a sliver short of the limb. Built in the spin-axis frame
+    // (US/VS), the same great-circle math as the hatch but ungated by tone.
+    if (o.graticule) {
+      const gstep = Math.max(5, o.graticuleSpacingDeg) * DEG;
+      const res = Math.max(2, o.hatchSpacing * 0.8);
+      const emit = (N: Vec3, run: Point[]): boolean => {
+        if (N.z <= 0.03) return false; // hold off the limb
+        const sx = bx + br * N.x;
+        const sy = by + br * N.y;
+        if (occluded(sx, sy)) return false;
+        run.push({ x: sx, y: sy });
+        return true;
+      };
+      // Parallels (constant latitude).
+      for (let lat = -Math.PI / 2 + gstep; lat < Math.PI / 2 - 1e-3; lat += gstep) {
+        const sLat = Math.sin(lat);
+        const cLat = Math.cos(lat);
+        const ns = Math.max(48, Math.ceil((TAU * br * cLat) / res));
+        let run: Point[] = [];
+        for (let s = 0; s <= ns; s++) {
+          const lon = (s / ns) * TAU;
+          const cl = Math.cos(lon);
+          const sl = Math.sin(lon);
+          const N: Vec3 = {
+            x: SPIN.x * sLat + (US.x * cl + VS.x * sl) * cLat,
+            y: SPIN.y * sLat + (US.y * cl + VS.y * sl) * cLat,
+            z: SPIN.z * sLat + (US.z * cl + VS.z * sl) * cLat,
+          };
+          if (!emit(N, run)) { pushRun(lines, run, 'graticule'); run = []; }
+        }
+        pushRun(lines, run, 'graticule');
+      }
+      // Meridians (constant longitude), pole to pole.
+      const nt = Math.max(48, Math.ceil((Math.PI * br) / res));
+      for (let lon = 0; lon < TAU - 1e-3; lon += gstep) {
+        const cl = Math.cos(lon);
+        const sl = Math.sin(lon);
+        const dU = { x: US.x * cl + VS.x * sl, y: US.y * cl + VS.y * sl, z: US.z * cl + VS.z * sl };
+        let run: Point[] = [];
+        for (let s = 0; s <= nt; s++) {
+          const t = (s / nt) * Math.PI;
+          const cT = Math.cos(t);
+          const sT = Math.sin(t);
+          const N: Vec3 = {
+            x: SPIN.x * cT + dU.x * sT,
+            y: SPIN.y * cT + dU.y * sT,
+            z: SPIN.z * cT + dU.z * sT,
+          };
+          if (!emit(N, run)) { pushRun(lines, run, 'graticule'); run = []; }
+        }
+        pushRun(lines, run, 'graticule');
+      }
+    }
+
     // --- Limb: a bold silhouette built from concentric single-pen passes.
     const limbPasses = Math.max(2, Math.round(o.penWidth > 0 ? 3 : 2));
     for (let k = 0; k < limbPasses; k++) {
@@ -820,6 +890,64 @@ export function generatePlanet(options: PlanetOptions): {
       craters: true,
       occluder: { cx, cy, R },
     });
+  }
+
+  // --- Graduated neatline just inside the margin: an outer rule, an inner
+  // rule, and graduation ticks between them — the frame of an engraved plate.
+  if (o.plateFrame) {
+    const x0 = margin;
+    const y0 = margin;
+    const x1 = width - margin;
+    const y1 = height - margin;
+    const inset = Math.max(3, margin * 0.18);
+    const rect = (a: number, b: number, c: number, d: number): void => {
+      lines.push({ points: [{ x: a, y: b }, { x: c, y: b }, { x: c, y: d }, { x: a, y: d }, { x: a, y: b }], layer: 'annotation' });
+    };
+    rect(x0, y0, x1, y1);
+    rect(x0 + inset, y0 + inset, x1 - inset, y1 - inset);
+    const divX = Math.max(8, Math.round((x1 - x0) / Math.max(20, (x1 - x0) / 24)));
+    for (let i = 0; i <= divX; i++) {
+      const fx = x0 + ((x1 - x0) * i) / divX;
+      lines.push({ points: [{ x: fx, y: y0 }, { x: fx, y: y0 + inset }], layer: 'annotation' });
+      lines.push({ points: [{ x: fx, y: y1 }, { x: fx, y: y1 - inset }], layer: 'annotation' });
+    }
+    const divY = Math.max(6, Math.round((divX * (y1 - y0)) / (x1 - x0)));
+    for (let i = 0; i <= divY; i++) {
+      const fy = y0 + ((y1 - y0) * i) / divY;
+      lines.push({ points: [{ x: x0, y: fy }, { x: x0 + inset, y: fy }], layer: 'annotation' });
+      lines.push({ points: [{ x: x1, y: fy }, { x: x1 - inset, y: fy }], layer: 'annotation' });
+    }
+  }
+
+  // --- Scale bar: a divided rule near the bottom of the plate.
+  if (o.scaleBar) {
+    const usableW = width - 2 * margin;
+    const len = usableW * 0.28;
+    const bx0 = cx - len / 2;
+    const by0 = height - margin - Math.max(16, margin * 0.6);
+    const h = Math.max(5, usableW * 0.012);
+    const segs = 5;
+    lines.push({ points: [{ x: bx0, y: by0 }, { x: bx0 + len, y: by0 }], layer: 'annotation' });
+    lines.push({ points: [{ x: bx0, y: by0 - h }, { x: bx0 + len, y: by0 - h }], layer: 'annotation' });
+    for (let i = 0; i <= segs; i++) {
+      const sx = bx0 + (len * i) / segs;
+      lines.push({ points: [{ x: sx, y: by0 - h }, { x: sx, y: by0 }], layer: 'annotation' });
+    }
+  }
+
+  // --- Engraved title / caption (single-stroke, plottable).
+  const usableW = width - 2 * margin;
+  if (o.title) {
+    const size = Math.max(11, usableW * 0.05);
+    const tx = cx - textWidth(o.title, size) / 2;
+    const ty = margin + (o.plateFrame ? margin * 0.5 : size * 0.4);
+    for (const stroke of textToStrokes(o.title, tx, ty, size)) lines.push({ points: stroke, layer: 'label' });
+  }
+  if (o.caption) {
+    const size = Math.max(9, usableW * 0.032);
+    const cxs = cx - textWidth(o.caption, size) / 2;
+    const cyy = height - margin - size - (o.scaleBar ? Math.max(16, margin * 0.6) + size * 1.4 : o.plateFrame ? margin * 0.5 : 0);
+    for (const stroke of textToStrokes(o.caption, cxs, cyy, size)) lines.push({ points: stroke, layer: 'label' });
   }
 
   // --- Hand-drawn finishing wobble over the whole plate.

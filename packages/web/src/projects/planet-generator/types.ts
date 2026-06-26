@@ -62,6 +62,14 @@ export interface PlanetState {
   craterMinR: number; // fraction of disk radius
   craterMaxR: number;
 
+  // Engraved-plate annotation
+  graticule: boolean;
+  graticuleSpacingDeg: number;
+  plateFrame: boolean;
+  scaleBar: boolean;
+  plateTitle: string;
+  plateCaption: string;
+
   // Scene extras
   starfield: boolean;
   starCount: number;
@@ -131,6 +139,13 @@ export const defaultPlanetState: PlanetState = {
   craterCount: 80,
   craterMinR: 0.02,
   craterMaxR: 0.14,
+
+  graticule: false,
+  graticuleSpacingDeg: 30,
+  plateFrame: false,
+  scaleBar: false,
+  plateTitle: '',
+  plateCaption: '',
 
   // Default composition: a planet sitting in a field of stars.
   starfield: true,
