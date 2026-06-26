@@ -61,6 +61,12 @@ export interface PlanetState {
   craterCount: number;
   craterMinR: number; // fraction of disk radius
   craterMaxR: number;
+  craterDetail: boolean;
+
+  // Surface relief
+  terminatorEmphasis: number; // 0..1
+  mountains: boolean;
+  clouds: boolean;
 
   // Engraved-plate annotation
   graticule: boolean;
@@ -141,6 +147,11 @@ export const defaultPlanetState: PlanetState = {
   craterCount: 80,
   craterMinR: 0.02,
   craterMaxR: 0.14,
+  craterDetail: false,
+
+  terminatorEmphasis: 0,
+  mountains: false,
+  clouds: false,
 
   graticule: false,
   graticuleSpacingDeg: 30,

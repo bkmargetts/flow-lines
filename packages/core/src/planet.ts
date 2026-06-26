@@ -88,6 +88,12 @@ export interface PlanetOptions {
   craterCount?: number;
   craterMinR?: number; // fraction of disk radius
   craterMaxR?: number;
+  craterDetail?: boolean; // central peaks + ejecta rays on big craters
+
+  // Surface relief
+  terminatorEmphasis?: number; // 0..1 extra hatch hugging the terminator
+  mountains?: boolean; // chevron hachures on high terrestrial land
+  clouds?: boolean; // soft cloud shapes traced over terrestrial worlds
 
   // Engraved-plate annotation
   graticule?: boolean; // lat/long lines on the globe
@@ -214,6 +220,10 @@ const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'se
   craterCount: 80,
   craterMinR: 0.02,
   craterMaxR: 0.14,
+  craterDetail: false,
+  terminatorEmphasis: 0,
+  mountains: false,
+  clouds: false,
   graticule: false,
   graticuleSpacingDeg: 30,
   plateFrame: false,
@@ -510,8 +520,34 @@ export function generatePlanet(options: PlanetOptions): {
       }
     }
 
+    // --- Terminator emphasis: extra rings hugging the day/night boundary (the
+    // great circle at colatitude π/2 around the light axis), for the classic
+    // engraved ramp from light into shadow.
+    if (o.terminatorEmphasis > 0 && bodyType !== 'star') {
+      const eband = 0.5;
+      const estep = Math.max(0.012, dt * (1 - 0.55 * o.terminatorEmphasis));
+      for (let t0 = Math.PI / 2 - eband; t0 <= Math.PI / 2 + eband + 1e-9; t0 += estep) {
+        const sinT = Math.sin(t0);
+        const cosT = Math.cos(t0);
+        const ns = Math.max(16, Math.ceil((TAU * br * Math.abs(sinT)) / o.hatchSpacing));
+        let run: Point[] = [];
+        for (let s = 0; s <= ns; s++) {
+          const ss = (s / ns) * TAU;
+          const dir = Math.cos(ss);
+          const dir2 = Math.sin(ss);
+          const N: Vec3 = {
+            x: bA.x * cosT + (bU.x * dir + bV.x * dir2) * sinT,
+            y: bA.y * cosT + (bU.y * dir + bV.y * dir2) * sinT,
+            z: bA.z * cosT + (bU.z * dir + bV.z * dir2) * sinT,
+          };
+          if (!sampleAndEmit(N, 0.12, run)) { pushRun(lines, run, 'hatch'); run = []; }
+        }
+        pushRun(lines, run, 'hatch');
+      }
+    }
+
     // --- Traced feature contours from a screen-space raster of the field.
-    const traceField = (fieldFn: (N: Vec3) => number, iso: number, pen?: 'fine' | 'bold'): void => {
+    const traceField = (fieldFn: (N: Vec3) => number, iso: number, pen?: 'fine' | 'bold', layer = 'feature'): void => {
       const grid = Math.max(48, Math.min(220, Math.round(br * 1.5)));
       const data = new Float32Array(grid * grid);
       const step = (2 * br) / (grid - 1);
@@ -542,13 +578,13 @@ export function generatePlanet(options: PlanetOptions): {
           const dx = sx - bx;
           const dy = sy - by;
           if (dx * dx + dy * dy > lim2 || occluded(sx, sy)) {
-            pushRun(lines, run, 'feature', pen);
+            pushRun(lines, run, layer, pen);
             run = [];
             continue;
           }
           run.push({ x: sx, y: sy });
         }
-        pushRun(lines, run, 'feature', pen);
+        pushRun(lines, run, layer, pen);
       }
     };
 
@@ -565,6 +601,16 @@ export function generatePlanet(options: PlanetOptions): {
         const ragged = o.capRaggedness * 0.4 * nCap.fbm3D(r.x * 2.4, r.y * 2.4, r.z * 2.4, 2, 0.5, 2, 1);
         return Math.abs(f.lat) - (capLatRad - ragged);
       }, 0);
+    }
+
+    // --- Clouds: soft blobs from a low-frequency field, traced as light
+    // outlines over terrestrial worlds (the edge detector misses them).
+    if (o.clouds && bodyType === 'terrestrial') {
+      const nCloud = createNoise(bodySeed + 606);
+      traceField((N) => {
+        const r = rot(N);
+        return nCloud.fbm3D(r.x * scale * 0.7, r.y * scale * 0.7, r.z * scale * 0.7, 3, 0.55, 2, 1);
+      }, 0.32, undefined, 'cloud');
     }
 
     // --- Storms (gas giants): an oval cell with a couple of internal swirl
@@ -647,6 +693,55 @@ export function generatePlanet(options: PlanetOptions): {
         const a1 = antiAng - orient + 1.9;
         for (const k of [0.78, 0.56, 0.36]) {
           pushRun(lines, ellipse(ccx, ccy, major * k, minor * k, orient, a0, a1), 'feature');
+        }
+        // Central peak + ejecta rays on the bigger, fresher craters.
+        if (o.craterDetail && sz > br * 0.06) {
+          lines.push({ points: dot4(ccx, ccy, Math.max(o.penWidth * 0.6, sz * 0.12)), layer: 'feature' });
+          if (sz > br * 0.09) {
+            const rays = 6 + Math.floor(cr() * 4);
+            for (let rI = 0; rI < rays; rI++) {
+              const ra = (rI / rays) * TAU + cr() * 0.4;
+              const r0 = sz * 1.05;
+              const r1 = r0 + sz * (0.4 + cr() * 0.5);
+              lines.push({ points: [
+                { x: ccx + Math.cos(ra) * r0, y: ccy + Math.sin(ra) * r0 * Math.max(0.3, d.z) },
+                { x: ccx + Math.cos(ra) * r1, y: ccy + Math.sin(ra) * r1 * Math.max(0.3, d.z) },
+              ], layer: 'feature' });
+            }
+          }
+        }
+      }
+    }
+
+    // --- Mountain hachures: short chevrons on the highest terrestrial land,
+    // apex toward the light, so ranges read as relief.
+    if (o.mountains && bodyType === 'terrestrial') {
+      const mr = makeRandom(bodySeed + 1212);
+      const cell = Math.max(4, o.hatchSpacing * 1.5);
+      const ld = Math.hypot(bL.x, bL.y) || 1;
+      const ux = bL.x / ld;
+      const uy = bL.y / ld; // up-light screen direction
+      const px = -uy;
+      const py = ux; // perpendicular
+      const sz = cell * 0.5;
+      for (let yy = by - br; yy <= by + br; yy += cell) {
+        for (let xx = bx - br; xx <= bx + br; xx += cell) {
+          const jx = xx + (mr() - 0.5) * cell;
+          const jy = yy + (mr() - 0.5) * cell;
+          const dx = jx - bx;
+          const dy = jy - by;
+          const r2 = dx * dx + dy * dy;
+          if (r2 > br * br * 0.97) continue;
+          if (occluded(jx, jy)) continue;
+          const z = Math.sqrt(br * br - r2);
+          const N: Vec3 = { x: dx / br, y: dy / br, z: z / br };
+          const f = surface(N);
+          if (f.n < o.seaLevel + 0.28) continue; // peaks only
+          if (mr() > 0.55) continue; // sparse
+          const apex = { x: jx + ux * sz * 0.7, y: jy + uy * sz * 0.7 };
+          const baseL = { x: jx + px * sz * 0.7 - ux * sz * 0.3, y: jy + py * sz * 0.7 - uy * sz * 0.3 };
+          const baseR = { x: jx - px * sz * 0.7 - ux * sz * 0.3, y: jy - py * sz * 0.7 - uy * sz * 0.3 };
+          lines.push({ points: [baseL, apex, baseR], layer: 'relief' });
         }
       }
     }

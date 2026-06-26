@@ -68,6 +68,11 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     craterCount: state.craterCount,
     craterMinR: state.craterMinR,
     craterMaxR: state.craterMaxR,
+    craterDetail: state.craterDetail,
+
+    terminatorEmphasis: state.terminatorEmphasis,
+    mountains: state.mountains,
+    clouds: state.clouds,
 
     graticule: state.graticule,
     graticuleSpacingDeg: state.graticuleSpacingDeg,
@@ -117,6 +122,8 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
         annotation: pal.annotation,
         label: pal.labelInk,
         orbit: pal.graticule,
+        relief: pal.feature,
+        cloud: pal.graticule,
       }
     : {
         limb: state.limbColor,
@@ -130,6 +137,8 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
         annotation: state.featureColor,
         label: state.featureColor,
         orbit: state.featureColor,
+        relief: state.featureColor,
+        cloud: state.featureColor,
       };
 
   return {

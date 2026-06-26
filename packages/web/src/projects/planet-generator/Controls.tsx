@@ -188,6 +188,20 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
             <>
               <Slider label="Count" value={state.craterCount} min={0} max={200} step={5} onChange={(v) => update({ craterCount: v })} />
               <Slider label="Max size" value={state.craterMaxR} min={0.03} max={0.3} step={0.01} onChange={(v) => update({ craterMaxR: v })} format={(v) => v.toFixed(2)} />
+              <Toggle label="Central peaks + ejecta rays" checked={state.craterDetail} onChange={(v) => update({ craterDetail: v })} />
+            </>
+          )}
+        </>
+      )}
+
+      {!isStar && (
+        <>
+          <h3 className="section-title">Relief</h3>
+          <Slider label="Terminator emphasis" value={state.terminatorEmphasis} min={0} max={1} step={0.05} onChange={(v) => update({ terminatorEmphasis: v })} format={(v) => v.toFixed(2)} />
+          {t === 'terrestrial' && (
+            <>
+              <Toggle label="Mountain hachures" checked={state.mountains} onChange={(v) => update({ mountains: v })} />
+              <Toggle label="Clouds" checked={state.clouds} onChange={(v) => update({ clouds: v })} />
             </>
           )}
         </>

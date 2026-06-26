@@ -52,7 +52,7 @@ export const PLANET_PRESETS: PlanetPreset[] = [
     label: 'Cratered moon',
     state: {
       planetType: 'moon',
-      mareAmount: 0.45, craters: true, craterCount: 90, stipple: 0.6,
+      mareAmount: 0.45, craters: true, craterCount: 90, craterDetail: true, stipple: 0.6,
       atmosphere: 0, lightElevation: 18, crossHatchLayers: 3,
       bands: false, rings: false, iceCaps: false, coastlines: true,
       palette: 'lunar',
@@ -97,7 +97,7 @@ export const PLANET_PRESETS: PlanetPreset[] = [
     label: 'Barren rocky',
     state: {
       planetType: 'barren',
-      mareAmount: 0.3, craters: true, craterCount: 50, craterMaxR: 0.1,
+      mareAmount: 0.3, craters: true, craterCount: 50, craterMaxR: 0.1, craterDetail: true,
       stipple: 0.3, atmosphere: 0, crossHatchLayers: 4, terrainContrast: 1.2,
       bands: false, rings: false, iceCaps: false,
       palette: 'lunar',
