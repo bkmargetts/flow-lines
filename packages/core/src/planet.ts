@@ -48,12 +48,15 @@ export interface PlanetOptions {
   seaLevel?: number; // terrestrial land/sea threshold on noise (-1..1)
   mareLevel?: number; // moon dark-plain threshold
   coastlines?: boolean; // trace feature outlines
+  lavaFissureWidth?: number; // |noise| band kept as open glowing cracks
+  lavaGlow?: number; // 0..1 ember-stipple density along the fissures
 
   // Gas giant
   bands?: boolean;
   bandCount?: number;
   bandTurbulence?: number;
   storms?: number; // count of oval spots (Great Red Spot)
+  stormSize?: number; // 0..n scale on the storm ovals
 
   // Ice caps
   iceCaps?: boolean;
@@ -76,6 +79,7 @@ export interface PlanetOptions {
   ringYaw?: number; // degrees
   ringGap?: number; // 0..1 fraction of the span left as a Cassini gap
   ringCount?: number; // concentric stroke bands
+  ringDensity?: number; // strokes per band (tone by spacing)
   ringShadow?: boolean; // cut the planet's shadow into the rings
 
   // Craters
@@ -168,10 +172,13 @@ const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'se
   seaLevel: 0,
   mareLevel: -0.12,
   coastlines: true,
+  lavaFissureWidth: 0.12,
+  lavaGlow: 0.4,
   bands: false,
   bandCount: 9,
   bandTurbulence: 0.5,
   storms: 0,
+  stormSize: 1,
   iceCaps: false,
   capLatitude: 68,
   capRaggedness: 0.5,
@@ -188,6 +195,7 @@ const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'se
   ringYaw: 12,
   ringGap: 0.14,
   ringCount: 6,
+  ringDensity: 3,
   ringShadow: true,
   craters: false,
   craterCount: 80,
@@ -246,6 +254,13 @@ export function generatePlanet(options: PlanetOptions): {
   if (U.x * U.x + U.y * U.y + U.z * U.z < 1e-6) U = cross(A, { x: 0, y: 1, z: 0 });
   U = norm(U);
   const V = cross(A, U);
+
+  // A second frame around the planet's spin axis (vertical in screen space), so
+  // gas-giant hatch and the graticule run along latitude/longitude, not the
+  // light axis. "Ring" passes in this frame are parallels (the belts).
+  const SPIN: Vec3 = { x: 0, y: 1, z: 0 };
+  const US = norm(cross(SPIN, { x: 0, y: 0, z: 1 }));
+  const VS = cross(SPIN, US);
 
   const lines: FlowLine[] = [];
 
@@ -327,15 +342,17 @@ export function generatePlanet(options: PlanetOptions): {
           return f.n < o.mareLevel ? 0.42 : 0.16;
         case 'gas-giant':
         case 'ringed': {
-          const dark = 0.5 - 0.5 * f.band; // dark zones where band is negative
-          return Math.max(0.15 + 0.32 * dark, stormDark(N));
+          // Sharpen the sinusoid toward a square wave so belts (dark) and zones
+          // (clean paper) read as committed bands, not a soft gradient.
+          const dark = 0.5 - 0.5 * Math.tanh(f.band * 2.2);
+          return Math.max(0.06 + 0.5 * dark, stormDark(N));
         }
         case 'ice':
           return 0.06 + (f.n < 0 ? 0.12 : 0);
-        case 'lava': {
-          const ridge = 1 - Math.abs(f.n); // ridged crust network
-          return ridge > 0.62 ? 0.52 : 0.04; // dark crust vs unhatched glow
-        }
+        case 'lava':
+          // Dark hatched crust everywhere except thin glowing fissures (|n|≈0),
+          // which stay as clean paper — the molten cracks.
+          return Math.abs(f.n) < o.lavaFissureWidth ? 0 : 0.52;
         case 'star':
           return 0;
         default:
@@ -364,8 +381,7 @@ export function generatePlanet(options: PlanetOptions): {
       const f = surface(N);
       if (isCap(N, f.lat)) return false;
       if (bodyType === 'lava') {
-        const ridge = 1 - Math.abs(f.n);
-        if (ridge <= 0.62) return false; // glow cells stay open
+        if (Math.abs(f.n) < o.lavaFissureWidth) return false; // glowing crack stays open
       }
       return true;
     };
@@ -384,6 +400,15 @@ export function generatePlanet(options: PlanetOptions): {
     ];
     const layerCount = Math.max(1, Math.min(PASSES.length, Math.round(o.crossHatchLayers)));
     const dt = Math.max(0.01, o.hatchSpacing / br); // angular step ≈ hatchSpacing px
+
+    // Gas giants hatch around the spin axis so "ring" passes lay down as
+    // horizontal belts; everything else hatches around the light axis so the
+    // shading bunches toward the terminator. Tone gating (which folds the belt
+    // albedo) still tightens the shadow side in both frames.
+    const beltHatch = bodyType === 'gas-giant' || bodyType === 'ringed';
+    const HA = beltHatch ? SPIN : A;
+    const HU = beltHatch ? US : U;
+    const HV = beltHatch ? VS : V;
 
     const sampleAndEmit = (N: Vec3, thr: number, run: Point[]): boolean => {
       // returns whether the point was kept (continues the run)
@@ -413,9 +438,9 @@ export function generatePlanet(options: PlanetOptions): {
             const dir = Math.cos(ss);
             const dir2 = Math.sin(ss);
             const N: Vec3 = {
-              x: A.x * cosT + (U.x * dir + V.x * dir2) * sinT,
-              y: A.y * cosT + (U.y * dir + V.y * dir2) * sinT,
-              z: A.z * cosT + (U.z * dir + V.z * dir2) * sinT,
+              x: HA.x * cosT + (HU.x * dir + HV.x * dir2) * sinT,
+              y: HA.y * cosT + (HU.y * dir + HV.y * dir2) * sinT,
+              z: HA.z * cosT + (HU.z * dir + HV.z * dir2) * sinT,
             };
             if (!sampleAndEmit(N, pass.thr, run)) {
               pushRun(lines, run, 'hatch');
@@ -431,7 +456,7 @@ export function generatePlanet(options: PlanetOptions): {
           const phi = (m + pass.phase) * dPhi;
           const cphi = Math.cos(phi);
           const sphi = Math.sin(phi);
-          const dirU = { x: U.x * cphi + V.x * sphi, y: U.y * cphi + V.y * sphi, z: U.z * cphi + V.z * sphi };
+          const dirU = { x: HU.x * cphi + HV.x * sphi, y: HU.y * cphi + HV.y * sphi, z: HU.z * cphi + HV.z * sphi };
           const nt = Math.max(24, Math.ceil(Math.PI / dt));
           let run: Point[] = [];
           for (let s = 0; s <= nt; s++) {
@@ -439,9 +464,9 @@ export function generatePlanet(options: PlanetOptions): {
             const sinT = Math.sin(t);
             const cosT = Math.cos(t);
             const N: Vec3 = {
-              x: A.x * cosT + dirU.x * sinT,
-              y: A.y * cosT + dirU.y * sinT,
-              z: A.z * cosT + dirU.z * sinT,
+              x: HA.x * cosT + dirU.x * sinT,
+              y: HA.y * cosT + dirU.y * sinT,
+              z: HA.z * cosT + dirU.z * sinT,
             };
             if (!sampleAndEmit(N, pass.thr, run)) {
               pushRun(lines, run, 'hatch');
@@ -499,7 +524,7 @@ export function generatePlanet(options: PlanetOptions): {
       if (bodyType === 'terrestrial') traceField((N) => surface(N).n, o.seaLevel);
       else if (bodyType === 'moon' || bodyType === 'barren') traceField((N) => surface(N).n, o.mareLevel);
       else if (bodyType === 'gas-giant' || bodyType === 'ringed') traceField((N) => surface(N).band, 0);
-      else if (bodyType === 'lava') traceField((N) => 1 - Math.abs(surface(N).n), 0.62);
+      else if (bodyType === 'lava') traceField((N) => Math.abs(surface(N).n), o.lavaFissureWidth);
     }
     if (o.iceCaps) {
       traceField((N) => {
@@ -508,6 +533,24 @@ export function generatePlanet(options: PlanetOptions): {
         const ragged = o.capRaggedness * 0.4 * nCap.fbm3D(r.x * 2.4, r.y * 2.4, r.z * 2.4, 2, 0.5, 2, 1);
         return Math.abs(f.lat) - (capLatRad - ragged);
       }, 0);
+    }
+
+    // --- Storms (gas giants): an oval cell with a couple of internal swirl
+    // rings — a drawn Great Red Spot, not just a darker patch.
+    for (const s of storms) {
+      if (s.dir.z <= 0.12) continue; // front-facing only
+      const scx = bx + br * s.dir.x;
+      const scy = by + br * s.dir.y;
+      if (occluded(scx, scy)) continue;
+      const span = br * Math.sin(s.rad) * o.stormSize;
+      if (span < 3) continue;
+      const orient = Math.atan2(s.dir.y, s.dir.x) + Math.PI / 2; // tangent to the limb
+      const major = span * 1.25;
+      const minor = span * 0.8 * Math.max(0.4, s.dir.z);
+      pushRun(lines, ellipse(scx, scy, major, minor, orient, 0, TAU), 'feature', span > br * 0.12 ? 'bold' : undefined);
+      for (const k of [0.66, 0.4]) {
+        pushRun(lines, ellipse(scx, scy, major * k, minor * k, orient, 0, TAU), 'feature');
+      }
     }
 
     // --- Stipple (shadow / texture dots), gated by tone.
@@ -525,8 +568,18 @@ export function generatePlanet(options: PlanetOptions): {
           if (occluded(jx, jy)) continue;
           const z = Math.sqrt(br * br - r2);
           const N: Vec3 = { x: dx / br, y: dy / br, z: z / br };
-          const tone = bodyType === 'star' ? clamp01(0.35 + 0.5 * (1 - N.z)) : toneAt(N);
-          if (sr() < tone * o.stipple) {
+          let prob: number;
+          if (bodyType === 'star') {
+            prob = clamp01(0.35 + 0.5 * (1 - N.z)) * o.stipple;
+          } else if (bodyType === 'lava') {
+            // Embers cluster along the glowing fissures; the crust gets only a
+            // light scatter so it reads as texture, not noise.
+            const onFissure = Math.abs(surface(N).n) < o.lavaFissureWidth * 1.6;
+            prob = onFissure ? o.lavaGlow : toneAt(N) * o.stipple * 0.3;
+          } else {
+            prob = toneAt(N) * o.stipple;
+          }
+          if (sr() < prob) {
             const rr = o.penWidth * 0.55;
             lines.push({ points: dot4(jx, jy, rr), layer: 'stipple' });
           }
@@ -700,9 +753,9 @@ export function generatePlanet(options: PlanetOptions): {
     const gapStart = inner + span * (0.5 - o.ringGap / 2);
     const gapEnd = inner + span * (0.5 + o.ringGap / 2);
     const N = 540;
-    for (let bandi = 0; bandi < o.ringCount; bandi++) {
-      const rr = inner + (span * (bandi + 0.5)) / o.ringCount;
-      if (o.ringGap > 0 && rr >= gapStart && rr <= gapEnd) continue; // Cassini gap
+    // Trace one concentric ring stroke at radius rr, occluded behind the sphere
+    // and cut by the planet's shadow.
+    const traceRing = (rr: number): void => {
       let run: Point[] = [];
       for (let i = 0; i <= N; i++) {
         const th = (i / N) * TAU;
@@ -736,6 +789,20 @@ export function generatePlanet(options: PlanetOptions): {
         run.push({ x: sx, y: sy });
       }
       pushRun(lines, run, 'ring');
+    };
+    // Each band is several closely-spaced strokes so its tone comes from
+    // spacing (real ring systems are densest just inside the Cassini gap).
+    const sub = Math.max(1, Math.round(o.ringDensity));
+    const subSpacing = Math.max(1.2, o.penWidth * 1.6);
+    for (let bandi = 0; bandi < o.ringCount; bandi++) {
+      const rrC = inner + (span * (bandi + 0.5)) / o.ringCount;
+      if (o.ringGap > 0 && rrC >= gapStart && rrC <= gapEnd) continue; // Cassini gap
+      // Denser toward the inner edge, thinning outward — the classic B→A falloff.
+      const subN = Math.max(1, Math.round(sub * (1.35 - 0.6 * (bandi / o.ringCount))));
+      for (let k = 0; k < subN; k++) {
+        const rr = rrC + (k - (subN - 1) / 2) * subSpacing;
+        traceRing(rr);
+      }
     }
   }
 

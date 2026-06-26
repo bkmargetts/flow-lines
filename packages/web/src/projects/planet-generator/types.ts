@@ -24,12 +24,15 @@ export interface PlanetState {
   ocean: number; // 0..1 terrestrial sea fraction
   mareAmount: number; // 0..1 lunar dark-plain amount
   coastlines: boolean;
+  lavaFissureWidth: number; // 0..1 width of the glowing cracks
+  lavaGlow: number; // 0..1 ember-stipple density on the fissures
 
   // Gas giant
   bands: boolean;
   bandCount: number;
   bandTurbulence: number;
   storms: number;
+  stormSize: number; // scale on the storm ovals
 
   // Ice caps
   iceCaps: boolean;
@@ -50,6 +53,7 @@ export interface PlanetState {
   ringYaw: number; // degrees
   ringGap: number; // 0..1
   ringCount: number;
+  ringDensity: number; // strokes per band
   ringShadow: boolean;
 
   // Craters
@@ -95,11 +99,14 @@ export const defaultPlanetState: PlanetState = {
   ocean: 0.58,
   mareAmount: 0.42,
   coastlines: true,
+  lavaFissureWidth: 0.12,
+  lavaGlow: 0.4,
 
   bands: false,
   bandCount: 9,
   bandTurbulence: 0.5,
   storms: 1,
+  stormSize: 1,
 
   iceCaps: true,
   capLatitude: 68,
@@ -117,6 +124,7 @@ export const defaultPlanetState: PlanetState = {
   ringYaw: 12,
   ringGap: 0.14,
   ringCount: 6,
+  ringDensity: 3,
   ringShadow: true,
 
   craters: false,

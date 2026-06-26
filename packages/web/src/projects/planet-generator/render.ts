@@ -36,11 +36,14 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     // mareAmount 0..1 → mare threshold
     mareLevel: (state.mareAmount - 0.5) * 0.8,
     coastlines: state.coastlines,
+    lavaFissureWidth: state.lavaFissureWidth,
+    lavaGlow: state.lavaGlow,
 
     bands: state.bands,
     bandCount: state.bandCount,
     bandTurbulence: state.bandTurbulence,
     storms: state.storms,
+    stormSize: state.stormSize,
 
     iceCaps: state.iceCaps,
     capLatitude: state.capLatitude,
@@ -58,6 +61,7 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     ringYaw: state.ringYaw,
     ringGap: state.ringGap,
     ringCount: state.ringCount,
+    ringDensity: state.ringDensity,
     ringShadow: state.ringShadow,
 
     craters: state.craters,
