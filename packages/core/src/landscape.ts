@@ -692,7 +692,11 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   const cloudNoise = createNoise(seed + 909);
   // `let` because occlusion rebuilds the array (front masses erase what's behind).
   let lines: FlowLine[] = [];
-  // Opaque masses that stand in front of the sky (subtracted from sky columns).
+  // Detail marks emitted after the land masses (cloud outlines, sun rays, birds,
+  // trees) are collected here so they can be occluded by those masses before
+  // being merged in — otherwise they'd float over the mountains.
+  let detail: FlowLine[] = [];
+  // Opaque land masses (headlands / foreground / rocks), in front of sky & detail.
   const skyOccluders: Point[][] = [];
 
   const horizonY = y0 + clamp01(o.horizonFrac) * usableH;
@@ -725,6 +729,9 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   const bands: Band[] = [];
   const contours: { profile: Point[]; layer: string; passes: number }[] = [];
   let skyBoundary = horizon;
+  // The nearest land crest, where trees sit (so they're in front, not floating
+  // on a distant ridge).
+  let treeCrest = horizon;
   let waterTopY = horizonY;
   let waterBotY = horizonY;
 
@@ -754,6 +761,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const beachTone: ToneFn = (x, y) => clamp01(0.48 + o.toneContrast * 0.18 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
       bands.push({ upper: shoreline, lower: bottomLine, tone: beachTone, baseSpacing: o.ridgeHatchSpacing * 1.2, angleDeg: o.ridgeHatchAngle, layer: 'ridge', formFollow: o.formFollow, crossHatch: 0 });
       contours.push({ profile: shoreline, layer: 'contour', passes: 3 });
+      treeCrest = shoreline;
     }
     contours.push({ profile: horizon, layer: 'horizon', passes: 2 });
   } else {
@@ -766,6 +774,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       profiles.push(makeProfile(noise, 13.7 * (k + 1), x0, x1, profStep, baseY, amp, o.ridgeFreq * (1 + 0.12 * k), o.ridgeOctaves, o.ridgePersistence, usableW));
     }
     skyBoundary = profiles[0];
+    treeCrest = profiles[n - 1];
     const m = profiles[0].length;
     // Overlapping ridges: each ridge is visible only above the upper envelope of
     // every nearer ridge — so a near crest that rises in front of a far one
@@ -950,7 +959,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
           if (rng() < density) {
             const wob = reflNoise.noise2D(colX * 0.05, y * 0.08) * Math.min(5, half * 0.35);
             const b = Math.min(waterBotY - 1, y + dlen);
-            if (b > y + 1) pushRun(lines, [{ x: colX + wob, y }, { x: colX + wob + (rng() - 0.5) * 2.5, y: b }], 'reflection');
+            if (b > y + 1) pushRun(detail, [{ x: colX + wob, y }, { x: colX + wob + (rng() - 0.5) * 2.5, y: b }], 'reflection');
           }
           y += dlen + 5 + rng() * 8;
         }
@@ -1083,18 +1092,18 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       for (const c of contoursC) {
         if (c.length < 10) continue;
         const mapped = c.map((p) => ({ x: x0 + (p.x / (cloudRaster!.width - 1)) * usableW, y: skyTopY + (p.y / (cloudRaster!.height - 1)) * skyH }));
-        pushRun(lines, trimPolyline(mapped, 0.12), 'cloud');
+        pushRun(detail, trimPolyline(mapped, 0.12), 'cloud');
       }
     }
 
-    // Sun rays / glow.
+    // Sun rays / glow (→ detail, so the land masses occlude them).
     if (sunActive && o.sunRays) {
       const rays = 16;
       for (let r = 0; r < rays; r++) {
         const a = (r / rays) * TAU + rng() * 0.1;
         const r0 = haloR * (1.02 + rng() * 0.1);
         const r1 = r0 + sunR * (0.3 + rng() * 0.5);
-        pushRun(lines, [
+        pushRun(detail, [
           { x: sunX + Math.cos(a) * r0, y: sunY + Math.sin(a) * r0 },
           { x: sunX + Math.cos(a) * r1, y: sunY + Math.sin(a) * r1 },
         ], 'sun');
@@ -1106,7 +1115,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         const a = (r / 64) * TAU;
         rim.push({ x: sunX + Math.cos(a) * sunR, y: sunY + Math.sin(a) * sunR });
       }
-      pushRun(lines, rim, 'sun', 'bold');
+      pushRun(detail, rim, 'sun', 'bold');
     }
 
     // Birds: a few shallow gull "vees" in the upper sky, clear of the sun.
@@ -1117,8 +1126,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         if (sunActive && Math.hypot(bx - sunX, by - sunY) < haloR * 1.2) continue;
         const s = usableW * (0.012 + rng() * 0.012);
         const dip = s * 0.42;
-        pushRun(lines, densifySegment({ x: bx - s, y: by }, { x: bx, y: by + dip }, 5), 'bird');
-        pushRun(lines, densifySegment({ x: bx, y: by + dip }, { x: bx + s, y: by }, 5), 'bird');
+        pushRun(detail, densifySegment({ x: bx - s, y: by }, { x: bx, y: by + dip }, 5), 'bird');
+        pushRun(detail, densifySegment({ x: bx, y: by + dip }, { x: bx + s, y: by }, 5), 'bird');
       }
     }
   }
@@ -1128,9 +1137,13 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
 
   // —— Trees / foliage clumps along the nearest land crest ——————————————
   if (o.trees > 0) {
-    const crest = o.hasWater ? (bands.find((b) => b.layer === 'ridge')?.upper ?? horizon) : skyBoundary;
-    drawTrees(lines, crest, Math.round(o.trees), usableW, rng);
+    drawTrees(detail, treeCrest, Math.round(o.trees), usableW, rng);
   }
+
+  // Occlude the after-mass detail (cloud outlines, sun rays, birds, trees) by the
+  // land masses so it sits behind them, then merge it in.
+  for (const occ of skyOccluders) detail = occludeBehind(detail, occ);
+  for (const d of detail) lines.push(d);
 
   // —— Hand-drawn finish + margin clip ————————————————————————————————————
   let finished: FlowLine[];
