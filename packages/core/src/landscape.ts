@@ -567,6 +567,104 @@ function rockShape(cx: number, baseY: number, w: number, h: number, rng: () => n
 }
 
 // ——————————————————————————————————————————————————————————————————————
+// Occlusion (vector painter's algorithm)
+// ——————————————————————————————————————————————————————————————————————
+
+/** Parameter t along a→b where it crosses segment c→d, or null. Half-open on the
+ *  edge (u in [0,1)) so a shared vertex isn't double-counted. */
+function segSegT(a: Point, b: Point, c: Point, d: Point): number | null {
+  const rx = b.x - a.x;
+  const ry = b.y - a.y;
+  const sx = d.x - c.x;
+  const sy = d.y - c.y;
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / den;
+  const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den;
+  if (t > 1e-9 && t < 1 - 1e-9 && u >= 0 && u < 1) return t;
+  return null;
+}
+
+/** The runs of a polyline lying OUTSIDE a closed polygon — each sub-segment is
+ *  classified by its own midpoint, so it is robust to vertex/edge degeneracies. */
+function subtractPolygon(points: Point[], poly: Point[]): Point[][] {
+  if (points.length < 2) return points.length ? [points.slice()] : [];
+  const runs: Point[][] = [];
+  let run: Point[] = [];
+  const flush = (): void => {
+    if (run.length >= 2) runs.push(run);
+    run = [];
+  };
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const ts: number[] = [0, 1];
+    for (let j = 0, k = poly.length - 1; j < poly.length; k = j++) {
+      const t = segSegT(a, b, poly[k], poly[j]);
+      if (t !== null) ts.push(t);
+    }
+    ts.sort((p, q) => p - q);
+    for (let s = 0; s < ts.length - 1; s++) {
+      const t0 = ts[s];
+      const t1 = ts[s + 1];
+      if (t1 - t0 < 1e-7) continue;
+      const mid = (t0 + t1) / 2;
+      if (pointInPolygon(poly, a.x + (b.x - a.x) * mid, a.y + (b.y - a.y) * mid)) {
+        flush();
+        continue;
+      }
+      const p0 = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
+      const p1 = { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 };
+      if (run.length === 0) run.push(p0);
+      else if (Math.hypot(p0.x - run[run.length - 1].x, p0.y - run[run.length - 1].y) > 1e-6) {
+        flush();
+        run.push(p0);
+      }
+      run.push(p1);
+    }
+  }
+  flush();
+  return runs;
+}
+
+/** Remove the parts of already-drawn strokes that fall behind an opaque mass
+ *  `poly` (drawn back-to-front, so the mass occludes everything before it).
+ *  Bounding-box culled, so most strokes pass straight through. */
+function occludeBehind(lines: FlowLine[], poly: Point[]): FlowLine[] {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of poly) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const out: FlowLine[] = [];
+  for (const ln of lines) {
+    let lx0 = Infinity;
+    let ly0 = Infinity;
+    let lx1 = -Infinity;
+    let ly1 = -Infinity;
+    for (const p of ln.points) {
+      if (p.x < lx0) lx0 = p.x;
+      if (p.x > lx1) lx1 = p.x;
+      if (p.y < ly0) ly0 = p.y;
+      if (p.y > ly1) ly1 = p.y;
+    }
+    if (lx1 < minX || lx0 > maxX || ly1 < minY || ly0 > maxY) {
+      out.push(ln);
+      continue;
+    }
+    const runs = subtractPolygon(ln.points, poly);
+    if (runs.length === 1 && runs[0].length === ln.points.length) out.push(ln);
+    else for (const r of runs) if (r.length >= 2) out.push({ ...ln, points: r });
+  }
+  return out;
+}
+
+// ——————————————————————————————————————————————————————————————————————
 // Main
 // ——————————————————————————————————————————————————————————————————————
 
@@ -592,7 +690,10 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   const toneNoise = createNoise(seed + 555);
   const patchNoise = createNoise(seed + 1777);
   const cloudNoise = createNoise(seed + 909);
-  const lines: FlowLine[] = [];
+  // `let` because occlusion rebuilds the array (front masses erase what's behind).
+  let lines: FlowLine[] = [];
+  // Opaque masses that stand in front of the sky (subtracted from sky columns).
+  const skyOccluders: Point[][] = [];
 
   const horizonY = y0 + clamp01(o.horizonFrac) * usableH;
   const profStep = Math.max(2, usableW / 200);
@@ -665,19 +766,62 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       profiles.push(makeProfile(noise, 13.7 * (k + 1), x0, x1, profStep, baseY, amp, o.ridgeFreq * (1 + 0.12 * k), o.ridgeOctaves, o.ridgePersistence, usableW));
     }
     skyBoundary = profiles[0];
+    const m = profiles[0].length;
+    // Overlapping ridges: each ridge is visible only above the upper envelope of
+    // every nearer ridge — so a near crest that rises in front of a far one
+    // genuinely occludes it, and the far ridge shows only the sliver poking above.
     for (let k = 0; k < n; k++) {
-      const upper = profiles[k];
-      const lower = k + 1 < n ? profiles[k + 1] : bottomLine;
       const f = (k + 1) / n;
+      const env: number[] = new Array(m);
+      for (let i = 0; i < m; i++) {
+        let e = y1;
+        for (let j = k + 1; j < n; j++) if (profiles[j][i].y < e) e = profiles[j][i].y;
+        env[i] = e;
+      }
+      const lower: Point[] = profiles[k].map((p, i) => ({ x: p.x, y: Math.max(p.y, env[i]) }));
       let angle = o.ridgeHatchAngle;
       if (o.slopeFollow) angle += (k % 2 === 0 ? -1 : 1) * (12 + 8 * (1 - f));
-      bands.push({ upper, lower, tone: ridgeTone(f), baseSpacing: o.ridgeHatchSpacing, angleDeg: angle, layer: 'ridge', formFollow: o.formFollow, crossHatch: o.crossHatch });
-      // Far ridges fade to a single light contour pass (lost-and-found edges).
-      contours.push({ profile: upper, layer: k === 0 ? 'horizon' : 'contour', passes: f < 0.4 ? 1 : f < 0.75 ? 2 : 3 });
+      bands.push({ upper: profiles[k], lower, tone: ridgeTone(f), baseSpacing: o.ridgeHatchSpacing, angleDeg: angle, layer: 'ridge', formFollow: o.formFollow, crossHatch: o.crossHatch });
+      // Contour only where the crest clears the nearer envelope. Far ridges fade
+      // to a single light pass (lost-and-found edges).
+      const passes = f < 0.4 ? 1 : f < 0.75 ? 2 : 3;
+      let run: Point[] = [];
+      for (let i = 0; i < m; i++) {
+        if (env[i] >= profiles[k][i].y - 0.5) run.push(profiles[k][i]);
+        else {
+          if (run.length > 1) contours.push({ profile: run, layer: k === 0 ? 'horizon' : 'contour', passes });
+          run = [];
+        }
+      }
+      if (run.length > 1) contours.push({ profile: run, layer: k === 0 ? 'horizon' : 'contour', passes });
     }
   }
 
-  // —— Overlapping receding headlands on the water ————————————————————————
+  // —— Hatch the main bands (water + beach/ridges), then their contours ————
+  for (const band of bands) {
+    const poly = closeRegion(band.upper, band.lower);
+    if (band.layer === 'water') {
+      const craft: Craft = { rng, taper: o.taper * 0.5, jitter: 1.2 * DEG, subStep: 16 };
+      const breakFn: BreakFn = (t0, t1, O, d, r) => dashRun(t0, t1, O, d, r, o.waterDash, o.waterGap);
+      sweepHatch(lines, poly, 0, band.baseSpacing, band.tone, () => true, 'water', craft, breakFn);
+    } else {
+      hatchLand(lines, band.upper, poly, band.tone, band.baseSpacing, band.layer, {
+        rng,
+        taper: o.taper,
+        jitter: 2 * DEG,
+        formFollow: band.formFollow,
+        baseAngleDeg: band.angleDeg,
+        crossHatch: band.crossHatch,
+        patchiness: o.hatchPatchiness,
+        patchNoise,
+        maxLen: usableH * 0.05,
+      });
+    }
+  }
+  // Ridge / horizon / shore contours (emitted now so nearer masses occlude them).
+  for (const c of contours) emitContour(lines, c.profile, c.layer, o.penWidth, c.passes);
+
+  // —— Overlapping receding headlands on the water (each occludes what's behind) —
   if (o.hasWater && o.headlands > 0) {
     const count = Math.round(o.headlands);
     for (let i = 0; i < count; i++) {
@@ -698,40 +842,18 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         const rough = 0.7 + 0.5 * noise.fbm(t * 3 + i * 5, 33.3, 3, 0.5, 2, 1);
         profile.push({ x, y: baseY - height * hump * rough });
       }
-      const lower: Point[] = [
+      const poly = closeRegion(profile, [
         { x: hx0, y: baseY },
         { x: hx1, y: baseY },
-      ];
-      const poly = closeRegion(profile, lower);
+      ]);
+      lines = occludeBehind(lines, poly); // hide water + farther headlands behind it
+      skyOccluders.push(poly);
       const tone = ridgeTone(0.3 + 0.4 * f);
       const craft: Craft = { rng, taper: o.taper, jitter: 2 * DEG, subStep: 10 };
       sweepHatch(lines, poly, 78, o.ridgeHatchSpacing * lerp(1.7, 1.1, f), tone, () => true, 'headland', craft, undefined, usableH * 0.03);
       emitContour(lines, profile, 'headland', o.penWidth, f < 0.5 ? 1 : 2);
-      // Apex reflects in the water.
       const apex = profile.reduce((a, b) => (b.y < a.y ? b : a), profile[0]);
       reflectors.push({ x: apex.x, top: Math.max(waterTopY, baseY), height: (baseY - apex.y) * 0.9, half: halfW * 0.4 });
-    }
-  }
-
-  // —— Hatch the main bands ——————————————————————————————————————————————
-  for (const band of bands) {
-    const poly = closeRegion(band.upper, band.lower);
-    if (band.layer === 'water') {
-      const craft: Craft = { rng, taper: o.taper * 0.5, jitter: 1.2 * DEG, subStep: 16 };
-      const breakFn: BreakFn = (t0, t1, O, d, r) => dashRun(t0, t1, O, d, r, o.waterDash, o.waterGap);
-      sweepHatch(lines, poly, 0, band.baseSpacing, band.tone, () => true, 'water', craft, breakFn);
-    } else {
-      hatchLand(lines, band.upper, poly, band.tone, band.baseSpacing, band.layer, {
-        rng,
-        taper: o.taper,
-        jitter: 2 * DEG,
-        formFollow: band.formFollow,
-        baseAngleDeg: band.angleDeg,
-        crossHatch: band.crossHatch,
-        patchiness: o.hatchPatchiness,
-        patchNoise,
-        maxLen: usableH * 0.05,
-      });
     }
   }
 
@@ -763,6 +885,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
           { x: ordered[ordered.length - 1].x, y: y1 },
         ];
     const poly = closeRegion(ordered, lower);
+    lines = occludeBehind(lines, poly); // a near mass — hide everything behind it
+    skyOccluders.push(poly);
     const fgTone: ToneFn = (x, y) => clamp01(0.84 + o.toneContrast * 0.2 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
     hatchLand(lines, ordered, poly, fgTone, o.ridgeHatchSpacing * 0.85, 'foreground', {
       rng,
@@ -791,6 +915,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         { x: shape[0].x, y: baseY },
         { x: shape[shape.length - 1].x, y: baseY },
       ]);
+      lines = occludeBehind(lines, poly); // a rock hides the water behind it
+      skyOccluders.push(poly);
       const rockTone: ToneFn = (x, y) => clamp01(0.8 + 0.18 * toneNoise.noise2D(x * 0.05, y * 0.05));
       hatchLand(lines, shape, poly, rockTone, o.rockHatchSpacing, 'rock', {
         rng,
@@ -915,6 +1041,15 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
           }
         }
       }
+      // Hide the sky behind opaque masses that poke above the horizon (headlands).
+      for (const occ of skyOccluders) {
+        const ivs = clipLineToPolygon(occ, { x, y: 0 }, { x: 0, y: 1 });
+        for (const [oy0, oy1] of ivs) {
+          const next: [number, number][] = [];
+          for (const [lo, hi] of segs) for (const piece of subtractInterval(lo, hi, oy0, oy1)) next.push(piece);
+          segs = next;
+        }
+      }
       // Carve clouds (split each segment around cloudy spans, sampled cheaply).
       if (cloudRaster) {
         const refined: [number, number][] = [];
@@ -988,8 +1123,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     }
   }
 
-  // —— Contours (after fills so they sit on top) ————————————————————————
-  for (const c of contours) emitContour(lines, c.profile, c.layer, o.penWidth, c.passes);
+  // (Ridge / horizon / shore contours were emitted before the masses so the
+  // nearer masses occlude them; nothing more to draw here.)
 
   // —— Trees / foliage clumps along the nearest land crest ——————————————
   if (o.trees > 0) {
@@ -1109,4 +1244,4 @@ function clipSegmentToRect(a: Point, b: Point, x0: number, y0: number, x1: numbe
 }
 
 // Exported only for tests / potential reuse — keeps the surface tiny otherwise.
-export const _internals = { clipLineToPolygon, hatchPolygon: sweepHatch, closeRegion, pointInPolygon };
+export const _internals = { clipLineToPolygon, hatchPolygon: sweepHatch, closeRegion, pointInPolygon, subtractPolygon, occludeBehind };

@@ -130,6 +130,38 @@ describe('clipLineToPolygon (the hatch workhorse)', () => {
     expect(intervals.length).toBe(2);
   });
 
+  it('subtractPolygon keeps only the parts of a line outside a square', () => {
+    const square: Point[] = [
+      { x: 4, y: 0 },
+      { x: 6, y: 0 },
+      { x: 6, y: 10 },
+      { x: 4, y: 10 },
+    ];
+    // Horizontal line y=5 from x=0..10 → two outside runs: [0..4] and [6..10].
+    const runs = _internals.subtractPolygon([{ x: 0, y: 5 }, { x: 10, y: 5 }], square);
+    expect(runs.length).toBe(2);
+    expect(runs[0][0].x).toBeCloseTo(0, 5);
+    expect(runs[0][runs[0].length - 1].x).toBeCloseTo(4, 5);
+    expect(runs[1][0].x).toBeCloseTo(6, 5);
+    expect(runs[1][runs[1].length - 1].x).toBeCloseTo(10, 5);
+  });
+
+  it('occludeBehind splits background strokes around a front mass', () => {
+    const bg: FlowLine[] = [{ points: [{ x: 0, y: 5 }, { x: 10, y: 5 }], layer: 'water' }];
+    const mass: Point[] = [
+      { x: 4, y: 0 },
+      { x: 6, y: 0 },
+      { x: 6, y: 10 },
+      { x: 4, y: 10 },
+    ];
+    const out = _internals.occludeBehind(bg, mass);
+    expect(out.length).toBe(2);
+    for (const l of out) expect(l.layer).toBe('water');
+    // A stroke entirely clear of the mass is untouched.
+    const clear: FlowLine[] = [{ points: [{ x: 0, y: 20 }, { x: 10, y: 20 }], layer: 'sky' }];
+    expect(_internals.occludeBehind(clear, mass).length).toBe(1);
+  });
+
   it('closeRegion builds a polygon whose interior matches point-in-polygon', () => {
     const upper: Point[] = [
       { x: 0, y: 2 },
