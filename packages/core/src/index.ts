@@ -113,6 +113,10 @@ export type { VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle, VineComp
 export { generatePlanet } from './planet.js';
 export type { PlanetOptions, PlanetType } from './planet.js';
 
+// Landscape generator (procedural pen-and-ink landscapes)
+export { generateLandscape } from './landscape.js';
+export type { LandscapeOptions } from './landscape.js';
+
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
 

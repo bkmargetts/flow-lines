@@ -1,0 +1,122 @@
+import type { SketchStyle } from '@flow-lines/core';
+
+/**
+ * UI state for the Landscape Generator (mm / 0..1 / degree units). `render.ts`
+ * converts it to the core's `LandscapeOptions` in px. Friendlier knobs than the
+ * core (fractions for position, mm for everything physical) map across there.
+ */
+export interface LandscapeState {
+  scene: string; // preset id
+  seed: number;
+  zoom: number;
+
+  // Composition
+  horizonFrac: number; // 0..1 vertical position of the horizon
+  horizonWobbleMm: number;
+  horizonFreq: number;
+  hasWater: boolean;
+  waterFrac: number; // 0..1 of the below-horizon space given to water
+
+  // Sky
+  skyHatchSpacingMm: number;
+  skyToneTop: number; // 0..1
+  skyToneHorizon: number; // 0..1
+
+  // Sun / moon
+  sun: boolean;
+  sunXFrac: number; // 0..1 across the usable frame
+  sunYFrac: number; // 0..1 down the usable frame
+  sunRadiusMm: number;
+  sunHalo: number; // 0..1
+  moonRim: boolean;
+  reflection: boolean;
+  reflectionWidthMm: number;
+
+  // Water
+  waterHatchSpacingMm: number;
+  waterDashMm: number;
+  waterGapMm: number;
+
+  // Ridges / hills
+  ridgeCount: number;
+  ridgeAmpMm: number;
+  ridgeFreq: number;
+  ridgeOctaves: number;
+  ridgePersistence: number;
+  ridgeHatchSpacingMm: number;
+  ridgeHatchAngle: number; // degrees from horizontal
+  slopeFollow: boolean;
+
+  // Rocks / islands
+  rocks: number;
+  rockMaxSizeMm: number;
+  rockHatchSpacingMm: number;
+
+  // Pen / finishing
+  penWidthMm: number;
+  wobbleMm: number;
+  sketch: number; // 0..1
+  sketchStyle: SketchStyle;
+
+  // Ink
+  palette: string;
+  skyColor: string;
+  waterColor: string;
+  ridgeColor: string;
+  contourColor: string;
+  rockColor: string;
+}
+
+export const defaultLandscapeState: LandscapeState = {
+  scene: 'coastal-sunset',
+  seed: Math.floor(Math.random() * 1000000),
+  zoom: 1,
+
+  horizonFrac: 0.46,
+  horizonWobbleMm: 2,
+  horizonFreq: 2.2,
+  hasWater: true,
+  waterFrac: 0.6,
+
+  skyHatchSpacingMm: 2,
+  skyToneTop: 1,
+  skyToneHorizon: 1,
+
+  sun: true,
+  sunXFrac: 0.52,
+  sunYFrac: 0.34,
+  sunRadiusMm: 14,
+  sunHalo: 0.7,
+  moonRim: false,
+  reflection: true,
+  reflectionWidthMm: 10,
+
+  waterHatchSpacingMm: 2,
+  waterDashMm: 12,
+  waterGapMm: 3.5,
+
+  ridgeCount: 3,
+  ridgeAmpMm: 12,
+  ridgeFreq: 2.4,
+  ridgeOctaves: 4,
+  ridgePersistence: 0.5,
+  ridgeHatchSpacingMm: 1.7,
+  ridgeHatchAngle: 80,
+  slopeFollow: false,
+
+  rocks: 3,
+  rockMaxSizeMm: 16,
+  rockHatchSpacingMm: 1.4,
+
+  penWidthMm: 0.45,
+  wobbleMm: 0.22,
+  sketch: 0,
+  sketchStyle: 'loose',
+
+  palette: 'ink',
+  skyColor: '#2a2a26',
+  waterColor: '#2a2a26',
+  ridgeColor: '#2a2a26',
+  contourColor: '#2a2a26',
+  rockColor: '#2a2a26',
+};
