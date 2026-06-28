@@ -30,7 +30,7 @@ export const PLANET_PRESETS: PlanetPreset[] = [
     label: 'Gas giant',
     state: {
       planetType: 'gas-giant',
-      bands: true, bandCount: 11, bandTurbulence: 0.55, storms: 1,
+      bands: true, bandCount: 11, bandTurbulence: 0.55, storms: 1, stormSize: 1.2,
       limbDarkening: 0.5, stipple: 0, crossHatchLayers: 2,
       coastlines: true, iceCaps: false, rings: false, craters: false,
       atmosphere: 0, palette: 'saturn',
@@ -41,9 +41,9 @@ export const PLANET_PRESETS: PlanetPreset[] = [
     label: 'Ringed gas giant',
     state: {
       planetType: 'ringed',
-      bands: true, bandCount: 10, bandTurbulence: 0.5, storms: 1,
+      bands: true, bandCount: 10, bandTurbulence: 0.5, storms: 1, stormSize: 1.2,
       limbDarkening: 0.45, crossHatchLayers: 2,
-      rings: true, ringTilt: 22, ringYaw: 14, ringGap: 0.13, ringCount: 7, ringShadow: true,
+      rings: true, ringTilt: 22, ringYaw: 14, ringGap: 0.13, ringCount: 7, ringDensity: 4, ringShadow: true,
       iceCaps: false, craters: false, atmosphere: 0, palette: 'saturn',
     },
   },
@@ -52,7 +52,7 @@ export const PLANET_PRESETS: PlanetPreset[] = [
     label: 'Cratered moon',
     state: {
       planetType: 'moon',
-      mareAmount: 0.45, craters: true, craterCount: 90, stipple: 0.6,
+      mareAmount: 0.45, craters: true, craterCount: 90, craterDetail: true, stipple: 0.6,
       atmosphere: 0, lightElevation: 18, crossHatchLayers: 3,
       bands: false, rings: false, iceCaps: false, coastlines: true,
       palette: 'lunar',
@@ -75,6 +75,7 @@ export const PLANET_PRESETS: PlanetPreset[] = [
     state: {
       planetType: 'lava',
       terrainContrast: 2, terrainScale: 2.1, stipple: 0.5, atmosphere: 2,
+      lavaFissureWidth: 0.14, lavaGlow: 0.5, lightElevation: 24,
       crossHatchLayers: 3, coastlines: true,
       bands: false, rings: false, craters: false, iceCaps: false,
       palette: 'mars',
@@ -96,7 +97,7 @@ export const PLANET_PRESETS: PlanetPreset[] = [
     label: 'Barren rocky',
     state: {
       planetType: 'barren',
-      mareAmount: 0.3, craters: true, craterCount: 50, craterMaxR: 0.1,
+      mareAmount: 0.3, craters: true, craterCount: 50, craterMaxR: 0.1, craterDetail: true,
       stipple: 0.3, atmosphere: 0, crossHatchLayers: 4, terrainContrast: 1.2,
       bands: false, rings: false, iceCaps: false,
       palette: 'lunar',

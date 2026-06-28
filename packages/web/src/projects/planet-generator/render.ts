@@ -36,11 +36,14 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     // mareAmount 0..1 → mare threshold
     mareLevel: (state.mareAmount - 0.5) * 0.8,
     coastlines: state.coastlines,
+    lavaFissureWidth: state.lavaFissureWidth,
+    lavaGlow: state.lavaGlow,
 
     bands: state.bands,
     bandCount: state.bandCount,
     bandTurbulence: state.bandTurbulence,
     storms: state.storms,
+    stormSize: state.stormSize,
 
     iceCaps: state.iceCaps,
     capLatitude: state.capLatitude,
@@ -58,12 +61,27 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     ringYaw: state.ringYaw,
     ringGap: state.ringGap,
     ringCount: state.ringCount,
+    ringDensity: state.ringDensity,
     ringShadow: state.ringShadow,
 
     craters: state.craters,
     craterCount: state.craterCount,
     craterMinR: state.craterMinR,
     craterMaxR: state.craterMaxR,
+    craterDetail: state.craterDetail,
+
+    terminatorEmphasis: state.terminatorEmphasis,
+    mountains: state.mountains,
+    clouds: state.clouds,
+
+    graticule: state.graticule,
+    graticuleSpacingDeg: state.graticuleSpacingDeg,
+    plateFrame: state.plateFrame,
+    scaleBar: state.scaleBar,
+    title: state.plateTitle,
+    caption: state.plateCaption,
+    layout: state.layout,
+    layoutCount: state.layoutCount,
 
     starfield: state.starfield,
     starCount: state.starCount,
@@ -74,6 +92,8 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
 
     penWidth: (state.penWidthMm * mm) / zoom,
     wobble: (state.wobbleMm * mm) / zoom,
+    sketch: state.sketch,
+    sketchStyle: state.sketchStyle,
   };
 
   const result = generatePlanet(options);
@@ -100,6 +120,12 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
         ring: pal.ring,
         star: pal.star,
         atmosphere: pal.atmosphere,
+        graticule: pal.graticule,
+        annotation: pal.annotation,
+        label: pal.labelInk,
+        orbit: pal.graticule,
+        relief: pal.feature,
+        cloud: pal.graticule,
       }
     : {
         limb: state.limbColor,
@@ -109,6 +135,12 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
         ring: state.accentColor,
         star: state.accentColor,
         atmosphere: state.accentColor,
+        graticule: state.featureColor,
+        annotation: state.featureColor,
+        label: state.featureColor,
+        orbit: state.featureColor,
+        relief: state.featureColor,
+        cloud: state.featureColor,
       };
 
   return {

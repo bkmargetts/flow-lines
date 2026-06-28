@@ -978,11 +978,12 @@ program
 
 // Multi-pen ink palettes for the planet command (subset of the web app's).
 const PLANET_PALETTES: Record<string, Record<string, string>> = {
-  ink: { limb: '#2a2a26', hatch: '#2a2a26', feature: '#2a2a26', stipple: '#2a2a26', ring: '#2a2a26', star: '#2a2a26', atmosphere: '#2a2a26' },
-  astronomical: { limb: '#3a2f25', hatch: '#3b3a36', feature: '#4a3320', stipple: '#3b3a36', ring: '#5b4636', star: '#2b3a55', atmosphere: '#566b86' },
-  saturn: { limb: '#4a3a23', hatch: '#5a4a32', feature: '#6e5326', stipple: '#5a4a32', ring: '#8a6a36', star: '#6b5a44', atmosphere: '#b89a5a' },
-  lunar: { limb: '#2c2c2c', hatch: '#3c3c3c', feature: '#222222', stipple: '#3c3c3c', ring: '#3c3c3c', star: '#4a4a4a', atmosphere: '#6a6a6a' },
-  mars: { limb: '#6e2f1f', hatch: '#8a3b2e', feature: '#5a2418', stipple: '#8a3b2e', ring: '#8a3b2e', star: '#7a5a4a', atmosphere: '#b5715a' },
+  ink: { limb: '#2a2a26', hatch: '#2a2a26', feature: '#2a2a26', stipple: '#2a2a26', ring: '#2a2a26', star: '#2a2a26', atmosphere: '#2a2a26', graticule: '#2a2a26', annotation: '#2a2a26', label: '#2a2a26', orbit: '#2a2a26', relief: '#2a2a26', cloud: '#2a2a26' },
+  astronomical: { limb: '#3a2f25', hatch: '#3b3a36', feature: '#4a3320', stipple: '#3b3a36', ring: '#5b4636', star: '#2b3a55', atmosphere: '#566b86', graticule: '#6b5e7a', annotation: '#4a3320', label: '#3a2f25', orbit: '#6b5e7a', relief: '#4a3320', cloud: '#6b5e7a' },
+  saturn: { limb: '#4a3a23', hatch: '#5a4a32', feature: '#6e5326', stipple: '#5a4a32', ring: '#8a6a36', star: '#6b5a44', atmosphere: '#b89a5a', graticule: '#8a7a52', annotation: '#6e5326', label: '#4a3a23', orbit: '#8a7a52', relief: '#6e5326', cloud: '#8a7a52' },
+  lunar: { limb: '#2c2c2c', hatch: '#3c3c3c', feature: '#222222', stipple: '#3c3c3c', ring: '#3c3c3c', star: '#4a4a4a', atmosphere: '#6a6a6a', graticule: '#5a5a5a', annotation: '#222222', label: '#2c2c2c', orbit: '#5a5a5a', relief: '#222222', cloud: '#5a5a5a' },
+  mars: { limb: '#6e2f1f', hatch: '#8a3b2e', feature: '#5a2418', stipple: '#8a3b2e', ring: '#8a3b2e', star: '#7a5a4a', atmosphere: '#b5715a', graticule: '#a86a55', annotation: '#5a2418', label: '#6e2f1f', orbit: '#a86a55', relief: '#5a2418', cloud: '#a86a55' },
+  cyanotype: { limb: '#13385e', hatch: '#1f4d78', feature: '#0e2a47', stipple: '#1f4d78', ring: '#1f4d78', star: '#3a6fa0', atmosphere: '#5a8fc0', graticule: '#3a6fa0', annotation: '#0e2a47', label: '#13385e', orbit: '#3a6fa0', relief: '#0e2a47', cloud: '#3a6fa0' },
 };
 
 program
@@ -1011,11 +1012,14 @@ program
   .option('--sea-level <number>', 'Terrestrial land/sea threshold (-1..1)', '0')
   .option('--mare-level <number>', 'Lunar dark-plain threshold (-1..1)', '-0.12')
   .option('--no-coastlines', 'Skip traced feature outlines')
+  .option('--lava-fissure-width <number>', 'Width of glowing lava cracks (0-1)', '0.12')
+  .option('--lava-glow <number>', 'Ember-stipple density on lava fissures (0-1)', '0.4')
   // gas
   .option('--bands', 'Banded zones (gas giants)')
   .option('--band-count <number>', 'Number of banded zones', '9')
   .option('--band-turbulence <number>', 'Band wobble (0-1.2)', '0.5')
   .option('--storms <number>', 'Oval storm spots', '0')
+  .option('--storm-size <number>', 'Storm oval scale', '1')
   // ice
   .option('--ice-caps', 'Draw polar ice caps')
   .option('--cap-latitude <number>', 'Latitude where caps begin (deg)', '68')
@@ -1024,6 +1028,11 @@ program
   .option('--cross-hatch-layers <number>', 'Cross-hatch layers (1-5)', '3')
   .option('--stipple <number>', 'Shadow/texture stipple (0-1)', '0')
   .option('--atmosphere <number>', 'Glow rings (corona for stars)', '0')
+  // relief
+  .option('--terminator-emphasis <number>', 'Extra hatch hugging the terminator (0-1)', '0')
+  .option('--mountains', 'Chevron hachures on high terrestrial land')
+  .option('--clouds', 'Trace soft cloud shapes (terrestrial)')
+  .option('--crater-detail', 'Central peaks + ejecta rays on big craters')
   // rings
   .option('--rings', 'Draw a tilted ring system')
   .option('--ring-inner <number>', 'Inner ring radius in disk radii', '1.35')
@@ -1032,12 +1041,23 @@ program
   .option('--ring-yaw <number>', 'Ring yaw in degrees', '12')
   .option('--ring-gap <number>', 'Cassini gap fraction (0-1)', '0.14')
   .option('--ring-count <number>', 'Concentric ring bands', '6')
+  .option('--ring-density <number>', 'Strokes per ring band', '3')
   .option('--no-ring-shadow', 'Do not cut the planet shadow into the rings')
   // craters
   .option('--craters', 'Scatter craters')
   .option('--crater-count <number>', 'Number of craters', '80')
   .option('--crater-min-r <number>', 'Min crater radius (fraction of disk)', '0.02')
   .option('--crater-max-r <number>', 'Max crater radius (fraction of disk)', '0.14')
+  // engraved plate
+  .option('--graticule', 'Draw lat/long lines on the globe')
+  .option('--graticule-spacing <number>', 'Degrees between graticule lines', '30')
+  .option('--plate-frame', 'Graduated neatline just inside the margin')
+  .option('--scale-bar', 'Divided scale bar along the bottom')
+  .option('--title <text>', 'Engraved plate title')
+  .option('--caption <text>', 'Engraved plate caption')
+  // composition
+  .option('--layout <l>', 'single | phases | comparison | orbital', 'single')
+  .option('--layout-count <number>', 'Bodies in a multi-body plate', '5')
   // scene
   .option('--starfield', 'Scatter a background starfield')
   .option('--star-count <number>', 'Number of stars', '120')
@@ -1046,9 +1066,11 @@ program
   .option('--moon-angle <number>', 'Moon angle in degrees', '-35')
   .option('--moon-radius-frac <number>', 'Moon radius as fraction of the planet', '0.28')
   // ink
-  .option('--palette <p>', 'Multi-pen palette: ink | astronomical | saturn | lunar | mars', 'ink')
+  .option('--palette <p>', 'Multi-pen palette: ink | astronomical | saturn | lunar | mars | cyanotype', 'ink')
   .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1')
   .option('--wobble <number>', 'Hand-drawn wobble amplitude in px', '0.6')
+  .option('--sketch <number>', 'Hand-drawn sketch overdraw intensity (0-1)', '0')
+  .option('--sketch-style <s>', 'Sketch character: loose | fine | gestural | scratchy', 'loose')
   .option('--background', 'Include background rectangle')
   .option('--background-color <color>', 'Background color', '#ffffff')
   .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
@@ -1094,16 +1116,22 @@ program
       seaLevel: parseFloat(options.seaLevel),
       mareLevel: parseFloat(options.mareLevel),
       coastlines: options.coastlines,
+      lavaFissureWidth: parseFloat(options.lavaFissureWidth),
+      lavaGlow: parseFloat(options.lavaGlow),
       bands: options.bands ?? false,
       bandCount: parseInt(options.bandCount, 10),
       bandTurbulence: parseFloat(options.bandTurbulence),
       storms: parseInt(options.storms, 10),
+      stormSize: parseFloat(options.stormSize),
       iceCaps: options.iceCaps ?? false,
       capLatitude: parseFloat(options.capLatitude),
       hatchSpacing: paperStrokeWidth ? (parseFloat(options.hatchSpacing) * paperStrokeWidth) / parseFloat(options.penWidthMm) : parseFloat(options.hatchSpacing),
       crossHatchLayers: parseInt(options.crossHatchLayers, 10),
       stipple: parseFloat(options.stipple),
       atmosphere: parseInt(options.atmosphere, 10),
+      terminatorEmphasis: parseFloat(options.terminatorEmphasis),
+      mountains: options.mountains ?? false,
+      clouds: options.clouds ?? false,
       rings: options.rings ?? false,
       ringInner: parseFloat(options.ringInner),
       ringOuter: parseFloat(options.ringOuter),
@@ -1111,11 +1139,21 @@ program
       ringYaw: parseFloat(options.ringYaw),
       ringGap: parseFloat(options.ringGap),
       ringCount: parseInt(options.ringCount, 10),
+      ringDensity: parseInt(options.ringDensity, 10),
       ringShadow: options.ringShadow,
       craters: options.craters ?? false,
       craterCount: parseInt(options.craterCount, 10),
       craterMinR: parseFloat(options.craterMinR),
       craterMaxR: parseFloat(options.craterMaxR),
+      craterDetail: options.craterDetail ?? false,
+      graticule: options.graticule ?? false,
+      graticuleSpacingDeg: parseFloat(options.graticuleSpacing),
+      plateFrame: options.plateFrame ?? false,
+      scaleBar: options.scaleBar ?? false,
+      title: options.title,
+      caption: options.caption,
+      layout: options.layout as PlanetOptions['layout'],
+      layoutCount: parseInt(options.layoutCount, 10),
       starfield: options.starfield ?? false,
       starCount: parseInt(options.starCount, 10),
       moon: options.moon ?? false,
@@ -1124,6 +1162,8 @@ program
       moonRadiusFrac: parseFloat(options.moonRadiusFrac),
       penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
       wobble: parseFloat(options.wobble),
+      sketch: parseFloat(options.sketch),
+      sketchStyle: options.sketchStyle as PlanetOptions['sketchStyle'],
     };
 
     console.log('Generating planet...');

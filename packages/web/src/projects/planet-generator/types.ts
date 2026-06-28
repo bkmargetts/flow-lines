@@ -1,4 +1,4 @@
-import type { PlanetType } from '@flow-lines/core';
+import type { PlanetType, SketchStyle } from '@flow-lines/core';
 
 /**
  * UI state for the Planet Generator (mm / degrees / 0..1 units). `render.ts`
@@ -24,12 +24,15 @@ export interface PlanetState {
   ocean: number; // 0..1 terrestrial sea fraction
   mareAmount: number; // 0..1 lunar dark-plain amount
   coastlines: boolean;
+  lavaFissureWidth: number; // 0..1 width of the glowing cracks
+  lavaGlow: number; // 0..1 ember-stipple density on the fissures
 
   // Gas giant
   bands: boolean;
   bandCount: number;
   bandTurbulence: number;
   storms: number;
+  stormSize: number; // scale on the storm ovals
 
   // Ice caps
   iceCaps: boolean;
@@ -50,6 +53,7 @@ export interface PlanetState {
   ringYaw: number; // degrees
   ringGap: number; // 0..1
   ringCount: number;
+  ringDensity: number; // strokes per band
   ringShadow: boolean;
 
   // Craters
@@ -57,6 +61,22 @@ export interface PlanetState {
   craterCount: number;
   craterMinR: number; // fraction of disk radius
   craterMaxR: number;
+  craterDetail: boolean;
+
+  // Surface relief
+  terminatorEmphasis: number; // 0..1
+  mountains: boolean;
+  clouds: boolean;
+
+  // Engraved-plate annotation
+  graticule: boolean;
+  graticuleSpacingDeg: number;
+  plateFrame: boolean;
+  scaleBar: boolean;
+  plateTitle: string;
+  plateCaption: string;
+  layout: 'single' | 'phases' | 'comparison' | 'orbital';
+  layoutCount: number;
 
   // Scene extras
   starfield: boolean;
@@ -69,6 +89,8 @@ export interface PlanetState {
   // Pen / finishing
   penWidthMm: number;
   wobbleMm: number;
+  sketch: number; // 0..1 hand-drawn overdraw
+  sketchStyle: SketchStyle;
 
   // Ink
   palette: string;
@@ -95,11 +117,14 @@ export const defaultPlanetState: PlanetState = {
   ocean: 0.58,
   mareAmount: 0.42,
   coastlines: true,
+  lavaFissureWidth: 0.12,
+  lavaGlow: 0.4,
 
   bands: false,
   bandCount: 9,
   bandTurbulence: 0.5,
   storms: 1,
+  stormSize: 1,
 
   iceCaps: true,
   capLatitude: 68,
@@ -117,12 +142,27 @@ export const defaultPlanetState: PlanetState = {
   ringYaw: 12,
   ringGap: 0.14,
   ringCount: 6,
+  ringDensity: 3,
   ringShadow: true,
 
   craters: false,
   craterCount: 80,
   craterMinR: 0.02,
   craterMaxR: 0.14,
+  craterDetail: false,
+
+  terminatorEmphasis: 0,
+  mountains: false,
+  clouds: false,
+
+  graticule: false,
+  graticuleSpacingDeg: 30,
+  plateFrame: false,
+  scaleBar: false,
+  plateTitle: '',
+  plateCaption: '',
+  layout: 'single',
+  layoutCount: 5,
 
   // Default composition: a planet sitting in a field of stars.
   starfield: true,
@@ -134,6 +174,8 @@ export const defaultPlanetState: PlanetState = {
 
   penWidthMm: 0.3,
   wobbleMm: 0.18,
+  sketch: 0,
+  sketchStyle: 'loose',
 
   palette: 'astronomical',
   limbColor: '#2a2a26',

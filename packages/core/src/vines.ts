@@ -26,6 +26,7 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
+import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
 
 export type VineMode = 'growth' | 'colonization';
 export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
@@ -47,8 +48,8 @@ export type StemShade = 'none' | 'along' | 'cross';
 export type StemTexture = 'none' | 'bark';
 /** Flower species. */
 export type VineFlower = 'rose' | 'daisy' | 'bell' | 'bud' | 'mixed';
-/** Character of the hand-sketched overdraw. */
-export type SketchStyle = 'loose' | 'fine' | 'gestural' | 'scratchy';
+/** Character of the hand-sketched overdraw (shared with the Planet Generator). */
+export type { SketchStyle };
 /** How leaflets are arranged into a single (possibly compound) leaf. */
 export type LeafArrangement = 'simple' | 'pinnate' | 'bipinnate' | 'palmate' | 'trifoliate';
 /** How successive leaves are inserted along a stem. */
@@ -753,18 +754,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   // The style sets the character (passes / wobble wavelength / amplitude /
   // jitter); `sketch` is the intensity.
   if (sketch > 0.01) {
-    const s = sketchStyle;
-    const passes =
-      s === 'fine' || s === 'scratchy' ? 1 + Math.round(sketch * 3) :
-      s === 'gestural' ? 1 + Math.round(sketch) :
-      1 + Math.round(sketch * 2);
-    const wavelength = s === 'gestural' ? 70 : s === 'fine' ? 16 : s === 'scratchy' ? 12 : 28;
-    const amplitude =
-      s === 'gestural' ? 0.8 + sketch * 3 :
-      s === 'fine' ? 0.3 + sketch * 0.9 :
-      s === 'scratchy' ? 0.4 + sketch * 1.2 :
-      0.5 + sketch * 1.6;
-    const jitter = s === 'scratchy' ? sketch * 2 : s === 'gestural' ? sketch * 1.6 : sketch * 1.1;
+    const { passes, wavelength, amplitude, jitter } = getSketchStyleConfig(sketchStyle, sketch);
     if (outLines.length * passes < LINE_CAP) {
       const acc: FlowLine[] = [];
       for (let p = 0; p < passes; p++) {
