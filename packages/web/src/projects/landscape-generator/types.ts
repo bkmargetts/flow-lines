@@ -1,4 +1,4 @@
-import type { SketchStyle } from '@flow-lines/core';
+import type { ForegroundSide, SketchStyle } from '@flow-lines/core';
 
 /**
  * UI state for the Landscape Generator (mm / 0..1 / degree units). `render.ts`
@@ -29,6 +29,7 @@ export interface LandscapeState {
   sunRadiusMm: number;
   sunHalo: number; // 0..1
   moonRim: boolean;
+  sunRays: boolean;
   reflection: boolean;
   reflectionWidthMm: number;
 
@@ -46,6 +47,23 @@ export interface LandscapeState {
   ridgeHatchSpacingMm: number;
   ridgeHatchAngle: number; // degrees from horizontal
   slopeFollow: boolean;
+  formFollow: boolean;
+
+  // Compositional depth
+  headlands: number; // overlapping receding land fingers near the horizon
+  foreground: number; // 0..1 size of a dark foreground landform (0 = off)
+  foregroundSide: ForegroundSide;
+
+  // Hatch craft
+  toneContrast: number; // 0..1
+  crossHatch: number; // 0..2 extra shadow layers
+  hatchPatchiness: number; // 0..1
+  taper: number; // 0..1
+
+  // Detail marks
+  clouds: number; // 0..1 carved-cloud coverage
+  trees: number; // count
+  birds: number; // count
 
   // Rocks / islands
   rocks: number;
@@ -88,21 +106,36 @@ export const defaultLandscapeState: LandscapeState = {
   sunRadiusMm: 14,
   sunHalo: 0.7,
   moonRim: false,
+  sunRays: false,
   reflection: true,
-  reflectionWidthMm: 10,
+  reflectionWidthMm: 9,
 
-  waterHatchSpacingMm: 2,
-  waterDashMm: 12,
-  waterGapMm: 3.5,
+  waterHatchSpacingMm: 1.9,
+  waterDashMm: 11,
+  waterGapMm: 3,
 
   ridgeCount: 3,
   ridgeAmpMm: 12,
   ridgeFreq: 2.4,
   ridgeOctaves: 4,
   ridgePersistence: 0.5,
-  ridgeHatchSpacingMm: 1.7,
+  ridgeHatchSpacingMm: 1.6,
   ridgeHatchAngle: 80,
   slopeFollow: false,
+  formFollow: true,
+
+  headlands: 0,
+  foreground: 0,
+  foregroundSide: 'left',
+
+  toneContrast: 0.5,
+  crossHatch: 1,
+  hatchPatchiness: 0.5,
+  taper: 0.5,
+
+  clouds: 0,
+  trees: 0,
+  birds: 0,
 
   rocks: 3,
   rockMaxSizeMm: 16,

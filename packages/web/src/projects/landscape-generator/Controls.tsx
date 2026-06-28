@@ -109,6 +109,7 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
           <Slider label="Sun height" value={state.sunYFrac} min={0.08} max={0.6} step={0.01} onChange={(v) => update({ sunYFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Sun size" value={state.sunRadiusMm} min={4} max={30} step={0.5} onChange={(v) => update({ sunRadiusMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
           <Slider label="Halo" value={state.sunHalo} min={0} max={1.5} step={0.05} onChange={(v) => update({ sunHalo: v })} format={(v) => v.toFixed(2)} />
+          <Toggle label="Sun rays" checked={state.sunRays} onChange={(v) => update({ sunRays: v })} />
           <Toggle label="Draw rim (moon)" checked={state.moonRim} onChange={(v) => update({ moonRim: v })} />
           {state.hasWater && (
             <Toggle label="Water reflection" checked={state.reflection} onChange={(v) => update({ reflection: v })} />
@@ -128,14 +129,45 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
         </>
       )}
 
-      <h3 className="section-title">{state.hasWater ? 'Foreground' : 'Ridges'}</h3>
+      <h3 className="section-title">{state.hasWater ? 'Land' : 'Ridges'}</h3>
       {!state.hasWater && (
         <Slider label="Ridge layers" value={state.ridgeCount} min={1} max={8} step={1} onChange={(v) => update({ ridgeCount: v })} />
       )}
       <Slider label="Ridge height" value={state.ridgeAmpMm} min={2} max={36} step={0.5} onChange={(v) => update({ ridgeAmpMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Hatch spacing" value={state.ridgeHatchSpacingMm} min={0.8} max={4} step={0.1} onChange={(v) => update({ ridgeHatchSpacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
-      <Slider label="Hatch angle" value={state.ridgeHatchAngle} min={0} max={90} step={1} onChange={(v) => update({ ridgeHatchAngle: v })} format={(v) => `${v}°`} />
-      <Toggle label="Slope-following hatch" checked={state.slopeFollow} onChange={(v) => update({ slopeFollow: v })} />
+      <Toggle label="Form-following hatch (wraps the hill)" checked={state.formFollow} onChange={(v) => update({ formFollow: v })} />
+      <Slider label="Hatch angle" value={state.ridgeHatchAngle} min={0} max={90} step={1} onChange={(v) => update({ ridgeHatchAngle: v })} format={(v) => `${v}°`} disabled={state.formFollow} />
+      {!state.formFollow && (
+        <Toggle label="Slope-following angle" checked={state.slopeFollow} onChange={(v) => update({ slopeFollow: v })} />
+      )}
+
+      <h3 className="section-title">Depth &amp; landforms</h3>
+      {state.hasWater && (
+        <Slider label="Headlands" value={state.headlands} min={0} max={5} step={1} onChange={(v) => update({ headlands: v })} />
+      )}
+      <Slider label="Foreground landform" value={state.foreground} min={0} max={1} step={0.05} onChange={(v) => update({ foreground: v })} format={(v) => (v < 0.01 ? 'off' : `${Math.round(v * 100)}%`)} />
+      {state.foreground > 0.01 && (
+        <div className="control-group">
+          <label className="label-text">Foreground side</label>
+          <select value={state.foregroundSide} onChange={(e) => update({ foregroundSide: e.target.value as LandscapeState['foregroundSide'] })}>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+        </div>
+      )}
+
+      <h3 className="section-title">Hatch craft</h3>
+      <Slider label="Tonal depth" value={state.toneContrast} min={0} max={1} step={0.05} onChange={(v) => update({ toneContrast: v })} format={(v) => v.toFixed(2)} />
+      <Slider label="Cross-hatch (shadow)" value={state.crossHatch} min={0} max={2} step={1} onChange={(v) => update({ crossHatch: v })} />
+      <Slider label="Patchiness" value={state.hatchPatchiness} min={0} max={1} step={0.05} onChange={(v) => update({ hatchPatchiness: v })} format={(v) => v.toFixed(2)} />
+      <Slider label="Stroke break / taper" value={state.taper} min={0} max={1} step={0.05} onChange={(v) => update({ taper: v })} format={(v) => v.toFixed(2)} />
+
+      <h3 className="section-title">Detail</h3>
+      <Slider label="Clouds" value={state.clouds} min={0} max={1} step={0.05} onChange={(v) => update({ clouds: v })} format={(v) => (v < 0.01 ? 'off' : `${Math.round(v * 100)}%`)} />
+      {!state.hasWater && (
+        <Slider label="Trees" value={state.trees} min={0} max={12} step={1} onChange={(v) => update({ trees: v })} />
+      )}
+      <Slider label="Birds" value={state.birds} min={0} max={10} step={1} onChange={(v) => update({ birds: v })} />
 
       <h3 className="section-title">Rocks</h3>
       <Slider label="Rocks / islands" value={state.rocks} min={0} max={8} step={1} onChange={(v) => update({ rocks: v })} />

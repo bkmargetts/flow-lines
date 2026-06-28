@@ -1192,21 +1192,26 @@ program
   });
 
 // Multi-pen ink palettes for the landscape command (matches the web app's).
+// Layers map to a few ink roles: sky/water/ridge/contour/rock; headland=ridge,
+// foreground/horizon/bird/sun=contour, cloud=sky, tree=ridge.
+const lsPalette = (sky: string, water: string, ridge: string, contour: string, rock: string): Record<string, string> => ({
+  sky, water, reflection: water, ridge, headland: ridge, foreground: contour, contour, horizon: contour, rock, cloud: sky, tree: ridge, bird: contour, sun: contour,
+});
 const LANDSCAPE_PALETTES: Record<string, Record<string, string>> = {
-  ink: { sky: '#2a2a26', water: '#2a2a26', reflection: '#2a2a26', ridge: '#2a2a26', contour: '#2a2a26', horizon: '#2a2a26', rock: '#2a2a26', sun: '#2a2a26' },
-  sunset: { sky: '#9a6a4a', water: '#3a6076', reflection: '#3a6076', ridge: '#4a4636', contour: '#2e2820', horizon: '#2e2820', rock: '#3a342a', sun: '#2e2820' },
-  graphite: { sky: '#6a6a6a', water: '#525a60', reflection: '#525a60', ridge: '#3a3a3a', contour: '#222222', horizon: '#222222', rock: '#2c2c2c', sun: '#222222' },
-  sanguine: { sky: '#a86a4a', water: '#8a6a4a', reflection: '#8a6a4a', ridge: '#7a3b2a', contour: '#5a2418', horizon: '#5a2418', rock: '#6e2f1f', sun: '#5a2418' },
-  cyanotype: { sky: '#3a6fa0', water: '#13385e', reflection: '#13385e', ridge: '#1f4d78', contour: '#0e2a47', horizon: '#0e2a47', rock: '#0e2a47', sun: '#0e2a47' },
+  ink: lsPalette('#2a2a26', '#2a2a26', '#2a2a26', '#2a2a26', '#2a2a26'),
+  sunset: lsPalette('#9a6a4a', '#3a6076', '#4a4636', '#2e2820', '#3a342a'),
+  graphite: lsPalette('#6a6a6a', '#525a60', '#3a3a3a', '#222222', '#2c2c2c'),
+  sanguine: lsPalette('#a86a4a', '#8a6a4a', '#7a3b2a', '#5a2418', '#6e2f1f'),
+  cyanotype: lsPalette('#3a6fa0', '#13385e', '#1f4d78', '#0e2a47', '#0e2a47'),
 };
 
 // Scene presets for the landscape command (a subset of each preset's character).
 const LANDSCAPE_SCENES: Record<string, Partial<LandscapeOptions> & { palette?: string }> = {
-  'coastal-sunset': { hasWater: true, waterFrac: 0.6, horizonFrac: 0.44, sun: true, reflection: true, ridgeHatchAngle: 80, rocks: 3, palette: 'sunset' },
-  'misty-ranges': { hasWater: false, horizonFrac: 0.3, sun: false, ridgeCount: 6, ridgeAmp: 46, ridgePersistence: 0.45, ridgeHatchAngle: 80, slopeFollow: true, palette: 'graphite' },
-  'rolling-hills': { hasWater: false, horizonFrac: 0.4, sun: true, ridgeCount: 4, ridgeAmp: 32, ridgeFreq: 1.6, ridgeHatchAngle: 24, palette: 'ink' },
-  'desert-dunes': { hasWater: false, horizonFrac: 0.36, sun: true, ridgeCount: 5, ridgeAmp: 26, ridgeFreq: 1.1, ridgePersistence: 0.6, ridgeHatchAngle: 18, slopeFollow: true, palette: 'sanguine' },
-  'alpine-lake': { hasWater: true, waterFrac: 0.5, horizonFrac: 0.5, horizonWobble: 22, horizonFreq: 3.2, sun: true, reflection: true, ridgeHatchAngle: 78, rocks: 4, palette: 'cyanotype' },
+  'coastal-sunset': { hasWater: true, waterFrac: 0.6, horizonFrac: 0.44, sun: true, sunRays: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.5, foregroundSide: 'left', clouds: 0.35, birds: 5, rocks: 3, palette: 'sunset' },
+  'misty-ranges': { hasWater: false, horizonFrac: 0.3, sun: false, ridgeCount: 6, ridgeAmp: 46, ridgePersistence: 0.45, formFollow: true, toneContrast: 0.6, crossHatch: 1, birds: 3, palette: 'graphite' },
+  'rolling-hills': { hasWater: false, horizonFrac: 0.4, sun: true, ridgeCount: 4, ridgeAmp: 32, ridgeFreq: 1.6, formFollow: true, clouds: 0.32, trees: 6, palette: 'ink' },
+  'desert-dunes': { hasWater: false, horizonFrac: 0.36, sun: true, ridgeCount: 5, ridgeAmp: 26, ridgeFreq: 1.1, ridgePersistence: 0.6, formFollow: true, slopeFollow: true, crossHatch: 0, toneContrast: 0.55, palette: 'sanguine' },
+  'alpine-lake': { hasWater: true, waterFrac: 0.5, horizonFrac: 0.5, horizonWobble: 22, horizonFreq: 3.2, sun: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.35, foregroundSide: 'right', clouds: 0.35, rocks: 2, palette: 'cyanotype' },
 };
 
 program
@@ -1235,9 +1240,10 @@ program
   .option('--sun-y <number>', 'Sun centre y in px (defaults to upper sky)')
   .option('--sun-radius <number>', 'Sun radius in px', '42')
   .option('--sun-halo <number>', 'Soft halo as a fraction of the radius (0-1.5)', '0.7')
+  .option('--sun-rays', 'Short radial glow strokes around the sun')
   .option('--moon-rim', 'Draw a faint rim (moon) instead of bare paper')
-  .option('--no-reflection', 'Skip the sun-reflection column in the water')
-  .option('--reflection-width <number>', 'Reflection column half-width in px', '30')
+  .option('--no-reflection', 'Skip mirror shimmer in the water')
+  .option('--reflection-width <number>', 'Sun reflection column half-width in px', '26')
   // water
   .option('--water-spacing <number>', 'Horizontal water hatch spacing in px', '6')
   .option('--water-dash <number>', 'Mean water dash length in px', '36')
@@ -1248,9 +1254,23 @@ program
   .option('--ridge-freq <number>', 'Ridge noise frequency (default 2.4)')
   .option('--ridge-octaves <number>', 'Ridge noise octaves', '4')
   .option('--ridge-persistence <number>', 'Ridge noise roughness (0.3-0.75; default 0.5)')
-  .option('--ridge-spacing <number>', 'Ridge hatch spacing in px', '5')
-  .option('--ridge-angle <number>', 'Ridge hatch angle in degrees from horizontal (default 80)')
-  .option('--slope-follow', 'Tilt each ridge hatch toward its descent')
+  .option('--ridge-spacing <number>', 'Ridge hatch spacing in px', '4.5')
+  .option('--ridge-angle <number>', 'Straight-hatch angle in degrees (when not form-following; default 80)')
+  .option('--no-form-follow', 'Straight hatch instead of cross-contour comb')
+  .option('--slope-follow', 'Tilt straight ridge hatch toward its descent')
+  // compositional depth
+  .option('--headlands <number>', 'Overlapping receding headlands on water (default per --scene)')
+  .option('--foreground <number>', 'Dark foreground landform size 0..1 (default 0)')
+  .option('--foreground-side <s>', 'Foreground landform side: left | right (default per --scene)')
+  // hatch craft
+  .option('--tone-contrast <number>', 'Light/shadow modulation 0..1 (default 0.5)')
+  .option('--cross-hatch <number>', 'Extra shadow hatch layers 0..2 (default 1)')
+  .option('--patchiness <number>', 'Break shadow into hand-sized patches 0..1', '0.5')
+  .option('--taper <number>', 'Stroke-end taper / break / jitter 0..1', '0.5')
+  // detail marks
+  .option('--clouds <number>', 'Carved-cloud coverage 0..1 (default 0)')
+  .option('--trees <number>', 'Foliage clumps on the nearest crest (default 0)')
+  .option('--birds <number>', 'Gull marks in the sky (default 0)')
   // rocks
   .option('--rocks <number>', 'Small rocks / islands (default 0, or per --scene)')
   .option('--rock-max-size <number>', 'Max rock size in px', '46')
@@ -1310,8 +1330,9 @@ program
       sunRadius: num('sunRadius', 42),
       sunHalo: num('sunHalo', 0.7),
       moonRim: options.moonRim ?? false,
+      sunRays: options.sunRays ?? scene?.sunRays ?? false,
       reflection: scene ? (scene.reflection ?? true) && options.reflection : options.reflection,
-      reflectionWidth: num('reflectionWidth', 30),
+      reflectionWidth: num('reflectionWidth', 26),
       waterHatchSpacing: num('waterSpacing', 6),
       waterDash: num('waterDash', 36),
       waterGap: num('waterGap', 10),
@@ -1320,9 +1341,20 @@ program
       ridgeFreq: num('ridgeFreq', scene?.ridgeFreq ?? 2.4),
       ridgeOctaves: Math.round(num('ridgeOctaves', 4)),
       ridgePersistence: num('ridgePersistence', scene?.ridgePersistence ?? 0.5),
-      ridgeHatchSpacing: num('ridgeSpacing', 5),
+      ridgeHatchSpacing: num('ridgeSpacing', 4.5),
       ridgeHatchAngle: num('ridgeAngle', scene?.ridgeHatchAngle ?? 80),
       slopeFollow: options.slopeFollow ?? scene?.slopeFollow ?? false,
+      formFollow: scene ? (scene.formFollow ?? true) && options.formFollow : options.formFollow,
+      headlands: Math.round(num('headlands', scene?.headlands ?? 0)),
+      foreground: num('foreground', scene?.foreground ?? 0),
+      foregroundSide: (options.foregroundSide ?? scene?.foregroundSide ?? 'left') as LandscapeOptions['foregroundSide'],
+      toneContrast: num('toneContrast', scene?.toneContrast ?? 0.5),
+      crossHatch: Math.round(num('crossHatch', scene?.crossHatch ?? 1)),
+      hatchPatchiness: num('patchiness', 0.5),
+      taper: num('taper', 0.5),
+      clouds: num('clouds', scene?.clouds ?? 0),
+      trees: Math.round(num('trees', scene?.trees ?? 0)),
+      birds: Math.round(num('birds', scene?.birds ?? 0)),
       rocks: Math.round(num('rocks', scene?.rocks ?? 0)),
       rockMaxSize: num('rockMaxSize', 46),
       rockHatchSpacing: num('rockSpacing', 4),

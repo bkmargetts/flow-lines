@@ -41,6 +41,7 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     sunRadius: z(state.sunRadiusMm * mm),
     sunHalo: state.sunHalo,
     moonRim: state.moonRim,
+    sunRays: state.sunRays,
     reflection: state.reflection,
     reflectionWidth: z(state.reflectionWidthMm * mm),
 
@@ -56,6 +57,20 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     ridgeHatchSpacing: Math.max(1.5, z(state.ridgeHatchSpacingMm * mm)),
     ridgeHatchAngle: state.ridgeHatchAngle,
     slopeFollow: state.slopeFollow,
+    formFollow: state.formFollow,
+
+    headlands: Math.round(state.headlands),
+    foreground: state.foreground,
+    foregroundSide: state.foregroundSide,
+
+    toneContrast: state.toneContrast,
+    crossHatch: Math.round(state.crossHatch),
+    hatchPatchiness: state.hatchPatchiness,
+    taper: state.taper,
+
+    clouds: state.clouds,
+    trees: Math.round(state.trees),
+    birds: Math.round(state.birds),
 
     rocks: Math.round(state.rocks),
     rockMaxSize: z(state.rockMaxSizeMm * mm),
@@ -88,9 +103,14 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
         water: pal.water,
         reflection: pal.water,
         ridge: pal.ridge,
+        headland: pal.ridge,
+        foreground: pal.contour,
         contour: pal.contour,
         horizon: pal.contour,
         rock: pal.rock,
+        cloud: pal.sky,
+        tree: pal.ridge,
+        bird: pal.contour,
         sun: pal.contour,
       }
     : {
@@ -98,9 +118,14 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
         water: state.waterColor,
         reflection: state.waterColor,
         ridge: state.ridgeColor,
+        headland: state.ridgeColor,
+        foreground: state.contourColor,
         contour: state.contourColor,
         horizon: state.contourColor,
         rock: state.rockColor,
+        cloud: state.skyColor,
+        tree: state.ridgeColor,
+        bird: state.contourColor,
         sun: state.contourColor,
       };
 

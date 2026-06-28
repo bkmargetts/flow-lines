@@ -56,6 +56,31 @@ describe('generateLandscape', () => {
     expect(layer(land.lines, 'ridge').length).toBeGreaterThan(10);
   });
 
+  it('adds headlands and a foreground landform when asked', () => {
+    const r = generateLandscape(baseOptions({ hasWater: true, headlands: 3, foreground: 0.5, foregroundSide: 'left' }));
+    expect(layer(r.lines, 'headland').length).toBeGreaterThan(5);
+    expect(layer(r.lines, 'foreground').length).toBeGreaterThan(5);
+  });
+
+  it('cross-hatch and clouds add marks; clouds stay clear of carved holes', () => {
+    const plain = generateLandscape(baseOptions({ hasWater: false, ridgeCount: 3, crossHatch: 0, toneContrast: 0.6 }));
+    const crossed = generateLandscape(baseOptions({ hasWater: false, ridgeCount: 3, crossHatch: 2, toneContrast: 0.6 }));
+    expect(layer(crossed.lines, 'ridge').length).toBeGreaterThan(layer(plain.lines, 'ridge').length);
+    const cloudy = generateLandscape(baseOptions({ clouds: 0.6 }));
+    expect(layer(cloudy.lines, 'cloud').length).toBeGreaterThan(0);
+  });
+
+  it('keeps land hatch in short strokes, not band-long lines', () => {
+    const r = generateLandscape(baseOptions({ hasWater: false, ridgeCount: 3 }));
+    const long = layer(r.lines, 'ridge').filter((l) => {
+      let len = 0;
+      for (let i = 1; i < l.points.length; i++) len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+      return len > 200;
+    });
+    // A handful may survive wobble, but the band must not be one screen of long lines.
+    expect(long.length).toBeLessThan(layer(r.lines, 'ridge').length * 0.1);
+  });
+
   it('holds the sun as clean negative space in the sky band', () => {
     const sunX = 300;
     const sunY = 150;

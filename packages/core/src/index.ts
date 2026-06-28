@@ -115,7 +115,7 @@ export type { PlanetOptions, PlanetType } from './planet.js';
 
 // Landscape generator (procedural pen-and-ink landscapes)
 export { generateLandscape } from './landscape.js';
-export type { LandscapeOptions } from './landscape.js';
+export type { LandscapeOptions, ForegroundSide } from './landscape.js';
 
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
