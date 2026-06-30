@@ -9,6 +9,7 @@ import {
   generateConwayExposure,
   generateFlowLines,
   generateFlowLinesGrid,
+  generateLandscape,
   generatePlanet,
   generateVines,
   grayscaleFromRGBA,
@@ -45,6 +46,7 @@ import {
   type VineSupport,
   type StemTexture,
   type Point,
+  type LandscapeOptions,
   type PlanetOptions,
   type PlanetType,
 } from '@flow-lines/core';
@@ -1184,6 +1186,202 @@ program
     };
 
     const svg = toSVG({ ...result, seed: planetOptions.seed ?? 0 }, svgOptions);
+    const outputPath = resolve(process.cwd(), options.output);
+    writeFileSync(outputPath, svg, 'utf-8');
+    console.log(`\nSaved to: ${outputPath}`);
+  });
+
+// Multi-pen ink palettes for the landscape command (matches the web app's).
+// Layers map to a few ink roles: sky/water/ridge/contour/rock; headland=ridge,
+// foreground/horizon/bird/sun=contour, cloud=sky, tree=ridge.
+const lsPalette = (sky: string, water: string, ridge: string, contour: string, rock: string): Record<string, string> => ({
+  sky, water, reflection: water, ridge, headland: ridge, foreground: contour, contour, horizon: contour, rock, cloud: sky, tree: ridge, bird: contour, sun: contour,
+});
+const LANDSCAPE_PALETTES: Record<string, Record<string, string>> = {
+  ink: lsPalette('#2a2a26', '#2a2a26', '#2a2a26', '#2a2a26', '#2a2a26'),
+  sunset: lsPalette('#9a6a4a', '#3a6076', '#4a4636', '#2e2820', '#3a342a'),
+  graphite: lsPalette('#6a6a6a', '#525a60', '#3a3a3a', '#222222', '#2c2c2c'),
+  sanguine: lsPalette('#a86a4a', '#8a6a4a', '#7a3b2a', '#5a2418', '#6e2f1f'),
+  cyanotype: lsPalette('#3a6fa0', '#13385e', '#1f4d78', '#0e2a47', '#0e2a47'),
+};
+
+// Scene presets for the landscape command (a subset of each preset's character).
+const LANDSCAPE_SCENES: Record<string, Partial<LandscapeOptions> & { palette?: string }> = {
+  'coastal-sunset': { hasWater: true, waterFrac: 0.6, horizonFrac: 0.44, sun: true, sunRays: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.5, foregroundSide: 'left', clouds: 0.35, birds: 5, rocks: 3, palette: 'sunset' },
+  'misty-ranges': { hasWater: false, horizonFrac: 0.3, sun: false, ridgeCount: 6, ridgeAmp: 46, ridgePersistence: 0.45, formFollow: true, toneContrast: 0.6, crossHatch: 1, birds: 3, palette: 'graphite' },
+  'rolling-hills': { hasWater: false, horizonFrac: 0.4, sun: true, ridgeCount: 4, ridgeAmp: 32, ridgeFreq: 1.6, formFollow: true, clouds: 0.32, trees: 6, palette: 'ink' },
+  'desert-dunes': { hasWater: false, horizonFrac: 0.36, sun: true, ridgeCount: 5, ridgeAmp: 26, ridgeFreq: 1.1, ridgePersistence: 0.6, formFollow: true, slopeFollow: true, crossHatch: 0, toneContrast: 0.55, palette: 'sanguine' },
+  'alpine-lake': { hasWater: true, waterFrac: 0.5, horizonFrac: 0.5, horizonWobble: 22, horizonFreq: 3.2, sun: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.35, foregroundSide: 'right', clouds: 0.35, rocks: 2, palette: 'cyanotype' },
+};
+
+program
+  .command('landscape')
+  .description('Generate procedural, plottable pen-and-ink landscapes')
+  .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '630')
+  .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '720')
+  .option('--paper <size>', 'Plot to a physical sheet (a6,a5,a4,a3,letter,legal,tabloid); exports the SVG in mm')
+  .option('--orientation <o>', 'Paper orientation: portrait or landscape', 'portrait')
+  .option('--margin-mm <number>', 'Clear paper border in mm (with --paper)', '12')
+  .option('--pen-width-mm <number>', 'Plotted pen width in mm (with --paper)', '0.45')
+  .option('--resolution <number>', 'Render density in px per mm (with --paper)', '3')
+  .option('-m, --margin <number>', 'Margin from canvas edges in px (without --paper)', '24')
+  .option('-s, --seed <number>', 'Random seed for reproducibility')
+  .option('--scene <s>', 'coastal-sunset | misty-ranges | rolling-hills | desert-dunes | alpine-lake')
+  // composition (no defaults: a --scene preset fills these, explicit flags override)
+  .option('--horizon-frac <number>', 'Horizon height as a fraction of the frame (0-1; default 0.46)')
+  .option('--horizon-wobble <number>', 'Horizon undulation amplitude in px (default 6)')
+  .option('--horizon-freq <number>', 'Horizon noise frequency (default 2.2)')
+  .option('--no-water', 'Land below the horizon instead of water')
+  .option('--water-frac <number>', 'Share of the below-horizon space given to water (0-1; default 0.6)')
+  // sky / sun
+  .option('--sky-spacing <number>', 'Vertical sky hatch spacing in px', '6')
+  .option('--no-sun', 'Do not hold a sun/moon as negative space')
+  .option('--sun-x <number>', 'Sun centre x in px (defaults to ~middle)')
+  .option('--sun-y <number>', 'Sun centre y in px (defaults to upper sky)')
+  .option('--sun-radius <number>', 'Sun radius in px', '42')
+  .option('--sun-halo <number>', 'Soft halo as a fraction of the radius (0-1.5)', '0.7')
+  .option('--sun-rays', 'Short radial glow strokes around the sun')
+  .option('--moon-rim', 'Draw a faint rim (moon) instead of bare paper')
+  .option('--no-reflection', 'Skip mirror shimmer in the water')
+  .option('--reflection-width <number>', 'Sun reflection column half-width in px', '26')
+  // water
+  .option('--water-spacing <number>', 'Horizontal water hatch spacing in px', '6')
+  .option('--water-dash <number>', 'Mean water dash length in px', '36')
+  .option('--water-gap <number>', 'Mean water dash gap in px', '10')
+  // ridges (count/amp/freq/persistence/angle have no default: --scene fills them)
+  .option('--ridge-count <number>', 'Receding ridge silhouettes (land scenes; default 3)')
+  .option('--ridge-amp <number>', 'Front-ridge amplitude in px (default 34)')
+  .option('--ridge-freq <number>', 'Ridge noise frequency (default 2.4)')
+  .option('--ridge-octaves <number>', 'Ridge noise octaves', '4')
+  .option('--ridge-persistence <number>', 'Ridge noise roughness (0.3-0.75; default 0.5)')
+  .option('--ridge-spacing <number>', 'Ridge hatch spacing in px', '4.5')
+  .option('--ridge-angle <number>', 'Straight-hatch angle in degrees (when not form-following; default 80)')
+  .option('--no-form-follow', 'Straight hatch instead of cross-contour comb')
+  .option('--slope-follow', 'Tilt straight ridge hatch toward its descent')
+  // compositional depth
+  .option('--headlands <number>', 'Overlapping receding headlands on water (default per --scene)')
+  .option('--foreground <number>', 'Dark foreground landform size 0..1 (default 0)')
+  .option('--foreground-side <s>', 'Foreground landform side: left | right (default per --scene)')
+  // hatch craft
+  .option('--tone-contrast <number>', 'Light/shadow modulation 0..1 (default 0.5)')
+  .option('--cross-hatch <number>', 'Extra shadow hatch layers 0..2 (default 1)')
+  .option('--patchiness <number>', 'Break shadow into hand-sized patches 0..1', '0.5')
+  .option('--taper <number>', 'Stroke-end taper / break / jitter 0..1', '0.5')
+  // detail marks
+  .option('--clouds <number>', 'Carved-cloud coverage 0..1 (default 0)')
+  .option('--trees <number>', 'Foliage clumps on the nearest crest (default 0)')
+  .option('--birds <number>', 'Gull marks in the sky (default 0)')
+  // rocks
+  .option('--rocks <number>', 'Small rocks / islands (default 0, or per --scene)')
+  .option('--rock-max-size <number>', 'Max rock size in px', '46')
+  .option('--rock-spacing <number>', 'Rock hatch spacing in px', '4')
+  // ink / finishing
+  .option('--palette <p>', 'Multi-pen palette: ink | sunset | graphite | sanguine | cyanotype', 'ink')
+  .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1.2')
+  .option('--wobble <number>', 'Hand-drawn wobble amplitude in px', '0.6')
+  .option('--sketch <number>', 'Hand-drawn sketch overdraw intensity (0-1)', '0')
+  .option('--sketch-style <s>', 'Sketch character: loose | fine | gestural | scratchy', 'loose')
+  .option('--background', 'Include background rectangle')
+  .option('--background-color <color>', 'Background color', '#ffffff')
+  .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
+  .option('-o, --output <file>', 'Output file path', 'landscape.svg')
+  .action((options) => {
+    let width: number;
+    let height: number;
+    let marginPx: number;
+    let paperSvg: Pick<SVGOptions, 'physicalWidth' | 'physicalHeight'> = {};
+    let paperStrokeWidth: number | undefined;
+
+    if (options.paper) {
+      const page = pageMetrics(
+        getPaperSize(String(options.paper).toLowerCase()),
+        options.orientation as Orientation,
+        parseFloat(options.resolution)
+      );
+      width = page.widthPx;
+      height = page.heightPx;
+      marginPx = parseFloat(options.marginMm) * page.pxPerMm;
+      paperSvg = { physicalWidth: `${page.widthMm}mm`, physicalHeight: `${page.heightMm}mm` };
+      paperStrokeWidth = parseFloat(options.penWidthMm) * page.pxPerMm;
+    } else {
+      width = parseInt(options.width, 10);
+      height = parseInt(options.height, 10);
+      marginPx = parseInt(options.margin, 10);
+    }
+
+    // A --scene preset seeds the defaults; explicit flags still override it.
+    const scene = options.scene ? LANDSCAPE_SCENES[String(options.scene)] : undefined;
+    const num = (flag: string, fallback: number): number => (options[flag] !== undefined ? parseFloat(options[flag]) : fallback);
+
+    const landscapeOptions: LandscapeOptions = {
+      width,
+      height,
+      margin: marginPx,
+      seed: options.seed ? parseInt(options.seed, 10) : undefined,
+      horizonFrac: num('horizonFrac', scene?.horizonFrac ?? 0.46),
+      horizonWobble: num('horizonWobble', scene?.horizonWobble ?? 6),
+      horizonFreq: num('horizonFreq', scene?.horizonFreq ?? 2.2),
+      hasWater: scene ? (scene.hasWater ?? true) && options.water : options.water,
+      waterFrac: num('waterFrac', scene?.waterFrac ?? 0.6),
+      skyHatchSpacing: num('skySpacing', 6),
+      sun: scene ? (scene.sun ?? true) && options.sun : options.sun,
+      sunX: options.sunX !== undefined ? parseFloat(options.sunX) : undefined,
+      sunY: options.sunY !== undefined ? parseFloat(options.sunY) : undefined,
+      sunRadius: num('sunRadius', 42),
+      sunHalo: num('sunHalo', 0.7),
+      moonRim: options.moonRim ?? false,
+      sunRays: options.sunRays ?? scene?.sunRays ?? false,
+      reflection: scene ? (scene.reflection ?? true) && options.reflection : options.reflection,
+      reflectionWidth: num('reflectionWidth', 26),
+      waterHatchSpacing: num('waterSpacing', 6),
+      waterDash: num('waterDash', 36),
+      waterGap: num('waterGap', 10),
+      ridgeCount: Math.round(num('ridgeCount', scene?.ridgeCount ?? 3)),
+      ridgeAmp: num('ridgeAmp', scene?.ridgeAmp ?? 34),
+      ridgeFreq: num('ridgeFreq', scene?.ridgeFreq ?? 2.4),
+      ridgeOctaves: Math.round(num('ridgeOctaves', 4)),
+      ridgePersistence: num('ridgePersistence', scene?.ridgePersistence ?? 0.5),
+      ridgeHatchSpacing: num('ridgeSpacing', 4.5),
+      ridgeHatchAngle: num('ridgeAngle', scene?.ridgeHatchAngle ?? 80),
+      slopeFollow: options.slopeFollow ?? scene?.slopeFollow ?? false,
+      formFollow: scene ? (scene.formFollow ?? true) && options.formFollow : options.formFollow,
+      headlands: Math.round(num('headlands', scene?.headlands ?? 0)),
+      foreground: num('foreground', scene?.foreground ?? 0),
+      foregroundSide: (options.foregroundSide ?? scene?.foregroundSide ?? 'left') as LandscapeOptions['foregroundSide'],
+      toneContrast: num('toneContrast', scene?.toneContrast ?? 0.5),
+      crossHatch: Math.round(num('crossHatch', scene?.crossHatch ?? 1)),
+      hatchPatchiness: num('patchiness', 0.5),
+      taper: num('taper', 0.5),
+      clouds: num('clouds', scene?.clouds ?? 0),
+      trees: Math.round(num('trees', scene?.trees ?? 0)),
+      birds: Math.round(num('birds', scene?.birds ?? 0)),
+      rocks: Math.round(num('rocks', scene?.rocks ?? 0)),
+      rockMaxSize: num('rockMaxSize', 46),
+      rockHatchSpacing: num('rockSpacing', 4),
+      penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
+      wobble: parseFloat(options.wobble),
+      sketch: parseFloat(options.sketch),
+      sketchStyle: options.sketchStyle as LandscapeOptions['sketchStyle'],
+    };
+
+    console.log('Generating landscape...');
+    console.log(`  Size: ${width}x${height}, scene: ${options.scene ?? 'custom'}`);
+
+    const result = generateLandscape(landscapeOptions);
+    console.log(`  Generated ${result.lines.length} lines`);
+
+    const palette = LANDSCAPE_PALETTES[scene?.palette ?? options.palette] ?? LANDSCAPE_PALETTES.ink;
+    const svgOptions: SVGOptions = {
+      strokeColor: palette.contour,
+      strokeWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
+      includeBackground: options.background ?? false,
+      backgroundColor: options.backgroundColor,
+      optimizePaths: options.optimize,
+      layerColors: palette,
+      ...paperSvg,
+    };
+
+    const svg = toSVG(result, svgOptions);
     const outputPath = resolve(process.cwd(), options.output);
     writeFileSync(outputPath, svg, 'utf-8');
     console.log(`\nSaved to: ${outputPath}`);
