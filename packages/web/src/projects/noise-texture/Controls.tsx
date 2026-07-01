@@ -1,5 +1,6 @@
 import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
+import { SketchControls } from '../../components/SketchControls';
 import { GratingFields } from '../../textures/grating/GratingFields';
 import type { ControlsProps } from '../../modules/types';
 import type { NoiseTextureState } from './types';
@@ -66,6 +67,8 @@ export function NoiseTextureControls({ state, update }: ControlsProps<NoiseTextu
           onChange={(e) => updateState({ penWidthMm: parseFloat(e.target.value) })}
         />
       </div>
+
+      <SketchControls sketch={state.sketch} sketchStyle={state.sketchStyle} onChange={update} />
     </div>
   );
 }

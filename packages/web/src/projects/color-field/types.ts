@@ -6,6 +6,8 @@
  * `render.ts`); palette / seed / pen-width follow the other generative modules.
  */
 
+import type { SketchStyle } from '@flow-lines/core';
+
 export type AccentType = 'bar' | 'gap';
 export type AccentOrientation = 'vertical' | 'horizontal';
 export type GradientMode = 'linear' | 'radial';
@@ -52,6 +54,10 @@ export interface ColorFieldState {
   jitterMm: number;
   wobbleAmpMm: number;
   wobbleWavelengthMm: number;
+  /** Opt-in hand-drawn sketch overdraw intensity, 0..1 (0 = off). */
+  sketch: number;
+  /** Character of the sketch overdraw. */
+  sketchStyle: SketchStyle;
   minSegmentLengthMm: number;
   penWidthMm: number;
   seed: number;
@@ -87,6 +93,8 @@ export const defaultColorFieldState: ColorFieldState = {
   jitterMm: 0.1,
   wobbleAmpMm: 1.6,
   wobbleWavelengthMm: 55,
+  sketch: 0,
+  sketchStyle: 'loose',
   minSegmentLengthMm: 1,
   penWidthMm: 0.3,
   seed: Math.floor(Math.random() * 1000000),

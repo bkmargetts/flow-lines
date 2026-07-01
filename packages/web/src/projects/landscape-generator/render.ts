@@ -77,9 +77,13 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     rockHatchSpacing: Math.max(1.2, z(state.rockHatchSpacingMm * mm)),
 
     penWidth: z(state.penWidthMm * mm),
-    wobble: z(state.wobbleMm * mm),
-    sketch: state.sketch,
-    sketchStyle: state.sketchStyle,
+    // Base hand-drawn wobble; suppressed when sketch is on, because the
+    // compositor's per-layer sketch stage then supplies the hand-drawn
+    // character (and this keeps the two from doubling up).
+    wobble: state.sketch > 0.01 ? 0 : z(state.wobbleMm * mm),
+    // Sketch overdraw is applied generically by the compositor (see the
+    // returned LayerOutput.sketch), so the generator draws clean lines.
+    sketch: 0,
   };
 
   const result = generateLandscape(options);
@@ -134,5 +138,6 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     strokeColor: pal ? pal.contour : state.contourColor,
     strokeWidthPx: state.penWidthMm * mm,
     layerColors,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

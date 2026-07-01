@@ -79,8 +79,10 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     stemShade: state.stemShade,
     stemTexture: state.stemTexture,
     occlude: state.occlude,
-    sketch: state.sketch,
-    sketchStyle: state.sketchStyle,
+    // Sketch overdraw is applied generically by the compositor's per-layer
+    // finishing stage (see the `sketch` field on the returned LayerOutput), so
+    // the generator itself draws clean lines.
+    sketch: 0,
     castShadow: state.castShadow,
 
     density: seasonDensity,
@@ -141,5 +143,6 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     strokeColor: pal ? pal.stem : state.strokeColor,
     strokeWidthPx: state.penWidthMm * mm,
     layerColors,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

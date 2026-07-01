@@ -4,7 +4,7 @@ import { traceIsoContours } from './iso-contours.js';
 import { GrayscaleImage } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import { textToStrokes, textWidth } from './stroke-font.js';
-import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
+import { applySketch, type SketchStyle } from './sketch-styles.js';
 
 /**
  * Procedural planets drawn as plottable pen-and-ink: a sphere shaded by
@@ -1167,14 +1167,7 @@ export function generatePlanet(options: PlanetOptions): {
   // Generator) when `sketch` is set, otherwise a single low-frequency wobble.
   let finished: FlowLine[];
   if (o.sketch > 0.01) {
-    const { passes, wavelength, amplitude, jitter } = getSketchStyleConfig(o.sketchStyle, o.sketch);
-    const acc: FlowLine[] = [];
-    for (let p = 0; p < passes; p++) {
-      const pseed = seed + p * 9301 + 7;
-      const styled = applyHandDrawnStyle({ lines, width, height, seed: pseed }, { amplitude, wavelength, jitter, seed: pseed }).lines;
-      for (const l of styled) acc.push(l);
-    }
-    finished = acc;
+    finished = applySketch({ lines, width, height, seed }, o.sketchStyle, o.sketch).lines;
   } else {
     finished = applyHandDrawnStyle({ lines, width, height, seed }, { amplitude: o.wobble, wavelength: 42, seed }).lines;
   }

@@ -1,4 +1,4 @@
-import type { PhysarumPreset } from '@flow-lines/core';
+import type { PhysarumPreset, SketchStyle } from '@flow-lines/core';
 
 /**
  * Physarum (slime-mold transport networks) settings. The page frame (paper,
@@ -69,6 +69,10 @@ export interface PhysarumState {
   vignette: number;
   /** Hand-drawn wobble amplitude in px */
   wobble: number;
+  /** Opt-in hand-drawn sketch overdraw intensity, 0..1 (0 = off). */
+  sketch: number;
+  /** Character of the sketch overdraw. */
+  sketchStyle: SketchStyle;
 
   // ---- Presentation / inks ----
   strokeColor: string;
@@ -117,6 +121,8 @@ export const defaultPhysarumState: PhysarumState = {
   valueBands: 5,
   vignette: 0.35,
   wobble: 0.8,
+  sketch: 0,
+  sketchStyle: 'loose',
 
   strokeColor: '#000000',
   penWidthMm: 0.3,

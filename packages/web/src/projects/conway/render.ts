@@ -51,5 +51,6 @@ export function renderConway(state: ConwayState, env: RenderEnv): LayerOutput {
     layerColors: state.multiInk
       ? { present: state.presentColor, ghost: state.ghostColor, trail: state.trailColor }
       : undefined,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

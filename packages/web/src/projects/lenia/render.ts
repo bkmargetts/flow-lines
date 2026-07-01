@@ -54,5 +54,6 @@ export function renderLenia(state: LeniaState, env: RenderEnv): LayerOutput {
     layerColors: state.multiInk
       ? { core: state.coreColor, mid: state.midColor, rim: state.rimColor }
       : undefined,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

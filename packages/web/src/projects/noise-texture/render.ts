@@ -20,5 +20,6 @@ export function renderNoiseTexture(state: NoiseTextureState, env: RenderEnv): La
     strokeColor,
     strokeWidthPx: state.penWidthMm * page.pxPerMm,
     layerColors,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

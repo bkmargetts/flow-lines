@@ -1,6 +1,7 @@
 import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
 import { ColorField, PalettePicker } from '../../components/ColorField';
+import { SketchControls } from '../../components/SketchControls';
 import type { ControlsProps, Updater } from '../../modules/types';
 import type {
   AccentOrientation,
@@ -364,6 +365,7 @@ export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldSt
         onChange={(v) => u({ wobbleAmpMm: v })}
         format={(v) => `${v.toFixed(2)}mm`}
       />
+      <SketchControls sketch={state.sketch} sketchStyle={state.sketchStyle} onChange={u} />
       <Slider
         label="Min segment"
         info="Drops segments shorter than this, mm — clears feather slivers."

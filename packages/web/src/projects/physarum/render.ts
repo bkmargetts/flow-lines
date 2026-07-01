@@ -56,5 +56,6 @@ export function renderPhysarum(state: PhysarumState, env: RenderEnv): LayerOutpu
     layerColors: state.multiInk
       ? { core: state.coreColor, mid: state.midColor, rim: state.rimColor }
       : undefined,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

@@ -1,4 +1,5 @@
 import {
+  applySketch,
   limitStrokeDensity,
   toSVG,
   toSVGLayers,
@@ -82,7 +83,7 @@ export function composite(
       // Live layers never *re-render* against what's above them (their worker is
       // too expensive to re-run on stack churn) — take their published lines.
       // Hold-off is still honoured cheaply by trimming those lines (no re-render).
-      out = layer.liveOutput ?? null;
+      out = sketchLayer(layer.liveOutput ?? null, page);
       if (out && holdOff && haloPx != null) {
         out = { ...out, lines: holdOffAgainst(out.lines, avoidAccum, haloPx) };
       }
@@ -94,7 +95,9 @@ export function composite(
         avoid: holdOff ? avoidAccum : undefined,
         haloPx,
       };
-      out = layer.module.render(layer.state, env);
+      // Apply the opt-in sketch overdraw before hold-off, so wobble can't push
+      // strokes back into a halo the layer above reserved.
+      out = sketchLayer(layer.module.render(layer.state, env), page);
       // Modules that don't natively reserve paper get a generic trim fallback.
       if (out && holdOff && haloPx != null && !layer.module.consumesAvoid) {
         out = { ...out, lines: holdOffAgainst(out.lines, avoidAccum, haloPx) };
@@ -186,6 +189,29 @@ export function composite(
 export function compositeLayers(result: CompositeResult): { layer: string; svg: string }[] {
   return toSVGLayers(result.result, result.svgOptions);
 }
+
+/** The generic per-layer sketch finishing stage: when a module opts in via
+ *  `LayerOutput.sketch`, redraw its lines with the shared hand-drawn overdraw
+ *  (core's `applySketch`) in final page px. A no-op for layers that don't opt
+ *  in, so it's safe to run over every layer (live included). */
+function sketchLayer(out: LayerOutput | null, page: PageMetrics): LayerOutput | null {
+  if (!out || !out.sketch || out.sketch.intensity <= 0.01 || !out.lines.length) return out;
+  const { style, intensity, seed } = out.sketch;
+  const { lines } = applySketch(
+    { lines: out.lines, width: page.widthPx, height: page.heightPx, seed },
+    style,
+    intensity,
+    // Multi-pass overdraw multiplies the line count; cap it so a dense layer
+    // (a packed texture, a full colour field) degrades to no-sketch rather than
+    // stalling the render worker.
+    { lineCap: SKETCH_LINE_CAP }
+  );
+  return { ...out, lines };
+}
+
+/** Skip sketch overdraw once the multiplied line count would exceed this — a
+ *  guard against pathological blow-ups on very dense layers. */
+const SKETCH_LINE_CAP = 120000;
 
 function distinctLayers(lines: FlowLine[]): number {
   const keys = new Set<string>();

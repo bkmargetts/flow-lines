@@ -1,3 +1,5 @@
+import type { SketchStyle } from '@flow-lines/core';
+
 /**
  * Conway long-exposure settings. The page frame (paper, orientation,
  * resolution, margin) lives in the shared FrameContext, not here.
@@ -21,6 +23,10 @@ export interface ConwayState {
   residueMaxCells: number;
   /** Hand-drawn wobble amplitude in px */
   wobble: number;
+  /** Opt-in hand-drawn sketch overdraw intensity, 0..1 (0 = off). */
+  sketch: number;
+  /** Character of the sketch overdraw. */
+  sketchStyle: SketchStyle;
   /** History render style */
   style: 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers';
   /** Reserved-paper sliver around the present, in mm */
@@ -76,6 +82,8 @@ export const defaultConwayState: ConwayState = {
   solidThreshold: 0.62,
   residueMaxCells: 6,
   wobble: 0.8,
+  sketch: 0,
+  sketchStyle: 'loose',
   style: 'marks',
   haloMm: 1.2,
   contourLevels: 5,

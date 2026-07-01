@@ -55,5 +55,6 @@ export function renderComplexFlow(state: ComplexFlowState, env: RenderEnv): Laye
     strokeColor: '#111111',
     strokeWidthPx: state.penWidthMm * page.pxPerMm,
     layerColors: buildPaletteLayerColors(state.palette, state.layerCount, state.customRamp),
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

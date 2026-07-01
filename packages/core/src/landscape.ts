@@ -1,7 +1,7 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
-import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
+import { applySketch, type SketchStyle } from './sketch-styles.js';
 import { traceIsoContours } from './iso-contours.js';
 import type { GrayscaleImage } from './image.js';
 
@@ -1148,14 +1148,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   // —— Hand-drawn finish + margin clip ————————————————————————————————————
   let finished: FlowLine[];
   if (o.sketch > 0.01) {
-    const { passes, wavelength, amplitude, jitter } = getSketchStyleConfig(o.sketchStyle, o.sketch);
-    const acc: FlowLine[] = [];
-    for (let p = 0; p < passes; p++) {
-      const pseed = seed + p * 9301 + 7;
-      const styled = applyHandDrawnStyle({ lines, width, height, seed: pseed }, { amplitude, wavelength, jitter, seed: pseed }).lines;
-      for (const l of styled) acc.push(l);
-    }
-    finished = acc;
+    finished = applySketch({ lines, width, height, seed }, o.sketchStyle, o.sketch).lines;
   } else {
     finished = applyHandDrawnStyle({ lines, width, height, seed }, { amplitude: o.wobble, wavelength: 42, seed }).lines;
   }

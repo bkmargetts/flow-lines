@@ -2,6 +2,7 @@ import { LENIA_PRESETS, type LeniaPreset } from '@flow-lines/core';
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
+import { SketchControls } from '../../components/SketchControls';
 import type { ControlsProps } from '../../modules/types';
 import type { LeniaState } from './types';
 
@@ -477,6 +478,8 @@ export function LeniaControls({ state, update }: ControlsProps<LeniaState>) {
               onChange={(e) => updateState({ wobble: parseFloat(e.target.value) })}
             />
           </div>
+
+          <SketchControls sketch={state.sketch} sketchStyle={state.sketchStyle} onChange={update} />
         </details>
 
         {state.artStyle && (

@@ -1,6 +1,7 @@
 import { InfoTip } from '../../components/InfoTip';
 import { PalettePicker } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
+import { SketchControls } from '../../components/SketchControls';
 import type { ControlsProps } from '../../modules/types';
 import type { ComplexFlowState } from './types';
 import type { SingularityLayout, SeedLayout, LayerBy } from '@flow-lines/core';
@@ -414,6 +415,8 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
           onChange={(e) => updateState({ wobble: parseFloat(e.target.value) })}
         />
       </div>
+
+      <SketchControls sketch={state.sketch} sketchStyle={state.sketchStyle} onChange={update} />
 
       <h3 className="section-title">Seed</h3>
 

@@ -167,6 +167,49 @@ describe('composite', () => {
     expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(2);
   });
 
+  it('applies a layer\'s opt-in sketch overdraw (multi-pass) and leaves others alone', () => {
+    // One long line so the sketch pass count is what changes the count. Scratchy
+    // at intensity 1 redraws it several times; a plain stripe is untouched.
+    const sketchy: PureModule<unknown> = {
+      kind: 'pure',
+      id: 'sketchy',
+      label: 'sketchy',
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: [{ points: [{ x: 10, y: 50 }, { x: 300, y: 52 }], pen: 'fine' as const }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+        sketch: { style: 'scratchy' as const, intensity: 1, seed: 5 },
+      }),
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('plain', '#000', 20)),
+      layer(sketchy, { instanceId: 'sketchy' }),
+    ]);
+    // Plain layer: exactly its one line. Sketchy layer: redrawn into several.
+    expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(1);
+    expect(result.result.lines.filter((l) => l.layer === 'L1/fine').length).toBeGreaterThan(1);
+  });
+
+  it('leaves a layer untouched when its sketch intensity is zero', () => {
+    const offMod: PureModule<unknown> = {
+      kind: 'pure',
+      id: 'off',
+      label: 'off',
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: [{ points: [{ x: 10, y: 50 }, { x: 300, y: 52 }], pen: 'fine' as const }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+        sketch: { style: 'scratchy' as const, intensity: 0, seed: 5 },
+      }),
+    };
+    const result = composite({ ...defaultFrame }, page, [layer(offMod, { instanceId: 'off' })]);
+    expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(1);
+  });
+
   it('is a clean empty sheet when there are no visible layers', () => {
     const result = composite({ ...defaultFrame }, page, [
       layer(stripe('a', '#ff0000', 20), { visible: false }),

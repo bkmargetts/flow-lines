@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ColorField } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
+import { SketchControls } from '../../components/SketchControls';
 import type { ControlsProps } from '../../modules/types';
 import type { LandscapeState } from './types';
 import { LANDSCAPE_PALETTES, CUSTOM_PALETTE } from './palettes';
@@ -206,18 +207,7 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
         <Slider label="Rock spacing" value={state.rockHatchSpacingMm} min={0.8} max={3} step={0.1} onChange={(v) => update({ rockHatchSpacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} disabled={state.rocks < 1} />
         <Slider label="Pen width" value={state.penWidthMm} min={0.1} max={1} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
         <Slider label="Wobble" value={state.wobbleMm} min={0} max={0.8} step={0.02} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
-        <Slider label="Sketchiness" value={state.sketch} min={0} max={1} step={0.05} onChange={(v) => update({ sketch: v })} format={(v) => v.toFixed(2)} />
-        {state.sketch > 0 && (
-          <div className="control-group">
-            <label className="label-text">Sketch style</label>
-            <select value={state.sketchStyle} onChange={(e) => update({ sketchStyle: e.target.value as LandscapeState['sketchStyle'] })}>
-              <option value="loose">Loose</option>
-              <option value="fine">Fine</option>
-              <option value="gestural">Gestural</option>
-              <option value="scratchy">Scratchy</option>
-            </select>
-          </div>
-        )}
+        <SketchControls sketch={state.sketch} sketchStyle={state.sketchStyle} onChange={update} />
       </details>
     </div>
   );

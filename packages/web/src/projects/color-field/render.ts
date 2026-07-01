@@ -94,5 +94,6 @@ export function renderColorField(state: ColorFieldState, env: RenderEnv): LayerO
     strokeWidthPx: state.penWidthMm * page.pxPerMm,
     layerColors,
     layerBlend,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

@@ -1,4 +1,4 @@
-import type { RDPreset } from '@flow-lines/core';
+import type { RDPreset, SketchStyle } from '@flow-lines/core';
 
 /**
  * Reaction–Diffusion (Gray–Scott) settings. The page frame (paper,
@@ -55,6 +55,10 @@ export interface RDState {
   vignette: number;
   /** Hand-drawn wobble amplitude in px */
   wobble: number;
+  /** Opt-in hand-drawn sketch overdraw intensity, 0..1 (0 = off). */
+  sketch: number;
+  /** Character of the sketch overdraw. */
+  sketchStyle: SketchStyle;
 
   // ---- Presentation / inks ----
   strokeColor: string;
@@ -96,6 +100,8 @@ export const defaultRDState: RDState = {
   valueBands: 5,
   vignette: 0.35,
   wobble: 0.8,
+  sketch: 0,
+  sketchStyle: 'loose',
 
   strokeColor: '#000000',
   penWidthMm: 0.3,

@@ -1,4 +1,4 @@
-import type { LeniaPreset, LeniaSeedPattern } from '@flow-lines/core';
+import type { LeniaPreset, LeniaSeedPattern, SketchStyle } from '@flow-lines/core';
 
 /**
  * Lenia ("Lifeforms") settings. The page frame (paper, orientation,
@@ -67,6 +67,10 @@ export interface LeniaState {
   vignette: number;
   /** Hand-drawn wobble amplitude in px */
   wobble: number;
+  /** Opt-in hand-drawn sketch overdraw intensity, 0..1 (0 = off). */
+  sketch: number;
+  /** Character of the sketch overdraw. */
+  sketchStyle: SketchStyle;
 
   // ---- Presentation / inks ----
   strokeColor: string;
@@ -114,6 +118,8 @@ export const defaultLeniaState: LeniaState = {
   valueBands: 5,
   vignette: 0.35,
   wobble: 0.8,
+  sketch: 0,
+  sketchStyle: 'loose',
 
   strokeColor: '#000000',
   penWidthMm: 0.3,

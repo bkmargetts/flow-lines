@@ -91,9 +91,13 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     moonRadiusFrac: state.moonRadiusFrac,
 
     penWidth: (state.penWidthMm * mm) / zoom,
-    wobble: (state.wobbleMm * mm) / zoom,
-    sketch: state.sketch,
-    sketchStyle: state.sketchStyle,
+    // Base hand-drawn wobble; suppressed when sketch is on, because the
+    // compositor's per-layer sketch stage then supplies the hand-drawn
+    // character (and this keeps the two from doubling up).
+    wobble: state.sketch > 0.01 ? 0 : (state.wobbleMm * mm) / zoom,
+    // Sketch overdraw is applied generically by the compositor (see the
+    // returned LayerOutput.sketch), so the generator draws clean lines.
+    sketch: 0,
   };
 
   const result = generatePlanet(options);
@@ -148,5 +152,6 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     strokeColor: pal ? pal.limb : state.limbColor,
     strokeWidthPx: state.penWidthMm * mm,
     layerColors,
+    sketch: { style: state.sketchStyle, intensity: state.sketch, seed: state.seed },
   };
 }

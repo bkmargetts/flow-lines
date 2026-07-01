@@ -26,7 +26,7 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
-import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
+import { applySketch, type SketchStyle } from './sketch-styles.js';
 
 export type VineMode = 'growth' | 'colonization';
 export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
@@ -752,21 +752,11 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
 
   // Sketchy overdraw: redraw every line a few times with low-frequency wobble.
   // The style sets the character (passes / wobble wavelength / amplitude /
-  // jitter); `sketch` is the intensity.
-  if (sketch > 0.01) {
-    const { passes, wavelength, amplitude, jitter } = getSketchStyleConfig(sketchStyle, sketch);
-    if (outLines.length * passes < LINE_CAP) {
-      const acc: FlowLine[] = [];
-      for (let p = 0; p < passes; p++) {
-        const styled = applyHandDrawnStyle(
-          { lines: outLines, width, height, seed: seed + p * 9301 + 7 },
-          { amplitude, wavelength, jitter, seed: seed + p * 9301 + 7 }
-        ).lines;
-        for (const l of styled) acc.push(l);
-      }
-      outLines = acc;
-    }
-  }
+  // jitter); `sketch` is the intensity. The `LINE_CAP` guard skips it when the
+  // multiplied line count would blow past the cap.
+  outLines = applySketch({ lines: outLines, width, height, seed }, sketchStyle, sketch, {
+    lineCap: LINE_CAP,
+  }).lines;
 
   // Keep the margin clear: clip every line to the inner box so foliage, blooms
   // and wobble that overhang the stems' growth bounds don't spill into the

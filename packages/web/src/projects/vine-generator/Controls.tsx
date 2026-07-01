@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ColorField } from '../../components/ColorField';
 import { EditableValue } from '../../components/EditableValue';
+import { SketchControls } from '../../components/SketchControls';
 import type { ControlsProps } from '../../modules/types';
 import type { VineState } from './types';
 import { VINE_PALETTES, CUSTOM_PALETTE } from './palettes';
@@ -571,26 +572,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </label>
         <p className="paint-hint">Vines stop short of geometry they'd grow into.</p>
       </div>
-      <Slider
-        label="Sketchiness"
-        value={state.sketch}
-        min={0}
-        max={1}
-        step={0.05}
-        onChange={(v) => update({ sketch: v })}
-        format={(v) => v.toFixed(2)}
-      />
-      {state.sketch > 0 && (
-        <div className="control-group">
-          <label className="label-text">Sketch style</label>
-          <select value={state.sketchStyle} onChange={(e) => update({ sketchStyle: e.target.value as VineState['sketchStyle'] })}>
-            <option value="loose">Loose</option>
-            <option value="fine">Fine</option>
-            <option value="gestural">Gestural</option>
-            <option value="scratchy">Scratchy</option>
-          </select>
-        </div>
-      )}
+      <SketchControls sketch={state.sketch} sketchStyle={state.sketchStyle} onChange={update} />
 
       <h3 className="section-title">Style</h3>
 

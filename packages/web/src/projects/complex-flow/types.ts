@@ -1,4 +1,4 @@
-import { type Point, type SingularityLayout, type SeedLayout, type LayerBy } from '@flow-lines/core';
+import { type Point, type SingularityLayout, type SeedLayout, type LayerBy, type SketchStyle } from '@flow-lines/core';
 
 /**
  * Complex Flow settings (Savva-style poles & zeros). The page frame (paper,
@@ -44,6 +44,10 @@ export interface ComplexFlowState {
   /** Pen width in millimetres (plotted line weight) */
   penWidthMm: number;
   handDrawn: boolean;
+  /** Opt-in hand-drawn sketch overdraw intensity, 0..1 (0 = off). */
+  sketch: number;
+  /** Character of the sketch overdraw. */
+  sketchStyle: SketchStyle;
 }
 
 export const defaultComplexFlowState: ComplexFlowState = {
@@ -79,4 +83,6 @@ export const defaultComplexFlowState: ComplexFlowState = {
 
   penWidthMm: 0.25,
   handDrawn: false,
+  sketch: 0,
+  sketchStyle: 'loose',
 };

@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { FlowLine, PageMetrics } from '@flow-lines/core';
+import type { FlowLine, PageMetrics, SketchStyle } from '@flow-lines/core';
 import type { FrameSettings } from '../FrameContext';
 
 /**
@@ -58,6 +58,12 @@ export interface LayerOutput {
    *  layer names. Lets a layer overprint so overlapping inks show the blended
    *  colour (physical pen overprint). Absent keys render normally. */
   layerBlend?: Record<string, string>;
+  /** Opt-in hand-drawn "sketch" overdraw for this layer. When present with a
+   *  positive intensity, the compositor redraws this layer's lines a few times
+   *  with low-frequency wobble (via core's `applySketch`) — the shared, generic
+   *  version of the look the Vine/Planet/Landscape generators pioneered. Absent
+   *  = the layer is left exactly as rendered. */
+  sketch?: { style: SketchStyle; intensity: number; seed: number };
 }
 
 /** A state patch — a partial value or a function of the current state (so
