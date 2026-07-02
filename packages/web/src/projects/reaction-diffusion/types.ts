@@ -1,4 +1,5 @@
 import type { RDPreset } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * Reaction–Diffusion (Gray–Scott) settings. The page frame (paper,
@@ -71,7 +72,7 @@ export interface RDState {
 }
 
 export const defaultRDState: RDState = {
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   preset: 'coral',
   gridCols: 180,
   steps: 4000,
