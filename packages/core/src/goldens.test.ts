@@ -175,6 +175,15 @@ CASES['planet/moon-craters/42'] = () =>
     craters: true,
     stipple: 0.5,
   });
+CASES['planet/rivers/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    rivers: 5,
+    mountains: true,
+  });
 CASES['planet/oblate-ringed/42'] = () =>
   generatePlanet({
     width: 300,

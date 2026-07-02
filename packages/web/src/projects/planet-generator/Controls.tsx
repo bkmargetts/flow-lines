@@ -163,7 +163,11 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
             <>
               <Toggle label="Mountain hachures" checked={state.mountains} onChange={(v) => update({ mountains: v })} />
               <Toggle label="Clouds" checked={state.clouds} onChange={(v) => update({ clouds: v })} />
+              <Slider label="Rivers" value={state.rivers} min={0} max={12} step={1} onChange={(v) => update({ rivers: v })} />
             </>
+          )}
+          {isRocky && (
+            <Slider label="Rilles (channels)" value={state.rilles} min={0} max={8} step={1} onChange={(v) => update({ rilles: v })} />
           )}
         </>
       )}

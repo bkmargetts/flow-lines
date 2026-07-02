@@ -94,6 +94,8 @@ export interface PlanetOptions {
   terminatorEmphasis?: number; // 0..1 extra hatch hugging the terminator
   mountains?: boolean; // chevron hachures on high terrestrial land
   clouds?: boolean; // soft cloud shapes traced over terrestrial worlds
+  rivers?: number; // drainage lines descending high ground to the sea (terrestrial)
+  rilles?: number; // sinuous double-line channels (moon / barren)
 
   // Engraved-plate annotation
   graticule?: boolean; // lat/long lines on the globe

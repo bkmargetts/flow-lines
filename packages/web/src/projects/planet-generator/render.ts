@@ -82,6 +82,8 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     terminatorEmphasis: state.terminatorEmphasis,
     mountains: state.mountains,
     clouds: state.clouds,
+    rivers: state.rivers,
+    rilles: state.rilles,
 
     graticule: state.graticule,
     graticuleSpacingDeg: state.graticuleSpacingDeg,

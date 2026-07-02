@@ -69,6 +69,8 @@ export function registerPlanet(program: Command) {
     .option('--terminator-emphasis <number>', 'Extra hatch hugging the terminator (0-1)', '0')
     .option('--mountains', 'Chevron hachures on high terrestrial land')
     .option('--clouds', 'Trace soft cloud shapes (terrestrial)')
+    .option('--rivers <number>', 'Drainage lines from high ground to the sea (terrestrial)', '0')
+    .option('--rilles <number>', 'Sinuous double-line channels (moon / barren)', '0')
     .option('--crater-detail', 'Central peaks + ejecta rays on big craters')
     // rings
     .option('--rings', 'Draw a tilted ring system')
@@ -158,6 +160,8 @@ export function registerPlanet(program: Command) {
         terminatorEmphasis: parseFloat(options.terminatorEmphasis),
         mountains: options.mountains ?? false,
         clouds: options.clouds ?? false,
+        rivers: parseInt(options.rivers, 10),
+        rilles: parseInt(options.rilles, 10),
         rings: options.rings ?? false,
         ringInner: parseFloat(options.ringInner),
         ringOuter: parseFloat(options.ringOuter),

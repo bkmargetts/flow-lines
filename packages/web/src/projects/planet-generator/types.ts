@@ -79,6 +79,8 @@ export interface PlanetState {
   terminatorEmphasis: number; // 0..1
   mountains: boolean;
   clouds: boolean;
+  rivers: number; // drainage lines (terrestrial)
+  rilles: number; // sinuous channels (moon / barren)
 
   // Engraved-plate annotation
   graticule: boolean;
@@ -176,6 +178,8 @@ export const defaultPlanetState: PlanetState = {
   terminatorEmphasis: 0,
   mountains: false,
   clouds: false,
+  rivers: 0,
+  rilles: 0,
 
   graticule: false,
   graticuleSpacingDeg: 30,

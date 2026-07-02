@@ -55,6 +55,8 @@ export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin
   terminatorEmphasis: 0,
   mountains: false,
   clouds: false,
+  rivers: 0,
+  rilles: 0,
   graticule: false,
   graticuleSpacingDeg: 30,
   plateFrame: false,

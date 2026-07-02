@@ -160,6 +160,32 @@ describe('generatePlanet', () => {
     }
   });
 
+  it('rivers flow downhill to the sea and stay on the front disk', () => {
+    const opts = { planetType: 'terrestrial' as const, rivers: 6, seed: 5 };
+    const off = generatePlanet(baseOptions({ ...opts, rivers: 0 }));
+    const on = generatePlanet(baseOptions(opts));
+    const extra = layer(on.lines, 'feature').length - layer(off.lines, 'feature').length;
+    expect(extra).toBeGreaterThan(0);
+    for (const ln of layer(on.lines, 'feature')) {
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeLessThanOrEqual(R + 1.5);
+      }
+    }
+    // Rivers are a terrestrial mark: a moon with rivers renders identically.
+    const moon = generatePlanet(baseOptions({ planetType: 'moon' }));
+    const moonRivers = generatePlanet(baseOptions({ planetType: 'moon', rivers: 6 }));
+    expect(moonRivers.lines).toEqual(moon.lines);
+  });
+
+  it('rilles emit double-line channels on rocky bodies only', () => {
+    const off = generatePlanet(baseOptions({ planetType: 'moon' }));
+    const on = generatePlanet(baseOptions({ planetType: 'moon', rilles: 4 }));
+    expect(layer(on.lines, 'feature').length).toBeGreaterThan(layer(off.lines, 'feature').length);
+    const terr = generatePlanet(baseOptions({ planetType: 'terrestrial' }));
+    const terrRilles = generatePlanet(baseOptions({ planetType: 'terrestrial', rilles: 4 }));
+    expect(terrRilles.lines).toEqual(terr.lines);
+  });
+
   it('squashes oblate gas giants: limb wider than tall, marks inside the spheroid', () => {
     const r = generatePlanet(baseOptions({ planetType: 'gas-giant', bands: true, oblateness: 0.12 }));
     const ky = 1 - 0.12;

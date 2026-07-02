@@ -129,8 +129,9 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
   // Per-body noise/RNG streams, each on its own seed offset so features can be
   // toggled without shifting unrelated geometry. Offsets in use elsewhere:
   // +202 (reserved), +505 storms, +606 clouds, +707 stipple, +808/+909 craters,
-  // +1212 mountains, +1414/+1515 aurora; scene-level: +1001 starfield,
-  // +1313 corona, +1616 haze atmosphere, +4242 moon, +9100 layouts.
+  // +1212 mountains, +1414/+1515 aurora, +1717/+1818/+2525 rivers,
+  // +1919/+2626 rilles; scene-level: +1001 starfield, +1313 corona,
+  // +1616 haze atmosphere, +4242 moon, +9100 layouts.
   const nSurf = createNoise(bodySeed);
   const nBand = createNoise(bodySeed + 101);
   const nCap = createNoise(bodySeed + 303);

@@ -4,6 +4,8 @@ import { renderHatch, renderTerminatorEmphasis, renderStipple, renderLimb } from
 import {
   renderContours,
   renderEclipseOutline,
+  renderRivers,
+  renderRilles,
   renderAurora,
   renderClouds,
   renderStorms,
@@ -20,6 +22,8 @@ export function renderBody(scene: SceneCtx, b: BodyParams): void {
   renderTerminatorEmphasis(ctx);
   renderContours(ctx);
   renderEclipseOutline(ctx);
+  renderRivers(ctx);
+  renderRilles(ctx);
   renderClouds(ctx);
   renderStorms(ctx);
   renderStipple(ctx);

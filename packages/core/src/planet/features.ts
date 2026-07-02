@@ -4,9 +4,36 @@ import { traceIsoContours } from '../iso-contours.js';
 import { GrayscaleImage } from '../image.js';
 import { makeRandom } from '../lib/rng.js';
 import { clamp01 } from '../lib/math.js';
-import { type Vec3, TAU, DEG, norm, makeRotation } from './vec3.js';
+import { type Vec3, TAU, DEG, cross, norm, makeRotation } from './vec3.js';
+import { smoothPolyline, offsetPolyline } from '../lib/polyline.js';
 import { pushRun, dot4, ellipse } from './geometry.js';
 import type { BodyCtx } from './context.js';
+
+/** Tangent-plane gradient of the surface field at N (finite differences). */
+function surfaceGradient(ctx: BodyCtx, N: Vec3): Vec3 {
+  const eps = 0.02;
+  let T1 = cross(N, { x: 0, y: 0, z: 1 });
+  if (T1.x * T1.x + T1.y * T1.y + T1.z * T1.z < 1e-6) T1 = cross(N, { x: 0, y: 1, z: 0 });
+  T1 = norm(T1);
+  const T2 = cross(N, T1);
+  const at = (T: Vec3, s: number): number =>
+    ctx.surface(norm({ x: N.x + T.x * s, y: N.y + T.y * s, z: N.z + T.z * s })).n;
+  const g1 = at(T1, eps) - at(T1, -eps);
+  const g2 = at(T2, eps) - at(T2, -eps);
+  return {
+    x: T1.x * g1 + T2.x * g2,
+    y: T1.y * g1 + T2.y * g2,
+    z: T1.z * g1 + T2.z * g2,
+  };
+}
+
+/** Rotate tangent vector D around the normal N by angle a. */
+function rotateAround(N: Vec3, D: Vec3, a: number): Vec3 {
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const K = cross(N, D);
+  return { x: D.x * c + K.x * s, y: D.y * c + K.y * s, z: D.z * c + K.z * s };
+}
 
 /** Traced feature contours from a screen-space raster of the field. */
 export function traceField(
@@ -157,6 +184,169 @@ export function renderAurora(ctx: BodyCtx): void {
         pts.push({ x: sx, y: sy });
       }
       if (ok) pushRun(lines, pts, 'aurora');
+    }
+  }
+}
+
+/** Rivers: descend the surface field from high-ground springs to the sea,
+ *  with a gentle noise meander — drainage the coastline tracer implies but
+ *  never draws. The lower reach gets a second offset pass so the mouth reads
+ *  bolder, single-pen taper by repetition. Terrestrial only. */
+export function renderRivers(ctx: BodyCtx): void {
+  const { b, bx, by, br, bry, occluded, surface } = ctx;
+  const { o, lines } = ctx.scene;
+  if (!(o.rivers > 0 && b.bodyType === 'terrestrial')) return;
+  const rr = makeRandom(b.bodySeed + 1717);
+  const rrot = makeRotation(makeRandom(b.bodySeed + 1818));
+  const nMeander = createNoise(b.bodySeed + 2525);
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  // Springs: Fibonacci-sphere candidates on front-facing ground, highest
+  // first — the highest springs run the longest rivers.
+  const cands: { d: Vec3; n: number }[] = [];
+  const CAND = 220;
+  for (let i = 0; i < CAND; i++) {
+    const yy = 1 - ((i + 0.5) / CAND) * 2;
+    const rad = Math.sqrt(Math.max(0, 1 - yy * yy));
+    const th = i * golden + rr() * 0.4;
+    const d = rrot({ x: Math.cos(th) * rad, y: yy, z: Math.sin(th) * rad });
+    if (d.z <= 0.15) continue;
+    const n = surface(d).n;
+    if (n <= o.seaLevel + 0.22) continue;
+    cands.push({ d, n });
+  }
+  cands.sort((a, b) => b.n - a.n);
+  // Highest first, but no two springs on the same peak.
+  const springs: Vec3[] = [];
+  for (const c of cands) {
+    if (springs.length >= Math.round(o.rivers)) break;
+    if (springs.some((s) => s.x * c.d.x + s.y * c.d.y + s.z * c.d.z > Math.cos(0.25))) continue;
+    springs.push(c.d);
+  }
+  const stepAng = Math.max(0.008, o.hatchSpacing / (2.5 * br));
+  for (const spring of springs) {
+    let N = spring;
+    const pts = [{ x: bx + br * N.x, y: by + bry * N.y }];
+    // Flow with momentum: pure gradient descent zigzags across the valley
+    // floor and stalls; carrying the previous direction runs the river down
+    // the valley the way real drainage does.
+    let prev: Vec3 | null = null;
+    let lastN = surface(N).n;
+    let sinceDrop = 0;
+    for (let step = 0; step < 400; step++) {
+      const G = surfaceGradient(ctx, N);
+      const gl = Math.hypot(G.x, G.y, G.z);
+      let D: Vec3;
+      if (gl > 1e-5) {
+        D = { x: -G.x / gl, y: -G.y / gl, z: -G.z / gl };
+      } else if (prev) {
+        D = prev;
+      } else {
+        D = norm(cross(N, { x: 0.3, y: 0.9, z: 0.1 }));
+      }
+      if (prev) {
+        D = { x: prev.x * 0.65 + D.x * 0.35, y: prev.y * 0.65 + D.y * 0.35, z: prev.z * 0.65 + D.z * 0.35 };
+      }
+      // Re-tangentialize after the blend, then a gentle noise meander.
+      const dn = D.x * N.x + D.y * N.y + D.z * N.z;
+      D = norm({ x: D.x - N.x * dn, y: D.y - N.y * dn, z: D.z - N.z * dn });
+      const rn = ctx.rot(N);
+      const meander = nMeander.fbm3D(rn.x * 2.2, rn.y * 2.2, rn.z * 2.2, 2, 0.5, 2, 1);
+      D = rotateAround(N, D, meander * 0.5);
+      prev = D;
+      N = norm({ x: N.x + D.x * stepAng, y: N.y + D.y * stepAng, z: N.z + D.z * stepAng });
+      const sx = bx + br * N.x;
+      const sy = by + bry * N.y;
+      if (N.z <= 0.03 || occluded(sx, sy)) break;
+      pts.push({ x: sx, y: sy });
+      const f = surface(N);
+      if (f.n < o.seaLevel) break; // reached the sea
+      if (f.n < lastN - 0.004) {
+        lastN = f.n;
+        sinceDrop = 0;
+      } else if (++sinceDrop > 120) {
+        break; // stuck in a basin — end the river there
+      }
+    }
+    if (pts.length < 10) continue;
+    const smooth = smoothPolyline(pts, 2);
+    pushRun(lines, smooth, 'feature');
+    if (smooth.length >= 30) {
+      const tail = smooth.slice(-Math.floor(smooth.length / 3));
+      pushRun(lines, offsetPolyline(tail, o.penWidth * 0.9), 'feature');
+    }
+  }
+}
+
+/** Rilles: sinuous collapsed channels on moons and barren worlds. The walk
+ *  follows the iso-direction of the mare field (perpendicular to its
+ *  gradient — rilles hug basin edges) with a noise heading wobble; inked as a
+ *  double line (near wall + offset far wall) with collapse ticks at the ends. */
+export function renderRilles(ctx: BodyCtx): void {
+  const { b, bx, by, br, bry, occluded, surface } = ctx;
+  const { o, lines } = ctx.scene;
+  if (!(o.rilles > 0 && (b.bodyType === 'moon' || b.bodyType === 'barren'))) return;
+  const rr = makeRandom(b.bodySeed + 1919);
+  const nHead = createNoise(b.bodySeed + 2626);
+  const stepAng = Math.max(0.008, o.hatchSpacing / (2.5 * br));
+  for (let i = 0; i < Math.round(o.rilles); i++) {
+    // A deterministic scatter of front-facing starts.
+    let N: Vec3 | null = null;
+    for (let tries = 0; tries < 8; tries++) {
+      const yy = (rr() - 0.5) * 1.7;
+      const lon = rr() * TAU;
+      const rad = Math.sqrt(Math.max(0, 1 - yy * yy));
+      const cand = { x: Math.cos(lon) * rad, y: yy, z: Math.sin(lon) * rad };
+      if (cand.z > 0.25) {
+        N = cand;
+        break;
+      }
+    }
+    if (!N) continue;
+    const sign = rr() < 0.5 ? 1 : -1;
+    const steps = 60 + Math.floor(rr() * 90);
+    const pts = [{ x: bx + br * N.x, y: by + bry * N.y }];
+    for (let step = 0; step < steps; step++) {
+      const G = surfaceGradient(ctx, N);
+      const gl = Math.hypot(G.x, G.y, G.z);
+      let D: Vec3;
+      if (gl > 1e-5) {
+        D = norm(cross(N, { x: G.x / gl, y: G.y / gl, z: G.z / gl }));
+        D = { x: D.x * sign, y: D.y * sign, z: D.z * sign };
+      } else {
+        D = norm(cross(N, { x: 0.2, y: 1, z: 0.3 }));
+      }
+      const rn = ctx.rot(N);
+      const wob = nHead.fbm3D(rn.x * 1.8, rn.y * 1.8, rn.z * 1.8, 2, 0.5, 2, 1);
+      D = rotateAround(N, D, wob * 0.7);
+      N = norm({ x: N.x + D.x * stepAng, y: N.y + D.y * stepAng, z: N.z + D.z * stepAng });
+      const sx = bx + br * N.x;
+      const sy = by + bry * N.y;
+      if (N.z <= 0.03 || occluded(sx, sy)) break;
+      pts.push({ x: sx, y: sy });
+    }
+    if (pts.length < 8) continue;
+    const center = smoothPolyline(pts, 1);
+    const wall = offsetPolyline(center, o.penWidth * 1.4);
+    pushRun(lines, center, 'feature');
+    pushRun(lines, wall, 'feature');
+    // Collapse ticks: short cross-strokes near both ends of the trench.
+    for (const idx of [1, 3, 5, center.length - 2, center.length - 4, center.length - 6]) {
+      if (idx < 1 || idx >= center.length - 1) continue;
+      const a = center[idx - 1];
+      const c = center[idx + 1];
+      const tx = c.x - a.x;
+      const ty = c.y - a.y;
+      const tl = Math.hypot(tx, ty) || 1;
+      const px = -ty / tl;
+      const py = tx / tl;
+      const t = o.penWidth * 1.6;
+      lines.push({
+        points: [
+          { x: center[idx].x - px * t * 0.4, y: center[idx].y - py * t * 0.4 },
+          { x: center[idx].x + px * t * 1.4, y: center[idx].y + py * t * 1.4 },
+        ],
+        layer: 'feature',
+      });
     }
   }
 }
