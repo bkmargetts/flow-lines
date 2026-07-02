@@ -5,6 +5,7 @@ import { GrayscaleImage } from './image.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import { textToStrokes, textWidth } from './stroke-font.js';
 import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
+import { makeRandom, randomSeed, subSeed } from './lib/rng.js';
 
 /**
  * Procedural planets drawn as plottable pen-and-ink: a sphere shaded by
@@ -144,15 +145,6 @@ const norm = (a: Vec3): Vec3 => {
   return { x: a.x / l, y: a.y / l, z: a.z / l };
 };
 
-/** Repo-standard LCG: deterministic [0,1) stream from an integer seed. */
-function makeRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
-}
-
 /** A fixed 3-axis rotation built from a seed, so each seed shows a different
  *  face of the surface noise without any non-determinism. */
 function makeRotation(rng: () => number): (v: Vec3) => Vec3 {
@@ -273,7 +265,7 @@ export function generatePlanet(options: PlanetOptions): {
   height: number;
 } {
   const o = { ...DEFAULTS, ...options };
-  const seed = options.seed ?? Math.floor(Math.random() * 1000000);
+  const seed = options.seed ?? randomSeed();
   const { width, height, margin } = options;
   const cx = width / 2;
   const cy = height / 2;
@@ -1170,7 +1162,7 @@ export function generatePlanet(options: PlanetOptions): {
     const { passes, wavelength, amplitude, jitter } = getSketchStyleConfig(o.sketchStyle, o.sketch);
     const acc: FlowLine[] = [];
     for (let p = 0; p < passes; p++) {
-      const pseed = seed + p * 9301 + 7;
+      const pseed = subSeed(seed, p);
       const styled = applyHandDrawnStyle({ lines, width, height, seed: pseed }, { amplitude, wavelength, jitter, seed: pseed }).lines;
       for (const l of styled) acc.push(l);
     }

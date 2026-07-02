@@ -4,6 +4,7 @@ import { optimizePlot } from './optimize.js';
 import { gaussianBlur } from './image.js';
 import { traceIsoContours } from './iso-contours.js';
 import { createNoise, SimplexNoise } from './noise.js';
+import { makeRandom, randomSeed } from './lib/rng.js';
 
 /**
  * Lenia — a continuous-domain generalisation of Conway's Game of Life
@@ -184,15 +185,6 @@ const MAX_COLS = 180;
 const MAX_STEPS = 900;
 const MAX_RADIUS = 18;
 const TAP_BUDGET = 2e9;
-
-/** Deterministic LCG, matching the convention used across the toolbox. */
-function makeRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
-}
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -566,7 +558,7 @@ export function generateLenia(options: LeniaOptions): FlowLinesResult {
     width,
     height,
     margin = 0,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
     preset = 'orbium',
     seedSpots = 5,
     style = 'contour',

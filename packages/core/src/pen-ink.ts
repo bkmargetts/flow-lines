@@ -13,6 +13,7 @@ import { optimizePlot } from './optimize.js';
 import { createNoise } from './noise.js';
 import { SemanticMap, type LabelImage } from './semantic-map.js';
 import { composeMassPlan } from './value-plan.js';
+import { randomSeed } from './lib/rng.js';
 
 /** Drop a fraction of a polyline's arc length from each end */
 function trimPolyline(points: Point[], fraction: number): Point[] {
@@ -554,7 +555,7 @@ export function imageToPenInk(
   // expressed at the reference density are scaled so physical spacing holds.
   const scale = Math.max(1e-3, options.scale ?? 1);
   const margin = (options.margin ?? 20) * scale;
-  const seed = options.seed ?? Math.floor(Math.random() * 1000000);
+  const seed = options.seed ?? randomSeed();
 
   // Scene labels, when provided, replace the geometric heuristics below
   // wherever they are confident; with no label map every gate falls back

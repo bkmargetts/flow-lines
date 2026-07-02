@@ -4,6 +4,7 @@ import { optimizePlot } from './optimize.js';
 import { GrayscaleImage, gaussianBlur } from './image.js';
 import { traceIsoContours } from './iso-contours.js';
 import { createNoise, SimplexNoise } from './noise.js';
+import { makeRandom, randomSeed } from './lib/rng.js';
 
 /**
  * A Gray–Scott reaction–diffusion field, rendered as plottable single-pen
@@ -143,15 +144,6 @@ export const RD_PRESETS: Record<RDPreset, { f: number; k: number }> = {
 const MAX_COLS = 250;
 const MAX_STEPS = 6000;
 const STEP_BUDGET = 4.5e8;
-
-/** Deterministic LCG, matching the convention used across the toolbox. */
-function makeRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
-}
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -422,7 +414,7 @@ export function generateReactionDiffusion(options: ReactionDiffusionOptions): Fl
     width,
     height,
     margin = 0,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
     preset = 'coral',
     dt = 1.0,
     du = 1.0,

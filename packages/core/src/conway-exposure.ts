@@ -4,6 +4,7 @@ import { optimizePlot } from './optimize.js';
 import { GrayscaleImage, gaussianBlur } from './image.js';
 import { traceIsoContours } from './iso-contours.js';
 import { createNoise, SimplexNoise } from './noise.js';
+import { makeRandom, randomSeed } from './lib/rng.js';
 
 /**
  * A still "long exposure" of Conway's Game of Life: one frame that holds the
@@ -170,15 +171,6 @@ interface Simulation {
   maxExposure: number;
   /** Tracked mover paths in cell coordinates (only when style === 'streaks') */
   tracks: Point[][];
-}
-
-/** Deterministic LCG, matching the convention used across the toolbox */
-function makeRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
 }
 
 /**
@@ -746,7 +738,7 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     width,
     height,
     margin = 0,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
     seedCount = 1,
     generations = 180,
     decay = 0.92,

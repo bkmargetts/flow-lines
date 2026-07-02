@@ -4,6 +4,7 @@ import { applyHandDrawnStyle } from './hand-drawn.js';
 import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
 import { traceIsoContours } from './iso-contours.js';
 import type { GrayscaleImage } from './image.js';
+import { makeRandom, randomSeed, subSeed } from './lib/rng.js';
 
 /**
  * Procedural landscapes drawn as plottable pen-and-ink. The goal is work that
@@ -105,15 +106,6 @@ const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 /** A runaway guard: never emit more strokes than this, however dense the knobs. */
 const LINE_CAP = 90000;
-
-/** Repo-standard LCG: deterministic [0,1) stream from an integer seed. */
-function makeRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
-}
 
 const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 'seed' | 'sunX' | 'sunY'>> = {
   horizonFrac: 0.46,
@@ -676,7 +668,7 @@ function occludeBehind(lines: FlowLine[], poly: Point[]): FlowLine[] {
  */
 export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   const o = { ...DEFAULTS, ...options };
-  const seed = options.seed ?? Math.floor(Math.random() * 1000000);
+  const seed = options.seed ?? randomSeed();
   const { width, height, margin } = options;
   const x0 = margin;
   const y0 = margin;
@@ -1151,7 +1143,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     const { passes, wavelength, amplitude, jitter } = getSketchStyleConfig(o.sketchStyle, o.sketch);
     const acc: FlowLine[] = [];
     for (let p = 0; p < passes; p++) {
-      const pseed = seed + p * 9301 + 7;
+      const pseed = subSeed(seed, p);
       const styled = applyHandDrawnStyle({ lines, width, height, seed: pseed }, { amplitude, wavelength, jitter, seed: pseed }).lines;
       for (const l of styled) acc.push(l);
     }

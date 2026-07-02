@@ -1,6 +1,7 @@
 import { createNoise } from './noise.js';
 import { bandLayerName, pointInMask, type MaskShape } from './overlapped-lines.js';
 import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { randomSeed } from './lib/rng.js';
 
 /**
  * Colour-field texture — a soft, atmospheric gradient built the way the grating
@@ -229,7 +230,7 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     accents = [],
     penWidthPx = 1.2,
     maskShapes,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
   } = options;
 
   const noise = createNoise(seed);

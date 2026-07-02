@@ -27,6 +27,7 @@ import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
+import { makeRandom, randomSeed, subSeed } from './lib/rng.js';
 
 export type VineMode = 'growth' | 'colonization';
 export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
@@ -207,15 +208,6 @@ interface Root {
 interface Element {
   lines: FlowLine[];
   silhouette: Point[][];
-}
-
-/** Deterministic LCG, the same one used across the core generators. */
-function makeRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
 }
 
 /** Steer `angle` a fraction `amount` toward `target`, by the short way round. */
@@ -493,7 +485,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     width,
     height,
     margin = 20,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
     mode = 'growth',
     composition = 'specimen',
     fillShape = 'circle',
@@ -759,8 +751,8 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
       const acc: FlowLine[] = [];
       for (let p = 0; p < passes; p++) {
         const styled = applyHandDrawnStyle(
-          { lines: outLines, width, height, seed: seed + p * 9301 + 7 },
-          { amplitude, wavelength, jitter, seed: seed + p * 9301 + 7 }
+          { lines: outLines, width, height, seed: subSeed(seed, p) },
+          { amplitude, wavelength, jitter, seed: subSeed(seed, p) }
         ).lines;
         for (const l of styled) acc.push(l);
       }

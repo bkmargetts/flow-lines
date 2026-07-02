@@ -1,4 +1,5 @@
 import { FlowField, FlowFieldOptions } from './flow-field.js';
+import { randomSeed } from './lib/rng.js';
 
 export interface Point {
   x: number;
@@ -50,7 +51,7 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     margin = 20,
     minLineLength = 10,
     fieldResolution = 10,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
     noiseScale,
     octaves,
     persistence,
@@ -239,7 +240,7 @@ export function generateFlowLinesEven(options: EvenFlowLinesOptions): FlowLinesR
     margin = 20,
     minLineLength = 10,
     fieldResolution = 10,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
     noiseScale,
     octaves,
     persistence,
