@@ -79,6 +79,11 @@ export interface BodyCtx {
   /** Signed clearance (px) from the eclipse shadow cylinder: negative inside
    *  the umbra, 0 at its edge. Only present when a shadow caster applies. */
   eclipseField?: (N: Vec3) => number;
+  /** Radial screen warp for irregular small bodies (asteroid / comet nuclei).
+   *  Applied to every emitted point of this body after rendering, so limb,
+   *  hatch, and craters deform coherently into one lumpy silhouette. Absent
+   *  (not identity) for regular bodies — existing output stays untouched. */
+  warp?: (sx: number, sy: number) => { x: number; y: number };
 }
 
 export function makeSceneCtx(o: ResolvedOptions, seed: number): SceneCtx {
@@ -205,7 +210,11 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
         return f.n < o.seaLevel ? 0.5 : 0.08;
       case 'moon':
       case 'barren':
+      case 'asteroid':
         return f.n < o.mareLevel ? 0.42 : 0.16;
+      case 'comet':
+        // Comet nuclei are among the darkest bodies known — a sooty crust.
+        return f.n < o.mareLevel ? 0.5 : 0.28;
       case 'gas-giant':
       case 'ringed': {
         // Sharpen the sinusoid toward a square wave so belts (dark) and zones
@@ -315,6 +324,25 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
     };
   }
 
+  // --- Irregular silhouette for small bodies: a radial screen warp scaled by
+  // a noise loop around the disk. A bijection along rays from the centre, so
+  // warping the emitted points keeps every mark inside the warped limb.
+  const lump =
+    (bodyType === 'asteroid' || bodyType === 'comet') && o.lumpiness > 0
+      ? Math.min(0.25, o.lumpiness)
+      : 0;
+  let warp: BodyCtx['warp'];
+  if (lump > 0) {
+    const nWarp = createNoise(bodySeed + 2020);
+    warp = (sx: number, sy: number): { x: number; y: number } => {
+      const dx = sx - bx;
+      const dy = sy - by;
+      const th = Math.atan2(dy, dx);
+      const f = 1 + lump * nWarp.fbm3D(Math.cos(th) * 1.8, Math.sin(th) * 1.8, 0.7, 3, 0.5, 2, 1);
+      return { x: bx + dx * f, y: by + dy * f };
+    };
+  }
+
   // Where we keep clean paper rather than lay line hatch.
   const hatchMask = (N: Vec3): boolean => {
     if (bodyType === 'star') return false; // granulation is stipple, not line
@@ -353,5 +381,6 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
     toneAt,
     hatchMask,
     ...(eclipseField ? { eclipseField } : {}),
+    ...(warp ? { warp } : {}),
   };
 }

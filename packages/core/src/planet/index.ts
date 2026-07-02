@@ -5,6 +5,7 @@ import { DEFAULTS } from './body.js';
 import { bodyKy, makeSceneCtx, type ResolvedOptions } from './context.js';
 import { renderBody } from './render-body.js';
 import { renderRings } from './rings.js';
+import { renderCometTail } from './comet.js';
 import { composeLayout } from './layouts.js';
 import {
   renderStarfield,
@@ -78,6 +79,9 @@ export function generatePlanet(options: PlanetOptions): {
       craters: o.craters,
       ...(shadowCasters ? { shadowCasters } : {}),
     });
+
+    // Comet coma + tail fan anti-sunward behind the nucleus.
+    renderCometTail(scene);
 
     // Rings (Saturn): a flat disc of bands tilted toward edge-on, occluded
     // where it passes behind the sphere.

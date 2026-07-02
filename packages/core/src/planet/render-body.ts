@@ -18,6 +18,7 @@ import {
  *  is the emission order — it is pinned by the golden hashes. */
 export function renderBody(scene: SceneCtx, b: BodyParams): void {
   const ctx = makeBodyCtx(scene, b);
+  const start = scene.lines.length;
   renderHatch(ctx);
   renderTerminatorEmphasis(ctx);
   renderContours(ctx);
@@ -32,4 +33,15 @@ export function renderBody(scene: SceneCtx, b: BodyParams): void {
   renderGraticule(ctx);
   renderAurora(ctx);
   renderLimb(ctx);
+
+  // Irregular small bodies: deform everything this body drew through one
+  // radial warp — the limb becomes the lumpy silhouette and every mark
+  // (hatch, craters, contours) follows the same deformation.
+  if (ctx.warp) {
+    const warp = ctx.warp;
+    for (let i = start; i < scene.lines.length; i++) {
+      const ln = scene.lines[i];
+      scene.lines[i] = { ...ln, points: ln.points.map((p) => warp(p.x, p.y)) };
+    }
+  }
 }

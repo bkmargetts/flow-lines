@@ -175,6 +175,26 @@ CASES['planet/moon-craters/42'] = () =>
     craters: true,
     stipple: 0.5,
   });
+CASES['planet/asteroid/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'asteroid',
+    craters: true,
+    stipple: 0.5,
+  });
+CASES['planet/comet/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'comet',
+    radiusFrac: 0.2,
+    starfield: true,
+  });
 CASES['planet/rivers/42'] = () =>
   generatePlanet({
     width: 300,

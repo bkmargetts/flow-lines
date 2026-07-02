@@ -13,7 +13,8 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
   const t = state.planetType;
   const isTerrestrial = t === 'terrestrial' || t === 'ice' || t === 'lava';
   const isGas = t === 'gas-giant' || t === 'ringed';
-  const isRocky = t === 'moon' || t === 'barren';
+  const isRocky = t === 'moon' || t === 'barren' || t === 'asteroid';
+  const isSmallBody = t === 'asteroid' || t === 'comet';
   const isStar = t === 'star';
 
   const selectType = (id: string) => {
@@ -141,7 +142,20 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         </>
       )}
 
-      {isRocky && (
+      {isSmallBody && (
+        <>
+          <h3 className="section-title">{t === 'comet' ? 'Comet' : 'Asteroid'}</h3>
+          <Slider label="Lumpiness" value={state.lumpiness} min={0} max={0.25} step={0.01} onChange={(v) => update({ lumpiness: v })} format={(v) => v.toFixed(2)} />
+          {t === 'comet' && (
+            <>
+              <Slider label="Tail length" value={state.tailLength} min={2} max={9} step={0.5} onChange={(v) => update({ tailLength: v })} format={(v) => `${v.toFixed(1)}×`} />
+              <Slider label="Tail spread" value={state.tailSpread} min={10} max={60} step={2} onChange={(v) => update({ tailSpread: v })} format={(v) => `${v}°`} />
+            </>
+          )}
+        </>
+      )}
+
+      {(isRocky || t === 'comet') && (
         <>
           <h3 className="section-title">Craters</h3>
           <Toggle label="Craters" checked={state.craters} onChange={(v) => update({ craters: v })} />

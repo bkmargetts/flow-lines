@@ -75,6 +75,11 @@ export interface PlanetState {
   craterMaxR: number;
   craterDetail: boolean;
 
+  // Small bodies
+  lumpiness: number; // asteroid/comet silhouette irregularity
+  tailLength: number; // comet tail in disk radii
+  tailSpread: number; // comet fan half-spread (deg)
+
   // Surface relief
   terminatorEmphasis: number; // 0..1
   mountains: boolean;
@@ -174,6 +179,10 @@ export const defaultPlanetState: PlanetState = {
   craterMinR: 0.02,
   craterMaxR: 0.14,
   craterDetail: false,
+
+  lumpiness: 0.14,
+  tailLength: 5,
+  tailSpread: 28,
 
   terminatorEmphasis: 0,
   mountains: false,

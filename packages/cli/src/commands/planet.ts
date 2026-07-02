@@ -24,7 +24,7 @@ export function registerPlanet(program: Command) {
     .option('--resolution <number>', 'Render density in px per mm (with --paper)', '3')
     .option('-m, --margin <number>', 'Margin from canvas edges in px (without --paper)', '24')
     .option('-s, --seed <number>', 'Random seed for reproducibility')
-    .option('--type <t>', 'terrestrial | gas-giant | ringed | moon | ice | lava | star | barren', 'terrestrial')
+    .option('--type <t>', 'terrestrial | gas-giant | ringed | moon | ice | lava | star | barren | asteroid | comet', 'terrestrial')
     .option('--radius-frac <number>', 'Disk radius as a fraction of the usable half-frame', '0.7')
     // light
     .option('--light-angle <number>', 'Light azimuth in degrees', '-35')
@@ -72,6 +72,10 @@ export function registerPlanet(program: Command) {
     .option('--rivers <number>', 'Drainage lines from high ground to the sea (terrestrial)', '0')
     .option('--rilles <number>', 'Sinuous double-line channels (moon / barren)', '0')
     .option('--crater-detail', 'Central peaks + ejecta rays on big craters')
+    // small bodies
+    .option('--lumpiness <number>', 'Silhouette irregularity for asteroid/comet (0-0.25)', '0.14')
+    .option('--tail-length <number>', 'Comet tail length in disk radii', '5')
+    .option('--tail-spread <number>', 'Comet tail fan half-spread (deg)', '28')
     // rings
     .option('--rings', 'Draw a tilted ring system')
     .option('--ring-inner <number>', 'Inner ring radius in disk radii', '1.35')
@@ -176,6 +180,9 @@ export function registerPlanet(program: Command) {
         craterMinR: parseFloat(options.craterMinR),
         craterMaxR: parseFloat(options.craterMaxR),
         craterDetail: options.craterDetail ?? false,
+        lumpiness: parseFloat(options.lumpiness),
+        tailLength: parseFloat(options.tailLength),
+        tailSpread: parseFloat(options.tailSpread),
         graticule: options.graticule ?? false,
         graticuleSpacingDeg: parseFloat(options.graticuleSpacing),
         plateFrame: options.plateFrame ?? false,

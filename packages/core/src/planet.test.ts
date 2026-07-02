@@ -160,6 +160,49 @@ describe('generatePlanet', () => {
     }
   });
 
+  it('asteroids have a lumpy but closed silhouette with coherent marks', () => {
+    const r = generatePlanet(baseOptions({ planetType: 'asteroid', craters: true, lumpiness: 0.18 }));
+    const limb = layer(r.lines, 'limb');
+    expect(limb.length).toBeGreaterThan(0);
+    // Longest limb pass: radius varies (lumpy), endpoints still meet (closed).
+    const outer = limb.reduce((a, b) => (b.points.length > a.points.length ? b : a));
+    const radii = outer.points.map((p) => Math.hypot(p.x - center.x, p.y - center.y));
+    expect(Math.max(...radii) - Math.min(...radii)).toBeGreaterThan(R * 0.05);
+    const first = outer.points[0];
+    const last = outer.points[outer.points.length - 1];
+    expect(Math.hypot(first.x - last.x, first.y - last.y)).toBeLessThan(3);
+    // Every mark stays inside the (conservative) warped silhouette.
+    for (const ln of r.lines) {
+      if (ln.layer === 'star') continue;
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeLessThanOrEqual(R * 1.19);
+      }
+    }
+    // Deterministic per seed.
+    const again = generatePlanet(baseOptions({ planetType: 'asteroid', craters: true, lumpiness: 0.18 }));
+    expect(again.lines).toEqual(r.lines);
+  });
+
+  it('comets grow an anti-sunward tail, and only comets do', () => {
+    const comet = generatePlanet(
+      baseOptions({ planetType: 'comet', radiusFrac: 0.2, lightAngle: 0, lightElevation: 20 })
+    );
+    const tail = layer(comet.lines, 'tail');
+    expect(tail.length).toBeGreaterThan(0);
+    // Light from +x ⇒ the tail fans toward -x: its centroid sits left of centre.
+    let sx = 0;
+    let n = 0;
+    for (const ln of tail) {
+      for (const p of ln.points) {
+        sx += p.x;
+        n++;
+      }
+    }
+    expect(sx / n).toBeLessThan(center.x);
+    const rocky = generatePlanet(baseOptions({ planetType: 'barren' }));
+    expect(layer(rocky.lines, 'tail')).toHaveLength(0);
+  });
+
   it('rivers flow downhill to the sea and stay on the front disk', () => {
     const opts = { planetType: 'terrestrial' as const, rivers: 6, seed: 5 };
     const off = generatePlanet(baseOptions({ ...opts, rivers: 0 }));

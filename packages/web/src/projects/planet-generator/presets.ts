@@ -103,6 +103,28 @@ export const PLANET_PRESETS: PlanetPreset[] = [
       palette: 'lunar',
     },
   },
+  {
+    id: 'asteroid',
+    label: 'Asteroid',
+    state: {
+      planetType: 'asteroid',
+      lumpiness: 0.16, craters: true, craterCount: 40, craterMaxR: 0.22, craterDetail: true,
+      stipple: 0.5, lightElevation: 20, crossHatchLayers: 4,
+      atmosphere: 0, bands: false, rings: false, iceCaps: false, coastlines: true,
+      starfield: true, palette: 'lunar',
+    },
+  },
+  {
+    id: 'comet',
+    label: 'Comet',
+    state: {
+      planetType: 'comet',
+      radiusFrac: 0.2, lumpiness: 0.18, tailLength: 5, tailSpread: 28,
+      craters: false, stipple: 0.4, crossHatchLayers: 4, lightElevation: 14,
+      atmosphere: 0, bands: false, rings: false, iceCaps: false, coastlines: false,
+      starfield: true, palette: 'astronomical',
+    },
+  },
 ];
 
 export function getPlanetPreset(id: string): PlanetPreset | null {
@@ -118,15 +140,17 @@ const pick = <T,>(rng: () => number, arr: T[]): T => arr[Math.floor(rng() * arr.
  * and plottable.
  */
 export function randomPlanetGenome(rng: () => number): Partial<PlanetState> {
-  const types = ['terrestrial', 'gas-giant', 'ringed', 'moon', 'ice', 'lava', 'barren'] as const;
-  const type = pick(rng, [...types]);
+  const types = ['terrestrial', 'gas-giant', 'ringed', 'moon', 'ice', 'lava', 'barren', 'asteroid'] as const;
+  // Comets are a composition of their own, so they stay a rare roll.
+  const type = rng() < 0.08 ? ('comet' as const) : pick(rng, [...types]);
   const base = getPlanetPreset(type)?.state ?? {};
   const isGas = type === 'gas-giant' || type === 'ringed';
   return {
     ...base,
     lightAngle: Math.round((rng() * 360 - 180)),
     lightElevation: Math.round(12 + rng() * 66),
-    radiusFrac: Number((0.52 + rng() * 0.26).toFixed(2)),
+    radiusFrac: type === 'comet' ? Number((0.16 + rng() * 0.1).toFixed(2)) : Number((0.52 + rng() * 0.26).toFixed(2)),
+    lumpiness: type === 'asteroid' || type === 'comet' ? Number((0.1 + rng() * 0.12).toFixed(2)) : 0.14,
     terrainScale: Number((1.2 + rng() * 1.4).toFixed(2)),
     terrainContrast: Number((0.9 + rng() * 1.3).toFixed(2)),
     crossHatchLayers: 2 + Math.floor(rng() * 3),

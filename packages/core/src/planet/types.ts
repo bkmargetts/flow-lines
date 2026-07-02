@@ -8,7 +8,9 @@ export type PlanetType =
   | 'ice'
   | 'lava'
   | 'star'
-  | 'barren';
+  | 'barren'
+  | 'asteroid'
+  | 'comet';
 
 export type PlanetLayout = 'single' | 'phases' | 'comparison' | 'orbital';
 
@@ -62,6 +64,13 @@ export interface PlanetOptions {
   stipple?: number; // 0..1 shadow/texture dots
   atmosphere?: number; // 0..n glow rings (star: corona)
   atmosphereStyle?: 'rings' | 'haze'; // closed rings, or broken lit-limb arcs
+
+  // Small bodies (asteroid / comet)
+  /** Radial silhouette irregularity for asteroid/comet nuclei: the whole body
+   *  (limb, hatch, craters) deforms coherently through one screen warp. */
+  lumpiness?: number;
+  tailLength?: number; // comet tail length in disk radii
+  tailSpread?: number; // comet tail fan half-spread in degrees
 
   // Celestial phenomena
   /** The companion moon casts its shadow onto the primary (needs `moon`,
