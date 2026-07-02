@@ -25,14 +25,29 @@ pnpm monorepo:
   browser, **never imports ML or DOM**. ML results enter as plain data:
   grayscale rasters (`GrayscaleImage`), direction maps, normalized
   polygons/polylines (`PortraitOptions`), semantic label rasters
-  (`LabelImage`, taxonomy in `semantic-map.ts`).
+  (`LabelImage`, taxonomy in `semantic-map.ts`). Shared internals live in
+  `src/lib/` (`rng.ts` — the repo-standard LCG + `randomSeed`/`subSeed`;
+  `polyline.ts` — trim/offset/smooth/clip/point-in-polygon; `math.ts`) and
+  are **not** exported from the package barrel. The big generators are
+  directories, one concern per file (`vines/`, `pen-ink/`, `conway/`,
+  `landscape/`, `planet/`), each with an `index.ts` the flat `src/index.ts`
+  barrel re-exports — the public API is the barrel, never deep paths.
 - **`packages/cli`** — `flow-lines image -i photo.jpg -o out.svg` plus
   flags for every core option; decodes PNG/JPEG via pngjs/jpeg-js, and
   accepts external `--depth-image` / `--normal-image` / `--mask` /
   `--label-image` rasters (`scripts/segment-labels.mjs` generates
-  `photo.labels.png` sidecars with SegFormer-b0/ADE20K).
+  `photo.labels.png` sidecars with SegFormer-b0/ADE20K). One file per
+  command in `src/commands/` (registered from a thin `cli.ts`), with
+  image loading in `io.ts`, the shared paper/page block in `page.ts`, and
+  palette/scene tables in `palettes.ts` — deliberately duplicated from
+  the web app: **the CLI never imports `packages/web`**.
 - **`packages/web`** — React app (GitHub Pages). Heavy work stays off the
-  main thread: rendering runs in a persistent worker with a latest-wins
+  main thread: the whole layer stack composites in a dedicated worker
+  (`composite-worker.ts`/`composite-client.ts`, latest-wins, with a
+  synchronous fallback when `Worker` is unavailable) fed by
+  `modules/render-registry.ts` — the worker-safe moduleId→render map that
+  imports only each module's React-free `render.ts`; image-ink's own
+  rendering runs in a persistent worker with a latest-wins
   queue (`render-worker.ts`/`render-client.ts`); depth estimation runs in
   a **persistent, reused** worker that loads the model once and keeps it
   resident across photos (`depth-worker.ts`/`depth-client.ts`). It used to
@@ -174,6 +189,21 @@ pnpm monorepo:
 - `pnpm test` — vitest against **synthetic images** (tubes, disks,
   gradients, checkerboards) asserting geometric properties: stroke
   directions, densities, termination, determinism per seed.
+- **Golden hashes** — `packages/core/src/goldens.test.ts` +
+  `packages/web/src/module-goldens.test.ts` hash every generator / pure
+  module (and one composited stack) at fixed seeds against committed
+  JSON. Unlike the determinism tests (which compare two runs of the same
+  build), these pin output **across changes**: any refactor or tuning
+  that moves a single float fails them. A mismatch means the drawing
+  changed — if intentional, re-render the galleries, eyeball-diff, and
+  only then regenerate with `UPDATE_GOLDENS=1 pnpm test`. The hashes are
+  the guardrail; the album is the judge.
+- **`scripts/hash-baseline.mjs`** — byte-level regression tool for the
+  CLI surface: renders a 47-case command × preset matrix through the
+  built binary and records per-SVG sha256s (`write`), then diffs
+  (`compare`). The flag→options mapping has no other coverage; run it
+  around any CLI change. The manifest is a working artifact — don't
+  commit it.
 - **`test-images/` + `node scripts/gallery.mjs`** — the eyeball
   regression suite: renders the photo bank through every preset into one
   HTML contact sheet. Judge any tuning change against the whole album.
@@ -206,20 +236,26 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
 - GitHub Pages deploys `packages/web/dist` from pushes to `main`, any
   `claude/**` branch, **and** any `art/**` branch — last push wins, so the
   live site may serve a feature branch.
-- **Projects** (`packages/web/src/projects/`) — the web app is a shell over a
-  code registry of independent art tools. Each project is a self-contained
-  module (`<id>/` with a context provider, one or more **features** —
-  second-level tabs, each a `Controls`/`Canvas` pair sharing the project's
-  provider state — and an `index` exporting a `ProjectModule`) registered in
-  `projects/registry.ts`; built-in
-  Image → Ink and Flow Field are the first two. The page frame (paper,
-  orientation, resolution, margin, fit) lives in a shared `FrameContext`
-  (`FrameControls`) so every project plots to the same physical sheet. New
-  projects are developed on `art/<project>/<feature>` branches; merging adds
-  them to the registry. Every project's provider stays mounted for the
-  session (told whether it's `active`) so switching projects never loses
-  in-progress work. PR close (merged or abandoned) auto-deletes the branch
-  via `delete-branch.yml`.
+- **Modules & the layer stack** (`packages/web/src/modules/`,
+  `projects/`, `textures/`) — the web app is a shell over one flat
+  registry of art modules (`modules/registry.ts`); a plot is a *stack* of
+  layer instances composited bottom→top onto one sheet (`LayerStore.tsx`,
+  `lib/composite.ts`: top→bottom hold-off, per-slot pen-layer
+  namespacing, page border, density protection). A module is `pure`
+  (React-free `render.ts`: `state + env → lines`, run in the composite
+  worker — new pure modules must also be added to
+  `modules/render-registry.ts`; a parity test enforces it) or `live`
+  (owns its workers/ML and publishes lines — image-ink). Each module dir
+  has `types.ts` (state + defaults), `render.ts`, `Controls.tsx`, and an
+  `index` exporting the `Module`. Controls are built from the shared
+  atoms in `components/controls/` (`Slider`, `Toggle`, `SeedControl`,
+  `AdvancedSection`/`AdvGroup`, `PresetPicker`) — don't hand-roll those
+  rows. The page frame (paper, orientation, resolution, margin, fit)
+  lives in a shared `FrameContext` (`FrameControls`) so every layer plots
+  to the same physical sheet. New modules are developed on
+  `art/<project>/<feature>` branches; merging adds them to the registry.
+  PR close (merged or abandoned) auto-deletes the branch via
+  `delete-branch.yml`.
 - The web UI's first principle: **effortless** — upload, tap subject,
   download. Automation (face detect, depth when WebGPU, isolation on tap)
   runs without being asked; every knob lives in collapsed Advanced groups.
