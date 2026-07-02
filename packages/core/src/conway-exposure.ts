@@ -5,6 +5,8 @@ import { GrayscaleImage, gaussianBlur } from './image.js';
 import { traceIsoContours } from './iso-contours.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { makeRandom, randomSeed } from './lib/rng.js';
+import { trimPolyline, offsetPolyline, smoothPolyline } from './lib/polyline.js';
+import { lerp } from './lib/math.js';
 
 /**
  * A still "long exposure" of Conway's Game of Life: one frame that holds the
@@ -554,28 +556,6 @@ function cellSquare(cx: number, cy: number, half: number, inset: number): Point[
   ];
 }
 
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-
-/** Light moving-average smoothing with fixed endpoints — turns the blocky
- * cell-grid contours and centroid tracks into organic curves. */
-function smoothPolyline(points: Point[], iterations: number): Point[] {
-  if (points.length < 3) return points.map((p) => ({ ...p }));
-  let pts = points;
-  for (let it = 0; it < iterations; it++) {
-    const out: Point[] = new Array(pts.length);
-    out[0] = { ...pts[0] };
-    out[pts.length - 1] = { ...pts[pts.length - 1] };
-    for (let i = 1; i < pts.length - 1; i++) {
-      out[i] = {
-        x: (pts[i - 1].x + 2 * pts[i].x + pts[i + 1].x) / 4,
-        y: (pts[i - 1].y + 2 * pts[i].y + pts[i + 1].y) / 4,
-      };
-    }
-    pts = out;
-  }
-  return pts;
-}
-
 /** Split a polyline into the runs of consecutive points that fall outside the
  * mask — used to hold trails/contours a sliver short of the haloed present. */
 function clipPolylineByMask(points: Point[], inHalo: (p: Point) => boolean): Point[][] {
@@ -610,43 +590,6 @@ function posterize(t: number, bands: number, lo: number): number {
 function noiseAngle(noise: SimplexNoise, x: number, y: number, freq: number): Point {
   const theta = Math.PI * noise.fbm(x * freq, y * freq, 2, 0.5, 2.2);
   return { x: Math.cos(theta), y: Math.sin(theta) };
-}
-
-/** Drop a fraction of a polyline's arc length from each end (local copy of the
- * pen-ink taper helper, kept private so the two renderers stay decoupled). */
-function trimPolyline(points: Point[], fraction: number): Point[] {
-  if (points.length < 3) return points;
-  const cumulative: number[] = [0];
-  for (let i = 1; i < points.length; i++) {
-    cumulative.push(
-      cumulative[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
-    );
-  }
-  const total = cumulative[cumulative.length - 1];
-  const trim = Math.min(total * fraction, 12);
-  const start = cumulative.findIndex((c) => c >= trim);
-  let end = points.length - 1;
-  while (end > 0 && cumulative[end] > total - trim) end--;
-  if (start < 0 || end - start < 1) return points;
-  return points.slice(start, end + 1);
-}
-
-/** Offset a polyline perpendicular to its local direction (local copy). */
-function offsetPolyline(points: Point[], distance: number): Point[] {
-  if (Math.abs(distance) < 1e-6) return points.map((p) => ({ ...p }));
-  const out: Point[] = new Array(points.length);
-  for (let i = 0; i < points.length; i++) {
-    const ahead = points[Math.min(i + 1, points.length - 1)];
-    const behind = points[Math.max(i - 1, 0)];
-    const tx = ahead.x - behind.x;
-    const ty = ahead.y - behind.y;
-    const len = Math.hypot(tx, ty) || 1;
-    out[i] = {
-      x: points[i].x + (-ty / len) * distance,
-      y: points[i].y + (tx / len) * distance,
-    };
-  }
-  return out;
 }
 
 /**

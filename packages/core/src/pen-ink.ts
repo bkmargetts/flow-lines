@@ -14,46 +14,7 @@ import { createNoise } from './noise.js';
 import { SemanticMap, type LabelImage } from './semantic-map.js';
 import { composeMassPlan } from './value-plan.js';
 import { randomSeed } from './lib/rng.js';
-
-/** Drop a fraction of a polyline's arc length from each end */
-function trimPolyline(points: Point[], fraction: number): Point[] {
-  if (points.length < 3) return points;
-
-  const cumulative: number[] = [0];
-  for (let i = 1; i < points.length; i++) {
-    cumulative.push(
-      cumulative[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
-    );
-  }
-  const total = cumulative[cumulative.length - 1];
-  const trim = Math.min(total * fraction, 12);
-
-  const start = cumulative.findIndex((c) => c >= trim);
-  let end = points.length - 1;
-  while (end > 0 && cumulative[end] > total - trim) end--;
-
-  if (start < 0 || end - start < 1) return points;
-  return points.slice(start, end + 1);
-}
-
-/** Offset a polyline perpendicular to its local direction */
-function offsetPolyline(points: Point[], distance: number): Point[] {
-  if (Math.abs(distance) < 1e-6) return points.map((p) => ({ ...p }));
-
-  const out: Point[] = new Array(points.length);
-  for (let i = 0; i < points.length; i++) {
-    const ahead = points[Math.min(i + 1, points.length - 1)];
-    const behind = points[Math.max(i - 1, 0)];
-    const tx = ahead.x - behind.x;
-    const ty = ahead.y - behind.y;
-    const len = Math.hypot(tx, ty) || 1;
-    out[i] = {
-      x: points[i].x + (-ty / len) * distance,
-      y: points[i].y + (tx / len) * distance,
-    };
-  }
-  return out;
-}
+import { trimPolyline, offsetPolyline } from './lib/polyline.js';
 
 export interface FocusOptions {
   /** Focal point x in output canvas coordinates */

@@ -5,6 +5,8 @@ import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
 import { traceIsoContours } from './iso-contours.js';
 import type { GrayscaleImage } from './image.js';
 import { makeRandom, randomSeed, subSeed } from './lib/rng.js';
+import { trimPolyline, offsetPolyline, clipSegmentToRect, pointInPolygon } from './lib/polyline.js';
+import { lerp, clamp01 } from './lib/math.js';
 
 /**
  * Procedural landscapes drawn as plottable pen-and-ink. The goal is work that
@@ -101,8 +103,6 @@ export interface LandscapeOptions {
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 /** A runaway guard: never emit more strokes than this, however dense the knobs. */
 const LINE_CAP = 90000;
@@ -176,37 +176,6 @@ function densifySegment(a: Point, b: Point, step: number): Point[] {
   return pts;
 }
 
-/** Drop a fraction of a polyline's arc length from each end (tapered ends). */
-function trimPolyline(points: Point[], fraction: number): Point[] {
-  if (points.length < 3) return points;
-  const cumulative: number[] = [0];
-  for (let i = 1; i < points.length; i++) {
-    cumulative.push(cumulative[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
-  }
-  const total = cumulative[cumulative.length - 1];
-  const trim = Math.min(total * fraction, 12);
-  const start = cumulative.findIndex((c) => c >= trim);
-  let end = points.length - 1;
-  while (end > 0 && cumulative[end] > total - trim) end--;
-  if (start < 0 || end - start < 1) return points;
-  return points.slice(start, end + 1);
-}
-
-/** Offset a polyline perpendicular to its local direction (for bold passes). */
-function offsetPolyline(points: Point[], distance: number): Point[] {
-  if (Math.abs(distance) < 1e-6) return points.map((p) => ({ ...p }));
-  const out: Point[] = new Array(points.length);
-  for (let i = 0; i < points.length; i++) {
-    const ahead = points[Math.min(i + 1, points.length - 1)];
-    const behind = points[Math.max(i - 1, 0)];
-    const tx = ahead.x - behind.x;
-    const ty = ahead.y - behind.y;
-    const len = Math.hypot(tx, ty) || 1;
-    out[i] = { x: points[i].x + (-ty / len) * distance, y: points[i].y + (tx / len) * distance };
-  }
-  return out;
-}
-
 /** A 1-D fbm silhouette profile sampled L→R; peaks rise `amp` above `baseY`. */
 function makeProfile(
   noise: SimplexNoise,
@@ -249,17 +218,6 @@ function sampleProfileY(profile: Point[], x: number): number {
     }
   }
   return last.y;
-}
-
-/** Even-odd point-in-polygon test (mirrors vines.ts). */
-function pointInPolygon(poly: Point[], x: number, y: number): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i];
-    const b = poly[j];
-    if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
 }
 
 /** Closed region polygon from an upper (L→R) and lower (L→R) boundary. */
@@ -1219,33 +1177,6 @@ function clampLineToRect(line: FlowLine, x0: number, y0: number, x1: number, y1:
   }
   push();
   return runs;
-}
-
-function clipSegmentToRect(a: Point, b: Point, x0: number, y0: number, x1: number, y1: number): [Point, Point] | null {
-  let t0 = 0;
-  let t1 = 1;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const p = [-dx, dx, -dy, dy];
-  const q = [a.x - x0, x1 - a.x, a.y - y0, y1 - a.y];
-  for (let i = 0; i < 4; i++) {
-    if (p[i] === 0) {
-      if (q[i] < 0) return null;
-    } else {
-      const r = q[i] / p[i];
-      if (p[i] < 0) {
-        if (r > t1) return null;
-        if (r > t0) t0 = r;
-      } else {
-        if (r < t0) return null;
-        if (r < t1) t1 = r;
-      }
-    }
-  }
-  return [
-    { x: a.x + t0 * dx, y: a.y + t0 * dy },
-    { x: a.x + t1 * dx, y: a.y + t1 * dy },
-  ];
 }
 
 // Exported only for tests / potential reuse — keeps the surface tiny otherwise.

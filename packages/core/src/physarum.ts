@@ -5,6 +5,8 @@ import { gaussianBlur } from './image.js';
 import { traceIsoContours } from './iso-contours.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { makeRandom, randomSeed } from './lib/rng.js';
+import { smoothPolyline } from './lib/polyline.js';
+import { lerp, clamp } from './lib/math.js';
 
 /**
  * Physarum — a slime-mold transport-network model (Jeff Jones, 2010), rendered
@@ -160,9 +162,6 @@ const MAX_AGENTS = 60000;
 const AGENT_STEP_BUDGET = 4e7;
 const FIELD_STEP_BUDGET = 4.5e8;
 
-const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
-const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
-
 /** A seeded rule-of-thirds intersection, lerped out from centre by `bias`. */
 function thirdsOrigin(
   cols: number,
@@ -176,27 +175,6 @@ function thirdsOrigin(
     cx: Math.round(cols * (0.5 + (fx - 0.5) * bias)),
     cy: Math.round(rows * (0.5 + (fy - 0.5) * bias)),
   };
-}
-
-/** Light moving-average smoothing with fixed endpoints — turns the blocky
- * marching-squares contours (and raw agent staircases) into organic curves
- * (shared with Conway/RD/Lenia). */
-function smoothPolyline(points: Point[], iterations: number): Point[] {
-  if (points.length < 3) return points.map((p) => ({ ...p }));
-  let pts = points;
-  for (let it = 0; it < iterations; it++) {
-    const out: Point[] = new Array(pts.length);
-    out[0] = { ...pts[0] };
-    out[pts.length - 1] = { ...pts[pts.length - 1] };
-    for (let i = 1; i < pts.length - 1; i++) {
-      out[i] = {
-        x: (pts[i - 1].x + 2 * pts[i].x + pts[i + 1].x) / 4,
-        y: (pts[i - 1].y + 2 * pts[i].y + pts[i + 1].y) / 4,
-      };
-    }
-    pts = out;
-  }
-  return pts;
 }
 
 /**

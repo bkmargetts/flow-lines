@@ -6,6 +6,7 @@ import { applyHandDrawnStyle } from './hand-drawn.js';
 import { textToStrokes, textWidth } from './stroke-font.js';
 import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
 import { makeRandom, randomSeed, subSeed } from './lib/rng.js';
+import { clamp01 } from './lib/math.js';
 
 /**
  * Procedural planets drawn as plottable pen-and-ink: a sphere shaded by
@@ -132,7 +133,6 @@ interface Vec3 {
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
 const cross = (a: Vec3, b: Vec3): Vec3 => ({
