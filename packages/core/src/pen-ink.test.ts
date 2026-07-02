@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { imageToPenInk } from './pen-ink.js';
+import { imageToPenInk } from './pen-ink/index.js';
 import { ImageField } from './image-field.js';
 import { GrayscaleImage } from './image.js';
 import { traceContours } from './contours.js';

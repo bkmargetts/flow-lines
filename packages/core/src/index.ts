@@ -69,8 +69,8 @@ export { ImageField } from './image-field.js';
 export type { ImageFieldOptions, DirectionMap } from './image-field.js';
 
 // Image to pen-and-ink rendering
-export { imageToPenInk } from './pen-ink.js';
-export type { PenInkOptions, FocusOptions } from './pen-ink.js';
+export { imageToPenInk } from './pen-ink/index.js';
+export type { PenInkOptions, FocusOptions } from './pen-ink/index.js';
 
 // Physical paper sizes (plotter output)
 export {

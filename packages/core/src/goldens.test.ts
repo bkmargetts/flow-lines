@@ -15,7 +15,7 @@ import { generateVines } from './vines.js';
 import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
-import { imageToPenInk } from './pen-ink.js';
+import { imageToPenInk } from './pen-ink/index.js';
 import { toSVG } from './svg.js';
 import { optimizePlot } from './optimize.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';

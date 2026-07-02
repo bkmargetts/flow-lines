@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { optimizePlot, measurePenTravel, limitStrokeDensity } from './optimize.js';
-import { imageToPenInk } from './pen-ink.js';
+import { imageToPenInk } from './pen-ink/index.js';
 import type { FlowLine, FlowLinesResult } from './flow-lines.js';
 
 const line = (pts: [number, number][], pen?: 'fine' | 'bold') => ({
