@@ -257,13 +257,24 @@ function lineToPath(line: FlowLine, precision: number, optimize: boolean): strin
   if (points.length === 2) {
     d += ` L${formatNum(points[1].x)},${formatNum(points[1].y)}`;
   } else {
-    // Use smooth curves through points
+    // Smooth curves through densely-sampled points. A vertex whose adjacent
+    // segments are long is a real corner (plate frames, rules, sparse
+    // geometry), not a sampling artifact — honor it with straight lines, or a
+    // page-spanning rectangle balloons into arcs.
+    const CORNER = 30;
     for (let i = 1; i < points.length - 1; i++) {
+      const prev = points[i - 1];
       const current = points[i];
       const next = points[i + 1];
-      const midX = (current.x + next.x) / 2;
-      const midY = (current.y + next.y) / 2;
-      d += ` Q${formatNum(current.x)},${formatNum(current.y)} ${formatNum(midX)},${formatNum(midY)}`;
+      const inLong = Math.hypot(current.x - prev.x, current.y - prev.y) > CORNER;
+      const outLong = Math.hypot(next.x - current.x, next.y - current.y) > CORNER;
+      if (inLong || outLong) {
+        d += ` L${formatNum(current.x)},${formatNum(current.y)}`;
+      } else {
+        const midX = (current.x + next.x) / 2;
+        const midY = (current.y + next.y) / 2;
+        d += ` Q${formatNum(current.x)},${formatNum(current.y)} ${formatNum(midX)},${formatNum(midY)}`;
+      }
     }
     // Final point
     const last = points[points.length - 1];
