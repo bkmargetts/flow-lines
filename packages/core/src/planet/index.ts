@@ -1,12 +1,14 @@
-import { FlowLine, Point } from './flow-lines.js';
-import { createNoise, SimplexNoise } from './noise.js';
-import { traceIsoContours } from './iso-contours.js';
-import { GrayscaleImage } from './image.js';
-import { applyHandDrawnStyle } from './hand-drawn.js';
-import { textToStrokes, textWidth } from './stroke-font.js';
-import { getSketchStyleConfig, type SketchStyle } from './sketch-styles.js';
-import { makeRandom, randomSeed, subSeed } from './lib/rng.js';
-import { clamp01 } from './lib/math.js';
+import { FlowLine, Point } from '../flow-lines.js';
+import { createNoise, SimplexNoise } from '../noise.js';
+import { traceIsoContours } from '../iso-contours.js';
+import { GrayscaleImage } from '../image.js';
+import { applyHandDrawnStyle } from '../hand-drawn.js';
+import { textToStrokes, textWidth } from '../stroke-font.js';
+import { getSketchStyleConfig, type SketchStyle } from '../sketch-styles.js';
+import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
+import { clamp01 } from '../lib/math.js';
+import { type Vec3, TAU, DEG, dot, cross, norm, makeRotation } from './vec3.js';
+import { DEFAULTS, type BodyParams } from './body.js';
 
 /**
  * Procedural planets drawn as plottable pen-and-ink: a sphere shaded by
@@ -125,138 +127,9 @@ export interface PlanetOptions {
   sketchStyle?: SketchStyle; // character of the overdraw
 }
 
-interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
-
-const TAU = Math.PI * 2;
-const DEG = Math.PI / 180;
-
-const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
-const cross = (a: Vec3, b: Vec3): Vec3 => ({
-  x: a.y * b.z - a.z * b.y,
-  y: a.z * b.x - a.x * b.z,
-  z: a.x * b.y - a.y * b.x,
-});
-const norm = (a: Vec3): Vec3 => {
-  const l = Math.hypot(a.x, a.y, a.z) || 1;
-  return { x: a.x / l, y: a.y / l, z: a.z / l };
-};
-
-/** A fixed 3-axis rotation built from a seed, so each seed shows a different
- *  face of the surface noise without any non-determinism. */
-function makeRotation(rng: () => number): (v: Vec3) => Vec3 {
-  const a = rng() * TAU;
-  const b = rng() * TAU;
-  const c = rng() * TAU;
-  const ca = Math.cos(a), sa = Math.sin(a);
-  const cb = Math.cos(b), sb = Math.sin(b);
-  const cc = Math.cos(c), sc = Math.sin(c);
-  return (v: Vec3): Vec3 => {
-    // Rz then Ry then Rx
-    let x = v.x * ca - v.y * sa;
-    let y = v.x * sa + v.y * ca;
-    let z = v.z;
-    let x2 = x * cb + z * sb;
-    const z2 = -x * sb + z * cb;
-    x = x2;
-    z = z2;
-    const y2 = y * cc - z * sc;
-    const z3 = y * sc + z * cc;
-    y = y2;
-    z = z3;
-    x2 = x;
-    return { x: x2, y, z };
-  };
-}
-
-const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
-  radiusFrac: 0.7,
-  planetType: 'terrestrial',
-  lightAngle: -35,
-  lightElevation: 35,
-  ambient: 0.12,
-  limbDarkening: 0,
-  noiseScale: 1.7,
-  octaves: 5,
-  persistence: 0.5,
-  contrast: 1.4,
-  seaLevel: 0,
-  mareLevel: -0.12,
-  coastlines: true,
-  lavaFissureWidth: 0.12,
-  lavaGlow: 0.4,
-  bands: false,
-  bandCount: 9,
-  bandTurbulence: 0.5,
-  storms: 0,
-  stormSize: 1,
-  iceCaps: false,
-  capLatitude: 68,
-  capRaggedness: 0.5,
-  hatchSpacing: 6,
-  crossHatchLayers: 3,
-  lightWeight: 0.85,
-  albedoWeight: 0.7,
-  stipple: 0,
-  atmosphere: 0,
-  rings: false,
-  ringInner: 1.35,
-  ringOuter: 2.2,
-  ringTilt: 22,
-  ringYaw: 12,
-  ringGap: 0.14,
-  ringCount: 6,
-  ringDensity: 3,
-  ringShadow: true,
-  craters: false,
-  craterCount: 80,
-  craterMinR: 0.02,
-  craterMaxR: 0.14,
-  craterDetail: false,
-  terminatorEmphasis: 0,
-  mountains: false,
-  clouds: false,
-  graticule: false,
-  graticuleSpacingDeg: 30,
-  plateFrame: false,
-  scaleBar: false,
-  title: '',
-  caption: '',
-  layout: 'single',
-  layoutCount: 5,
-  starfield: false,
-  starCount: 120,
-  moon: false,
-  moonDist: 1.9,
-  moonAngle: -35,
-  moonRadiusFrac: 0.28,
-  penWidth: 1,
-  wobble: 0.6,
-  sketch: 0,
-  sketchStyle: 'loose',
-};
-
 /** Append `pts` as a FlowLine if it has enough points to draw. */
 function pushRun(out: FlowLine[], pts: Point[], layer: string, pen?: 'fine' | 'bold'): void {
   if (pts.length >= 2) out.push({ points: pts, layer, ...(pen ? { pen } : {}) });
-}
-
-interface BodyParams {
-  cx: number;
-  cy: number;
-  R: number;
-  bodyType: PlanetType;
-  bodySeed: number;
-  craters: boolean;
-  /** Disks that hide any sample falling inside them (the primary for a moon; the
-   *  star + nearer bodies for the orbital diagram). */
-  occluders?: { cx: number; cy: number; R: number }[];
-  /** Per-body light direction; falls back to the scene light when absent (only
-   *  phase strips need a different light per body). */
-  light?: Vec3;
 }
 
 export function generatePlanet(options: PlanetOptions): {

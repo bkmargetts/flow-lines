@@ -12,7 +12,7 @@ import { generateLenia } from './lenia.js';
 import { generatePhysarum } from './physarum.js';
 import { generateComplexFlow, type ComplexFlowOptions } from './complex-flow.js';
 import { generateVines } from './vines.js';
-import { generatePlanet } from './planet.js';
+import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape.js';
 import { generateTexture, type TextureOptions } from './texture.js';
 import { imageToPenInk } from './pen-ink.js';
