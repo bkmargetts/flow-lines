@@ -1,52 +1,12 @@
-import type { ReactNode } from 'react';
 import { ColorField } from '../../components/ColorField';
-import { EditableValue } from '../../components/EditableValue';
+import { AdvancedSection } from '../../components/controls/AdvancedSection';
+import { Slider } from '../../components/controls/Slider';
+import { Toggle } from '../../components/controls/Toggle';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { LandscapeState } from './types';
 import { LANDSCAPE_PALETTES, CUSTOM_PALETTE } from './palettes';
 import { LANDSCAPE_PRESETS, getLandscapePreset, randomLandscapeGenome } from './presets';
-
-/** One labelled range slider + its click-to-type value badge. */
-function Slider(props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format?: (v: number) => ReactNode;
-  disabled?: boolean;
-}) {
-  const { label, value, min, max, step, onChange, format, disabled } = props;
-  return (
-    <div className="control-group">
-      <label>
-        {label}{' '}
-        <EditableValue value={value} min={min} max={max} step={step} onChange={onChange} disabled={disabled}>
-          {format ? format(value) : value}
-        </EditableValue>
-      </label>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-    </div>
-  );
-}
-
-function Toggle(props: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="toggle-row">
-      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
-      {props.label}
-    </label>
-  );
-}
 
 /** Sidebar controls for the Landscape Generator module. */
 export function LandscapeGeneratorControls({ state, update }: ControlsProps<LandscapeState>) {
@@ -55,7 +15,7 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
     update(preset ? { ...preset.state, scene: id } : { scene: id });
   };
   const surprise = () => {
-    update({ ...randomLandscapeGenome(Math.random), seed: Math.floor(Math.random() * 1000000) });
+    update({ ...randomLandscapeGenome(Math.random), seed: randomSeed() });
   };
 
   return (
@@ -85,7 +45,7 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
             onChange={(e) => update({ seed: parseInt(e.target.value, 10) || 0 })}
             style={{ width: 110 }}
           />
-          <button type="button" className="secondary" onClick={() => update({ seed: Math.floor(Math.random() * 1000000) })} title="Random seed">
+          <button type="button" className="secondary" onClick={() => update({ seed: randomSeed() })} title="Random seed">
             🎲
           </button>
         </div>
@@ -195,8 +155,7 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
         </>
       )}
 
-      <details className="advanced">
-        <summary>Advanced</summary>
+      <AdvancedSection>
         <Slider label="Sky tone (top)" value={state.skyToneTop} min={0.3} max={1} step={0.05} onChange={(v) => update({ skyToneTop: v })} format={(v) => v.toFixed(2)} />
         <Slider label="Sky tone (horizon)" value={state.skyToneHorizon} min={0.3} max={1} step={0.05} onChange={(v) => update({ skyToneHorizon: v })} format={(v) => v.toFixed(2)} />
         <Slider label="Horizon detail" value={state.horizonFreq} min={0.6} max={5} step={0.1} onChange={(v) => update({ horizonFreq: v })} format={(v) => v.toFixed(1)} />
@@ -218,7 +177,7 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
             </select>
           </div>
         )}
-      </details>
+      </AdvancedSection>
     </div>
   );
 }
