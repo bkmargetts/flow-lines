@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generateLandscape, type LandscapeOptions } from './landscape.js';
-import { _internals } from './landscape.js';
+import { generateLandscape, type LandscapeOptions } from './landscape/index.js';
+import { _internals } from './landscape/index.js';
 import type { FlowLine, Point } from './flow-lines.js';
 
 function baseOptions(overrides: Partial<LandscapeOptions> = {}): LandscapeOptions {

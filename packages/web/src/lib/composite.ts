@@ -9,15 +9,29 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import type { FrameSettings } from '../FrameContext';
-import { DEFAULT_PEN_WIDTH_MM, type LayerOutput, type Module, type RenderEnv } from '../modules/types';
+import { DEFAULT_PEN_WIDTH_MM, type LayerOutput, type RenderEnv } from '../modules/types';
 import { buildBorder } from './border';
+
+/**
+ * The compositor's view of a module: just the render dispatch, structurally —
+ * a full `Module` satisfies it, and so does a worker-side registry entry
+ * (moduleId → render fn), which is how the composite worker feeds the same
+ * `composite()` without bundling any React Controls.
+ */
+export type CompositeModule =
+  | { kind: 'live' }
+  | {
+      kind: 'pure';
+      render: (state: unknown, env: RenderEnv) => LayerOutput | null;
+      consumesAvoid?: boolean;
+    };
 
 /** One layer's place in the stack, as the compositor sees it. Pure modules are
  *  rendered here; live modules (image-ink) arrive with their `output` already
  *  published from their own worker/effect. */
 export interface CompositeLayer {
   instanceId: string;
-  module: Module;
+  module: CompositeModule;
   state: unknown;
   visible: boolean;
   /** Clean-paper sliver this layer reserves around the lines stacked above it,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generatePlanet, type PlanetOptions } from './planet.js';
+import { generatePlanet, type PlanetOptions } from './planet/index.js';
 import type { FlowLine } from './flow-lines.js';
 
 function baseOptions(overrides: Partial<PlanetOptions> = {}): PlanetOptions {

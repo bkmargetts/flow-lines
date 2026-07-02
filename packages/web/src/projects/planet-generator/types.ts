@@ -1,4 +1,5 @@
 import type { PlanetType, SketchStyle } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * UI state for the Planet Generator (mm / degrees / 0..1 units). `render.ts`
@@ -102,7 +103,7 @@ export interface PlanetState {
 
 export const defaultPlanetState: PlanetState = {
   planetType: 'terrestrial',
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   radiusFrac: 0.62,
   zoom: 1,
 

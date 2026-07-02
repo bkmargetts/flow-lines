@@ -1,5 +1,6 @@
 import { createNoise } from './noise.js';
 import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { randomSeed } from './lib/rng.js';
 
 /**
  * Interleaved-grating texture. A block of evenly-spaced straight lines is
@@ -161,7 +162,7 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
     wobbleWavelengthPx = 120,
     edgeSmoothPx = 0,
     maskShapes,
-    seed = Math.floor(Math.random() * 1000000),
+    seed = randomSeed(),
   } = options;
 
   const noise = createNoise(seed);

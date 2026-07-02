@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateConwayExposure, type ConwayExposureOptions } from './conway-exposure.js';
+import { generateConwayExposure, type ConwayExposureOptions } from './conway/index.js';
 
 const base: ConwayExposureOptions = {
   width: 600,

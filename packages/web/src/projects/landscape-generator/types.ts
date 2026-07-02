@@ -1,4 +1,5 @@
 import type { ForegroundSide, SketchStyle } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * UI state for the Landscape Generator (mm / 0..1 / degree units). `render.ts`
@@ -87,7 +88,7 @@ export interface LandscapeState {
 
 export const defaultLandscapeState: LandscapeState = {
   scene: 'coastal-sunset',
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   zoom: 1,
 
   horizonFrac: 0.46,

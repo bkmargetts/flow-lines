@@ -10,7 +10,8 @@ import {
   type SegmentStatus,
 } from '../projects/image-ink/types';
 import { ColorField } from './ColorField';
-import { EditableValue } from './EditableValue';
+import { AdvancedSection, AdvGroup } from './controls/AdvancedSection';
+import { Slider } from './controls/Slider';
 
 interface ImageControlsProps {
   settings: InkSettings;
@@ -213,143 +214,101 @@ export function ImageControls({
         </div>
       )}
 
-      <details className="advanced">
-        <summary>Advanced</summary>
+      <AdvancedSection>
+        <AdvGroup title="Tone & Density">
+          <Slider
+            label="Layers"
+            value={settings.layers}
+            min={1}
+            max={5}
+            step={1}
+            onChange={(v) => updateSettings({ layers: v })}
+          />
 
-        <details className="adv-group">
-          <summary>Tone &amp; Density</summary>
+          <Slider
+            label="Shadow Spacing"
+            value={settings.minSpacing}
+            min={1.5}
+            max={8}
+            step={0.5}
+            onChange={(v) => updateSettings({ minSpacing: v })}
+            format={(v) => `${v.toFixed(1)}px`}
+          />
 
-          <div className="control-group">
-            <label>
-              Layers{' '}
-              <EditableValue value={settings.layers} min={1} max={5} step={1}
-                onChange={(v) => updateSettings({ layers: v })}>
-                {settings.layers}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="1" max="5" step="1"
-              value={settings.layers}
-              onChange={(e) => updateSettings({ layers: parseInt(e.target.value, 10) })}
-            />
-          </div>
+          <Slider
+            label="Highlight Spacing"
+            value={settings.maxSpacing}
+            min={6}
+            max={30}
+            step={1}
+            onChange={(v) => updateSettings({ maxSpacing: v })}
+            format={(v) => `${v.toFixed(0)}px`}
+          />
 
-          <div className="control-group">
-            <label>
-              Shadow Spacing{' '}
-              <EditableValue value={settings.minSpacing} min={1.5} max={8} step={0.5}
-                onChange={(v) => updateSettings({ minSpacing: v })}>
-                {settings.minSpacing.toFixed(1)}px
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="1.5" max="8" step="0.5"
-              value={settings.minSpacing}
-              onChange={(e) => updateSettings({ minSpacing: parseFloat(e.target.value) })}
-            />
-          </div>
+          <Slider
+            label="White Cutoff"
+            value={settings.whiteCutoff}
+            min={0}
+            max={0.4}
+            step={0.02}
+            onChange={(v) => updateSettings({ whiteCutoff: v })}
+            format={(v) => v.toFixed(2)}
+          />
 
-          <div className="control-group">
-            <label>
-              Highlight Spacing{' '}
-              <EditableValue value={settings.maxSpacing} min={6} max={30} step={1}
-                onChange={(v) => updateSettings({ maxSpacing: v })}>
-                {settings.maxSpacing.toFixed(0)}px
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="6" max="30" step="1"
-              value={settings.maxSpacing}
-              onChange={(e) => updateSettings({ maxSpacing: parseFloat(e.target.value) })}
-            />
-          </div>
-
-          <div className="control-group">
-            <label>
-              White Cutoff{' '}
-              <EditableValue value={settings.whiteCutoff} min={0} max={0.4} step={0.02}
-                onChange={(v) => updateSettings({ whiteCutoff: v })}>
-                {settings.whiteCutoff.toFixed(2)}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="0.4" step="0.02"
-              value={settings.whiteCutoff}
-              onChange={(e) => updateSettings({ whiteCutoff: parseFloat(e.target.value) })}
-            />
-          </div>
-
-          <div className="control-group">
-            <label>
-              Tone Gamma{' '}
-              <EditableValue value={settings.toneGamma} min={0.5} max={2.5} step={0.05}
-                onChange={(v) => updateSettings({ toneGamma: v })}>
-                {settings.toneGamma.toFixed(2)}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0.5" max="2.5" step="0.05"
-              value={settings.toneGamma}
-              onChange={(e) => updateSettings({ toneGamma: parseFloat(e.target.value) })}
-            />
+          <Slider
+            label="Tone Gamma"
+            value={settings.toneGamma}
+            min={0.5}
+            max={2.5}
+            step={0.05}
+            onChange={(v) => updateSettings({ toneGamma: v })}
+            format={(v) => v.toFixed(2)}
+          >
             <p className="paint-hint">Higher keeps midtones light, pushes ink into shadows.</p>
-          </div>
+          </Slider>
 
-          <div className="control-group">
-            <label>
-              Value Bands{' '}
-              <EditableValue value={settings.valueBands} min={0} max={6} step={1}
-                onChange={(v) => updateSettings({ valueBands: v })}>
-                {settings.valueBands < 2 ? 'off' : settings.valueBands}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="6" step="1"
-              value={settings.valueBands}
-              onChange={(e) => updateSettings({ valueBands: parseInt(e.target.value, 10) })}
-            />
+          <Slider
+            label="Value Bands"
+            value={settings.valueBands}
+            min={0}
+            max={6}
+            step={1}
+            onChange={(v) => updateSettings({ valueBands: v })}
+            format={(v) => (v < 2 ? 'off' : v)}
+          >
             <p className="paint-hint">
               Commit tone to a few big value shapes, like an artist&apos;s value plan.
             </p>
-          </div>
+          </Slider>
 
-          <div className="control-group">
-            <label>
-              Massing{' '}
-              <EditableValue value={settings.massing} min={0} max={1} step={0.05}
-                onChange={(v) => updateSettings({ massing: v })}
-                disabled={settings.valueBands < 2}>
-                {settings.valueBands < 2 ? 'needs value bands' : settings.massing.toFixed(2)}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={settings.massing}
-              disabled={settings.valueBands < 2}
-              onChange={(e) => updateSettings({ massing: parseFloat(e.target.value) })}
-            />
+          <Slider
+            label="Massing"
+            value={settings.massing}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ massing: v })}
+            disabled={settings.valueBands < 2}
+            format={(v) => (settings.valueBands < 2 ? 'needs value bands' : v.toFixed(2))}
+          >
             <p className="paint-hint">
               Compose the value plan by role: swell ground behind the subject, commit lights and darks apart.
             </p>
-          </div>
+          </Slider>
 
-          <div className="control-group">
-            <label>
-              Hatch Patchiness{' '}
-              <EditableValue value={settings.hatchPatchiness} min={0} max={1} step={0.05}
-                onChange={(v) => updateSettings({ hatchPatchiness: v })}>
-                {settings.hatchPatchiness.toFixed(2)}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={settings.hatchPatchiness}
-              onChange={(e) => updateSettings({ hatchPatchiness: parseFloat(e.target.value) })}
-            />
+          <Slider
+            label="Hatch Patchiness"
+            value={settings.hatchPatchiness}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ hatchPatchiness: v })}
+            format={(v) => v.toFixed(2)}
+          >
             <p className="paint-hint">
               Cross-hatch builds up in patches with gaps instead of a woven screen.
             </p>
-          </div>
+          </Slider>
 
           <div className="control-group">
             <label className="checkbox-label">
@@ -361,55 +320,38 @@ export function ImageControls({
               Rich blacks (deep shadows go solid)
             </label>
           </div>
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Marks &amp; Style</summary>
+        <AdvGroup title="Marks & Style">
+          <Slider
+            label="Hatch Angle"
+            value={settings.hatchAngle}
+            min={-90}
+            max={90}
+            step={5}
+            onChange={(v) => updateSettings({ hatchAngle: v })}
+            format={(v) => `${v}°`}
+          />
 
-          <div className="control-group">
-            <label>
-              Hatch Angle{' '}
-              <EditableValue value={settings.hatchAngle} min={-90} max={90} step={5}
-                onChange={(v) => updateSettings({ hatchAngle: v })}>
-                {settings.hatchAngle}°
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="-90" max="90" step="5"
-              value={settings.hatchAngle}
-              onChange={(e) => updateSettings({ hatchAngle: parseInt(e.target.value, 10) })}
-            />
-          </div>
+          <Slider
+            label="Wobble"
+            value={settings.wobble}
+            min={0}
+            max={3}
+            step={0.1}
+            onChange={(v) => updateSettings({ wobble: v })}
+            format={(v) => `${v.toFixed(1)}px`}
+          />
 
-          <div className="control-group">
-            <label>
-              Wobble{' '}
-              <EditableValue value={settings.wobble} min={0} max={3} step={0.1}
-                onChange={(v) => updateSettings({ wobble: v })}>
-                {settings.wobble.toFixed(1)}px
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="3" step="0.1"
-              value={settings.wobble}
-              onChange={(e) => updateSettings({ wobble: parseFloat(e.target.value) })}
-            />
-          </div>
-
-          <div className="control-group">
-            <label>
-              Texture Strokes{' '}
-              <EditableValue value={settings.textureStrokes} min={0} max={1} step={0.05}
-                onChange={(v) => updateSettings({ textureStrokes: v })}>
-                {settings.textureStrokes.toFixed(2)}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={settings.textureStrokes}
-              onChange={(e) => updateSettings({ textureStrokes: parseFloat(e.target.value) })}
-            />
-          </div>
+          <Slider
+            label="Texture Strokes"
+            value={settings.textureStrokes}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ textureStrokes: v })}
+            format={(v) => v.toFixed(2)}
+          />
 
           <div className="control-group">
             <label>Texture Mark Style</label>
@@ -427,65 +369,44 @@ export function ImageControls({
             </select>
           </div>
 
-          <div className="control-group">
-            <label>
-              Max Stroke Length{' '}
-              <EditableValue value={settings.maxStrokeLength} min={0} max={80} step={4}
-                onChange={(v) => updateSettings({ maxStrokeLength: v })}>
-                {settings.maxStrokeLength === 0 ? 'unlimited' : `${settings.maxStrokeLength}px`}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="80" step="4"
-              value={settings.maxStrokeLength}
-              onChange={(e) => updateSettings({ maxStrokeLength: parseInt(e.target.value, 10) })}
-            />
-          </div>
+          <Slider
+            label="Max Stroke Length"
+            value={settings.maxStrokeLength}
+            min={0}
+            max={80}
+            step={4}
+            onChange={(v) => updateSettings({ maxStrokeLength: v })}
+            format={(v) => (v === 0 ? 'unlimited' : `${v}px`)}
+          />
 
-          <div className="control-group">
-            <label>
-              Flow Smoothing{' '}
-              <EditableValue value={settings.fieldSmoothing} min={2} max={12} step={1}
-                onChange={(v) => updateSettings({ fieldSmoothing: v })}>
-                {settings.fieldSmoothing}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="2" max="12" step="1"
-              value={settings.fieldSmoothing}
-              onChange={(e) => updateSettings({ fieldSmoothing: parseInt(e.target.value, 10) })}
-            />
-          </div>
+          <Slider
+            label="Flow Smoothing"
+            value={settings.fieldSmoothing}
+            min={2}
+            max={12}
+            step={1}
+            onChange={(v) => updateSettings({ fieldSmoothing: v })}
+          />
 
-          <div className="control-group">
-            <label>
-              Counterchange{' '}
-              <EditableValue value={settings.counterchange} min={0} max={1} step={0.05}
-                onChange={(v) => updateSettings({ counterchange: v })}>
-                {settings.counterchange.toFixed(2)}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={settings.counterchange}
-              onChange={(e) => updateSettings({ counterchange: parseFloat(e.target.value) })}
-            />
-          </div>
+          <Slider
+            label="Counterchange"
+            value={settings.counterchange}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ counterchange: v })}
+            format={(v) => v.toFixed(2)}
+          />
 
-          <div className="control-group">
-            <label>
-              Silhouette Halo{' '}
-              <EditableValue value={settings.contourHalo} min={0} max={6} step={0.2}
-                onChange={(v) => updateSettings({ contourHalo: v })}>
-                {settings.contourHalo === 0 ? 'off' : `${settings.contourHalo.toFixed(1)}px`}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="6" step="0.2"
-              value={settings.contourHalo}
-              onChange={(e) => updateSettings({ contourHalo: parseFloat(e.target.value) })}
-            />
-          </div>
+          <Slider
+            label="Silhouette Halo"
+            value={settings.contourHalo}
+            min={0}
+            max={6}
+            step={0.2}
+            onChange={(v) => updateSettings({ contourHalo: v })}
+            format={(v) => (v === 0 ? 'off' : `${v.toFixed(1)}px`)}
+          />
 
           <div className="control-group">
             <label>Stipple open skies</label>
@@ -553,59 +474,40 @@ export function ImageControls({
               Bold contour outlines
             </label>
           </div>
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Subject &amp; Focus</summary>
-
-          <div className="control-group">
-            <label>
-              Detail Emphasis{' '}
-              <EditableValue value={settings.detailEmphasis} min={0} max={1} step={0.05}
-                onChange={(v) => updateSettings({ detailEmphasis: v })}>
-                {settings.detailEmphasis.toFixed(2)}
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0" max="1" step="0.05"
-              value={settings.detailEmphasis}
-              onChange={(e) => updateSettings({ detailEmphasis: parseFloat(e.target.value) })}
-            />
-          </div>
+        <AdvGroup title="Subject & Focus">
+          <Slider
+            label="Detail Emphasis"
+            value={settings.detailEmphasis}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ detailEmphasis: v })}
+            format={(v) => v.toFixed(2)}
+          />
 
           {focusPoints.length > 0 && (
             <>
-              <div className="control-group">
-                <label>
-                  Focus Radius{' '}
-                  <EditableValue value={settings.focusRadiusPct} min={5} max={60} step={1}
-                    onChange={(v) => updateSettings({ focusRadiusPct: v })}>
-                    {settings.focusRadiusPct}%
-                  </EditableValue>
-                </label>
-                <input
-                  type="range" min="5" max="60" step="1"
-                  value={settings.focusRadiusPct}
-                  onChange={(e) =>
-                    updateSettings({ focusRadiusPct: parseInt(e.target.value, 10) })
-                  }
-                />
-              </div>
+              <Slider
+                label="Focus Radius"
+                value={settings.focusRadiusPct}
+                min={5}
+                max={60}
+                step={1}
+                onChange={(v) => updateSettings({ focusRadiusPct: v })}
+                format={(v) => `${v}%`}
+              />
 
-              <div className="control-group">
-                <label>
-                  Focus Strength{' '}
-                  <EditableValue value={settings.focusStrength} min={0} max={1} step={0.05}
-                    onChange={(v) => updateSettings({ focusStrength: v })}>
-                    {settings.focusStrength.toFixed(2)}
-                  </EditableValue>
-                </label>
-                <input
-                  type="range" min="0" max="1" step="0.05"
-                  value={settings.focusStrength}
-                  onChange={(e) => updateSettings({ focusStrength: parseFloat(e.target.value) })}
-                />
-              </div>
+              <Slider
+                label="Focus Strength"
+                value={settings.focusStrength}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => updateSettings({ focusStrength: v })}
+                format={(v) => v.toFixed(2)}
+              />
 
               <div className="control-group">
                 <div className="paint-controls">
@@ -631,28 +533,21 @@ export function ImageControls({
               </div>
 
               {subjectMask && (
-                <div className="control-group">
-                  <label>
-                    Mask Strength{' '}
-                    <EditableValue value={settings.maskStrength} min={0} max={1} step={0.05}
-                      onChange={(v) => updateSettings({ maskStrength: v })}>
-                      {settings.maskStrength.toFixed(2)}
-                    </EditableValue>
-                  </label>
-                  <input
-                    type="range" min="0" max="1" step="0.05"
-                    value={settings.maskStrength}
-                    onChange={(e) => updateSettings({ maskStrength: parseFloat(e.target.value) })}
-                  />
-                </div>
+                <Slider
+                  label="Mask Strength"
+                  value={settings.maskStrength}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(v) => updateSettings({ maskStrength: v })}
+                  format={(v) => v.toFixed(2)}
+                />
               )}
             </>
           )}
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Scene Labels</summary>
-
+        <AdvGroup title="Scene Labels">
           <div className="control-group">
             <p className="paint-hint">
               A small scene model labels sky, water, foliage, buildings and
@@ -683,11 +578,9 @@ export function ImageControls({
               </p>
             )}
           </div>
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Portrait &amp; 3D Form</summary>
-
+        <AdvGroup title="Portrait & 3D Form">
           <div className="control-group">
             <div className="paint-controls">
               <button
@@ -714,20 +607,15 @@ export function ImageControls({
 
           {portraitState && (
             <>
-              <div className="control-group">
-                <label>
-                  Skin Lightening{' '}
-                  <EditableValue value={settings.skinLightening} min={0} max={1} step={0.05}
-                    onChange={(v) => updateSettings({ skinLightening: v })}>
-                    {settings.skinLightening.toFixed(2)}
-                  </EditableValue>
-                </label>
-                <input
-                  type="range" min="0" max="1" step="0.05"
-                  value={settings.skinLightening}
-                  onChange={(e) => updateSettings({ skinLightening: parseFloat(e.target.value) })}
-                />
-              </div>
+              <Slider
+                label="Skin Lightening"
+                value={settings.skinLightening}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => updateSettings({ skinLightening: v })}
+                format={(v) => v.toFixed(2)}
+              />
 
               <div className="control-group">
                 <label className="checkbox-label">
@@ -744,35 +632,25 @@ export function ImageControls({
 
           {depthMap && (
             <>
-              <div className="control-group">
-                <label>
-                  Form Strength{' '}
-                  <EditableValue value={settings.formStrength} min={0} max={1} step={0.05}
-                    onChange={(v) => updateSettings({ formStrength: v })}>
-                    {settings.formStrength.toFixed(2)}
-                  </EditableValue>
-                </label>
-                <input
-                  type="range" min="0" max="1" step="0.05"
-                  value={settings.formStrength}
-                  onChange={(e) => updateSettings({ formStrength: parseFloat(e.target.value) })}
-                />
-              </div>
+              <Slider
+                label="Form Strength"
+                value={settings.formStrength}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => updateSettings({ formStrength: v })}
+                format={(v) => v.toFixed(2)}
+              />
 
-              <div className="control-group">
-                <label>
-                  Depth Fade{' '}
-                  <EditableValue value={settings.depthIsolation} min={0} max={1} step={0.05}
-                    onChange={(v) => updateSettings({ depthIsolation: v })}>
-                    {settings.depthIsolation.toFixed(2)}
-                  </EditableValue>
-                </label>
-                <input
-                  type="range" min="0" max="1" step="0.05"
-                  value={settings.depthIsolation}
-                  onChange={(e) => updateSettings({ depthIsolation: parseFloat(e.target.value) })}
-                />
-              </div>
+              <Slider
+                label="Depth Fade"
+                value={settings.depthIsolation}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => updateSettings({ depthIsolation: v })}
+                format={(v) => v.toFixed(2)}
+              />
 
               <div className="control-group">
                 <label className="checkbox-label">
@@ -789,40 +667,28 @@ export function ImageControls({
               </div>
             </>
           )}
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Marks &amp; Output</summary>
+        <AdvGroup title="Marks & Output">
+          <Slider
+            label="Detail Resolution"
+            value={settings.workingSize}
+            min={400}
+            max={1000}
+            step={50}
+            onChange={(v) => updateSettings({ workingSize: v })}
+            format={(v) => `${v}px`}
+          />
 
-          <div className="control-group">
-            <label>
-              Detail Resolution{' '}
-              <EditableValue value={settings.workingSize} min={400} max={1000} step={50}
-                onChange={(v) => updateSettings({ workingSize: v })}>
-                {settings.workingSize}px
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="400" max="1000" step="50"
-              value={settings.workingSize}
-              onChange={(e) => updateSettings({ workingSize: parseInt(e.target.value, 10) })}
-            />
-          </div>
-
-          <div className="control-group">
-            <label>
-              Pen Width{' '}
-              <EditableValue value={settings.penWidthMm} min={0.1} max={1.5} step={0.05}
-                onChange={(v) => updateSettings({ penWidthMm: v })}>
-                {settings.penWidthMm}mm
-              </EditableValue>
-            </label>
-            <input
-              type="range" min="0.1" max="1.5" step="0.05"
-              value={settings.penWidthMm}
-              onChange={(e) => updateSettings({ penWidthMm: parseFloat(e.target.value) })}
-            />
-          </div>
+          <Slider
+            label="Pen Width"
+            value={settings.penWidthMm}
+            min={0.1}
+            max={1.5}
+            step={0.05}
+            onChange={(v) => updateSettings({ penWidthMm: v })}
+            format={(v) => `${v}mm`}
+          />
 
           <ColorField
             label="Stroke Color"
@@ -840,8 +706,8 @@ export function ImageControls({
               />
             </div>
           </div>
-        </details>
-      </details>
+        </AdvGroup>
+      </AdvancedSection>
 
     </div>
   );

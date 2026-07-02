@@ -1,4 +1,5 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { randomSeed } from './lib/rng.js';
 
 /**
  * Complex-valued rational-function flow fields, after George Savva's
@@ -366,7 +367,7 @@ const bandName = (i: number): string => `band-${String(i).padStart(2, '0')}`;
 
 export function generateComplexFlow(options: ComplexFlowOptions): FlowLinesResult {
   const o = options;
-  const seed = o.seed ?? Math.floor(Math.random() * 1000000);
+  const seed = o.seed ?? randomSeed();
 
   // One LCG stream, threaded in a fixed order (singularities → seeds → per-step
   // jitter) so output is deterministic per seed.

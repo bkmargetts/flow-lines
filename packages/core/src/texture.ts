@@ -3,6 +3,7 @@ import { createNoise } from './noise.js';
 import { traceIsoContours } from './iso-contours.js';
 import { gaussianBlur } from './image.js';
 import { generateOverlappedLines, type MaskShape } from './overlapped-lines.js';
+import { makeRandom } from './lib/rng.js';
 
 /**
  * A plottable background texture — a field of single-pen strokes laid behind
@@ -84,15 +85,6 @@ export interface TextureOptions {
   avoid?: FlowLine[];
   /** Clean-paper sliver reserved around `avoid`, in mm (0 = no halo) */
   haloMm?: number;
-}
-
-/** Deterministic LCG, matching the convention used across the toolbox. */
-function makeRandom(seed: number): () => number {
-  let s = seed >>> 0 || 1;
-  return () => {
-    s = (s * 1103515245 + 12345) & 0x7fffffff;
-    return s / 0x7fffffff;
-  };
 }
 
 /**

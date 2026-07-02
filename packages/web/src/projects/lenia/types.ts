@@ -1,4 +1,5 @@
 import type { LeniaPreset, LeniaSeedPattern } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * Lenia ("Lifeforms") settings. The page frame (paper, orientation,
@@ -83,7 +84,7 @@ export interface LeniaState {
 }
 
 export const defaultLeniaState: LeniaState = {
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   preset: 'orbium',
 
   gridCols: 96,

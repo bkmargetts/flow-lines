@@ -2,10 +2,10 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import { BASE_PX_PER_MM, type Orientation, type PaperFit } from '@flow-lines/core';
 
 /**
- * The page frame is shared by every project tab: the canvas is always a
+ * The page frame is shared by every layer in the stack: the canvas is always a
  * physical sheet (paper size + orientation + render density), with a clear
  * paper border and a fit rule for art that doesn't match the sheet's aspect.
- * Lifting it out of any one project means switching projects never loses the
+ * Lifting it out of any one module means switching layers never loses the
  * sheet you set up, and every tool plots to the same page.
  */
 export interface FrameSettings {

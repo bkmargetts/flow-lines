@@ -1,5 +1,5 @@
 import { InfoTip } from '../../components/InfoTip';
-import { EditableValue } from '../../components/EditableValue';
+import { Slider } from '../../components/controls/Slider';
 import { GratingFields } from '../../textures/grating/GratingFields';
 import type { ControlsProps } from '../../modules/types';
 import type { NoiseTextureState } from './types';
@@ -41,31 +41,20 @@ export function NoiseTextureControls({ state, update }: ControlsProps<NoiseTextu
 
       <h3 className="section-title">Style</h3>
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Pen width
             <InfoTip text="Plotted line weight in millimetres. Thin pens keep the interleaved grating crisp." />
           </span>
-          <EditableValue
-            value={state.penWidthMm}
-            min={0.05}
-            max={0.8}
-            step={0.05}
-            onChange={(v) => updateState({ penWidthMm: v })}
-          >
-            {state.penWidthMm.toFixed(2)}mm
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0.05"
-          max="0.8"
-          step="0.05"
-          value={state.penWidthMm}
-          onChange={(e) => updateState({ penWidthMm: parseFloat(e.target.value) })}
-        />
-      </div>
+        }
+        value={state.penWidthMm}
+        min={0.05}
+        max={0.8}
+        step={0.05}
+        onChange={(v) => updateState({ penWidthMm: v })}
+        format={(v) => `${v.toFixed(2)}mm`}
+      />
     </div>
   );
 }

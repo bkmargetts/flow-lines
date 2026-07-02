@@ -1,6 +1,8 @@
 import { InfoTip } from '../../components/InfoTip';
 import { PalettePicker } from '../../components/ColorField';
-import { EditableValue } from '../../components/EditableValue';
+import { AdvancedSection } from '../../components/controls/AdvancedSection';
+import { SeedControl } from '../../components/controls/SeedControl';
+import { Slider } from '../../components/controls/Slider';
 import type { ControlsProps } from '../../modules/types';
 import type { ComplexFlowState } from './types';
 import type { SingularityLayout, SeedLayout, LayerBy } from '@flow-lines/core';
@@ -29,7 +31,6 @@ const LAYER_BY: { id: LayerBy; label: string }[] = [
 /** Sidebar controls for the Complex Flow module. */
 export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlowState>) {
   const updateState = update;
-  const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
   const togglePlaceMode = () => update((prev) => ({ placeMode: !prev.placeMode }));
   const clearSingularities = () => update({ manualZeros: [], manualPoles: [] });
 
@@ -39,47 +40,33 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
     <div className="controls">
       <h3 className="section-title">Field</h3>
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Zeros (sinks/sources)
             <InfoTip text="Numerator roots of f(z)=Π(z-zero)/Π(z-pole). The flow streams out of (or into) each zero — they read as the bright centres the streamlines spiral around." />
           </span>
-          <EditableValue value={state.zeroCount} min={0} max={8} step={1}
-            onChange={(v) => updateState({ zeroCount: v })}>
-            {state.zeroCount}
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="8"
-          step="1"
-          value={state.zeroCount}
-          onChange={(e) => updateState({ zeroCount: parseInt(e.target.value, 10) })}
-        />
-      </div>
+        }
+        value={state.zeroCount}
+        min={0}
+        max={8}
+        step={1}
+        onChange={(v) => updateState({ zeroCount: v })}
+      />
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Poles (saddles)
             <InfoTip text="Denominator roots of f(z). The flow curves around each pole like a saddle, the structural counterweight to the zeros." />
           </span>
-          <EditableValue value={state.poleCount} min={0} max={8} step={1}
-            onChange={(v) => updateState({ poleCount: v })}>
-            {state.poleCount}
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="8"
-          step="1"
-          value={state.poleCount}
-          onChange={(e) => updateState({ poleCount: parseInt(e.target.value, 10) })}
-        />
-      </div>
+        }
+        value={state.poleCount}
+        min={0}
+        max={8}
+        step={1}
+        onChange={(v) => updateState({ poleCount: v })}
+      />
 
       <div className="control-group">
         <label>
@@ -109,47 +96,35 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
         </select>
       </div>
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Spread
             <InfoTip text="How far the zeros and poles sit from the centre. Tight spreads knot the flow into a dense core; wide spreads spread the topology across the page." />
           </span>
-          <EditableValue value={state.singularitySpread} min={0.1} max={1} step={0.05}
-            onChange={(v) => updateState({ singularitySpread: v })}>
-            {state.singularitySpread.toFixed(2)}
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0.1"
-          max="1"
-          step="0.05"
-          value={state.singularitySpread}
-          onChange={(e) => updateState({ singularitySpread: parseFloat(e.target.value) })}
-        />
-      </div>
+        }
+        value={state.singularitySpread}
+        min={0.1}
+        max={1}
+        step={0.05}
+        onChange={(v) => updateState({ singularitySpread: v })}
+        format={(v) => v.toFixed(2)}
+      />
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Field rotation
             <InfoTip text="Spin the whole vector field. At 90° sources become swirls (the flow circulates instead of radiating), so it's a quick way to turn explosions into vortices." />
           </span>
-          <EditableValue value={state.fieldRotationDeg} min={0} max={360} step={5}
-            onChange={(v) => updateState({ fieldRotationDeg: v })}>
-            {state.fieldRotationDeg}°
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="360"
-          step="5"
-          value={state.fieldRotationDeg}
-          onChange={(e) => updateState({ fieldRotationDeg: parseInt(e.target.value, 10) })}
-        />
-      </div>
+        }
+        value={state.fieldRotationDeg}
+        min={0}
+        max={360}
+        step={5}
+        onChange={(v) => updateState({ fieldRotationDeg: v })}
+        format={(v) => `${v}°`}
+      />
 
       <h3 className="section-title">Place singularities</h3>
 
@@ -222,89 +197,63 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
         </select>
       </div>
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Line count
             <InfoTip text="How many streamlines are traced. The blog's pieces layer many thousands of thin lines; more lines = denser, richer, longer to plot." />
           </span>
-          <EditableValue value={state.seedCount} min={100} max={5000} step={100}
-            onChange={(v) => updateState({ seedCount: v })}>
-            {state.seedCount}
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="100"
-          max="5000"
-          step="100"
-          value={state.seedCount}
-          onChange={(e) => updateState({ seedCount: parseInt(e.target.value, 10) })}
-        />
-      </div>
+        }
+        value={state.seedCount}
+        min={100}
+        max={5000}
+        step={100}
+        onChange={(v) => updateState({ seedCount: v })}
+      />
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Length (steps/dir)
             <InfoTip text="How far each streamline runs forward and backward from its seed. Higher draws long sweeping curves; lower keeps them as short directional dashes." />
           </span>
-          <EditableValue value={state.stepsPerDir} min={20} max={400} step={10}
-            onChange={(v) => updateState({ stepsPerDir: v })}>
-            {state.stepsPerDir}
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="20"
-          max="400"
-          step="10"
-          value={state.stepsPerDir}
-          onChange={(e) => updateState({ stepsPerDir: parseInt(e.target.value, 10) })}
-        />
-      </div>
+        }
+        value={state.stepsPerDir}
+        min={20}
+        max={400}
+        step={10}
+        onChange={(v) => updateState({ stepsPerDir: v })}
+      />
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Step length
             <InfoTip text="Distance per integration step (px). Smaller hugs the field more tightly (smoother curves, slower); larger is coarser and faster." />
           </span>
-          <EditableValue value={state.stepLength} min={0.5} max={6} step={0.5}
-            onChange={(v) => updateState({ stepLength: v })}>
-            {state.stepLength.toFixed(1)}px
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0.5"
-          max="6"
-          step="0.5"
-          value={state.stepLength}
-          onChange={(e) => updateState({ stepLength: parseFloat(e.target.value) })}
-        />
-      </div>
+        }
+        value={state.stepLength}
+        min={0.5}
+        max={6}
+        step={0.5}
+        onChange={(v) => updateState({ stepLength: v })}
+        format={(v) => `${v.toFixed(1)}px`}
+      />
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Step jitter
             <InfoTip text="Randomises each step's length so neighbouring streamlines don't lock into visible banding moiré. 0 is perfectly even." />
           </span>
-          <EditableValue value={state.stepJitter} min={0} max={1} step={0.05}
-            onChange={(v) => updateState({ stepJitter: v })}>
-            {state.stepJitter.toFixed(2)}
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={state.stepJitter}
-          onChange={(e) => updateState({ stepJitter: parseFloat(e.target.value) })}
-        />
-      </div>
+        }
+        value={state.stepJitter}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => updateState({ stepJitter: v })}
+        format={(v) => v.toFixed(2)}
+      />
 
       <h3 className="section-title">Colour</h3>
 
@@ -316,26 +265,19 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
         info="Streamlines are grouped into colour bands; each band plots as its own pen. The per-layer SVG export keeps them separate so it's a genuine multi-pen plot, not a colour trick. 'Mono' maps every band to one ink; 'Custom…' lets you pick each ink."
       />
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Colour bands (pens)
             <InfoTip text="How many colour bands / pen layers the streamlines split into. With concentric-ring seeding, each band is one ring." />
           </span>
-          <EditableValue value={state.layerCount} min={1} max={8} step={1}
-            onChange={(v) => updateState({ layerCount: v })}>
-            {state.layerCount}
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="1"
-          max="8"
-          step="1"
-          value={state.layerCount}
-          onChange={(e) => updateState({ layerCount: parseInt(e.target.value, 10) })}
-        />
-      </div>
+        }
+        value={state.layerCount}
+        min={1}
+        max={8}
+        step={1}
+        onChange={(v) => updateState({ layerCount: v })}
+      />
 
       <div className="control-group">
         <label>
@@ -361,26 +303,20 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
 
       <h3 className="section-title">Style</h3>
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Pen width
             <InfoTip text="Plotted line weight in millimetres. Thin pens (0.1–0.3mm) let the many layered lines build density without going muddy." />
           </span>
-          <EditableValue value={state.penWidthMm} min={0.05} max={0.8} step={0.05}
-            onChange={(v) => updateState({ penWidthMm: v })}>
-            {state.penWidthMm.toFixed(2)}mm
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0.05"
-          max="0.8"
-          step="0.05"
-          value={state.penWidthMm}
-          onChange={(e) => updateState({ penWidthMm: parseFloat(e.target.value) })}
-        />
-      </div>
+        }
+        value={state.penWidthMm}
+        min={0.05}
+        max={0.8}
+        step={0.05}
+        onChange={(v) => updateState({ penWidthMm: v })}
+        format={(v) => `${v.toFixed(2)}mm`}
+      />
 
       <div className="control-group">
         <label className="checkbox-label">
@@ -394,114 +330,77 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
         </label>
       </div>
 
-      <div className="control-group">
-        <label>
+      <Slider
+        labelNode={
           <span className="label-text">
             Wobble
             <InfoTip text="A decorative perpendicular ripple baked into each streamline as it's traced — a different texture from the hand-drawn shake. 0 is clean." />
           </span>
-          <EditableValue value={state.wobble} min={0} max={3} step={0.1}
-            onChange={(v) => updateState({ wobble: v })}>
-            {state.wobble.toFixed(1)}px
-          </EditableValue>
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="3"
-          step="0.1"
-          value={state.wobble}
-          onChange={(e) => updateState({ wobble: parseFloat(e.target.value) })}
-        />
-      </div>
+        }
+        value={state.wobble}
+        min={0}
+        max={3}
+        step={0.1}
+        onChange={(v) => updateState({ wobble: v })}
+        format={(v) => `${v.toFixed(1)}px`}
+      />
 
       <h3 className="section-title">Seed</h3>
 
-      <div className="control-group">
+      <SeedControl seed={state.seed} onChange={(seed) => updateState({ seed })}>
         <label>
           <span className="label-text">
             Seed
             <InfoTip text="Sets the random placement of 'random' arrangements and the per-step jitter. Same seed → identical drawing." />
           </span>
         </label>
-        <div className="seed-input">
-          <input
-            type="number"
-            value={state.seed}
-            onChange={(e) => updateState({ seed: parseInt(e.target.value, 10) || 0 })}
-          />
-          <button type="button" className="secondary" onClick={randomizeSeed} title="New random seed">
-            🎲
-          </button>
-        </div>
-      </div>
+      </SeedControl>
 
-      <details className="advanced">
-        <summary>Advanced</summary>
-
-        <div className="control-group">
-          <label>
+      <AdvancedSection>
+        <Slider
+          labelNode={
             <span className="label-text">
               Plane zoom
               <InfoTip text="How much of the complex plane the page shows. Larger zooms out (the singularities cluster toward the centre); smaller zooms in on the field." />
             </span>
-            <EditableValue value={state.planeScale} min={0.5} max={2.5} step={0.1}
-              onChange={(v) => updateState({ planeScale: v })}>
-              {state.planeScale.toFixed(2)}
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="2.5"
-            step="0.1"
-            value={state.planeScale}
-            onChange={(e) => updateState({ planeScale: parseFloat(e.target.value) })}
-          />
-        </div>
+          }
+          value={state.planeScale}
+          min={0.5}
+          max={2.5}
+          step={0.1}
+          onChange={(v) => updateState({ planeScale: v })}
+          format={(v) => v.toFixed(2)}
+        />
 
-        <div className="control-group">
-          <label>
+        <Slider
+          labelNode={
             <span className="label-text">
               Speed clamp
               <InfoTip text="A streamline that rockets off near a pole is cut when its raw speed exceeds this. Lower trims more aggressively around singularities." />
             </span>
-            <EditableValue value={state.speedClampMax} min={100} max={10000} step={100}
-              onChange={(v) => updateState({ speedClampMax: v })}>
-              {state.speedClampMax}
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="100"
-            max="10000"
-            step="100"
-            value={state.speedClampMax}
-            onChange={(e) => updateState({ speedClampMax: parseInt(e.target.value, 10) })}
-          />
-        </div>
+          }
+          value={state.speedClampMax}
+          min={100}
+          max={10000}
+          step={100}
+          onChange={(v) => updateState({ speedClampMax: v })}
+        />
 
-        <div className="control-group">
-          <label>
+        <Slider
+          labelNode={
             <span className="label-text">
               Min line length
               <InfoTip text="Streamlines shorter than this (px) are discarded — clears the stubs that form right on top of a singularity." />
             </span>
-            <EditableValue value={state.minLineLength} min={0} max={60} step={2}
-              onChange={(v) => updateState({ minLineLength: v })}>
-              {state.minLineLength}px
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="60"
-            step="2"
-            value={state.minLineLength}
-            onChange={(e) => updateState({ minLineLength: parseInt(e.target.value, 10) })}
-          />
-        </div>
-      </details>
+          }
+          value={state.minLineLength}
+          min={0}
+          max={60}
+          step={2}
+          onChange={(v) => updateState({ minLineLength: v })}
+          format={(v) => `${v}px`}
+        />
+      </AdvancedSection>
     </div>
   );
 }

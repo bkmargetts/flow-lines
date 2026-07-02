@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateVines, type VinesOptions, type VineSeeding } from './vines.js';
+import { generateVines, type VinesOptions, type VineSeeding } from './vines/index.js';
 import type { FlowLine } from './flow-lines.js';
 
 function baseOptions(overrides: Partial<VinesOptions> = {}): VinesOptions {

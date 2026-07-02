@@ -19,8 +19,8 @@ export { generateColorField, accentLayerName } from './color-field.js';
 export type { ColorFieldOptions, AccentSpec } from './color-field.js';
 
 // Conway's Game of Life long-exposure still
-export { generateConwayExposure } from './conway-exposure.js';
-export type { ConwayExposureOptions } from './conway-exposure.js';
+export { generateConwayExposure } from './conway/index.js';
+export type { ConwayExposureOptions } from './conway/index.js';
 
 // Reaction–diffusion (Gray–Scott) Turing patterns
 export { generateReactionDiffusion, stepReactionDiffusion, RD_PRESETS } from './reaction-diffusion.js';
@@ -69,8 +69,8 @@ export { ImageField } from './image-field.js';
 export type { ImageFieldOptions, DirectionMap } from './image-field.js';
 
 // Image to pen-and-ink rendering
-export { imageToPenInk } from './pen-ink.js';
-export type { PenInkOptions, FocusOptions } from './pen-ink.js';
+export { imageToPenInk } from './pen-ink/index.js';
+export type { PenInkOptions, FocusOptions } from './pen-ink/index.js';
 
 // Physical paper sizes (plotter output)
 export {
@@ -106,16 +106,16 @@ export { applyHandDrawnStyle } from './hand-drawn.js';
 export type { HandDrawnOptions } from './hand-drawn.js';
 
 // Vine generator (organic procedural vines)
-export { generateVines } from './vines.js';
-export type { VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from './vines.js';
+export { generateVines } from './vines/index.js';
+export type { VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from './vines/index.js';
 
 // Planet generator (procedural pen-and-ink planets)
-export { generatePlanet } from './planet.js';
-export type { PlanetOptions, PlanetType } from './planet.js';
+export { generatePlanet } from './planet/index.js';
+export type { PlanetOptions, PlanetType } from './planet/index.js';
 
 // Landscape generator (procedural pen-and-ink landscapes)
-export { generateLandscape } from './landscape.js';
-export type { LandscapeOptions, ForegroundSide } from './landscape.js';
+export { generateLandscape } from './landscape/index.js';
+export type { LandscapeOptions, ForegroundSide } from './landscape/index.js';
 
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';

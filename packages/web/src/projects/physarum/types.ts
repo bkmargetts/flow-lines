@@ -1,4 +1,5 @@
 import type { PhysarumPreset } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * Physarum (slime-mold transport networks) settings. The page frame (paper,
@@ -85,7 +86,7 @@ export interface PhysarumState {
 }
 
 export const defaultPhysarumState: PhysarumState = {
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   preset: 'network',
 
   gridCols: 200,

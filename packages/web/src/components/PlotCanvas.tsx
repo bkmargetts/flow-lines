@@ -1,7 +1,7 @@
 import type { Point } from '@flow-lines/core';
 import { Preview } from './Preview';
 import { useFrame } from '../FrameContext';
-import { useComposite, useLayerStore } from '../LayerStore';
+import { useComposite, useCompositeBusy, useLayerStore } from '../LayerStore';
 import { useInstanceApi } from '../projects/image-ink/instance-store';
 import type { ImageInkLayerState } from '../projects/image-ink/types';
 
@@ -29,6 +29,7 @@ export function PlotCanvas() {
   const { frame } = useFrame();
   const { layers, selectedId, updateState } = useLayerStore();
   const comp = useComposite();
+  const compositing = useCompositeBusy();
 
   const selected = layers.find((l) => l.instanceId === selectedId);
   const isInk = selected?.moduleId === 'image-ink';
@@ -85,7 +86,7 @@ export function PlotCanvas() {
 
   return (
     <>
-      {api?.isRendering && <div className="rendering-badge">Rendering…</div>}
+      {(api?.isRendering || compositing) && <div className="rendering-badge">Rendering…</div>}
       {emptyHint ? (
         <div className="empty-state">
           <p>{emptyHint}</p>

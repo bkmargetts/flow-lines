@@ -1,52 +1,12 @@
-import type { ReactNode } from 'react';
 import { ColorField } from '../../components/ColorField';
-import { EditableValue } from '../../components/EditableValue';
+import { AdvancedSection } from '../../components/controls/AdvancedSection';
+import { Slider } from '../../components/controls/Slider';
+import { Toggle } from '../../components/controls/Toggle';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { PlanetState } from './types';
 import { PLANET_PALETTES, CUSTOM_PALETTE } from './palettes';
 import { PLANET_PRESETS, getPlanetPreset, randomPlanetGenome } from './presets';
-
-/** One labelled range slider + its click-to-type value badge. */
-function Slider(props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format?: (v: number) => ReactNode;
-  disabled?: boolean;
-}) {
-  const { label, value, min, max, step, onChange, format, disabled } = props;
-  return (
-    <div className="control-group">
-      <label>
-        {label}{' '}
-        <EditableValue value={value} min={min} max={max} step={step} onChange={onChange} disabled={disabled}>
-          {format ? format(value) : value}
-        </EditableValue>
-      </label>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-    </div>
-  );
-}
-
-function Toggle(props: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="toggle-row">
-      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
-      {props.label}
-    </label>
-  );
-}
 
 /** Sidebar controls for the Planet Generator module. */
 export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetState>) {
@@ -61,7 +21,7 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
     update(preset ? preset.state : { planetType: id as PlanetState['planetType'] });
   };
   const surprise = () => {
-    update({ ...randomPlanetGenome(Math.random), seed: Math.floor(Math.random() * 1000000) });
+    update({ ...randomPlanetGenome(Math.random), seed: randomSeed() });
   };
 
   return (
@@ -91,7 +51,7 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
             onChange={(e) => update({ seed: parseInt(e.target.value, 10) || 0 })}
             style={{ width: 110 }}
           />
-          <button type="button" className="secondary" onClick={() => update({ seed: Math.floor(Math.random() * 1000000) })} title="Random seed">
+          <button type="button" className="secondary" onClick={() => update({ seed: randomSeed() })} title="Random seed">
             🎲
           </button>
         </div>
@@ -257,8 +217,7 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         </>
       )}
 
-      <details className="advanced">
-        <summary>Advanced</summary>
+      <AdvancedSection>
         <Slider label="Terrain detail (octaves)" value={state.terrainDetail} min={1} max={7} step={1} onChange={(v) => update({ terrainDetail: v })} />
         <Slider label="Cap raggedness" value={state.capRaggedness} min={0} max={1} step={0.05} onChange={(v) => update({ capRaggedness: v })} format={(v) => v.toFixed(2)} disabled={!state.iceCaps} />
         <Slider label="Ring inner" value={state.ringInner} min={1.05} max={2} step={0.05} onChange={(v) => update({ ringInner: v })} format={(v) => `${v.toFixed(2)}×`} disabled={!state.rings} />
@@ -278,7 +237,7 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
             </select>
           </div>
         )}
-      </details>
+      </AdvancedSection>
     </div>
   );
 }

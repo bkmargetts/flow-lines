@@ -1,4 +1,5 @@
 import { type Point } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * Flow-field settings. The page frame (paper, orientation, resolution,
@@ -34,7 +35,7 @@ export const defaultFlowState: FlowState = {
   lineCount: 100,
   denseFill: false,
   lineSpacingMm: 3,
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   stepLength: 2,
   maxSteps: 500,
   minLineLength: 10,

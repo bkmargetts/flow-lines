@@ -1,4 +1,5 @@
 import { type PortraitOptions } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * Per-image ink settings. The page frame (paper, orientation, resolution,
@@ -70,7 +71,7 @@ export interface PortraitState {
 }
 
 export const defaultInkSettings: InkSettings = {
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   layers: 3,
   minSpacing: 2.5,
   maxSpacing: 14,
