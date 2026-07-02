@@ -1,5 +1,4 @@
 import type { Module } from './types';
-import { fromTextureModule } from './from-texture';
 import { classicTexture } from '../textures/classic';
 import { gratingTexture } from '../textures/grating';
 import { blankTexture } from '../textures/blank';
@@ -17,10 +16,10 @@ import { noiseTextureModule } from '../projects/noise-texture';
 import { colorFieldModule } from '../projects/color-field';
 
 /**
- * Every module, in panel order — the single registry that replaces the old
- * `PROJECTS` + `TEXTURE_MODULES` split. Image→Ink leads (the default first
- * layer); the generative fields follow; the three former background textures
- * (wrapped in place) sit at the end.
+ * Every module, in panel order — the one flat registry the layer stack draws
+ * from. Image→Ink leads (the default first layer); the generative fields
+ * follow; the three background textures — ordinary pure modules like the
+ * rest — sit at the end.
  */
 // `any` at the registry boundary: each module is internally typed, but the
 // heterogeneous array + dynamic Controls rendering need a common element type
@@ -39,9 +38,9 @@ export const MODULES: Module<any>[] = [
   physarumModule,
   noiseTextureModule,
   colorFieldModule,
-  fromTextureModule(classicTexture),
-  fromTextureModule(gratingTexture),
-  fromTextureModule(blankTexture),
+  classicTexture,
+  gratingTexture,
+  blankTexture,
 ];
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
