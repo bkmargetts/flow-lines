@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateConwayExposure, stepLife } from './conway-exposure.js';
+import { generateConwayExposure, stepLife } from './conway/index.js';
 
 /** Pull every point of every line flat, for bounds/equality checks */
 function allPoints(lines: { points: { x: number; y: number }[] }[]) {

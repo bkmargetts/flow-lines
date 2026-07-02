@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { generateFlowLines, generateFlowLinesGrid, generateFlowLinesEven } from './flow-lines.js';
 import { generateOverlappedLines } from './overlapped-lines.js';
 import { generateColorField } from './color-field.js';
-import { generateConwayExposure } from './conway-exposure.js';
+import { generateConwayExposure } from './conway/index.js';
 import { generateReactionDiffusion } from './reaction-diffusion.js';
 import { generateLenia } from './lenia.js';
 import { generatePhysarum } from './physarum.js';

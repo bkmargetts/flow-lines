@@ -19,8 +19,8 @@ export { generateColorField, accentLayerName } from './color-field.js';
 export type { ColorFieldOptions, AccentSpec } from './color-field.js';
 
 // Conway's Game of Life long-exposure still
-export { generateConwayExposure } from './conway-exposure.js';
-export type { ConwayExposureOptions } from './conway-exposure.js';
+export { generateConwayExposure } from './conway/index.js';
+export type { ConwayExposureOptions } from './conway/index.js';
 
 // Reaction–diffusion (Gray–Scott) Turing patterns
 export { generateReactionDiffusion, stepReactionDiffusion, RD_PRESETS } from './reaction-diffusion.js';
