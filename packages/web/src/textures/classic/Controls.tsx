@@ -2,6 +2,8 @@ import type { TextureStyle } from '@flow-lines/core';
 import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
 import { ColorField } from '../../components/ColorField';
+import { SeedControl } from '../../components/controls/SeedControl';
+import { Slider } from '../../components/controls/Slider';
 import type { ClassicParams } from './index';
 
 const TEXTURE_STYLES: Array<{ id: TextureStyle; label: string }> = [
@@ -41,41 +43,27 @@ export function ClassicControls({ params, update }: Props) {
         params.style === 'grid' ||
         params.style === 'stipple' ||
         params.style === 'shapes') && (
-        <div className="control-group">
-          <label>
-            Spacing{" "}
-            <EditableValue value={params.spacingMm} min={1} max={12} step={0.5} onChange={(v) => update({ spacingMm: v })}>
-              {params.spacingMm.toFixed(1)}mm
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="12"
-            step="0.5"
-            value={params.spacingMm}
-            onChange={(e) => update({ spacingMm: parseFloat(e.target.value) })}
-          />
-        </div>
+        <Slider
+          label="Spacing"
+          value={params.spacingMm}
+          min={1}
+          max={12}
+          step={0.5}
+          onChange={(v) => update({ spacingMm: v })}
+          format={(v) => `${v.toFixed(1)}mm`}
+        />
       )}
 
       {(params.style === 'hatch' || params.style === 'grid' || params.style === 'shapes') && (
-        <div className="control-group">
-          <label>
-            Angle{" "}
-            <EditableValue value={params.angleDeg} min={0} max={180} step={1} onChange={(v) => update({ angleDeg: v })}>
-              {params.angleDeg}°
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="180"
-            step="1"
-            value={params.angleDeg}
-            onChange={(e) => update({ angleDeg: parseInt(e.target.value, 10) })}
-          />
-        </div>
+        <Slider
+          label="Angle"
+          value={params.angleDeg}
+          min={0}
+          max={180}
+          step={1}
+          onChange={(v) => update({ angleDeg: v })}
+          format={(v) => `${v}°`}
+        />
       )}
 
       {params.style === 'hatch' && (
@@ -92,60 +80,39 @@ export function ClassicControls({ params, update }: Props) {
       )}
 
       {(params.style === 'stipple' || params.style === 'contours') && (
-        <div className="control-group">
-          <label>
-            Density{" "}
-            <EditableValue value={params.density} min={0} max={1} step={0.05} onChange={(v) => update({ density: v })}>
-              {params.density.toFixed(2)}
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={params.density}
-            onChange={(e) => update({ density: parseFloat(e.target.value) })}
-          />
-        </div>
+        <Slider
+          label="Density"
+          value={params.density}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ density: v })}
+          format={(v) => v.toFixed(2)}
+        />
       )}
 
       {params.style !== 'shapes' && (
-        <div className="control-group">
-          <label>
-            {params.style === 'contours' ? 'Scale' : 'Mark size'}{" "}
-            <EditableValue value={params.scale} min={0.2} max={3} step={0.1} onChange={(v) => update({ scale: v })}>
-              {params.scale.toFixed(2)}
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="0.2"
-            max="3"
-            step="0.1"
-            value={params.scale}
-            onChange={(e) => update({ scale: parseFloat(e.target.value) })}
-          />
-        </div>
+        <Slider
+          label={params.style === 'contours' ? 'Scale' : 'Mark size'}
+          value={params.scale}
+          min={0.2}
+          max={3}
+          step={0.1}
+          onChange={(v) => update({ scale: v })}
+          format={(v) => v.toFixed(2)}
+        />
       )}
 
       {params.style !== 'grid' && (
-        <div className="control-group">
-          <label>
-            Jitter{" "}
-            <EditableValue value={params.jitter} min={0} max={1} step={0.05} onChange={(v) => update({ jitter: v })}>
-              {params.jitter.toFixed(2)}
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={params.jitter}
-            onChange={(e) => update({ jitter: parseFloat(e.target.value) })}
-          />
-        </div>
+        <Slider
+          label="Jitter"
+          value={params.jitter}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ jitter: v })}
+          format={(v) => v.toFixed(2)}
+        />
       )}
 
       {params.style === 'shapes' && (
@@ -167,22 +134,15 @@ export function ClassicControls({ params, update }: Props) {
       )}
 
       {params.style === 'shapes' && (
-        <div className="control-group">
-          <label>
-            Shape size{" "}
-            <EditableValue value={params.shapes.sizeMm} min={1} max={20} step={0.5} onChange={(v) => update({ shapes: { ...params.shapes, sizeMm: v } })}>
-              {params.shapes.sizeMm.toFixed(1)}mm
-            </EditableValue>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="20"
-            step="0.5"
-            value={params.shapes.sizeMm}
-            onChange={(e) => update({ shapes: { ...params.shapes, sizeMm: parseFloat(e.target.value) } })}
-          />
-        </div>
+        <Slider
+          label="Shape size"
+          value={params.shapes.sizeMm}
+          min={1}
+          max={20}
+          step={0.5}
+          onChange={(v) => update({ shapes: { ...params.shapes, sizeMm: v } })}
+          format={(v) => `${v.toFixed(1)}mm`}
+        />
       )}
 
       {params.style === 'shapes' && (
@@ -223,24 +183,9 @@ export function ClassicControls({ params, update }: Props) {
       </div>
       <ColorField label="Texture ink (custom)" value={params.color} onChange={(color) => update({ color })} />
 
-      <div className="control-group">
+      <SeedControl seed={params.seed} onChange={(seed) => update({ seed })} title="New texture seed">
         <label>Texture seed</label>
-        <div className="seed-input">
-          <input
-            type="number"
-            value={params.seed}
-            onChange={(e) => update({ seed: parseInt(e.target.value, 10) || 0 })}
-          />
-          <button
-            type="button"
-            className="secondary"
-            title="New texture seed"
-            onClick={() => update({ seed: Math.floor(Math.random() * 1000000) })}
-          >
-            🎲
-          </button>
-        </div>
-      </div>
+      </SeedControl>
     </>
   );
 }
