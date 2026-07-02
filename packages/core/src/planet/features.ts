@@ -3,6 +3,7 @@ import { createNoise } from '../noise.js';
 import { traceIsoContours } from '../iso-contours.js';
 import { GrayscaleImage } from '../image.js';
 import { makeRandom } from '../lib/rng.js';
+import { clamp01 } from '../lib/math.js';
 import { type Vec3, TAU, DEG, norm, makeRotation } from './vec3.js';
 import { pushRun, dot4, ellipse } from './geometry.js';
 import type { BodyCtx } from './context.js';
@@ -75,6 +76,88 @@ export function renderContours(ctx: BodyCtx): void {
       const ragged = o.capRaggedness * 0.4 * nCap.fbm3D(r.x * 2.4, r.y * 2.4, r.z * 2.4, 2, 0.5, 2, 1);
       return Math.abs(f.lat) - (capLatRad - ragged);
     }, 0);
+  }
+}
+
+/** Eclipse: the hard edge of the caster's shadow, traced across the disk and
+ *  inked bold — the engraved umbra boundary. The tonal darkening itself lives
+ *  in the tone model (context.ts); this draws only the committed edge. */
+export function renderEclipseOutline(ctx: BodyCtx): void {
+  if (!ctx.eclipseField) return;
+  traceField(ctx, ctx.eclipseField, 0, 'bold');
+}
+
+/** Aurora: dashed, noise-wobbled ovals around the spin poles with short
+ *  curtain rays hanging toward the equator — the classic engraved corona
+ *  borealis. Ungated by tone (an aurora glows on the night side). */
+export function renderAurora(ctx: BodyCtx): void {
+  const { b, bx, by, br, occluded } = ctx;
+  const { o, SPIN, US, VS, lines } = ctx.scene;
+  if (!o.aurora || b.bodyType === 'star') return;
+  const nAur = createNoise(b.bodySeed + 1515);
+  const ar = makeRandom(b.bodySeed + 1414);
+  const inten = clamp01(o.auroraIntensity);
+  const breakProb = 0.26 * (1.15 - inten);
+  const theta0 = (90 - o.auroraLatitude) * DEG; // colatitude of the oval
+  const pointAt = (pole: number, lon: number, th: number): Vec3 => {
+    const cl = Math.cos(lon);
+    const sl = Math.sin(lon);
+    const sT = Math.sin(th);
+    const cT = Math.cos(th) * pole;
+    return {
+      x: SPIN.x * cT + (US.x * cl + VS.x * sl) * sT,
+      y: SPIN.y * cT + (US.y * cl + VS.y * sl) * sT,
+      z: SPIN.z * cT + (US.z * cl + VS.z * sl) * sT,
+    };
+  };
+  const wobAt = (pole: number, lon: number, k: number): number =>
+    nAur.fbm3D(Math.cos(lon) * 1.6, pole * 0.7 + k * 0.31, Math.sin(lon) * 1.6, 2, 0.5, 2, 1);
+  for (const pole of [1, -1]) {
+    // 2-3 nested ovals, colatitude modulated by low-frequency noise.
+    const ovals = inten > 0.75 ? 3 : 2;
+    for (let k = 0; k < ovals; k++) {
+      const thBase = theta0 + k * 3 * DEG;
+      const ns = Math.max(48, Math.ceil((TAU * br * Math.sin(thBase)) / Math.max(2, o.hatchSpacing * 0.6)));
+      let run: Point[] = [];
+      for (let s = 0; s <= ns; s++) {
+        const lon = (s / ns) * TAU;
+        const th = thBase * (1 + 0.22 * wobAt(pole, lon, k));
+        const N = pointAt(pole, lon, th);
+        const sx = bx + br * N.x;
+        const sy = by + br * N.y;
+        const visible = N.z > 0.03 && !occluded(sx, sy);
+        if (!visible || ar() < breakProb) {
+          pushRun(lines, run, 'aurora');
+          run = [];
+          continue;
+        }
+        run.push({ x: sx, y: sy });
+      }
+      pushRun(lines, run, 'aurora');
+    }
+    // Curtain rays: short strokes along the local meridian, falling away from
+    // the pole off the outer oval.
+    const rays = Math.round(44 * inten);
+    for (let i = 0; i < rays; i++) {
+      const lon = ar() * TAU;
+      const th0 = theta0 * (1 + 0.22 * wobAt(pole, lon, 0)) + ar() * 2 * DEG;
+      const len = (2.2 + ar() * 3.2) * Math.max(3, o.hatchSpacing);
+      const dth = len / br;
+      const steps = 3;
+      const pts: Point[] = [];
+      let ok = true;
+      for (let q = 0; q <= steps; q++) {
+        const N = pointAt(pole, lon, th0 + (q / steps) * dth);
+        const sx = bx + br * N.x;
+        const sy = by + br * N.y;
+        if (N.z <= 0.03 || occluded(sx, sy)) {
+          ok = false;
+          break;
+        }
+        pts.push({ x: sx, y: sy });
+      }
+      if (ok) pushRun(lines, pts, 'aurora');
+    }
   }
 }
 

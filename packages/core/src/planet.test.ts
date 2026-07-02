@@ -110,6 +110,56 @@ describe('generatePlanet', () => {
     expect(right2).toBeGreaterThan(left2);
   });
 
+  it('emits the aurora layer only when toggled, on the front hemisphere', () => {
+    const off = generatePlanet(baseOptions());
+    expect(layer(off.lines, 'aurora')).toHaveLength(0);
+    const on = generatePlanet(baseOptions({ aurora: true }));
+    const marks = layer(on.lines, 'aurora');
+    expect(marks.length).toBeGreaterThan(0);
+    for (const ln of marks) {
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeLessThanOrEqual(R + 1.0);
+      }
+    }
+  });
+
+  it('eclipse darkens the disk under the moon shadow (more hatch), gated to the lit side', () => {
+    const hatchPoints = (lines: FlowLine[]): number =>
+      layer(lines, 'hatch').reduce((n, l) => n + l.points.length, 0);
+    // Moon up-light (moonAngle === lightAngle) so its umbra lands mid-disk at
+    // the sub-light point.
+    const opts: Partial<PlanetOptions> = {
+      planetType: 'barren',
+      lightAngle: 0,
+      lightElevation: 35,
+      moon: true,
+      moonAngle: 0,
+      moonDist: 1.8,
+      moonRadiusFrac: 0.35,
+    };
+    const off = generatePlanet(baseOptions(opts));
+    const on = generatePlanet(baseOptions({ ...opts, eclipse: true }));
+    expect(hatchPoints(on.lines)).toBeGreaterThan(hatchPoints(off.lines));
+    // The hard umbra edge is traced as a bold feature contour.
+    expect(layer(on.lines, 'feature').length).toBeGreaterThan(layer(off.lines, 'feature').length);
+    // With the moon on the anti-light side the eclipse is unphysical: no-op.
+    const behind = generatePlanet(baseOptions({ ...opts, moonAngle: 180 }));
+    const behindEclipse = generatePlanet(baseOptions({ ...opts, moonAngle: 180, eclipse: true }));
+    expect(behindEclipse.lines).toEqual(behind.lines);
+  });
+
+  it('haze atmosphere draws broken arcs outside the disk', () => {
+    const ringsStyle = generatePlanet(baseOptions({ atmosphere: 2 }));
+    const haze = generatePlanet(baseOptions({ atmosphere: 2, atmosphereStyle: 'haze' }));
+    const hazeArcs = layer(haze.lines, 'atmosphere');
+    expect(hazeArcs.length).toBeGreaterThan(layer(ringsStyle.lines, 'atmosphere').length);
+    for (const ln of hazeArcs) {
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeGreaterThan(R);
+      }
+    }
+  });
+
   it('occludes rings behind the disk (open arcs, not closed loops)', () => {
     const r = generatePlanet(baseOptions({ planetType: 'ringed', rings: true, bands: true }));
     const ringLines = layer(r.lines, 'ring');

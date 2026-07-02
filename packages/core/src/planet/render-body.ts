@@ -3,6 +3,8 @@ import { makeBodyCtx, type SceneCtx } from './context.js';
 import { renderHatch, renderTerminatorEmphasis, renderStipple, renderLimb } from './shading.js';
 import {
   renderContours,
+  renderEclipseOutline,
+  renderAurora,
   renderClouds,
   renderStorms,
   renderCraters,
@@ -17,11 +19,13 @@ export function renderBody(scene: SceneCtx, b: BodyParams): void {
   renderHatch(ctx);
   renderTerminatorEmphasis(ctx);
   renderContours(ctx);
+  renderEclipseOutline(ctx);
   renderClouds(ctx);
   renderStorms(ctx);
   renderStipple(ctx);
   renderCraters(ctx);
   renderMountains(ctx);
   renderGraticule(ctx);
+  renderAurora(ctx);
   renderLimb(ctx);
 }

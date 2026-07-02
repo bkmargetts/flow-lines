@@ -53,6 +53,21 @@ export function generatePlanet(options: PlanetOptions): {
   if (o.layout !== 'single') {
     composeLayout(scene);
   } else {
+    // Companion-moon geometry first: an eclipsing moon must shadow the
+    // primary, and the eclipse is only physical with the moon on the lit side.
+    // The moon's depth is inferred from how far up-light it sits, floating it
+    // toward the light ray so its umbra lands on the visible lit face (an
+    // aligned moon shadows the sub-light point — the classic eclipse plate).
+    const ma = o.moonAngle * DEG;
+    const mx = cx + Math.cos(ma) * o.moonDist * R;
+    const my = cy + Math.sin(ma) * o.moonDist * R;
+    const mR = Math.max(6, o.moonRadiusFrac * R);
+    const ld = Math.hypot(L.x, L.y);
+    const upLight = ld > 1e-6 ? ((mx - cx) * L.x + (my - cy) * L.y) / ld : 0;
+    const mz = ld > 1e-6 ? upLight * (L.z / ld) : 0;
+    const shadowCasters =
+      o.moon && o.eclipse && upLight > 0 ? [{ cx: mx, cy: my, R: mR, z: mz }] : undefined;
+
     // The primary planet.
     renderBody(scene, {
       cx,
@@ -61,6 +76,7 @@ export function generatePlanet(options: PlanetOptions): {
       bodyType: o.planetType,
       bodySeed: seed,
       craters: o.craters,
+      ...(shadowCasters ? { shadowCasters } : {}),
     });
 
     // Rings (Saturn): a flat disc of bands tilted toward edge-on, occluded
@@ -69,13 +85,10 @@ export function generatePlanet(options: PlanetOptions): {
 
     // Companion moon.
     if (o.moon) {
-      const ma = o.moonAngle * DEG;
-      const mx = cx + Math.cos(ma) * o.moonDist * R;
-      const my = cy + Math.sin(ma) * o.moonDist * R;
       renderBody(scene, {
         cx: mx,
         cy: my,
-        R: Math.max(6, o.moonRadiusFrac * R),
+        R: mR,
         bodyType: 'moon',
         bodySeed: seed + 4242,
         craters: true,

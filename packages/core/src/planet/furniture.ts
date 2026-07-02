@@ -4,7 +4,7 @@ import { textToStrokes, textWidth } from '../stroke-font.js';
 import { getSketchStyleConfig } from '../sketch-styles.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { TAU } from './vec3.js';
-import { dot4 } from './geometry.js';
+import { pushRun, dot4 } from './geometry.js';
 import type { SceneCtx } from './context.js';
 
 /** Scene background: starfield (behind everything). */
@@ -56,6 +56,34 @@ export function renderAtmosphere(scene: SceneCtx): void {
         ],
         layer: 'atmosphere',
       });
+    }
+  } else if (o.atmosphereStyle === 'haze') {
+    // Broken concentric arcs, biased toward the lit limb and thinning outward —
+    // a hazy glow rather than hard glow rings.
+    const hr = makeRandom(seed + 1616);
+    const { L } = scene;
+    const rings = Math.max(1, Math.round(o.atmosphere));
+    const ld = Math.hypot(L.x, L.y);
+    const lx = ld > 1e-6 ? L.x / ld : 1;
+    const ly = ld > 1e-6 ? L.y / ld : 0;
+    for (let i = 0; i < rings; i++) {
+      const rr = R * (1.02 + i * 0.035);
+      const duty = 0.85 - 0.45 * (i / Math.max(1, rings - 1));
+      const n = Math.max(90, Math.ceil((TAU * rr) / 4));
+      let run: { x: number; y: number }[] = [];
+      for (let s = 0; s <= n; s++) {
+        const t = (s / n) * TAU;
+        const c = Math.cos(t);
+        const sn = Math.sin(t);
+        const litBias = 0.35 + 0.65 * Math.max(0, c * lx + sn * ly);
+        if (hr() >= duty * litBias) {
+          pushRun(lines, run, 'atmosphere');
+          run = [];
+          continue;
+        }
+        run.push({ x: cx + c * rr, y: cy + sn * rr });
+      }
+      pushRun(lines, run, 'atmosphere');
     }
   } else {
     const rings = Math.max(1, Math.round(o.atmosphere));

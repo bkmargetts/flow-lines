@@ -175,6 +175,20 @@ CASES['planet/moon-craters/42'] = () =>
     craters: true,
     stipple: 0.5,
   });
+// Celestial phenomena in one plate: eclipse shadow, aurora, haze atmosphere.
+CASES['planet/phenomena/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    lightElevation: 20,
+    moon: true,
+    eclipse: true,
+    aurora: true,
+    atmosphere: 2,
+    atmosphereStyle: 'haze',
+  });
 CASES['texture/shapes/42'] = () =>
   generateTexture({ ...textureBase, style: 'shapes', seed: 42 });
 

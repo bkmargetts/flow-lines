@@ -48,6 +48,13 @@ export interface PlanetState {
   albedoWeight: number;
   stipple: number; // 0..1
   atmosphere: number; // 0..n rings (corona for stars)
+  atmosphereStyle: 'rings' | 'haze';
+
+  // Celestial phenomena
+  eclipse: boolean; // moon shadow on the planet (needs moon)
+  aurora: boolean;
+  auroraLatitude: number; // degrees
+  auroraIntensity: number; // 0..1
 
   // Rings
   rings: boolean;
@@ -141,6 +148,12 @@ export const defaultPlanetState: PlanetState = {
   albedoWeight: 0.7,
   stipple: 0,
   atmosphere: 1,
+  atmosphereStyle: 'rings',
+
+  eclipse: false,
+  aurora: false,
+  auroraLatitude: 70,
+  auroraIntensity: 0.6,
 
   rings: false,
   ringInner: 1.35,

@@ -58,6 +58,12 @@ export function registerPlanet(program: Command) {
     .option('--albedo-weight <number>', 'Shading weight of surface albedo in tone (0-1)', '0.7')
     .option('--stipple <number>', 'Shadow/texture stipple (0-1)', '0')
     .option('--atmosphere <number>', 'Glow rings (corona for stars)', '0')
+    .option('--atmosphere-style <s>', 'Atmosphere marks: rings | haze', 'rings')
+    // phenomena
+    .option('--eclipse', 'Companion moon casts its shadow on the planet (needs --moon)')
+    .option('--aurora', 'Dashed auroral ovals + curtain rays around the poles')
+    .option('--aurora-latitude <number>', 'Latitude of the auroral oval (deg)', '70')
+    .option('--aurora-intensity <number>', 'Aurora dash density / ray count (0-1)', '0.6')
     // relief
     .option('--terminator-emphasis <number>', 'Extra hatch hugging the terminator (0-1)', '0')
     .option('--mountains', 'Chevron hachures on high terrestrial land')
@@ -142,6 +148,11 @@ export function registerPlanet(program: Command) {
         albedoWeight: parseFloat(options.albedoWeight),
         stipple: parseFloat(options.stipple),
         atmosphere: parseInt(options.atmosphere, 10),
+        atmosphereStyle: options.atmosphereStyle as PlanetOptions['atmosphereStyle'],
+        eclipse: options.eclipse ?? false,
+        aurora: options.aurora ?? false,
+        auroraLatitude: parseFloat(options.auroraLatitude),
+        auroraIntensity: parseFloat(options.auroraIntensity),
         terminatorEmphasis: parseFloat(options.terminatorEmphasis),
         mountains: options.mountains ?? false,
         clouds: options.clouds ?? false,

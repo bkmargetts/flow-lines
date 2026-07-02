@@ -58,6 +58,16 @@ export interface PlanetOptions {
   albedoWeight?: number;
   stipple?: number; // 0..1 shadow/texture dots
   atmosphere?: number; // 0..n glow rings (star: corona)
+  atmosphereStyle?: 'rings' | 'haze'; // closed rings, or broken lit-limb arcs
+
+  // Celestial phenomena
+  /** The companion moon casts its shadow onto the primary (needs `moon`,
+   *  single layout, and the moon on the lit side — a solar eclipse plate). */
+  eclipse?: boolean;
+  eclipseSoftness?: number; // penumbra width as a fraction of the moon radius
+  aurora?: boolean; // dashed auroral ovals + curtain rays around the poles
+  auroraLatitude?: number; // degrees where the oval sits
+  auroraIntensity?: number; // 0..1 dash density / ray count
 
   // Rings
   rings?: boolean;

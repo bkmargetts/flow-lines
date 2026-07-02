@@ -62,6 +62,9 @@ export interface BodyCtx {
   darknessAt: (N: Vec3) => number;
   toneAt: (N: Vec3) => number;
   hatchMask: (N: Vec3) => boolean;
+  /** Signed clearance (px) from the eclipse shadow cylinder: negative inside
+   *  the umbra, 0 at its edge. Only present when a shadow caster applies. */
+  eclipseField?: (N: Vec3) => number;
 }
 
 export function makeSceneCtx(o: ResolvedOptions, seed: number): SceneCtx {
@@ -97,7 +100,7 @@ export function makeSceneCtx(o: ResolvedOptions, seed: number): SceneCtx {
 }
 
 export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
-  const { o, L } = scene;
+  const { o, L, SPIN, US, VS } = scene;
   const { cx: bx, cy: by, R: br, bodyType, bodySeed } = b;
   // Per-body light + its form-following hatch frame (defaults to the scene
   // light; phase strips override it so each disk shows a different phase).
@@ -110,8 +113,8 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
   // Per-body noise/RNG streams, each on its own seed offset so features can be
   // toggled without shifting unrelated geometry. Offsets in use elsewhere:
   // +202 (reserved), +505 storms, +606 clouds, +707 stipple, +808/+909 craters,
-  // +1212 mountains; scene-level: +1001 starfield, +1313 corona, +4242 moon,
-  // +9100 layouts.
+  // +1212 mountains, +1414/+1515 aurora; scene-level: +1001 starfield,
+  // +1313 corona, +1616 haze atmosphere, +4242 moon, +9100 layouts.
   const nSurf = createNoise(bodySeed);
   const nBand = createNoise(bodySeed + 101);
   const nCap = createNoise(bodySeed + 303);
@@ -214,16 +217,91 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
     return 1 - clamp01(shade);
   };
 
-  const toneAt = (N: Vec3): number => {
+  const baseTone = (N: Vec3): number => {
     const f = surface(N);
     const dk = darknessAt(N);
     const al = albedoDarkness(N, f);
     return clamp01(dk * o.lightWeight + al * o.albedoWeight);
   };
 
+  // --- Eclipse: a caster disk (the moon, in this body's z=0 plane) throws a
+  // cylindrical shadow along the light direction. A surface point P is in the
+  // umbra when the ray from P toward the light passes within the caster's
+  // radius. Fully gated behind the option so tone is bit-identical when off.
+  const casters = o.eclipse && b.shadowCasters && b.shadowCasters.length > 0 ? b.shadowCasters : undefined;
+  let eclipseField: ((N: Vec3) => number) | undefined;
+  let toneAt = baseTone;
+  if (casters) {
+    eclipseField = (N: Vec3): number => {
+      let g = 1000;
+      for (const c of casters) {
+        const wx = br * N.x - (c.cx - bx);
+        const wy = br * N.y - (c.cy - by);
+        const wz = br * N.z - c.z;
+        const t = wx * bL.x + wy * bL.y + wz * bL.z;
+        if (t >= 0) continue; // caster is behind the light path from here
+        const qx = wx - t * bL.x;
+        const qy = wy - t * bL.y;
+        const qz = wz - t * bL.z;
+        const q = Math.sqrt(qx * qx + qy * qy + qz * qz);
+        if (q - c.R < g) g = q - c.R;
+      }
+      return g;
+    };
+    const soft = Math.max(0.02, o.eclipseSoftness);
+    const eclipseDark = (N: Vec3): number => {
+      let dk = 0;
+      for (const c of casters) {
+        const wx = br * N.x - (c.cx - bx);
+        const wy = br * N.y - (c.cy - by);
+        const wz = br * N.z - c.z;
+        const t = wx * bL.x + wy * bL.y + wz * bL.z;
+        if (t >= 0) continue;
+        const qx = wx - t * bL.x;
+        const qy = wy - t * bL.y;
+        const qz = wz - t * bL.z;
+        const q = Math.sqrt(qx * qx + qy * qy + qz * qz);
+        const edge = c.R * (1 + soft);
+        if (q >= edge) continue;
+        let s = q <= c.R ? 1 : (edge - q) / (edge - c.R);
+        s = s * s * (3 - 2 * s); // smooth penumbra ramp
+        if (0.9 * s > dk) dk = 0.9 * s;
+      }
+      return dk;
+    };
+    toneAt = (N: Vec3): number => clamp01(baseTone(N) + eclipseDark(N));
+  }
+
+  // Aurora holds the hatch off in a band around the polar oval — the glow is
+  // reserved paper, the way engravers carve light out of tone; the dashes and
+  // curtain rays are then inked over the clean band (features.ts shares the
+  // same noise stream so the band tracks the drawn ovals).
+  let auroraHold: ((N: Vec3) => boolean) | undefined;
+  if (o.aurora && bodyType !== 'star') {
+    const nAur = createNoise(bodySeed + 1515);
+    const theta0 = (90 - o.auroraLatitude) * DEG;
+    auroraHold = (N: Vec3): boolean => {
+      const u = dot(N, US);
+      const v = dot(N, VS);
+      const lon = Math.atan2(v, u);
+      const cl = Math.cos(lon);
+      const sl = Math.sin(lon);
+      const ny = dot(N, SPIN);
+      for (const pole of [1, -1]) {
+        const colat = Math.acos(Math.max(-1, Math.min(1, pole * ny)));
+        if (colat > theta0 * 1.6 + 0.35) continue; // fast reject away from the pole
+        const wob = nAur.fbm3D(cl * 1.6, pole * 0.7, sl * 1.6, 2, 0.5, 2, 1);
+        const th = theta0 * (1 + 0.22 * wob);
+        if (colat > th - 3 * DEG && colat < th + 9 * DEG) return true;
+      }
+      return false;
+    };
+  }
+
   // Where we keep clean paper rather than lay line hatch.
   const hatchMask = (N: Vec3): boolean => {
     if (bodyType === 'star') return false; // granulation is stipple, not line
+    if (auroraHold && auroraHold(N)) return false; // auroral glow stays open
     const f = surface(N);
     if (isCap(N, f.lat)) return false;
     if (bodyType === 'lava') {
@@ -255,5 +333,6 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
     darknessAt,
     toneAt,
     hatchMask,
+    ...(eclipseField ? { eclipseField } : {}),
   };
 }

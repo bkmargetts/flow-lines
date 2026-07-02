@@ -173,12 +173,33 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         <Slider label="Stars" value={state.starCount} min={0} max={400} step={10} onChange={(v) => update({ starCount: v })} />
       )}
       <Slider label="Atmosphere / corona" value={state.atmosphere} min={0} max={3} step={1} onChange={(v) => update({ atmosphere: v })} />
+      {!isStar && state.atmosphere > 0 && (
+        <div className="control-group">
+          <label className="label-text">Atmosphere style</label>
+          <select value={state.atmosphereStyle} onChange={(e) => update({ atmosphereStyle: e.target.value as PlanetState['atmosphereStyle'] })}>
+            <option value="rings">Glow rings</option>
+            <option value="haze">Broken haze</option>
+          </select>
+        </div>
+      )}
+      {!isStar && (
+        <>
+          <Toggle label="Aurora" checked={state.aurora} onChange={(v) => update({ aurora: v })} />
+          {state.aurora && (
+            <>
+              <Slider label="Aurora latitude" value={state.auroraLatitude} min={55} max={85} step={1} onChange={(v) => update({ auroraLatitude: v })} format={(v) => `${v}°`} />
+              <Slider label="Aurora intensity" value={state.auroraIntensity} min={0} max={1} step={0.05} onChange={(v) => update({ auroraIntensity: v })} format={(v) => v.toFixed(2)} />
+            </>
+          )}
+        </>
+      )}
       <Toggle label="Companion moon" checked={state.moon} onChange={(v) => update({ moon: v })} />
       {state.moon && (
         <>
           <Slider label="Moon distance" value={state.moonDist} min={1.3} max={3} step={0.05} onChange={(v) => update({ moonDist: v })} format={(v) => `${v.toFixed(2)}×`} />
           <Slider label="Moon angle" value={state.moonAngle} min={-180} max={180} step={1} onChange={(v) => update({ moonAngle: v })} format={(v) => `${v}°`} />
           <Slider label="Moon size" value={state.moonRadiusFrac} min={0.1} max={0.6} step={0.02} onChange={(v) => update({ moonRadiusFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Toggle label="Eclipse (moon shadow)" checked={state.eclipse} onChange={(v) => update({ eclipse: v })} />
         </>
       )}
 
