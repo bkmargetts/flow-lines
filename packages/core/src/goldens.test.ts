@@ -11,7 +11,7 @@ import { generateReactionDiffusion } from './reaction-diffusion.js';
 import { generateLenia } from './lenia.js';
 import { generatePhysarum } from './physarum.js';
 import { generateComplexFlow, type ComplexFlowOptions } from './complex-flow.js';
-import { generateVines } from './vines.js';
+import { generateVines } from './vines/index.js';
 import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
