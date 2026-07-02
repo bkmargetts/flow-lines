@@ -1,6 +1,7 @@
 import type { BodyParams } from './body.js';
 import { makeBodyCtx, type SceneCtx } from './context.js';
 import { renderHatch, renderTerminatorEmphasis, renderStipple, renderLimb } from './shading.js';
+import { renderFeatureLabels } from './labels.js';
 import {
   renderContours,
   renderEclipseOutline,
@@ -43,5 +44,13 @@ export function renderBody(scene: SceneCtx, b: BodyParams): void {
       const ln = scene.lines[i];
       scene.lines[i] = { ...ln, points: ln.points.map((p) => warp(p.x, p.y)) };
     }
+    for (const c of ctx.labelCandidates) {
+      const w = warp(c.x, c.y);
+      c.x = w.x;
+      c.y = w.y;
+    }
   }
+
+  // Atlas callouts come after the warp so label text stays upright.
+  renderFeatureLabels(ctx);
 }

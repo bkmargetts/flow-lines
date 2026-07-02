@@ -94,6 +94,10 @@ export function registerPlanet(program: Command) {
     // engraved plate
     .option('--graticule', 'Draw lat/long lines on the globe')
     .option('--graticule-spacing <number>', 'Degrees between graticule lines', '30')
+    .option('--feature-labels', 'Name prominent features with leader lines + engraved text')
+    .option('--label-count <number>', 'Most prominent features to name', '6')
+    .option('--orbit-labels', 'Roman numerals + names beside each orbit (orbital layout)')
+    .option('--asteroid-belt', 'Dash belt between the middle orbits (orbital layout)')
     .option('--plate-frame', 'Graduated neatline just inside the margin')
     .option('--scale-bar', 'Divided scale bar along the bottom')
     .option('--title <text>', 'Engraved plate title')
@@ -185,6 +189,10 @@ export function registerPlanet(program: Command) {
         tailSpread: parseFloat(options.tailSpread),
         graticule: options.graticule ?? false,
         graticuleSpacingDeg: parseFloat(options.graticuleSpacing),
+        featureLabels: options.featureLabels ?? false,
+        labelCount: parseInt(options.labelCount, 10),
+        orbitLabels: options.orbitLabels ?? false,
+        asteroidBelt: options.asteroidBelt ?? false,
         plateFrame: options.plateFrame ?? false,
         scaleBar: options.scaleBar ?? false,
         title: options.title,

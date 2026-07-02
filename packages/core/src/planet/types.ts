@@ -109,6 +109,12 @@ export interface PlanetOptions {
   // Engraved-plate annotation
   graticule?: boolean; // lat/long lines on the globe
   graticuleSpacingDeg?: number; // degrees between lines
+  /** Name the most prominent features (craters, maria, storms, rilles) with
+   *  invented Latin, leader lines, and engraved text outside the limb. */
+  featureLabels?: boolean;
+  labelCount?: number; // most prominent features to name
+  orbitLabels?: boolean; // roman numerals + names beside each orbit (orbital layout)
+  asteroidBelt?: boolean; // dash belt between the middle orbits (orbital layout)
   plateFrame?: boolean; // graduated neatline just inside the margin
   scaleBar?: boolean; // divided scale bar along the bottom
   title?: string; // engraved plate title, centred along the top

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generatePlanet, type PlanetOptions } from './planet/index.js';
+import { inventName, romanNumeral } from './planet/labels.js';
+import { makeRandom } from './lib/rng.js';
 import type { FlowLine } from './flow-lines.js';
 
 function baseOptions(overrides: Partial<PlanetOptions> = {}): PlanetOptions {
@@ -158,6 +160,46 @@ describe('generatePlanet', () => {
         expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeGreaterThan(R);
       }
     }
+  });
+
+  it('feature labels emit callouts whose leaders touch their features', () => {
+    const off = generatePlanet(baseOptions({ planetType: 'moon', craters: true }));
+    expect(layer(off.lines, 'callout')).toHaveLength(0);
+    const on = generatePlanet(baseOptions({ planetType: 'moon', craters: true, featureLabels: true }));
+    const callouts = layer(on.lines, 'callout');
+    expect(callouts.length).toBeGreaterThan(0);
+    // Leader lines (2-point strokes) start on the disk and reach outside it.
+    const leaders = callouts.filter(
+      (l) =>
+        l.points.length === 2 &&
+        Math.hypot(l.points[0].x - center.x, l.points[0].y - center.y) < R &&
+        Math.hypot(l.points[1].x - center.x, l.points[1].y - center.y) > R
+    );
+    expect(leaders.length).toBeGreaterThan(0);
+  });
+
+  it('invents deterministic Latin names and roman numerals', () => {
+    const a = inventName(makeRandom(7), 'crater');
+    const b = inventName(makeRandom(7), 'crater');
+    expect(a).toEqual(b);
+    expect(a.length).toBeGreaterThan(2);
+    expect(inventName(makeRandom(7), 'mare').startsWith('MARE ')).toBe(true);
+    expect(inventName(makeRandom(7), 'rille').startsWith('RIMA ')).toBe(true);
+    expect(romanNumeral(4)).toBe('IV');
+    expect(romanNumeral(9)).toBe('IX');
+    expect(romanNumeral(12)).toBe('XII');
+  });
+
+  it('orbital plates can take an asteroid belt and orbit labels', () => {
+    const base = { layout: 'orbital' as const, layoutCount: 5 };
+    const plain = generatePlanet(baseOptions(base));
+    const dressed = generatePlanet(baseOptions({ ...base, asteroidBelt: true, orbitLabels: true }));
+    expect(layer(plain.lines, 'callout')).toHaveLength(0);
+    expect(layer(dressed.lines, 'callout').length).toBeGreaterThan(0);
+    // Belt dashes are short 2-point orbit-layer strokes; the plain plate has none.
+    const dashes = (r: { lines: FlowLine[] }): number =>
+      layer(r.lines, 'orbit').filter((l) => l.points.length === 2).length;
+    expect(dashes(dressed)).toBeGreaterThan(dashes(plain) + 100);
   });
 
   it('asteroids have a lumpy but closed silhouette with coherent marks', () => {

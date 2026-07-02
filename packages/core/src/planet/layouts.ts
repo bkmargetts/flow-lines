@@ -6,6 +6,7 @@ import type { PlanetType } from './types.js';
 import { bodyKy, type SceneCtx } from './context.js';
 import { renderBody } from './render-body.js';
 import { renderRings } from './rings.js';
+import { renderOrbitLabels } from './labels.js';
 
 /** Multi-body plates: a phase strip, a size-comparison row, or an orbital
  *  diagram. Each body is a normal renderBody at a computed centre/radius. */
@@ -91,6 +92,47 @@ export function composeLayout(scene: SceneCtx): void {
       }
       pushRun(lines, run, 'orbit');
     }
+    // Asteroid belt: tangent-oriented dashes filling the gap between the two
+    // middle orbits, hidden behind the star and nearer bodies like orbit arcs.
+    if (o.asteroidBelt && n >= 2) {
+      const ar = makeRandom(seed + 2424);
+      const k0 = Math.max(0, Math.floor(n / 2) - 1);
+      const r1 = planets[k0].orbR;
+      const r2 = planets[Math.min(n - 1, k0 + 1)].orbR;
+      for (let i = 0; i < 300; i++) {
+        const th = ar() * TAU;
+        const rad = r1 + (r2 - r1) * (0.3 + ar() * 0.4);
+        const px = rad * Math.cos(th);
+        const py = rad * Math.sin(th) * sT;
+        const ez = rad * Math.sin(th) * cT;
+        const sx = cx + px;
+        const sy = cy + py;
+        const rd2 = px * px + py * py;
+        if (rd2 < starR * starR && ez < Math.sqrt(starR * starR - rd2)) continue;
+        let hidden = false;
+        for (const pl of planets) {
+          if (pl.ez <= ez) continue;
+          const dx = sx - pl.cx;
+          const dy = sy - pl.cy;
+          if (dx * dx + dy * dy < pl.R * pl.R) {
+            hidden = true;
+            break;
+          }
+        }
+        if (hidden) continue;
+        const tx = -Math.sin(th);
+        const ty = Math.cos(th) * sT;
+        const tl = Math.hypot(tx, ty) || 1;
+        const dl = 1.2 + ar() * 2.4;
+        lines.push({
+          points: [
+            { x: sx - (tx / tl) * dl, y: sy - (ty / tl) * dl },
+            { x: sx + (tx / tl) * dl, y: sy + (ty / tl) * dl },
+          ],
+          layer: 'orbit',
+        });
+      }
+    }
     const starOcc = planets.filter((pl) => pl.ez > 0).map((pl) => ({ cx: pl.cx, cy: pl.cy, R: pl.R }));
     renderBody(scene, { cx, cy, R: starR, bodyType: 'star', bodySeed: seed, craters: false, occluders: starOcc });
     for (let k = 0; k < n; k++) {
@@ -100,5 +142,6 @@ export function composeLayout(scene: SceneCtx): void {
       const occluders = bodies.filter((o2) => o2 !== pl && o2.ez > pl.ez).map((o2) => ({ cx: o2.cx, cy: o2.cy, R: o2.R }));
       renderBody(scene, { cx: pl.cx, cy: pl.cy, R: pl.R, bodyType: bt, bodySeed: seed + k * 257, craters: bt === 'moon' || bt === 'barren', occluders });
     }
+    renderOrbitLabels(scene, planets.map((pl) => ({ orbR: pl.orbR, sT })));
   }
 }

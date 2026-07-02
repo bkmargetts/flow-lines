@@ -329,6 +329,8 @@ export function renderRilles(ctx: BodyCtx): void {
     const wall = offsetPolyline(center, o.penWidth * 1.4);
     pushRun(lines, center, 'feature');
     pushRun(lines, wall, 'feature');
+    const mid = center[Math.floor(center.length / 2)];
+    ctx.labelCandidates.push({ x: mid.x, y: mid.y, r: Math.min(br * 0.4, center.length * 1.2), kind: 'rille' });
     // Collapse ticks: short cross-strokes near both ends of the trench.
     for (const idx of [1, 3, 5, center.length - 2, center.length - 4, center.length - 6]) {
       if (idx < 1 || idx >= center.length - 1) continue;
@@ -383,6 +385,7 @@ export function renderStorms(ctx: BodyCtx): void {
     for (const k of [0.66, 0.4]) {
       pushRun(lines, ellipse(scx, scy, major * k, minor * k, orient, 0, TAU), 'feature');
     }
+    ctx.labelCandidates.push({ x: scx, y: scy, r: span, kind: 'storm' });
   }
 }
 
@@ -412,6 +415,7 @@ export function renderCraters(ctx: BodyCtx): void {
     const minor = Math.max(0.16, d.z) * sz;
     const orient = radialAng + Math.PI / 2; // major axis tangent to the limb
     pushRun(lines, ellipse(ccx, ccy, major, minor, orient, 0, TAU), 'feature', sz > br * 0.09 ? 'bold' : undefined);
+    if (sz > br * 0.07 && d.z > 0.4) ctx.labelCandidates.push({ x: ccx, y: ccy, r: sz, kind: 'crater' });
     // Inner shaded cup: nested partial arcs on the anti-light side.
     const a0 = antiAng - orient - 1.9;
     const a1 = antiAng - orient + 1.9;

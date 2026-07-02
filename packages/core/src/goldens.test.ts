@@ -175,6 +175,27 @@ CASES['planet/moon-craters/42'] = () =>
     craters: true,
     stipple: 0.5,
   });
+CASES['planet/labeled-moon/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'moon',
+    craters: true,
+    featureLabels: true,
+    plateFrame: true,
+  });
+CASES['planet/atlas-orbital/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    layout: 'orbital',
+    orbitLabels: true,
+    asteroidBelt: true,
+  });
 CASES['planet/asteroid/42'] = () =>
   generatePlanet({
     width: 300,

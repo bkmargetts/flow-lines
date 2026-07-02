@@ -227,6 +227,20 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
       {state.graticule && (
         <Slider label="Graticule spacing" value={state.graticuleSpacingDeg} min={10} max={45} step={5} onChange={(v) => update({ graticuleSpacingDeg: v })} format={(v) => `${v}°`} />
       )}
+      {!isStar && (
+        <>
+          <Toggle label="Feature labels" checked={state.featureLabels} onChange={(v) => update({ featureLabels: v })} />
+          {state.featureLabels && (
+            <Slider label="Label count" value={state.labelCount} min={2} max={12} step={1} onChange={(v) => update({ labelCount: v })} />
+          )}
+        </>
+      )}
+      {state.layout === 'orbital' && (
+        <>
+          <Toggle label="Orbit labels" checked={state.orbitLabels} onChange={(v) => update({ orbitLabels: v })} />
+          <Toggle label="Asteroid belt" checked={state.asteroidBelt} onChange={(v) => update({ asteroidBelt: v })} />
+        </>
+      )}
       <Toggle label="Graduated frame" checked={state.plateFrame} onChange={(v) => update({ plateFrame: v })} />
       <Toggle label="Scale bar" checked={state.scaleBar} onChange={(v) => update({ scaleBar: v })} />
       <div className="control-group">

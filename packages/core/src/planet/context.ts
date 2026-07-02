@@ -5,6 +5,16 @@ import { clamp01 } from '../lib/math.js';
 import { type Vec3, TAU, DEG, dot, cross, norm, makeRotation } from './vec3.js';
 import { DEFAULTS, type BodyParams } from './body.js';
 
+export type LabelKind = 'crater' | 'mare' | 'sea' | 'storm' | 'rille';
+
+/** A feature the atlas labeller may name: screen position + prominence. */
+export interface LabelCandidate {
+  x: number;
+  y: number;
+  r: number;
+  kind: LabelKind;
+}
+
 /** Vertical squash factor for a body type: only fast-spinning gas bodies
  *  flatten, and only when the option is set (1 elsewhere, so the spherical
  *  arithmetic is untouched). */
@@ -84,6 +94,9 @@ export interface BodyCtx {
    *  hatch, and craters deform coherently into one lumpy silhouette. Absent
    *  (not identity) for regular bodies — existing output stays untouched. */
   warp?: (sx: number, sy: number) => { x: number; y: number };
+  /** Features collected while rendering, for the atlas labeller. Pushing is
+   *  emission- and RNG-neutral, so it never moves a golden. */
+  labelCandidates: LabelCandidate[];
 }
 
 export function makeSceneCtx(o: ResolvedOptions, seed: number): SceneCtx {
@@ -382,5 +395,6 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
     hatchMask,
     ...(eclipseField ? { eclipseField } : {}),
     ...(warp ? { warp } : {}),
+    labelCandidates: [],
   };
 }

@@ -90,6 +90,10 @@ export interface PlanetState {
   // Engraved-plate annotation
   graticule: boolean;
   graticuleSpacingDeg: number;
+  featureLabels: boolean; // invented Latin names on prominent features
+  labelCount: number;
+  orbitLabels: boolean; // roman numerals + names (orbital layout)
+  asteroidBelt: boolean; // dash belt between orbits (orbital layout)
   plateFrame: boolean;
   scaleBar: boolean;
   plateTitle: string;
@@ -192,6 +196,10 @@ export const defaultPlanetState: PlanetState = {
 
   graticule: false,
   graticuleSpacingDeg: 30,
+  featureLabels: false,
+  labelCount: 6,
+  orbitLabels: false,
+  asteroidBelt: false,
   plateFrame: false,
   scaleBar: false,
   plateTitle: '',
