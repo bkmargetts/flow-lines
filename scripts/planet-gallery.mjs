@@ -37,6 +37,18 @@ const SECTIONS = {
     lava: ['--type', 'lava', '--contrast', '2', '--noise-scale', '2.1', '--stipple', '0.5', '--atmosphere', '2', '--lava-fissure-width', '0.14', '--lava-glow', '0.5', '--light-elevation', '24', '--palette', 'mars'],
     star: ['--type', 'star', '--limb-darkening', '0.7', '--atmosphere', '2', '--light-elevation', '90', '--ambient', '0.9', '--stipple', '0.6', '--cross-hatch-layers', '1', '--no-coastlines', '--palette', 'mars'],
     barren: ['--type', 'barren', '--mare-level', '-0.16', '--craters', '--crater-count', '50', '--crater-max-r', '0.1', '--crater-detail', '--stipple', '0.3', '--cross-hatch-layers', '4', '--palette', 'lunar'],
+    asteroid: ['--type', 'asteroid', '--lumpiness', '0.16', '--craters', '--crater-count', '40', '--crater-max-r', '0.22', '--crater-detail', '--stipple', '0.5', '--light-elevation', '20', '--cross-hatch-layers', '4', '--starfield', '--palette', 'lunar'],
+    comet: ['--type', 'comet', '--radius-frac', '0.2', '--lumpiness', '0.18', '--stipple', '0.4', '--light-elevation', '14', '--cross-hatch-layers', '4', '--starfield', '--palette', 'astronomical'],
+  },
+  Phenomena: {
+    eclipse: ['--type', 'terrestrial', '--sea-level', '0.1', '--moon', '--eclipse', '--moon-radius-frac', '0.32', '--starfield', '--palette', 'astronomical'],
+    aurora: ['--type', 'ice', '--ice-caps', '--cap-latitude', '45', '--aurora', '--aurora-latitude', '68', '--stipple', '0.2', '--palette', 'cyanotype'],
+    'haze atmosphere': ['--type', 'terrestrial', '--sea-level', '0.1', '--atmosphere', '3', '--atmosphere-style', 'haze', '--palette', 'astronomical'],
+    'oblate ringed': ['--type', 'ringed', '--bands', '--band-count', '10', '--storms', '1', '--oblateness', '0.1', '--rings', '--ring-count', '7', '--ring-density', '4', '--radius-frac', '0.5', '--cross-hatch-layers', '2', '--palette', 'saturn'],
+  },
+  Atlas: {
+    'labeled moon': ['--type', 'moon', '--mare-level', '-0.04', '--craters', '--crater-count', '70', '--crater-detail', '--rilles', '2', '--stipple', '0.4', '--feature-labels', '--plate-frame', '--title', 'LUNA', '--light-elevation', '18', '--palette', 'lunar'],
+    'annotated system': ['--layout', 'orbital', '--layout-count', '6', '--orbit-labels', '--asteroid-belt', '--plate-frame', '--title', 'THE SYSTEM', '--starfield', '--star-count', '110', '--palette', 'astronomical'],
   },
   'Engraved plate': {
     graticule: ['--type', 'terrestrial', '--sea-level', '0.1', '--ice-caps', '--graticule', '--graticule-spacing', '20', '--palette', 'astronomical'],
@@ -53,6 +65,8 @@ const SECTIONS = {
     terminator: ['--type', 'barren', '--craters', '--crater-count', '40', '--terminator-emphasis', '0.8', '--light-elevation', '18', '--stipple', '0.3', '--palette', 'lunar'],
     mountains: ['--type', 'terrestrial', '--sea-level', '0.1', '--ice-caps', '--mountains', '--contrast', '1.6', '--palette', 'astronomical'],
     clouds: ['--type', 'terrestrial', '--sea-level', '0.05', '--ice-caps', '--clouds', '--palette', 'astronomical'],
+    rivers: ['--type', 'terrestrial', '--sea-level', '0.1', '--rivers', '6', '--mountains', '--contrast', '1.6', '--palette', 'astronomical'],
+    rilles: ['--type', 'moon', '--mare-level', '-0.04', '--craters', '--crater-count', '50', '--rilles', '4', '--stipple', '0.4', '--light-elevation', '18', '--palette', 'lunar'],
   },
   'Hand-drawn': {
     loose: ['--type', 'terrestrial', '--sea-level', '0.1', '--ice-caps', '--sketch', '0.5', '--sketch-style', 'loose', '--palette', 'astronomical'],
