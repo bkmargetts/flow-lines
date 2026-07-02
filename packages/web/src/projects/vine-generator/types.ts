@@ -1,4 +1,5 @@
 import { type Point } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from '@flow-lines/core';
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
@@ -199,7 +200,7 @@ export const defaultVineState: VineState = {
 
   wobbleMm: 0.2,
 
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   palette: 'ink',
   strokeColor: '#2a2a26',
   leafColor: '#2a2a26',

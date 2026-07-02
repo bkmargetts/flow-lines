@@ -1,47 +1,15 @@
-import type { ReactNode } from 'react';
 import { ColorField } from '../../components/ColorField';
-import { EditableValue } from '../../components/EditableValue';
+import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
+import { SeedControl } from '../../components/controls/SeedControl';
+import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { VineState } from './types';
 import { VINE_PALETTES, CUSTOM_PALETTE } from './palettes';
 import { VINE_PRESETS, getVinePreset, randomVineGenome } from './presets';
 
-/** One labelled range slider + its click-to-type value badge. */
-function Slider(props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format?: (v: number) => ReactNode;
-  disabled?: boolean;
-}) {
-  const { label, value, min, max, step, onChange, format, disabled } = props;
-  return (
-    <div className="control-group">
-      <label>
-        {label}{' '}
-        <EditableValue value={value} min={min} max={max} step={step} onChange={onChange} disabled={disabled}>
-          {format ? format(value) : value}
-        </EditableValue>
-      </label>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-      />
-    </div>
-  );
-}
-
 /** Sidebar controls for the Vine Generator module. */
 export function VineGeneratorControls({ state, update }: ControlsProps<VineState>) {
-  const randomizeSeed = () => update({ seed: Math.floor(Math.random() * 1000000) });
   // The paint tool seeds roots (seeding=painted) or defines the fill region
   // (composition=fill, shape=painted).
   const painting = state.seeding === 'painted' || (state.composition === 'fill' && state.fillShape === 'painted') || state.composition === 'guide';
@@ -54,7 +22,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
     // A coherent random genome: a species cross plus randomised page elements
     // (palette, vessel, ground, stem count) so every press varies everything,
     // not just the foliage.
-    update({ species: 'custom', ...randomVineGenome(Math.random), seed: Math.floor(Math.random() * 1000000) });
+    update({ species: 'custom', ...randomVineGenome(Math.random), seed: randomSeed() });
   };
 
   return (
@@ -627,24 +595,10 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       />
 
       <h3 className="section-title">Seed</h3>
-      <div className="control-group">
-        <div className="seed-input">
-          <input
-            type="number"
-            value={state.seed}
-            onChange={(e) => update({ seed: parseInt(e.target.value, 10) || 0 })}
-          />
-          <button type="button" className="secondary" onClick={randomizeSeed}>
-            🎲
-          </button>
-        </div>
-      </div>
+      <SeedControl seed={state.seed} onChange={(seed) => update({ seed })} />
 
-      <details className="advanced">
-        <summary>Advanced</summary>
-
-        <details className="adv-group" open={state.mode === 'growth'}>
-          <summary>Climbing growth</summary>
+      <AdvancedSection>
+        <AdvGroup title="Climbing growth" open={state.mode === 'growth'}>
           <Slider label="Step Length" value={state.stepLengthMm} min={0.5} max={6} step={0.5} onChange={(v) => update({ stepLengthMm: v })} format={(v) => `${v}mm`} />
           <Slider label="Max Length" value={state.maxLengthMm} min={20} max={300} step={5} onChange={(v) => update({ maxLengthMm: v })} format={(v) => `${v}mm`} />
           <Slider label="Curl" value={state.curl} min={0} max={1.5} step={0.05} onChange={(v) => update({ curl: v })} format={(v) => v.toFixed(2)} />
@@ -652,35 +606,31 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           <Slider label="Climb (gravitropism)" value={state.gravitropism} min={0} max={1} step={0.05} onChange={(v) => update({ gravitropism: v })} format={(v) => v.toFixed(2)} />
           <Slider label="Branchiness" value={state.branchProb} min={0} max={0.2} step={0.005} onChange={(v) => update({ branchProb: v })} format={(v) => v.toFixed(3)} />
           <Slider label="Max Branch Depth" value={state.maxDepth} min={0} max={8} step={1} onChange={(v) => update({ maxDepth: v })} />
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group" open={state.mode === 'colonization'}>
-          <summary>Colonization</summary>
+        <AdvGroup title="Colonization" open={state.mode === 'colonization'}>
           <Slider label="Attractors" value={state.attractorCount} min={50} max={1500} step={50} onChange={(v) => update({ attractorCount: v })} />
           <Slider label="Reach" value={state.attractorRadiusMm} min={5} max={80} step={1} onChange={(v) => update({ attractorRadiusMm: v })} format={(v) => `${v}mm`} />
           <Slider label="Kill Radius" value={state.killRadiusMm} min={1} max={20} step={0.5} onChange={(v) => update({ killRadiusMm: v })} format={(v) => `${v}mm`} />
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Vine taper</summary>
+        <AdvGroup title="Vine taper">
           <Slider label="Taper" value={state.taper} min={0} max={1} step={0.05} onChange={(v) => update({ taper: v })} format={(v) => v.toFixed(2)} />
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Decoration detail</summary>
+        <AdvGroup title="Decoration detail">
           <Slider label="Leaf Size" value={state.leafSizeMm} min={1} max={20} step={0.5} onChange={(v) => update({ leafSizeMm: v })} format={(v) => `${v}mm`} />
           <Slider label="Leaf Width" value={state.leafWidthRatio} min={0.2} max={1} step={0.05} onChange={(v) => update({ leafWidthRatio: v })} format={(v) => v.toFixed(2)} />
           <Slider label="Leaf Spacing" value={state.leafSpacingMm} min={2} max={30} step={1} onChange={(v) => update({ leafSpacingMm: v })} format={(v) => `${v}mm`} />
           <Slider label="Tendril Chance" value={state.tendrilProb} min={0} max={1} step={0.05} onChange={(v) => update({ tendrilProb: v })} format={(v) => v.toFixed(2)} />
           <Slider label="Flower Chance" value={state.flowerProb} min={0} max={1} step={0.05} onChange={(v) => update({ flowerProb: v })} format={(v) => v.toFixed(2)} />
           <Slider label="Flower Size" value={state.flowerSizeMm} min={1} max={15} step={0.5} onChange={(v) => update({ flowerSizeMm: v })} format={(v) => `${v}mm`} />
-        </details>
+        </AdvGroup>
 
-        <details className="adv-group">
-          <summary>Hand</summary>
+        <AdvGroup title="Hand">
           <Slider label="Wobble" value={state.wobbleMm} min={0} max={2} step={0.05} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v}mm`} />
-        </details>
-      </details>
+        </AdvGroup>
+      </AdvancedSection>
     </div>
   );
 }
