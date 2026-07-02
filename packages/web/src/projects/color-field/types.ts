@@ -5,6 +5,7 @@
  * overlapping colours optically mix. Distances are in mm (mapped to px in
  * `render.ts`); palette / seed / pen-width follow the other generative modules.
  */
+import { randomSeed } from '../../lib/random';
 
 export type AccentType = 'bar' | 'gap';
 export type AccentOrientation = 'vertical' | 'horizontal';
@@ -89,7 +90,7 @@ export const defaultColorFieldState: ColorFieldState = {
   wobbleWavelengthMm: 55,
   minSegmentLengthMm: 1,
   penWidthMm: 0.3,
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   accents: [],
   blendInks: false,
   crossHatch: 1,
