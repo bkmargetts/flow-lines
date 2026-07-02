@@ -1,5 +1,5 @@
 import type { Vec3 } from './vec3.js';
-import type { PlanetOptions, PlanetType } from './index.js';
+import type { PlanetOptions, PlanetType } from './types.js';
 
 export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
   radiusFrac: 0.7,
