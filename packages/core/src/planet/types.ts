@@ -45,6 +45,9 @@ export interface PlanetOptions {
   bandTurbulence?: number;
   storms?: number; // count of oval spots (Great Red Spot)
   stormSize?: number; // 0..n scale on the storm ovals
+  /** Equatorial bulge: the disk is squashed vertically by 1-oblateness
+   *  (gas giants and ringed planets only — fast spinners flatten). */
+  oblateness?: number;
 
   // Ice caps
   iceCaps?: boolean;

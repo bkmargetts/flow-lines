@@ -3,7 +3,7 @@ import { makeRandom } from '../lib/rng.js';
 import { type Vec3, TAU, DEG, norm } from './vec3.js';
 import { pushRun } from './geometry.js';
 import type { PlanetType } from './types.js';
-import type { SceneCtx } from './context.js';
+import { bodyKy, type SceneCtx } from './context.js';
 import { renderBody } from './render-body.js';
 import { renderRings } from './rings.js';
 
@@ -27,7 +27,7 @@ export function composeLayout(scene: SceneCtx): void {
       const theta = -Math.PI * 0.92 + 1.84 * Math.PI * f;
       const light: Vec3 = { x: Math.sin(theta), y: 0.12, z: Math.cos(theta) };
       renderBody(scene, { cx: bxp, cy, R: br, bodyType: o.planetType, bodySeed: seed, craters: o.craters, light });
-      if (o.rings) renderRings(scene, bxp, cy, br, norm(light)); // ring each phase
+      if (o.rings) renderRings(scene, bxp, cy, br, norm(light), bodyKy(o.planetType, o.oblateness)); // ring each phase
     }
   } else if (o.layout === 'comparison') {
     // A baseline row of different worlds at decreasing radii.

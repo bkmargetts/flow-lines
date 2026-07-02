@@ -4,8 +4,9 @@ import { pushRun } from './geometry.js';
 import type { SceneCtx } from './context.js';
 
 /** Tilted ring system around a body at (rcx, rcy) of disk radius rR, lit by rL;
- *  occluded behind the sphere and cut by the planet's shadow. */
-export function renderRings(scene: SceneCtx, rcx: number, rcy: number, rR: number, rL: Vec3): void {
+ *  occluded behind the sphere (a spheroid squashed by `ky`) and cut by the
+ *  planet's shadow — an elliptic cylinder under parallel light. */
+export function renderRings(scene: SceneCtx, rcx: number, rcy: number, rR: number, rL: Vec3, ky = 1): void {
   const { o, lines } = scene;
   const tau = o.ringTilt * DEG; // opening angle from edge-on
   const sinTau = Math.sin(tau);
@@ -30,14 +31,15 @@ export function renderRings(scene: SceneCtx, rcx: number, rcy: number, rR: numbe
       const py = ex * sinYaw + ey * cosYaw;
       const sx = rcx + px;
       const sy = rcy + py;
-      const rd2 = px * px + py * py;
+      const pyk = py / ky;
+      const rd2 = px * px + pyk * pyk;
       let hidden = rd2 < rR * rR && ez < Math.sqrt(rR * rR - rd2);
       if (!hidden && o.ringShadow) {
         const p: Vec3 = { x: px, y: py, z: ez };
         const d = dot(p, rL);
         if (d < 0) {
           const qx = p.x - d * rL.x;
-          const qy = p.y - d * rL.y;
+          const qy = (p.y - d * rL.y) / ky;
           const qz = p.z - d * rL.z;
           if (qx * qx + qy * qy + qz * qz < rR * rR) hidden = true;
         }

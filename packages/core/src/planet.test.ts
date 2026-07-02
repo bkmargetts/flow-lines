@@ -160,6 +160,48 @@ describe('generatePlanet', () => {
     }
   });
 
+  it('squashes oblate gas giants: limb wider than tall, marks inside the spheroid', () => {
+    const r = generatePlanet(baseOptions({ planetType: 'gas-giant', bands: true, oblateness: 0.12 }));
+    const ky = 1 - 0.12;
+    const limb = layer(r.lines, 'limb');
+    expect(limb.length).toBeGreaterThan(0);
+    let maxDx = 0;
+    let maxDy = 0;
+    for (const ln of limb) {
+      for (const p of ln.points) {
+        maxDx = Math.max(maxDx, Math.abs(p.x - center.x));
+        maxDy = Math.max(maxDy, Math.abs(p.y - center.y));
+      }
+    }
+    expect(maxDx).toBeGreaterThan(maxDy * 1.05);
+    expect(Math.abs(maxDy - maxDx * ky)).toBeLessThan(2);
+    for (const ln of [...layer(r.lines, 'hatch'), ...layer(r.lines, 'feature')]) {
+      for (const p of ln.points) {
+        const ex = (p.x - center.x) / R;
+        const ey = (p.y - center.y) / (R * ky);
+        expect(ex * ex + ey * ey).toBeLessThanOrEqual(1.02);
+      }
+    }
+    // Sanity: oblateness must not leak onto rocky bodies.
+    const moon = generatePlanet(baseOptions({ planetType: 'moon' }));
+    const moonOblate = generatePlanet(baseOptions({ planetType: 'moon', oblateness: 0.12 }));
+    expect(moonOblate.lines).toEqual(moon.lines);
+  });
+
+  it('hides rings behind an oblate planet (open arcs)', () => {
+    const r = generatePlanet(
+      baseOptions({ planetType: 'ringed', rings: true, bands: true, oblateness: 0.12, radiusFrac: 0.45 })
+    );
+    const ringLines = layer(r.lines, 'ring');
+    expect(ringLines.length).toBeGreaterThan(0);
+    const open = ringLines.some((l) => {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return Math.hypot(a.x - b.x, a.y - b.y) > R * 0.2;
+    });
+    expect(open).toBe(true);
+  });
+
   it('occludes rings behind the disk (open arcs, not closed loops)', () => {
     const r = generatePlanet(baseOptions({ planetType: 'ringed', rings: true, bands: true }));
     const ringLines = layer(r.lines, 'ring');

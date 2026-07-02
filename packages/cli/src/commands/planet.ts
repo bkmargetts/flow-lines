@@ -47,6 +47,7 @@ export function registerPlanet(program: Command) {
     .option('--band-turbulence <number>', 'Band wobble (0-1.2)', '0.5')
     .option('--storms <number>', 'Oval storm spots', '0')
     .option('--storm-size <number>', 'Storm oval scale', '1')
+    .option('--oblateness <number>', 'Equatorial bulge: vertical squash of gas bodies (0-0.15)', '0')
     // ice
     .option('--ice-caps', 'Draw polar ice caps')
     .option('--cap-latitude <number>', 'Latitude where caps begin (deg)', '68')
@@ -139,6 +140,7 @@ export function registerPlanet(program: Command) {
         bandTurbulence: parseFloat(options.bandTurbulence),
         storms: parseInt(options.storms, 10),
         stormSize: parseFloat(options.stormSize),
+        oblateness: parseFloat(options.oblateness),
         iceCaps: options.iceCaps ?? false,
         capLatitude: parseFloat(options.capLatitude),
         capRaggedness: parseFloat(options.capRaggedness),

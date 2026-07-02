@@ -35,6 +35,7 @@ export interface PlanetState {
   bandTurbulence: number;
   storms: number;
   stormSize: number; // scale on the storm ovals
+  oblateness: number; // vertical squash of gas bodies (0..0.15)
 
   // Ice caps
   iceCaps: boolean;
@@ -137,6 +138,7 @@ export const defaultPlanetState: PlanetState = {
   bandTurbulence: 0.5,
   storms: 1,
   stormSize: 1,
+  oblateness: 0,
 
   iceCaps: true,
   capLatitude: 68,

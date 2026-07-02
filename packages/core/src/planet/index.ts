@@ -2,7 +2,7 @@ import { FlowLine } from '../flow-lines.js';
 import { randomSeed } from '../lib/rng.js';
 import { DEG, norm } from './vec3.js';
 import { DEFAULTS } from './body.js';
-import { makeSceneCtx, type ResolvedOptions } from './context.js';
+import { bodyKy, makeSceneCtx, type ResolvedOptions } from './context.js';
 import { renderBody } from './render-body.js';
 import { renderRings } from './rings.js';
 import { composeLayout } from './layouts.js';
@@ -81,7 +81,8 @@ export function generatePlanet(options: PlanetOptions): {
 
     // Rings (Saturn): a flat disc of bands tilted toward edge-on, occluded
     // where it passes behind the sphere.
-    if (o.rings) renderRings(scene, cx, cy, R, L);
+    const kyMain = bodyKy(o.planetType, o.oblateness);
+    if (o.rings) renderRings(scene, cx, cy, R, L, kyMain);
 
     // Companion moon.
     if (o.moon) {
@@ -92,7 +93,7 @@ export function generatePlanet(options: PlanetOptions): {
         bodyType: 'moon',
         bodySeed: seed + 4242,
         craters: true,
-        occluders: [{ cx, cy, R }],
+        occluders: [kyMain !== 1 ? { cx, cy, R, ky: kyMain } : { cx, cy, R }],
       });
     }
   }

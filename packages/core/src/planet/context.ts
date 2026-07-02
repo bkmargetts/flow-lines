@@ -5,6 +5,15 @@ import { clamp01 } from '../lib/math.js';
 import { type Vec3, TAU, DEG, dot, cross, norm, makeRotation } from './vec3.js';
 import { DEFAULTS, type BodyParams } from './body.js';
 
+/** Vertical squash factor for a body type: only fast-spinning gas bodies
+ *  flatten, and only when the option is set (1 elsewhere, so the spherical
+ *  arithmetic is untouched). */
+export function bodyKy(bodyType: BodyParams['bodyType'], oblateness: number): number {
+  return (bodyType === 'gas-giant' || bodyType === 'ringed') && oblateness > 0
+    ? 1 - Math.min(0.4, oblateness)
+    : 1;
+}
+
 /** Options with every default applied (frame + seed stay caller-provided). */
 export type ResolvedOptions = typeof DEFAULTS & {
   width: number;
@@ -44,6 +53,11 @@ export interface BodyCtx {
   bx: number;
   by: number;
   br: number;
+  /** Vertical squash for oblate bodies (1 = spherical). Screen projection is
+   *  (bx + br·N.x, by + bry·N.y); inversion divides dy by ky. Both reduce to
+   *  the exact spherical arithmetic when ky === 1. */
+  ky: number;
+  bry: number;
   /** Per-body light + its form-following hatch frame. */
   bL: Vec3;
   bA: Vec3;
@@ -110,6 +124,8 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
   if (bU.x * bU.x + bU.y * bU.y + bU.z * bU.z < 1e-6) bU = cross(bA, { x: 0, y: 1, z: 0 });
   bU = norm(bU);
   const bV = cross(bA, bU);
+  const ky = bodyKy(bodyType, o.oblateness);
+  const bry = br * ky;
   // Per-body noise/RNG streams, each on its own seed offset so features can be
   // toggled without shifting unrelated geometry. Offsets in use elsewhere:
   // +202 (reserved), +505 storms, +606 clouds, +707 stipple, +808/+909 craters,
@@ -141,7 +157,7 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
     if (!b.occluders) return false;
     for (const occ of b.occluders) {
       const dx = sx - occ.cx;
-      const dy = sy - occ.cy;
+      const dy = occ.ky ? (sy - occ.cy) / occ.ky : sy - occ.cy;
       if (dx * dx + dy * dy < occ.R * occ.R) return true;
     }
     return false;
@@ -236,7 +252,7 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
       let g = 1000;
       for (const c of casters) {
         const wx = br * N.x - (c.cx - bx);
-        const wy = br * N.y - (c.cy - by);
+        const wy = bry * N.y - (c.cy - by);
         const wz = br * N.z - c.z;
         const t = wx * bL.x + wy * bL.y + wz * bL.z;
         if (t >= 0) continue; // caster is behind the light path from here
@@ -253,7 +269,7 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
       let dk = 0;
       for (const c of casters) {
         const wx = br * N.x - (c.cx - bx);
-        const wy = br * N.y - (c.cy - by);
+        const wy = bry * N.y - (c.cy - by);
         const wz = br * N.z - c.z;
         const t = wx * bL.x + wy * bL.y + wz * bL.z;
         if (t >= 0) continue;
@@ -316,6 +332,8 @@ export function makeBodyCtx(scene: SceneCtx, b: BodyParams): BodyCtx {
     bx,
     by,
     br,
+    ky,
+    bry,
     bL,
     bA,
     bU,

@@ -115,6 +115,7 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
           <Slider label="Turbulence" value={state.bandTurbulence} min={0} max={1.2} step={0.05} onChange={(v) => update({ bandTurbulence: v })} disabled={!state.bands} format={(v) => v.toFixed(2)} />
           <Slider label="Storms" value={state.storms} min={0} max={4} step={1} onChange={(v) => update({ storms: v })} />
           <Slider label="Storm size" value={state.stormSize} min={0.4} max={2} step={0.1} onChange={(v) => update({ stormSize: v })} disabled={state.storms < 1} format={(v) => `${v.toFixed(1)}×`} />
+          <Slider label="Oblateness" value={state.oblateness} min={0} max={0.15} step={0.005} onChange={(v) => update({ oblateness: v })} format={(v) => v.toFixed(3)} />
         </>
       )}
 

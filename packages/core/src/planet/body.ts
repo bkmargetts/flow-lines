@@ -22,6 +22,7 @@ export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin
   bandTurbulence: 0.5,
   storms: 0,
   stormSize: 1,
+  oblateness: 0,
   iceCaps: false,
   capLatitude: 68,
   capRaggedness: 0.5,
@@ -82,8 +83,9 @@ export interface BodyParams {
   bodySeed: number;
   craters: boolean;
   /** Disks that hide any sample falling inside them (the primary for a moon; the
-   *  star + nearer bodies for the orbital diagram). */
-  occluders?: { cx: number; cy: number; R: number }[];
+   *  star + nearer bodies for the orbital diagram). `ky` squashes the occluding
+   *  disk vertically for oblate bodies (default 1). */
+  occluders?: { cx: number; cy: number; R: number; ky?: number }[];
   /** Disks that cast their shadow onto this body's surface along the light
    *  direction — the eclipsing moon. `z` is the caster's depth relative to the
    *  body centre (a moon floats toward the light so its umbra lands on the

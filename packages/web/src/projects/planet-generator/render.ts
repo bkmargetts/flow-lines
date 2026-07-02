@@ -45,6 +45,7 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
     bandTurbulence: state.bandTurbulence,
     storms: state.storms,
     stormSize: state.stormSize,
+    oblateness: state.oblateness,
 
     iceCaps: state.iceCaps,
     capLatitude: state.capLatitude,

@@ -4,8 +4,8 @@ import { textToStrokes, textWidth } from '../stroke-font.js';
 import { getSketchStyleConfig } from '../sketch-styles.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { TAU } from './vec3.js';
-import { pushRun, dot4 } from './geometry.js';
-import type { SceneCtx } from './context.js';
+import { pushRun, dot4, ellipse } from './geometry.js';
+import { bodyKy, type SceneCtx } from './context.js';
 
 /** Scene background: starfield (behind everything). */
 export function renderStarfield(scene: SceneCtx): void {
@@ -62,6 +62,7 @@ export function renderAtmosphere(scene: SceneCtx): void {
     // a hazy glow rather than hard glow rings.
     const hr = makeRandom(seed + 1616);
     const { L } = scene;
+    const ky = bodyKy(o.planetType, o.oblateness);
     const rings = Math.max(1, Math.round(o.atmosphere));
     const ld = Math.hypot(L.x, L.y);
     const lx = ld > 1e-6 ? L.x / ld : 1;
@@ -81,15 +82,20 @@ export function renderAtmosphere(scene: SceneCtx): void {
           run = [];
           continue;
         }
-        run.push({ x: cx + c * rr, y: cy + sn * rr });
+        run.push({ x: cx + c * rr, y: cy + sn * rr * ky });
       }
       pushRun(lines, run, 'atmosphere');
     }
   } else {
+    const ky = bodyKy(o.planetType, o.oblateness);
     const rings = Math.max(1, Math.round(o.atmosphere));
     for (let i = 0; i < rings; i++) {
       const rr = R * (1.02 + i * 0.035);
-      lines.push({ points: dot4(cx, cy, rr), layer: 'atmosphere' });
+      if (ky !== 1) {
+        lines.push({ points: ellipse(cx, cy, rr, rr * ky, 0, 0, TAU), layer: 'atmosphere' });
+      } else {
+        lines.push({ points: dot4(cx, cy, rr), layer: 'atmosphere' });
+      }
     }
   }
 }

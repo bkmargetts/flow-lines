@@ -16,7 +16,7 @@ export function traceField(
   pen?: 'fine' | 'bold',
   layer = 'feature'
 ): void {
-  const { bx, by, br, occluded } = ctx;
+  const { bx, by, br, ky, occluded } = ctx;
   const { lines } = ctx.scene;
   const grid = Math.max(48, Math.min(220, Math.round(br * 1.5)));
   const data = new Float32Array(grid * grid);
@@ -27,7 +27,7 @@ export function traceField(
       const sx = bx - br + gx * step;
       const sy = by - br + gy * step;
       const dx = sx - bx;
-      const dy = sy - by;
+      const dy = (sy - by) / ky;
       const r2 = dx * dx + dy * dy;
       if (r2 <= br * br) {
         const z = Math.sqrt(br * br - r2);
@@ -46,7 +46,7 @@ export function traceField(
       const sx = bx - br + gp.x * step;
       const sy = by - br + gp.y * step;
       const dx = sx - bx;
-      const dy = sy - by;
+      const dy = (sy - by) / ky;
       if (dx * dx + dy * dy > lim2 || occluded(sx, sy)) {
         pushRun(lines, run, layer, pen);
         run = [];
@@ -91,7 +91,7 @@ export function renderEclipseOutline(ctx: BodyCtx): void {
  *  curtain rays hanging toward the equator — the classic engraved corona
  *  borealis. Ungated by tone (an aurora glows on the night side). */
 export function renderAurora(ctx: BodyCtx): void {
-  const { b, bx, by, br, occluded } = ctx;
+  const { b, bx, by, br, bry, occluded } = ctx;
   const { o, SPIN, US, VS, lines } = ctx.scene;
   if (!o.aurora || b.bodyType === 'star') return;
   const nAur = createNoise(b.bodySeed + 1515);
@@ -124,7 +124,7 @@ export function renderAurora(ctx: BodyCtx): void {
         const th = thBase * (1 + 0.22 * wobAt(pole, lon, k));
         const N = pointAt(pole, lon, th);
         const sx = bx + br * N.x;
-        const sy = by + br * N.y;
+        const sy = by + bry * N.y;
         const visible = N.z > 0.03 && !occluded(sx, sy);
         if (!visible || ar() < breakProb) {
           pushRun(lines, run, 'aurora');
@@ -149,7 +149,7 @@ export function renderAurora(ctx: BodyCtx): void {
       for (let q = 0; q <= steps; q++) {
         const N = pointAt(pole, lon, th0 + (q / steps) * dth);
         const sx = bx + br * N.x;
-        const sy = by + br * N.y;
+        const sy = by + bry * N.y;
         if (N.z <= 0.03 || occluded(sx, sy)) {
           ok = false;
           break;
@@ -177,12 +177,12 @@ export function renderClouds(ctx: BodyCtx): void {
 /** Storms (gas giants): an oval cell with a couple of internal swirl rings —
  *  a drawn Great Red Spot, not just a darker patch. */
 export function renderStorms(ctx: BodyCtx): void {
-  const { bx, by, br, storms, occluded } = ctx;
+  const { bx, by, br, bry, storms, occluded } = ctx;
   const { o, lines } = ctx.scene;
   for (const s of storms) {
     if (s.dir.z <= 0.12) continue; // front-facing only
     const scx = bx + br * s.dir.x;
-    const scy = by + br * s.dir.y;
+    const scy = by + bry * s.dir.y;
     if (occluded(scx, scy)) continue;
     const span = br * Math.sin(s.rad) * o.stormSize;
     if (span < 3) continue;
@@ -198,7 +198,7 @@ export function renderStorms(ctx: BodyCtx): void {
 
 /** Craters: foreshortened rim ellipses + a shaded inner cup. */
 export function renderCraters(ctx: BodyCtx): void {
-  const { b, bx, by, br, bL, occluded } = ctx;
+  const { b, bx, by, br, bry, bL, occluded } = ctx;
   const { o, lines } = ctx.scene;
   if (!b.craters) return;
   const cr = makeRandom(b.bodySeed + 808);
@@ -215,7 +215,7 @@ export function renderCraters(ctx: BodyCtx): void {
     if (d.z <= 0.14) continue; // front-facing only
     const sz = (o.craterMinR + (o.craterMaxR - o.craterMinR) * cr() * cr()) * br;
     const ccx = bx + br * d.x;
-    const ccy = by + br * d.y;
+    const ccy = by + bry * d.y;
     if (occluded(ccx, ccy)) continue;
     const radialAng = Math.atan2(d.y, d.x);
     const major = sz;
@@ -250,7 +250,7 @@ export function renderCraters(ctx: BodyCtx): void {
 /** Mountain hachures: short chevrons on the highest terrestrial land, apex
  *  toward the light, so ranges read as relief. */
 export function renderMountains(ctx: BodyCtx): void {
-  const { b, bx, by, br, bL, surface, occluded } = ctx;
+  const { b, bx, by, br, ky, bL, surface, occluded } = ctx;
   const { o, lines } = ctx.scene;
   if (!(o.mountains && b.bodyType === 'terrestrial')) return;
   const mr = makeRandom(b.bodySeed + 1212);
@@ -266,7 +266,7 @@ export function renderMountains(ctx: BodyCtx): void {
       const jx = xx + (mr() - 0.5) * cell;
       const jy = yy + (mr() - 0.5) * cell;
       const dx = jx - bx;
-      const dy = jy - by;
+      const dy = (jy - by) / ky;
       const r2 = dx * dx + dy * dy;
       if (r2 > br * br * 0.97) continue;
       if (occluded(jx, jy)) continue;
@@ -287,7 +287,7 @@ export function renderMountains(ctx: BodyCtx): void {
  *  stopping a sliver short of the limb. Built in the spin-axis frame (US/VS),
  *  the same great-circle math as the hatch but ungated by tone. */
 export function renderGraticule(ctx: BodyCtx): void {
-  const { bx, by, br, occluded } = ctx;
+  const { bx, by, br, bry, occluded } = ctx;
   const { o, SPIN, US, VS, lines } = ctx.scene;
   if (!o.graticule) return;
   const gstep = Math.max(5, o.graticuleSpacingDeg) * DEG;
@@ -295,7 +295,7 @@ export function renderGraticule(ctx: BodyCtx): void {
   const emit = (N: Vec3, run: Point[]): boolean => {
     if (N.z <= 0.03) return false; // hold off the limb
     const sx = bx + br * N.x;
-    const sy = by + br * N.y;
+    const sy = by + bry * N.y;
     if (occluded(sx, sy)) return false;
     run.push({ x: sx, y: sy });
     return true;

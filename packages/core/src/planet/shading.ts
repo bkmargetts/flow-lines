@@ -11,7 +11,7 @@ function sampleAndEmit(ctx: BodyCtx, N: Vec3, thr: number, run: Point[]): boolea
   // returns whether the point was kept (continues the run)
   if (N.z <= 0) return false;
   const sx = ctx.bx + ctx.br * N.x;
-  const sy = ctx.by + ctx.br * N.y;
+  const sy = ctx.by + ctx.bry * N.y;
   if (ctx.occluded(sx, sy)) return false;
   if (!ctx.hatchMask(N)) return false;
   if (ctx.toneAt(N) < thr) return false;
@@ -136,7 +136,7 @@ export function renderTerminatorEmphasis(ctx: BodyCtx): void {
 
 /** Stipple (shadow / texture dots), gated by tone. */
 export function renderStipple(ctx: BodyCtx): void {
-  const { scene, b, bx, by, br, occluded, surface, toneAt } = ctx;
+  const { scene, b, bx, by, br, ky, occluded, surface, toneAt } = ctx;
   const { o, lines } = scene;
   if (!(o.stipple > 0)) return;
   const sr = makeRandom(b.bodySeed + 707);
@@ -146,7 +146,7 @@ export function renderStipple(ctx: BodyCtx): void {
       const jx = sx + (sr() - 0.5) * cell;
       const jy = sy + (sr() - 0.5) * cell;
       const dx = jx - bx;
-      const dy = jy - by;
+      const dy = (jy - by) / ky;
       const r2 = dx * dx + dy * dy;
       if (r2 > br * br) continue;
       if (occluded(jx, jy)) continue;
@@ -173,7 +173,7 @@ export function renderStipple(ctx: BodyCtx): void {
 
 /** Limb: a bold silhouette built from concentric single-pen passes. */
 export function renderLimb(ctx: BodyCtx): void {
-  const { scene, bx, by, br, occluded } = ctx;
+  const { scene, bx, by, br, ky, occluded } = ctx;
   const { o, lines } = scene;
   const limbPasses = Math.max(2, Math.round(o.penWidth > 0 ? 3 : 2));
   for (let k = 0; k < limbPasses; k++) {
@@ -184,7 +184,7 @@ export function renderLimb(ctx: BodyCtx): void {
     for (let i = 0; i <= n; i++) {
       const t = (i / n) * TAU;
       const sx = bx + Math.cos(t) * rr;
-      const sy = by + Math.sin(t) * rr;
+      const sy = by + Math.sin(t) * rr * ky;
       if (occluded(sx, sy)) {
         pushRun(lines, run, 'limb', 'bold');
         run = [];

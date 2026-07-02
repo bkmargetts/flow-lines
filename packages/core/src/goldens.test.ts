@@ -175,6 +175,18 @@ CASES['planet/moon-craters/42'] = () =>
     craters: true,
     stipple: 0.5,
   });
+CASES['planet/oblate-ringed/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'ringed',
+    rings: true,
+    bands: true,
+    oblateness: 0.1,
+    radiusFrac: 0.5,
+  });
 // Celestial phenomena in one plate: eclipse shadow, aurora, haze atmosphere.
 CASES['planet/phenomena/42'] = () =>
   generatePlanet({
