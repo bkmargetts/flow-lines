@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -10,7 +11,8 @@ import { getPaperSize, pageMetrics } from '@flow-lines/core';
 import { useFrame } from './FrameContext';
 import { getModule } from './modules/registry';
 import type { LayerOutput, LiveModule, RenderEnv, StateUpdate } from './modules/types';
-import { composite, type CompositeLayer, type CompositeResult } from './lib/composite';
+import { composite, type CompositeResult } from './lib/composite';
+import { requestComposite, SUPERSEDED, type SnapshotLayer } from './composite-client';
 
 /** The most layers a single plot may stack — "a reasonable number". */
 export const MAX_LAYERS = 8;
@@ -187,9 +189,73 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
         .map((l) => (
           <LiveInstanceHost key={l.instanceId} instanceId={l.instanceId} />
         ))}
-      {children}
+      <CompositeHost>{children}</CompositeHost>
     </LayerStoreContext.Provider>
   );
+}
+
+interface CompositeState {
+  comp: CompositeResult;
+  busy: boolean;
+}
+
+const CompositeContext = createContext<CompositeState | null>(null);
+
+/**
+ * Composites the whole stack off the main thread and shares the result with
+ * every consumer. One host per app, so the worker sees a single latest-wins
+ * request stream (two independent consumers would supersede each other), and
+ * heavy pure layers (lenia, physarum) render once per change — not once per
+ * consumer, as the old per-component `useMemo` did — without freezing the UI.
+ * The previous sheet stays visible while a new one renders (`busy`).
+ */
+function CompositeHost({ children }: { children: ReactNode }) {
+  const { frame } = useFrame();
+  const { layers, liveOutputs } = useLayerStore();
+  const page = usePage();
+  // Border-only empty sheet until the first worker result lands — cheap.
+  const [comp, setComp] = useState<CompositeResult>(() => composite(frame, page, []));
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setBusy(true);
+    const snapshot: SnapshotLayer[] = layers.map((l) => {
+      const kind = getModule(l.moduleId).kind;
+      return {
+        instanceId: l.instanceId,
+        moduleId: l.moduleId,
+        kind,
+        // Live layers composite from their published lines; their state may
+        // hold non-cloneable data (bitmaps) and must not cross the wire.
+        ...(kind === 'pure' ? { state: l.state } : {}),
+        visible: l.visible,
+        holdOffMm: l.holdOffMm,
+        liveOutput: liveOutputs[l.instanceId]?.output ?? null,
+      };
+    });
+    requestComposite({ frame, page, layers: snapshot }).then(
+      (result) => {
+        if (!alive) return;
+        setComp(result);
+        setBusy(false);
+      },
+      (err) => {
+        // Superseded → a newer request is already in flight and will clear
+        // `busy`; anything else means a module render threw — keep the last
+        // good sheet and stop showing busy.
+        if (!alive || err === SUPERSEDED) return;
+        console.error('composite failed:', err);
+        setBusy(false);
+      }
+    );
+    return () => {
+      alive = false;
+    };
+  }, [frame, layers, liveOutputs, page]);
+
+  const value = useMemo(() => ({ comp, busy }), [comp, busy]);
+  return <CompositeContext.Provider value={value}>{children}</CompositeContext.Provider>;
 }
 
 /** Drives one live module instance's hook so it can publish its lines. Renders
@@ -227,31 +293,23 @@ export function usePage() {
 }
 
 /**
- * The composited sheet for the whole stack. Pure layers are rendered inside the
- * memo; live layers contribute their published output. Recomputes when any
- * layer's state, the stack shape, a live output, or the frame changes.
- *
- * NOTE: every visible pure layer re-renders whenever this memo recomputes —
- * fine for the common light stack, but a heavy generative layer (lenia) stacked
- * under a frequently-publishing live layer would re-render on each publish. A
- * per-layer render cache keyed by (state, page) is the optimisation if that
- * bites.
+ * The composited sheet for the whole stack, computed off the main thread by
+ * `CompositeHost` (latest-wins; pure layers render in the composite worker,
+ * live layers contribute their published output). Returns the last settled
+ * sheet — while a new one renders, `useCompositeBusy()` reports true.
  */
 export function useComposite(): CompositeResult {
-  const { frame } = useFrame();
-  const { layers, liveOutputs } = useLayerStore();
-  const page = usePage();
-  return useMemo(() => {
-    const stack: CompositeLayer[] = layers.map((l) => ({
-      instanceId: l.instanceId,
-      module: getModule(l.moduleId),
-      state: l.state,
-      visible: l.visible,
-      holdOffMm: l.holdOffMm,
-      liveOutput: liveOutputs[l.instanceId]?.output ?? null,
-    }));
-    return composite(frame, page, stack);
-  }, [frame, layers, liveOutputs, page]);
+  const ctx = useContext(CompositeContext);
+  if (!ctx) throw new Error('useComposite must be used within a LayerStoreProvider');
+  return ctx.comp;
+}
+
+/** True while the stack is compositing a newer sheet than `useComposite()`
+ *  currently returns. */
+export function useCompositeBusy(): boolean {
+  const ctx = useContext(CompositeContext);
+  if (!ctx) throw new Error('useCompositeBusy must be used within a LayerStoreProvider');
+  return ctx.busy;
 }
 
 /** Build a module render env for a live instance to drive its own worker. */

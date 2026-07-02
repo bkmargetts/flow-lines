@@ -1,4 +1,4 @@
-import { useComposite } from '../LayerStore';
+import { useComposite, useCompositeBusy } from '../LayerStore';
 import { compositeLayers } from '../lib/composite';
 import { downloadSvgText, triggerDownload } from '../lib/download';
 import { zipStore } from '../lib/zip';
@@ -10,7 +10,10 @@ import { zipStore } from '../lib/zip';
  */
 export function PlotActions() {
   const comp = useComposite();
-  const hasContent = comp.result.lines.length > 0;
+  // Block export while a newer sheet is compositing — downloading the stale
+  // one would silently mismatch the settings on screen.
+  const busy = useCompositeBusy();
+  const hasContent = !busy && comp.result.lines.length > 0;
 
   const downloadSVG = () => {
     if (!comp.exportSvg) return;
@@ -37,7 +40,7 @@ export function PlotActions() {
       <button
         type="button"
         className="secondary"
-        disabled={!comp.hasLayers}
+        disabled={busy || !comp.hasLayers}
         onClick={downloadLayers}
         title="One SVG per pen layer, zipped — plot each with a different pen"
       >
