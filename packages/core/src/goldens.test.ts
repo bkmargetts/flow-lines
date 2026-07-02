@@ -152,6 +152,29 @@ CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
 CASES['planet/ringed/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'ringed' });
+// Rings and craters need coverage of their own: with defaults the ringed case
+// above renders identically to the gas giant (rings/bands are off).
+CASES['planet/ringed-rings/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'ringed',
+    rings: true,
+    bands: true,
+    radiusFrac: 0.5,
+  });
+CASES['planet/moon-craters/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'moon',
+    craters: true,
+    stipple: 0.5,
+  });
 CASES['texture/shapes/42'] = () =>
   generateTexture({ ...textureBase, style: 'shapes', seed: 42 });
 
