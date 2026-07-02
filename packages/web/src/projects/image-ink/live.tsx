@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { randomSeed } from '../../lib/random';
 import {
   grayscaleFromRGBA,
   contentRect,
@@ -139,7 +140,7 @@ export function useImageInkInstance(args: LiveInstanceArgs<ImageInkLayerState>):
   );
 
   const randomizeSeed = useCallback(() => {
-    const seed = Math.floor(Math.random() * 1000000);
+    const seed = randomSeed();
     // Surprise me: a new seed barely changes the look, so the dice also
     // rolls the artistic levers within tasteful ranges
     const r = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
