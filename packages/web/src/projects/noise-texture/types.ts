@@ -4,6 +4,7 @@
  * The grating generative logic is shared with the background-texture module.
  */
 import { defaultGratingParams, type GratingParams, type GratingMaskMode } from '../../textures/grating/shared';
+import { randomSeed } from '../../lib/random';
 
 export type MaskMode = GratingMaskMode;
 
@@ -15,7 +16,7 @@ export interface NoiseTextureState extends GratingParams {
 
 export const defaultNoiseTextureState: NoiseTextureState = {
   ...defaultGratingParams,
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   penWidthMm: 0.3,
   drawMode: false,
 };
