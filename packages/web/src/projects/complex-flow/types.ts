@@ -1,4 +1,5 @@
 import { type Point, type SingularityLayout, type SeedLayout, type LayerBy } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 
 /**
  * Complex Flow settings (Savva-style poles & zeros). The page frame (paper,
@@ -47,7 +48,7 @@ export interface ComplexFlowState {
 }
 
 export const defaultComplexFlowState: ComplexFlowState = {
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
 
   zeroCount: 3,
   poleCount: 2,
