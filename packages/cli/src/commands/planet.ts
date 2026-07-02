@@ -34,6 +34,7 @@ export function registerPlanet(program: Command) {
     // surface
     .option('--noise-scale <number>', 'Surface noise frequency', '1.7')
     .option('--octaves <number>', 'Surface noise octaves', '5')
+    .option('--persistence <number>', 'Surface noise persistence (0.3-0.8)', '0.5')
     .option('--contrast <number>', 'Sharpen coastlines / cracks', '1.4')
     .option('--sea-level <number>', 'Terrestrial land/sea threshold (-1..1)', '0')
     .option('--mare-level <number>', 'Lunar dark-plain threshold (-1..1)', '-0.12')
@@ -49,9 +50,12 @@ export function registerPlanet(program: Command) {
     // ice
     .option('--ice-caps', 'Draw polar ice caps')
     .option('--cap-latitude <number>', 'Latitude where caps begin (deg)', '68')
+    .option('--cap-raggedness <number>', 'Noisy cap edge (0-1)', '0.5')
     // marks
     .option('--hatch-spacing <number>', 'Form-hatch spacing in px', '6')
     .option('--cross-hatch-layers <number>', 'Cross-hatch layers (1-5)', '3')
+    .option('--light-weight <number>', 'Shading weight of lit-ness in tone (0-1)', '0.85')
+    .option('--albedo-weight <number>', 'Shading weight of surface albedo in tone (0-1)', '0.7')
     .option('--stipple <number>', 'Shadow/texture stipple (0-1)', '0')
     .option('--atmosphere <number>', 'Glow rings (corona for stars)', '0')
     // relief
@@ -117,6 +121,7 @@ export function registerPlanet(program: Command) {
         limbDarkening: parseFloat(options.limbDarkening),
         noiseScale: parseFloat(options.noiseScale),
         octaves: parseInt(options.octaves, 10),
+        persistence: parseFloat(options.persistence),
         contrast: parseFloat(options.contrast),
         seaLevel: parseFloat(options.seaLevel),
         mareLevel: parseFloat(options.mareLevel),
@@ -130,8 +135,11 @@ export function registerPlanet(program: Command) {
         stormSize: parseFloat(options.stormSize),
         iceCaps: options.iceCaps ?? false,
         capLatitude: parseFloat(options.capLatitude),
+        capRaggedness: parseFloat(options.capRaggedness),
         hatchSpacing: paperStrokeWidth ? (parseFloat(options.hatchSpacing) * paperStrokeWidth) / parseFloat(options.penWidthMm) : parseFloat(options.hatchSpacing),
         crossHatchLayers: parseInt(options.crossHatchLayers, 10),
+        lightWeight: parseFloat(options.lightWeight),
+        albedoWeight: parseFloat(options.albedoWeight),
         stipple: parseFloat(options.stipple),
         atmosphere: parseInt(options.atmosphere, 10),
         terminatorEmphasis: parseFloat(options.terminatorEmphasis),

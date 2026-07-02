@@ -22,6 +22,7 @@ export interface PlanetState {
   terrainScale: number; // noise frequency
   terrainContrast: number; // sharpen coast/cracks
   terrainDetail: number; // octaves
+  persistence: number; // fBm persistence
   ocean: number; // 0..1 terrestrial sea fraction
   mareAmount: number; // 0..1 lunar dark-plain amount
   coastlines: boolean;
@@ -43,6 +44,8 @@ export interface PlanetState {
   // Mark-making
   hatchSpacingMm: number;
   crossHatchLayers: number;
+  lightWeight: number; // tone = darkness*lightWeight + albedo*albedoWeight
+  albedoWeight: number;
   stipple: number; // 0..1
   atmosphere: number; // 0..n rings (corona for stars)
 
@@ -115,6 +118,7 @@ export const defaultPlanetState: PlanetState = {
   terrainScale: 1.7,
   terrainContrast: 1.4,
   terrainDetail: 5,
+  persistence: 0.5,
   ocean: 0.58,
   mareAmount: 0.42,
   coastlines: true,
@@ -133,6 +137,8 @@ export const defaultPlanetState: PlanetState = {
 
   hatchSpacingMm: 1.9,
   crossHatchLayers: 3,
+  lightWeight: 0.85,
+  albedoWeight: 0.7,
   stipple: 0,
   atmosphere: 1,
 

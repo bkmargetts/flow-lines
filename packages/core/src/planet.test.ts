@@ -31,6 +31,12 @@ describe('generatePlanet', () => {
     expect(c.lines).not.toEqual(a.lines);
   });
 
+  it('responds to the noise persistence knob', () => {
+    const a = generatePlanet(baseOptions({ persistence: 0.35 }));
+    const b = generatePlanet(baseOptions({ persistence: 0.7 }));
+    expect(b.lines).not.toEqual(a.lines);
+  });
+
   it('produces finite, in-bounds geometry', () => {
     // Small disk so the (legitimately large) rings still land on the sheet.
     const r = generatePlanet(baseOptions({ radiusFrac: 0.4, rings: true, starfield: true, craters: true, planetType: 'moon' }));

@@ -30,6 +30,7 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
 
     noiseScale: state.terrainScale,
     octaves: Math.round(state.terrainDetail),
+    persistence: state.persistence,
     contrast: state.terrainContrast,
     // ocean 0..1 → sea threshold: more ocean ⇒ higher threshold ⇒ more sea
     seaLevel: (state.ocean - 0.5) * 1.1,
@@ -51,6 +52,8 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
 
     hatchSpacing: Math.max(1.5, (state.hatchSpacingMm * mm) / zoom),
     crossHatchLayers: state.crossHatchLayers,
+    lightWeight: state.lightWeight,
+    albedoWeight: state.albedoWeight,
     stipple: state.stipple,
     atmosphere: state.atmosphere,
 

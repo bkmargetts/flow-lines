@@ -219,6 +219,9 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
 
       <AdvancedSection>
         <Slider label="Terrain detail (octaves)" value={state.terrainDetail} min={1} max={7} step={1} onChange={(v) => update({ terrainDetail: v })} />
+        <Slider label="Persistence" value={state.persistence} min={0.3} max={0.8} step={0.05} onChange={(v) => update({ persistence: v })} format={(v) => v.toFixed(2)} />
+        <Slider label="Light weight" value={state.lightWeight} min={0} max={1} step={0.05} onChange={(v) => update({ lightWeight: v })} format={(v) => v.toFixed(2)} />
+        <Slider label="Albedo weight" value={state.albedoWeight} min={0} max={1} step={0.05} onChange={(v) => update({ albedoWeight: v })} format={(v) => v.toFixed(2)} />
         <Slider label="Cap raggedness" value={state.capRaggedness} min={0} max={1} step={0.05} onChange={(v) => update({ capRaggedness: v })} format={(v) => v.toFixed(2)} disabled={!state.iceCaps} />
         <Slider label="Ring inner" value={state.ringInner} min={1.05} max={2} step={0.05} onChange={(v) => update({ ringInner: v })} format={(v) => `${v.toFixed(2)}×`} disabled={!state.rings} />
         <Slider label="Ring outer" value={state.ringOuter} min={1.4} max={3} step={0.05} onChange={(v) => update({ ringOuter: v })} format={(v) => `${v.toFixed(2)}×`} disabled={!state.rings} />
