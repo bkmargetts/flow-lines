@@ -6,9 +6,7 @@ import type { FrameSettings } from '../FrameContext';
  * A module is the one unit of art in the app: photos→ink, a generative field, a
  * background texture — all the same kind of thing. A plot is a *stack* of layer
  * instances, each an instance of some module, composited bottom→top into one
- * sheet. This replaces the old project/texture split: ProjectModule (a
- * session-mounted provider shown one at a time) and TextureModule (a pure
- * function layered behind it) collapse into `Module`.
+ * sheet.
  *
  * Two kinds, because one signature can't honestly cover both a synchronous
  * texture and image-ink's worker+ML pipeline:

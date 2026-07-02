@@ -18,7 +18,7 @@ const PAPER_TONES: Array<{ id: string; label: string }> = [
 
 /**
  * The shared page frame — paper, orientation, render density, fit and the
- * paper-border margin. Mounted once in the shell so every project tab plots
+ * paper-border margin. Mounted once in the shell so every layer plots
  * to the same physical sheet.
  */
 export function FrameControls() {
