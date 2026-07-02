@@ -2,6 +2,7 @@
  * Conway long-exposure settings. The page frame (paper, orientation,
  * resolution, margin) lives in the shared FrameContext, not here.
  */
+import { randomSeed } from '../../lib/random';
 export interface ConwayState {
   seed: number;
   /** How many R-pentominoes to detonate at the start */
@@ -65,7 +66,7 @@ export interface ConwayState {
 }
 
 export const defaultConwayState: ConwayState = {
-  seed: Math.floor(Math.random() * 1000000),
+  seed: randomSeed(),
   seedCount: 1,
   cellSize: 1.8,
   generations: 400,
