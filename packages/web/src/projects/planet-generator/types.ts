@@ -22,6 +22,7 @@ export interface PlanetState {
   terrainScale: number; // noise frequency
   terrainContrast: number; // sharpen coast/cracks
   terrainDetail: number; // octaves
+  persistence: number; // fBm persistence
   ocean: number; // 0..1 terrestrial sea fraction
   mareAmount: number; // 0..1 lunar dark-plain amount
   coastlines: boolean;
@@ -34,6 +35,7 @@ export interface PlanetState {
   bandTurbulence: number;
   storms: number;
   stormSize: number; // scale on the storm ovals
+  oblateness: number; // vertical squash of gas bodies (0..0.15)
 
   // Ice caps
   iceCaps: boolean;
@@ -43,8 +45,17 @@ export interface PlanetState {
   // Mark-making
   hatchSpacingMm: number;
   crossHatchLayers: number;
+  lightWeight: number; // tone = darkness*lightWeight + albedo*albedoWeight
+  albedoWeight: number;
   stipple: number; // 0..1
   atmosphere: number; // 0..n rings (corona for stars)
+  atmosphereStyle: 'rings' | 'haze';
+
+  // Celestial phenomena
+  eclipse: boolean; // moon shadow on the planet (needs moon)
+  aurora: boolean;
+  auroraLatitude: number; // degrees
+  auroraIntensity: number; // 0..1
 
   // Rings
   rings: boolean;
@@ -64,14 +75,25 @@ export interface PlanetState {
   craterMaxR: number;
   craterDetail: boolean;
 
+  // Small bodies
+  lumpiness: number; // asteroid/comet silhouette irregularity
+  tailLength: number; // comet tail in disk radii
+  tailSpread: number; // comet fan half-spread (deg)
+
   // Surface relief
   terminatorEmphasis: number; // 0..1
   mountains: boolean;
   clouds: boolean;
+  rivers: number; // drainage lines (terrestrial)
+  rilles: number; // sinuous channels (moon / barren)
 
   // Engraved-plate annotation
   graticule: boolean;
   graticuleSpacingDeg: number;
+  featureLabels: boolean; // invented Latin names on prominent features
+  labelCount: number;
+  orbitLabels: boolean; // roman numerals + names (orbital layout)
+  asteroidBelt: boolean; // dash belt between orbits (orbital layout)
   plateFrame: boolean;
   scaleBar: boolean;
   plateTitle: string;
@@ -115,6 +137,7 @@ export const defaultPlanetState: PlanetState = {
   terrainScale: 1.7,
   terrainContrast: 1.4,
   terrainDetail: 5,
+  persistence: 0.5,
   ocean: 0.58,
   mareAmount: 0.42,
   coastlines: true,
@@ -126,6 +149,7 @@ export const defaultPlanetState: PlanetState = {
   bandTurbulence: 0.5,
   storms: 1,
   stormSize: 1,
+  oblateness: 0,
 
   iceCaps: true,
   capLatitude: 68,
@@ -133,8 +157,16 @@ export const defaultPlanetState: PlanetState = {
 
   hatchSpacingMm: 1.9,
   crossHatchLayers: 3,
+  lightWeight: 0.85,
+  albedoWeight: 0.7,
   stipple: 0,
   atmosphere: 1,
+  atmosphereStyle: 'rings',
+
+  eclipse: false,
+  aurora: false,
+  auroraLatitude: 70,
+  auroraIntensity: 0.6,
 
   rings: false,
   ringInner: 1.35,
@@ -152,12 +184,22 @@ export const defaultPlanetState: PlanetState = {
   craterMaxR: 0.14,
   craterDetail: false,
 
+  lumpiness: 0.14,
+  tailLength: 5,
+  tailSpread: 28,
+
   terminatorEmphasis: 0,
   mountains: false,
   clouds: false,
+  rivers: 0,
+  rilles: 0,
 
   graticule: false,
   graticuleSpacingDeg: 30,
+  featureLabels: false,
+  labelCount: 6,
+  orbitLabels: false,
+  asteroidBelt: false,
   plateFrame: false,
   scaleBar: false,
   plateTitle: '',

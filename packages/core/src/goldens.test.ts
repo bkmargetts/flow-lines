@@ -152,6 +152,105 @@ CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
 CASES['planet/ringed/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'ringed' });
+// Rings and craters need coverage of their own: with defaults the ringed case
+// above renders identically to the gas giant (rings/bands are off).
+CASES['planet/ringed-rings/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'ringed',
+    rings: true,
+    bands: true,
+    radiusFrac: 0.5,
+  });
+CASES['planet/moon-craters/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'moon',
+    craters: true,
+    stipple: 0.5,
+  });
+CASES['planet/labeled-moon/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'moon',
+    craters: true,
+    featureLabels: true,
+    plateFrame: true,
+  });
+CASES['planet/atlas-orbital/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    layout: 'orbital',
+    orbitLabels: true,
+    asteroidBelt: true,
+  });
+CASES['planet/asteroid/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'asteroid',
+    craters: true,
+    stipple: 0.5,
+  });
+CASES['planet/comet/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'comet',
+    radiusFrac: 0.2,
+    starfield: true,
+  });
+CASES['planet/rivers/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    rivers: 5,
+    mountains: true,
+  });
+CASES['planet/oblate-ringed/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    planetType: 'ringed',
+    rings: true,
+    bands: true,
+    oblateness: 0.1,
+    radiusFrac: 0.5,
+  });
+// Celestial phenomena in one plate: eclipse shadow, aurora, haze atmosphere.
+CASES['planet/phenomena/42'] = () =>
+  generatePlanet({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    lightElevation: 20,
+    moon: true,
+    eclipse: true,
+    aurora: true,
+    atmosphere: 2,
+    atmosphereStyle: 'haze',
+  });
 CASES['texture/shapes/42'] = () =>
   generateTexture({ ...textureBase, style: 'shapes', seed: 42 });
 

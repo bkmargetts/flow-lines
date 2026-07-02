@@ -13,7 +13,8 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
   const t = state.planetType;
   const isTerrestrial = t === 'terrestrial' || t === 'ice' || t === 'lava';
   const isGas = t === 'gas-giant' || t === 'ringed';
-  const isRocky = t === 'moon' || t === 'barren';
+  const isRocky = t === 'moon' || t === 'barren' || t === 'asteroid';
+  const isSmallBody = t === 'asteroid' || t === 'comet';
   const isStar = t === 'star';
 
   const selectType = (id: string) => {
@@ -115,6 +116,7 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
           <Slider label="Turbulence" value={state.bandTurbulence} min={0} max={1.2} step={0.05} onChange={(v) => update({ bandTurbulence: v })} disabled={!state.bands} format={(v) => v.toFixed(2)} />
           <Slider label="Storms" value={state.storms} min={0} max={4} step={1} onChange={(v) => update({ storms: v })} />
           <Slider label="Storm size" value={state.stormSize} min={0.4} max={2} step={0.1} onChange={(v) => update({ stormSize: v })} disabled={state.storms < 1} format={(v) => `${v.toFixed(1)}×`} />
+          <Slider label="Oblateness" value={state.oblateness} min={0} max={0.15} step={0.005} onChange={(v) => update({ oblateness: v })} format={(v) => v.toFixed(3)} />
         </>
       )}
 
@@ -140,7 +142,20 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         </>
       )}
 
-      {isRocky && (
+      {isSmallBody && (
+        <>
+          <h3 className="section-title">{t === 'comet' ? 'Comet' : 'Asteroid'}</h3>
+          <Slider label="Lumpiness" value={state.lumpiness} min={0} max={0.25} step={0.01} onChange={(v) => update({ lumpiness: v })} format={(v) => v.toFixed(2)} />
+          {t === 'comet' && (
+            <>
+              <Slider label="Tail length" value={state.tailLength} min={2} max={9} step={0.5} onChange={(v) => update({ tailLength: v })} format={(v) => `${v.toFixed(1)}×`} />
+              <Slider label="Tail spread" value={state.tailSpread} min={10} max={60} step={2} onChange={(v) => update({ tailSpread: v })} format={(v) => `${v}°`} />
+            </>
+          )}
+        </>
+      )}
+
+      {(isRocky || t === 'comet') && (
         <>
           <h3 className="section-title">Craters</h3>
           <Toggle label="Craters" checked={state.craters} onChange={(v) => update({ craters: v })} />
@@ -162,7 +177,11 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
             <>
               <Toggle label="Mountain hachures" checked={state.mountains} onChange={(v) => update({ mountains: v })} />
               <Toggle label="Clouds" checked={state.clouds} onChange={(v) => update({ clouds: v })} />
+              <Slider label="Rivers" value={state.rivers} min={0} max={12} step={1} onChange={(v) => update({ rivers: v })} />
             </>
+          )}
+          {isRocky && (
+            <Slider label="Rilles (channels)" value={state.rilles} min={0} max={8} step={1} onChange={(v) => update({ rilles: v })} />
           )}
         </>
       )}
@@ -173,12 +192,33 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         <Slider label="Stars" value={state.starCount} min={0} max={400} step={10} onChange={(v) => update({ starCount: v })} />
       )}
       <Slider label="Atmosphere / corona" value={state.atmosphere} min={0} max={3} step={1} onChange={(v) => update({ atmosphere: v })} />
+      {!isStar && state.atmosphere > 0 && (
+        <div className="control-group">
+          <label className="label-text">Atmosphere style</label>
+          <select value={state.atmosphereStyle} onChange={(e) => update({ atmosphereStyle: e.target.value as PlanetState['atmosphereStyle'] })}>
+            <option value="rings">Glow rings</option>
+            <option value="haze">Broken haze</option>
+          </select>
+        </div>
+      )}
+      {!isStar && (
+        <>
+          <Toggle label="Aurora" checked={state.aurora} onChange={(v) => update({ aurora: v })} />
+          {state.aurora && (
+            <>
+              <Slider label="Aurora latitude" value={state.auroraLatitude} min={55} max={85} step={1} onChange={(v) => update({ auroraLatitude: v })} format={(v) => `${v}°`} />
+              <Slider label="Aurora intensity" value={state.auroraIntensity} min={0} max={1} step={0.05} onChange={(v) => update({ auroraIntensity: v })} format={(v) => v.toFixed(2)} />
+            </>
+          )}
+        </>
+      )}
       <Toggle label="Companion moon" checked={state.moon} onChange={(v) => update({ moon: v })} />
       {state.moon && (
         <>
           <Slider label="Moon distance" value={state.moonDist} min={1.3} max={3} step={0.05} onChange={(v) => update({ moonDist: v })} format={(v) => `${v.toFixed(2)}×`} />
           <Slider label="Moon angle" value={state.moonAngle} min={-180} max={180} step={1} onChange={(v) => update({ moonAngle: v })} format={(v) => `${v}°`} />
           <Slider label="Moon size" value={state.moonRadiusFrac} min={0.1} max={0.6} step={0.02} onChange={(v) => update({ moonRadiusFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Toggle label="Eclipse (moon shadow)" checked={state.eclipse} onChange={(v) => update({ eclipse: v })} />
         </>
       )}
 
@@ -186,6 +226,20 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
       <Toggle label="Graticule (lat/long)" checked={state.graticule} onChange={(v) => update({ graticule: v })} />
       {state.graticule && (
         <Slider label="Graticule spacing" value={state.graticuleSpacingDeg} min={10} max={45} step={5} onChange={(v) => update({ graticuleSpacingDeg: v })} format={(v) => `${v}°`} />
+      )}
+      {!isStar && (
+        <>
+          <Toggle label="Feature labels" checked={state.featureLabels} onChange={(v) => update({ featureLabels: v })} />
+          {state.featureLabels && (
+            <Slider label="Label count" value={state.labelCount} min={2} max={12} step={1} onChange={(v) => update({ labelCount: v })} />
+          )}
+        </>
+      )}
+      {state.layout === 'orbital' && (
+        <>
+          <Toggle label="Orbit labels" checked={state.orbitLabels} onChange={(v) => update({ orbitLabels: v })} />
+          <Toggle label="Asteroid belt" checked={state.asteroidBelt} onChange={(v) => update({ asteroidBelt: v })} />
+        </>
       )}
       <Toggle label="Graduated frame" checked={state.plateFrame} onChange={(v) => update({ plateFrame: v })} />
       <Toggle label="Scale bar" checked={state.scaleBar} onChange={(v) => update({ scaleBar: v })} />
@@ -219,6 +273,9 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
 
       <AdvancedSection>
         <Slider label="Terrain detail (octaves)" value={state.terrainDetail} min={1} max={7} step={1} onChange={(v) => update({ terrainDetail: v })} />
+        <Slider label="Persistence" value={state.persistence} min={0.3} max={0.8} step={0.05} onChange={(v) => update({ persistence: v })} format={(v) => v.toFixed(2)} />
+        <Slider label="Light weight" value={state.lightWeight} min={0} max={1} step={0.05} onChange={(v) => update({ lightWeight: v })} format={(v) => v.toFixed(2)} />
+        <Slider label="Albedo weight" value={state.albedoWeight} min={0} max={1} step={0.05} onChange={(v) => update({ albedoWeight: v })} format={(v) => v.toFixed(2)} />
         <Slider label="Cap raggedness" value={state.capRaggedness} min={0} max={1} step={0.05} onChange={(v) => update({ capRaggedness: v })} format={(v) => v.toFixed(2)} disabled={!state.iceCaps} />
         <Slider label="Ring inner" value={state.ringInner} min={1.05} max={2} step={0.05} onChange={(v) => update({ ringInner: v })} format={(v) => `${v.toFixed(2)}×`} disabled={!state.rings} />
         <Slider label="Ring outer" value={state.ringOuter} min={1.4} max={3} step={0.05} onChange={(v) => update({ ringOuter: v })} format={(v) => `${v.toFixed(2)}×`} disabled={!state.rings} />

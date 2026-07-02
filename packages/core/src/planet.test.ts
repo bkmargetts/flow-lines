@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generatePlanet, type PlanetOptions } from './planet/index.js';
+import { inventName, romanNumeral } from './planet/labels.js';
+import { makeRandom } from './lib/rng.js';
 import type { FlowLine } from './flow-lines.js';
 
 function baseOptions(overrides: Partial<PlanetOptions> = {}): PlanetOptions {
@@ -29,6 +31,12 @@ describe('generatePlanet', () => {
     const c = generatePlanet(baseOptions({ seed: 12 }));
     expect(b.lines).toEqual(a.lines);
     expect(c.lines).not.toEqual(a.lines);
+  });
+
+  it('responds to the noise persistence knob', () => {
+    const a = generatePlanet(baseOptions({ persistence: 0.35 }));
+    const b = generatePlanet(baseOptions({ persistence: 0.7 }));
+    expect(b.lines).not.toEqual(a.lines);
   });
 
   it('produces finite, in-bounds geometry', () => {
@@ -102,6 +110,207 @@ describe('generatePlanet', () => {
     const left2 = count(flipped.lines, (x) => x < center.x - 10);
     const right2 = count(flipped.lines, (x) => x > center.x + 10);
     expect(right2).toBeGreaterThan(left2);
+  });
+
+  it('emits the aurora layer only when toggled, on the front hemisphere', () => {
+    const off = generatePlanet(baseOptions());
+    expect(layer(off.lines, 'aurora')).toHaveLength(0);
+    const on = generatePlanet(baseOptions({ aurora: true }));
+    const marks = layer(on.lines, 'aurora');
+    expect(marks.length).toBeGreaterThan(0);
+    for (const ln of marks) {
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeLessThanOrEqual(R + 1.0);
+      }
+    }
+  });
+
+  it('eclipse darkens the disk under the moon shadow (more hatch), gated to the lit side', () => {
+    const hatchPoints = (lines: FlowLine[]): number =>
+      layer(lines, 'hatch').reduce((n, l) => n + l.points.length, 0);
+    // Moon up-light (moonAngle === lightAngle) so its umbra lands mid-disk at
+    // the sub-light point.
+    const opts: Partial<PlanetOptions> = {
+      planetType: 'barren',
+      lightAngle: 0,
+      lightElevation: 35,
+      moon: true,
+      moonAngle: 0,
+      moonDist: 1.8,
+      moonRadiusFrac: 0.35,
+    };
+    const off = generatePlanet(baseOptions(opts));
+    const on = generatePlanet(baseOptions({ ...opts, eclipse: true }));
+    expect(hatchPoints(on.lines)).toBeGreaterThan(hatchPoints(off.lines));
+    // The hard umbra edge is traced as a bold feature contour.
+    expect(layer(on.lines, 'feature').length).toBeGreaterThan(layer(off.lines, 'feature').length);
+    // With the moon on the anti-light side the eclipse is unphysical: no-op.
+    const behind = generatePlanet(baseOptions({ ...opts, moonAngle: 180 }));
+    const behindEclipse = generatePlanet(baseOptions({ ...opts, moonAngle: 180, eclipse: true }));
+    expect(behindEclipse.lines).toEqual(behind.lines);
+  });
+
+  it('haze atmosphere draws broken arcs outside the disk', () => {
+    const ringsStyle = generatePlanet(baseOptions({ atmosphere: 2 }));
+    const haze = generatePlanet(baseOptions({ atmosphere: 2, atmosphereStyle: 'haze' }));
+    const hazeArcs = layer(haze.lines, 'atmosphere');
+    expect(hazeArcs.length).toBeGreaterThan(layer(ringsStyle.lines, 'atmosphere').length);
+    for (const ln of hazeArcs) {
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeGreaterThan(R);
+      }
+    }
+  });
+
+  it('feature labels emit callouts whose leaders touch their features', () => {
+    const off = generatePlanet(baseOptions({ planetType: 'moon', craters: true }));
+    expect(layer(off.lines, 'callout')).toHaveLength(0);
+    const on = generatePlanet(baseOptions({ planetType: 'moon', craters: true, featureLabels: true }));
+    const callouts = layer(on.lines, 'callout');
+    expect(callouts.length).toBeGreaterThan(0);
+    // Leader lines (2-point strokes) start on the disk and reach outside it.
+    const leaders = callouts.filter(
+      (l) =>
+        l.points.length === 2 &&
+        Math.hypot(l.points[0].x - center.x, l.points[0].y - center.y) < R &&
+        Math.hypot(l.points[1].x - center.x, l.points[1].y - center.y) > R
+    );
+    expect(leaders.length).toBeGreaterThan(0);
+  });
+
+  it('invents deterministic Latin names and roman numerals', () => {
+    const a = inventName(makeRandom(7), 'crater');
+    const b = inventName(makeRandom(7), 'crater');
+    expect(a).toEqual(b);
+    expect(a.length).toBeGreaterThan(2);
+    expect(inventName(makeRandom(7), 'mare').startsWith('MARE ')).toBe(true);
+    expect(inventName(makeRandom(7), 'rille').startsWith('RIMA ')).toBe(true);
+    expect(romanNumeral(4)).toBe('IV');
+    expect(romanNumeral(9)).toBe('IX');
+    expect(romanNumeral(12)).toBe('XII');
+  });
+
+  it('orbital plates can take an asteroid belt and orbit labels', () => {
+    const base = { layout: 'orbital' as const, layoutCount: 5 };
+    const plain = generatePlanet(baseOptions(base));
+    const dressed = generatePlanet(baseOptions({ ...base, asteroidBelt: true, orbitLabels: true }));
+    expect(layer(plain.lines, 'callout')).toHaveLength(0);
+    expect(layer(dressed.lines, 'callout').length).toBeGreaterThan(0);
+    // Belt dashes are short 2-point orbit-layer strokes; the plain plate has none.
+    const dashes = (r: { lines: FlowLine[] }): number =>
+      layer(r.lines, 'orbit').filter((l) => l.points.length === 2).length;
+    expect(dashes(dressed)).toBeGreaterThan(dashes(plain) + 100);
+  });
+
+  it('asteroids have a lumpy but closed silhouette with coherent marks', () => {
+    const r = generatePlanet(baseOptions({ planetType: 'asteroid', craters: true, lumpiness: 0.18 }));
+    const limb = layer(r.lines, 'limb');
+    expect(limb.length).toBeGreaterThan(0);
+    // Longest limb pass: radius varies (lumpy), endpoints still meet (closed).
+    const outer = limb.reduce((a, b) => (b.points.length > a.points.length ? b : a));
+    const radii = outer.points.map((p) => Math.hypot(p.x - center.x, p.y - center.y));
+    expect(Math.max(...radii) - Math.min(...radii)).toBeGreaterThan(R * 0.05);
+    const first = outer.points[0];
+    const last = outer.points[outer.points.length - 1];
+    expect(Math.hypot(first.x - last.x, first.y - last.y)).toBeLessThan(3);
+    // Every mark stays inside the (conservative) warped silhouette.
+    for (const ln of r.lines) {
+      if (ln.layer === 'star') continue;
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeLessThanOrEqual(R * 1.19);
+      }
+    }
+    // Deterministic per seed.
+    const again = generatePlanet(baseOptions({ planetType: 'asteroid', craters: true, lumpiness: 0.18 }));
+    expect(again.lines).toEqual(r.lines);
+  });
+
+  it('comets grow an anti-sunward tail, and only comets do', () => {
+    const comet = generatePlanet(
+      baseOptions({ planetType: 'comet', radiusFrac: 0.2, lightAngle: 0, lightElevation: 20 })
+    );
+    const tail = layer(comet.lines, 'tail');
+    expect(tail.length).toBeGreaterThan(0);
+    // Light from +x ⇒ the tail fans toward -x: its centroid sits left of centre.
+    let sx = 0;
+    let n = 0;
+    for (const ln of tail) {
+      for (const p of ln.points) {
+        sx += p.x;
+        n++;
+      }
+    }
+    expect(sx / n).toBeLessThan(center.x);
+    const rocky = generatePlanet(baseOptions({ planetType: 'barren' }));
+    expect(layer(rocky.lines, 'tail')).toHaveLength(0);
+  });
+
+  it('rivers flow downhill to the sea and stay on the front disk', () => {
+    const opts = { planetType: 'terrestrial' as const, rivers: 6, seed: 5 };
+    const off = generatePlanet(baseOptions({ ...opts, rivers: 0 }));
+    const on = generatePlanet(baseOptions(opts));
+    const extra = layer(on.lines, 'feature').length - layer(off.lines, 'feature').length;
+    expect(extra).toBeGreaterThan(0);
+    for (const ln of layer(on.lines, 'feature')) {
+      for (const p of ln.points) {
+        expect(Math.hypot(p.x - center.x, p.y - center.y)).toBeLessThanOrEqual(R + 1.5);
+      }
+    }
+    // Rivers are a terrestrial mark: a moon with rivers renders identically.
+    const moon = generatePlanet(baseOptions({ planetType: 'moon' }));
+    const moonRivers = generatePlanet(baseOptions({ planetType: 'moon', rivers: 6 }));
+    expect(moonRivers.lines).toEqual(moon.lines);
+  });
+
+  it('rilles emit double-line channels on rocky bodies only', () => {
+    const off = generatePlanet(baseOptions({ planetType: 'moon' }));
+    const on = generatePlanet(baseOptions({ planetType: 'moon', rilles: 4 }));
+    expect(layer(on.lines, 'feature').length).toBeGreaterThan(layer(off.lines, 'feature').length);
+    const terr = generatePlanet(baseOptions({ planetType: 'terrestrial' }));
+    const terrRilles = generatePlanet(baseOptions({ planetType: 'terrestrial', rilles: 4 }));
+    expect(terrRilles.lines).toEqual(terr.lines);
+  });
+
+  it('squashes oblate gas giants: limb wider than tall, marks inside the spheroid', () => {
+    const r = generatePlanet(baseOptions({ planetType: 'gas-giant', bands: true, oblateness: 0.12 }));
+    const ky = 1 - 0.12;
+    const limb = layer(r.lines, 'limb');
+    expect(limb.length).toBeGreaterThan(0);
+    let maxDx = 0;
+    let maxDy = 0;
+    for (const ln of limb) {
+      for (const p of ln.points) {
+        maxDx = Math.max(maxDx, Math.abs(p.x - center.x));
+        maxDy = Math.max(maxDy, Math.abs(p.y - center.y));
+      }
+    }
+    expect(maxDx).toBeGreaterThan(maxDy * 1.05);
+    expect(Math.abs(maxDy - maxDx * ky)).toBeLessThan(2);
+    for (const ln of [...layer(r.lines, 'hatch'), ...layer(r.lines, 'feature')]) {
+      for (const p of ln.points) {
+        const ex = (p.x - center.x) / R;
+        const ey = (p.y - center.y) / (R * ky);
+        expect(ex * ex + ey * ey).toBeLessThanOrEqual(1.02);
+      }
+    }
+    // Sanity: oblateness must not leak onto rocky bodies.
+    const moon = generatePlanet(baseOptions({ planetType: 'moon' }));
+    const moonOblate = generatePlanet(baseOptions({ planetType: 'moon', oblateness: 0.12 }));
+    expect(moonOblate.lines).toEqual(moon.lines);
+  });
+
+  it('hides rings behind an oblate planet (open arcs)', () => {
+    const r = generatePlanet(
+      baseOptions({ planetType: 'ringed', rings: true, bands: true, oblateness: 0.12, radiusFrac: 0.45 })
+    );
+    const ringLines = layer(r.lines, 'ring');
+    expect(ringLines.length).toBeGreaterThan(0);
+    const open = ringLines.some((l) => {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return Math.hypot(a.x - b.x, a.y - b.y) > R * 0.2;
+    });
+    expect(open).toBe(true);
   });
 
   it('occludes rings behind the disk (open arcs, not closed loops)', () => {

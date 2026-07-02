@@ -24,7 +24,7 @@ export function registerPlanet(program: Command) {
     .option('--resolution <number>', 'Render density in px per mm (with --paper)', '3')
     .option('-m, --margin <number>', 'Margin from canvas edges in px (without --paper)', '24')
     .option('-s, --seed <number>', 'Random seed for reproducibility')
-    .option('--type <t>', 'terrestrial | gas-giant | ringed | moon | ice | lava | star | barren', 'terrestrial')
+    .option('--type <t>', 'terrestrial | gas-giant | ringed | moon | ice | lava | star | barren | asteroid | comet', 'terrestrial')
     .option('--radius-frac <number>', 'Disk radius as a fraction of the usable half-frame', '0.7')
     // light
     .option('--light-angle <number>', 'Light azimuth in degrees', '-35')
@@ -34,6 +34,7 @@ export function registerPlanet(program: Command) {
     // surface
     .option('--noise-scale <number>', 'Surface noise frequency', '1.7')
     .option('--octaves <number>', 'Surface noise octaves', '5')
+    .option('--persistence <number>', 'Surface noise persistence (0.3-0.8)', '0.5')
     .option('--contrast <number>', 'Sharpen coastlines / cracks', '1.4')
     .option('--sea-level <number>', 'Terrestrial land/sea threshold (-1..1)', '0')
     .option('--mare-level <number>', 'Lunar dark-plain threshold (-1..1)', '-0.12')
@@ -46,19 +47,35 @@ export function registerPlanet(program: Command) {
     .option('--band-turbulence <number>', 'Band wobble (0-1.2)', '0.5')
     .option('--storms <number>', 'Oval storm spots', '0')
     .option('--storm-size <number>', 'Storm oval scale', '1')
+    .option('--oblateness <number>', 'Equatorial bulge: vertical squash of gas bodies (0-0.15)', '0')
     // ice
     .option('--ice-caps', 'Draw polar ice caps')
     .option('--cap-latitude <number>', 'Latitude where caps begin (deg)', '68')
+    .option('--cap-raggedness <number>', 'Noisy cap edge (0-1)', '0.5')
     // marks
     .option('--hatch-spacing <number>', 'Form-hatch spacing in px', '6')
     .option('--cross-hatch-layers <number>', 'Cross-hatch layers (1-5)', '3')
+    .option('--light-weight <number>', 'Shading weight of lit-ness in tone (0-1)', '0.85')
+    .option('--albedo-weight <number>', 'Shading weight of surface albedo in tone (0-1)', '0.7')
     .option('--stipple <number>', 'Shadow/texture stipple (0-1)', '0')
     .option('--atmosphere <number>', 'Glow rings (corona for stars)', '0')
+    .option('--atmosphere-style <s>', 'Atmosphere marks: rings | haze', 'rings')
+    // phenomena
+    .option('--eclipse', 'Companion moon casts its shadow on the planet (needs --moon)')
+    .option('--aurora', 'Dashed auroral ovals + curtain rays around the poles')
+    .option('--aurora-latitude <number>', 'Latitude of the auroral oval (deg)', '70')
+    .option('--aurora-intensity <number>', 'Aurora dash density / ray count (0-1)', '0.6')
     // relief
     .option('--terminator-emphasis <number>', 'Extra hatch hugging the terminator (0-1)', '0')
     .option('--mountains', 'Chevron hachures on high terrestrial land')
     .option('--clouds', 'Trace soft cloud shapes (terrestrial)')
+    .option('--rivers <number>', 'Drainage lines from high ground to the sea (terrestrial)', '0')
+    .option('--rilles <number>', 'Sinuous double-line channels (moon / barren)', '0')
     .option('--crater-detail', 'Central peaks + ejecta rays on big craters')
+    // small bodies
+    .option('--lumpiness <number>', 'Silhouette irregularity for asteroid/comet (0-0.25)', '0.14')
+    .option('--tail-length <number>', 'Comet tail length in disk radii', '5')
+    .option('--tail-spread <number>', 'Comet tail fan half-spread (deg)', '28')
     // rings
     .option('--rings', 'Draw a tilted ring system')
     .option('--ring-inner <number>', 'Inner ring radius in disk radii', '1.35')
@@ -77,6 +94,10 @@ export function registerPlanet(program: Command) {
     // engraved plate
     .option('--graticule', 'Draw lat/long lines on the globe')
     .option('--graticule-spacing <number>', 'Degrees between graticule lines', '30')
+    .option('--feature-labels', 'Name prominent features with leader lines + engraved text')
+    .option('--label-count <number>', 'Most prominent features to name', '6')
+    .option('--orbit-labels', 'Roman numerals + names beside each orbit (orbital layout)')
+    .option('--asteroid-belt', 'Dash belt between the middle orbits (orbital layout)')
     .option('--plate-frame', 'Graduated neatline just inside the margin')
     .option('--scale-bar', 'Divided scale bar along the bottom')
     .option('--title <text>', 'Engraved plate title')
@@ -117,6 +138,7 @@ export function registerPlanet(program: Command) {
         limbDarkening: parseFloat(options.limbDarkening),
         noiseScale: parseFloat(options.noiseScale),
         octaves: parseInt(options.octaves, 10),
+        persistence: parseFloat(options.persistence),
         contrast: parseFloat(options.contrast),
         seaLevel: parseFloat(options.seaLevel),
         mareLevel: parseFloat(options.mareLevel),
@@ -128,15 +150,26 @@ export function registerPlanet(program: Command) {
         bandTurbulence: parseFloat(options.bandTurbulence),
         storms: parseInt(options.storms, 10),
         stormSize: parseFloat(options.stormSize),
+        oblateness: parseFloat(options.oblateness),
         iceCaps: options.iceCaps ?? false,
         capLatitude: parseFloat(options.capLatitude),
+        capRaggedness: parseFloat(options.capRaggedness),
         hatchSpacing: paperStrokeWidth ? (parseFloat(options.hatchSpacing) * paperStrokeWidth) / parseFloat(options.penWidthMm) : parseFloat(options.hatchSpacing),
         crossHatchLayers: parseInt(options.crossHatchLayers, 10),
+        lightWeight: parseFloat(options.lightWeight),
+        albedoWeight: parseFloat(options.albedoWeight),
         stipple: parseFloat(options.stipple),
         atmosphere: parseInt(options.atmosphere, 10),
+        atmosphereStyle: options.atmosphereStyle as PlanetOptions['atmosphereStyle'],
+        eclipse: options.eclipse ?? false,
+        aurora: options.aurora ?? false,
+        auroraLatitude: parseFloat(options.auroraLatitude),
+        auroraIntensity: parseFloat(options.auroraIntensity),
         terminatorEmphasis: parseFloat(options.terminatorEmphasis),
         mountains: options.mountains ?? false,
         clouds: options.clouds ?? false,
+        rivers: parseInt(options.rivers, 10),
+        rilles: parseInt(options.rilles, 10),
         rings: options.rings ?? false,
         ringInner: parseFloat(options.ringInner),
         ringOuter: parseFloat(options.ringOuter),
@@ -151,8 +184,15 @@ export function registerPlanet(program: Command) {
         craterMinR: parseFloat(options.craterMinR),
         craterMaxR: parseFloat(options.craterMaxR),
         craterDetail: options.craterDetail ?? false,
+        lumpiness: parseFloat(options.lumpiness),
+        tailLength: parseFloat(options.tailLength),
+        tailSpread: parseFloat(options.tailSpread),
         graticule: options.graticule ?? false,
         graticuleSpacingDeg: parseFloat(options.graticuleSpacing),
+        featureLabels: options.featureLabels ?? false,
+        labelCount: parseInt(options.labelCount, 10),
+        orbitLabels: options.orbitLabels ?? false,
+        asteroidBelt: options.asteroidBelt ?? false,
         plateFrame: options.plateFrame ?? false,
         scaleBar: options.scaleBar ?? false,
         title: options.title,

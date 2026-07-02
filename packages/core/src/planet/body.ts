@@ -1,5 +1,5 @@
 import type { Vec3 } from './vec3.js';
-import type { PlanetOptions, PlanetType } from './index.js';
+import type { PlanetOptions, PlanetType } from './types.js';
 
 export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
   radiusFrac: 0.7,
@@ -22,6 +22,7 @@ export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin
   bandTurbulence: 0.5,
   storms: 0,
   stormSize: 1,
+  oblateness: 0,
   iceCaps: false,
   capLatitude: 68,
   capRaggedness: 0.5,
@@ -31,6 +32,15 @@ export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin
   albedoWeight: 0.7,
   stipple: 0,
   atmosphere: 0,
+  atmosphereStyle: 'rings' as const,
+  lumpiness: 0.14,
+  tailLength: 5,
+  tailSpread: 28,
+  eclipse: false,
+  eclipseSoftness: 0.25,
+  aurora: false,
+  auroraLatitude: 70,
+  auroraIntensity: 0.6,
   rings: false,
   ringInner: 1.35,
   ringOuter: 2.2,
@@ -48,8 +58,14 @@ export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin
   terminatorEmphasis: 0,
   mountains: false,
   clouds: false,
+  rivers: 0,
+  rilles: 0,
   graticule: false,
   graticuleSpacingDeg: 30,
+  featureLabels: false,
+  labelCount: 6,
+  orbitLabels: false,
+  asteroidBelt: false,
   plateFrame: false,
   scaleBar: false,
   title: '',
@@ -76,8 +92,14 @@ export interface BodyParams {
   bodySeed: number;
   craters: boolean;
   /** Disks that hide any sample falling inside them (the primary for a moon; the
-   *  star + nearer bodies for the orbital diagram). */
-  occluders?: { cx: number; cy: number; R: number }[];
+   *  star + nearer bodies for the orbital diagram). `ky` squashes the occluding
+   *  disk vertically for oblate bodies (default 1). */
+  occluders?: { cx: number; cy: number; R: number; ky?: number }[];
+  /** Disks that cast their shadow onto this body's surface along the light
+   *  direction — the eclipsing moon. `z` is the caster's depth relative to the
+   *  body centre (a moon floats toward the light so its umbra lands on the
+   *  visible lit face). Only consulted when the `eclipse` option is on. */
+  shadowCasters?: { cx: number; cy: number; R: number; z: number }[];
   /** Per-body light direction; falls back to the scene light when absent (only
    *  phase strips need a different light per body). */
   light?: Vec3;
