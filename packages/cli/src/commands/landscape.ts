@@ -4,10 +4,10 @@ import { resolve } from 'node:path';
 import { generateLandscape, toSVG, type LandscapeOptions, type SVGOptions } from '@flow-lines/core';
 import { LANDSCAPE_PALETTES, LANDSCAPE_SCENES } from '../palettes.js';
 import { resolvePageFrame } from '../page.js';
+import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerLandscape(program: Command) {
-  program
-    .command('landscape')
+  addSketchOptions(program.command('landscape'))
     .description('Generate procedural, plottable pen-and-ink landscapes')
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '630')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '720')
@@ -152,7 +152,7 @@ export function registerLandscape(program: Command) {
         ...paperSvg,
       };
 
-      const svg = toSVG(result, svgOptions);
+      const svg = toSVG(applySketchFromFlags(result, options, sketchScale(options)), svgOptions);
       const outputPath = resolve(process.cwd(), options.output);
       writeFileSync(outputPath, svg, 'utf-8');
       console.log(`\nSaved to: ${outputPath}`);

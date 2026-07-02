@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { BASE_PX_PER_MM, type Orientation, type PaperFit } from '@flow-lines/core';
+import { BASE_PX_PER_MM, type Orientation, type PaperFit, type SketchStyle } from '@flow-lines/core';
 
 /**
  * The page frame is shared by every layer in the stack: the canvas is always a
@@ -42,6 +42,20 @@ export interface FrameSettings {
    * only long parallel duplication.
    */
   densityMinOverlapMm: number;
+
+  // ---- Global hand-sketch finish (applies to every layer, once, at composite) ----
+  /** Off → output untouched. On → the whole sheet is redrawn with a sketch hand. */
+  sketchEnabled: boolean;
+  /** Character of the hand: loose | fine | gestural | scratchy. */
+  sketchStyle: SketchStyle;
+  /** Overall strength 0..1 — drives wobble, jitter and the overdraw pass count. */
+  sketchIntensity: number;
+  /** How far open line ends overshoot their stopping point, 0..1. */
+  sketchOvershoot: number;
+  /** Pen-lift break frequency 0..1 — how often long strokes lift and resume. */
+  sketchBreaks: number;
+  /** Seed for the sketch pass, independent of every layer's own seed. */
+  sketchSeed: number;
 }
 
 export const defaultFrame: FrameSettings = {
@@ -57,6 +71,12 @@ export const defaultFrame: FrameSettings = {
   densityEnabled: false,
   densityMaxPasses: 1,
   densityMinOverlapMm: 2.5,
+  sketchEnabled: false,
+  sketchStyle: 'loose',
+  sketchIntensity: 0.5,
+  sketchOvershoot: 0.35,
+  sketchBreaks: 0.25,
+  sketchSeed: 42,
 };
 
 interface FrameContextValue {

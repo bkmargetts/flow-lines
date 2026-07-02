@@ -14,10 +14,10 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import { loadImage, loadDirectionMap, loadLabelImage } from '../io.js';
+import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerImage(program: Command) {
-  program
-    .command('image')
+  addSketchOptions(program.command('image'))
     .description('Render an image as pen-and-ink style hatching for plotting')
     .requiredOption('-i, --input <file>', 'Input image (PNG or JPEG)')
     .option('-w, --width <number>', 'Output width in pixels', '800')
@@ -270,7 +270,7 @@ export function registerImage(program: Command) {
         );
       }
 
-      const svg = toSVG(result, svgOptions);
+      const svg = toSVG(applySketchFromFlags(result, options, sketchScale(options)), svgOptions);
       const outputPath = resolve(process.cwd(), options.output);
 
       writeFileSync(outputPath, svg, 'utf-8');

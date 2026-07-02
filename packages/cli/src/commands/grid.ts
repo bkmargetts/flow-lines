@@ -2,10 +2,10 @@ import type { Command } from 'commander';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { generateFlowLinesGrid, toSVG, type SVGOptions } from '@flow-lines/core';
+import { addSketchOptions, applySketchFromFlags } from '../sketch.js';
 
 export function registerGrid(program: Command) {
-  program
-    .command('grid')
+  addSketchOptions(program.command('grid'))
     .description('Generate flow lines from a grid of starting points')
     .option('-w, --width <number>', 'Canvas width in pixels', '800')
     .option('-h, --height <number>', 'Canvas height in pixels', '800')
@@ -54,7 +54,7 @@ export function registerGrid(program: Command) {
       console.log(`  Seed: ${result.seed}`);
       console.log(`  Generated ${result.lines.length} lines`);
 
-      const svg = toSVG(result, svgOptions);
+      const svg = toSVG(applySketchFromFlags(result, options), svgOptions);
       const outputPath = resolve(process.cwd(), options.output);
 
       writeFileSync(outputPath, svg, 'utf-8');
