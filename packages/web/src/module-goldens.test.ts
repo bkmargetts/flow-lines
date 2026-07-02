@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { getPaperSize, pageMetrics } from '@flow-lines/core';
 
 import { MODULES } from './modules/registry';
-import type { PureModule, RenderEnv } from './modules/types';
+import type { Module, PureModule, RenderEnv } from './modules/types';
 import { composite, type CompositeLayer } from './lib/composite';
 import { defaultFrame, type FrameSettings } from './FrameContext';
 
@@ -63,7 +63,9 @@ CASES['composite/stack'] = () => {
   const mods = [byId.get('classic')!, byId.get('flow-field')!, byId.get('conway')!];
   const layers: CompositeLayer[] = mods.map((mod, i) => ({
     instanceId: `golden-${i}`,
-    module: mod,
+    // React component props are invariant, so a concretely-typed module needs
+    // the same registry-boundary widening as modules/registry.ts itself.
+    module: mod as Module,
     state: stateFor(mod),
     visible: true,
     holdOffMm: mod.id === 'classic' ? 1.5 : 0,
