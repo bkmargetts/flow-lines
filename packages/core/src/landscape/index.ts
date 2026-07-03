@@ -642,14 +642,24 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   // —— Rocks / islands ——————————————————————————————————————————————————
   if (o.rocks > 0) {
     const placeY = o.hasWater ? lerp(waterTopY, waterBotY, 0.55) : lerp(horizonY, y1, 0.6);
+    // Claimed x-intervals — two rocks drawn on top of each other tangle into
+    // an unreadable knot of crossing contours and mismatched hatch.
+    const claimed: [number, number][] = [];
     for (let i = 0; i < Math.round(o.rocks); i++) {
       const w = o.rockMaxSize * (0.5 + 0.6 * rng());
       const h = w * (0.55 + 0.5 * rng());
-      // Rocks gather toward the focal zone (a few placement retries) and stay
-      // in OPEN water — a rock at the far edge of the band collides with the
-      // shoreline, beach and trees.
+      // Rocks gather toward the focal zone (a few placement retries), stay in
+      // OPEN water (a rock at the band's far edge collides with the shoreline,
+      // beach and trees), and keep clear of each other.
       let cx = lerp(x0 + w, x1 - w, rng());
       for (let att = 0; att < 3 && rng() > focusAccept(cx, placeY); att++) cx = lerp(x0 + w, x1 - w, rng());
+      let clear = false;
+      for (let att = 0; att < 6 && !clear; att++) {
+        clear = claimed.every(([a, b]) => cx + w * 0.75 < a || cx - w * 0.75 > b);
+        if (!clear) cx = lerp(x0 + w, x1 - w, rng());
+      }
+      if (!clear) continue; // no room — fewer rocks beats a tangle
+      claimed.push([cx - w * 0.75, cx + w * 0.75]);
       const baseY = o.hasWater ? waterTopY + (waterBotY - waterTopY) * (0.18 + 0.44 * rng()) : placeY + (rng() - 0.5) * usableH * 0.12;
       const shape = rockShape(cx, baseY, w, h, rng);
       const poly = closeRegion(shape, [
@@ -685,19 +695,24 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       // inside a tiny polygon only lands a mark or two, leaving an empty
       // outline tent perched on the water.
       const small = w < 30 || h < 22;
-      const rockAngle = small ? 0 : flankDeg + 90;
+      // ONE stroke system per rock at readable sizes: a mid rock carrying
+      // flank hatch + seat rows + fractures at the same pen weight collapses
+      // into an incoherent tangle at viewing scale. The hatch angle is also
+      // clamped steep so strokes CROSS both contours instead of hugging one.
+      const big = w >= 60;
+      const rockAngle = small ? 0 : Math.max(55, Math.min(125, flankDeg + 90));
       sweepHatch(lines, poly, rockAngle, o.rockHatchSpacing * (small ? 0.5 : 0.75), rockTone, () => true, 'rock', rockCraft, undefined, Math.max(16, h * 0.8));
-      if (w > o.rockMaxSize * 0.75) {
-        sweepHatch(lines, poly, flankDeg + 60, o.rockHatchSpacing * 1.3, rockTone, (xx, yy, t) => t > 0.7, 'rock', rockCraft, undefined, Math.max(8, h * 0.45));
-      }
-      // Waterline shadow: a few dark horizontal rows across the base seat the
-      // rock in the water instead of leaving it perched on its outline.
-      if (o.hasWater) {
-        sweepHatch(lines, poly, 0, o.rockHatchSpacing * 1.05, () => 0.85, (xx, yy) => yy > baseY - h * 0.3, 'rock', rockCraft, undefined, Math.max(8, w * 0.5));
+      if (big) {
+        sweepHatch(lines, poly, rockAngle - 30, o.rockHatchSpacing * 1.3, rockTone, (xx, yy, t) => t > 0.7, 'rock', rockCraft, undefined, Math.max(8, h * 0.45));
+        // Waterline shadow rows seat a big rock; on small ones they read as
+        // water crossing the mass.
+        if (o.hasWater) {
+          sweepHatch(lines, poly, 0, o.rockHatchSpacing * 1.05, () => 0.85, (xx, yy) => yy > baseY - h * 0.25, 'rock', rockCraft, undefined, Math.max(8, w * 0.5));
+        }
       }
       // A curved fracture stroke or two toward the base — genuinely large
       // rocks only (on anything smaller they read as collapsing easel legs).
-      const fractures = h > 26 && w > 52 ? 1 + (rng() < 0.5 ? 1 : 0) : 0;
+      const fractures = big && h > 30 ? 1 + (rng() < 0.5 ? 1 : 0) : 0;
       for (let fr = 0; fr < fractures; fr++) {
         const fx0 = apex.x + (rng() - 0.5) * w * 0.2;
         const fy0 = apex.y + h * (0.1 + 0.15 * rng());
