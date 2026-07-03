@@ -519,11 +519,14 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const cx = lerp(x0 + usableW * 0.12, x1 - usableW * 0.12, (i + 0.5) / count) + (rng() - 0.5) * usableW * 0.1;
       const halfW = usableW * (0.16 + 0.12 * rng() + 0.08 * f);
       const height = usableH * (0.04 + 0.07 * f) * (0.8 + 0.5 * rng());
-      // The base always sits IN the water — a far headland based above the
-      // horizon line hovers over the sea instead of rising out of it.
-      const baseY = horizonY + (waterBotY - horizonY) * lerp(0.015, 0.05, f);
       const hx0 = Math.max(x0, cx - halfW);
       const hx1 = Math.min(x1, cx + halfW);
+      // The base must sit IN the water along the headland's WHOLE span — the
+      // horizon is a wavy profile, and clearing only the scalar horizonY left
+      // the base hovering wherever the line dips (severe at high wobble).
+      let horizonDip = horizonY;
+      for (let hx = hx0; hx <= hx1; hx += profStep) horizonDip = Math.max(horizonDip, sampleProfileY(horizon, hx));
+      const baseY = horizonDip + (waterBotY - horizonY) * lerp(0.015, 0.045, f);
       const profile: Point[] = [];
       const segs = Math.max(8, Math.round((hx1 - hx0) / profStep));
       for (let s = 0; s <= segs; s++) {
@@ -543,6 +546,10 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const tone = ridgeTone(0.3 + 0.4 * f);
       const craft: Craft = { rng, taper: o.taper, jitter: 2 * DEG, subStep: 10 };
       sweepHatch(lines, poly, 78, o.ridgeHatchSpacing * lerp(1.7, 1.1, f), tone, () => true, 'headland', craft, undefined, usableH * 0.08);
+      // Waterline shadow: dark horizontal rows across the base cover the
+      // stroke-taper fringe and weld the mass to the water.
+      const seatTop = baseY - Math.min(10, height * 0.25);
+      sweepHatch(lines, poly, 0, o.ridgeHatchSpacing * 1.05, () => 0.85, (xx, yy) => yy > seatTop, 'headland', craft, undefined, usableW * 0.08);
       emitContour(lines, profile, 'headland', o.penWidth, f < 0.5 ? 1 : 2);
       const apex = profile.reduce((a, b) => (b.y < a.y ? b : a), profile[0]);
       reflectors.push({ x: apex.x, top: Math.max(waterTopY, baseY), height: (baseY - apex.y) * 0.9, half: halfW * 0.4 });
