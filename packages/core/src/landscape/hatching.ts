@@ -250,7 +250,8 @@ const COMB_MAX_TILT = 35 * DEG;
 
 export interface CombShade {
   mist?: number; // 0..1 — fade hatch out before the band base (lost-and-found)
-  fadeNoise?: SimplexNoise; // raggedises the fade edge so it never reads as a line
+  fadeNoise?: SimplexNoise; // the anchor field: where mist sits vs where the ridge connects
+  fadeRow?: number; // noise row for this band, so bands don't share mist banks
   shadeSlope?: number; // 0..1 — darken away-facing flanks, lighten lit ones
   lightX?: number; // -1 | 1 — horizontal light direction (from the sun side)
 }
@@ -312,10 +313,17 @@ function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: 
       const a = Math.max(0, best[0]) + craft.rng() * Math.min(4, (best[1] - best[0]) * 0.15);
       const b = best[1];
       const Hb = b - a;
-      let depth = Hb * Math.max(0, Math.min(1, depthBase * (0.55 + 0.9 * tv)));
+      // Anchored mist fade: a low-frequency field along x decides where the
+      // mist bank sits. Where it clears (roughly a third of the range) the
+      // hatch is boosted to FULL depth so the ridge connects down into the
+      // next crest — a constant-fraction fade left a full-width white channel
+      // above every crest, and the ridges read as floating shelves.
+      const anchor = shade.fadeNoise ? 0.5 + 0.5 * shade.fadeNoise.fbm(x * 0.008, shade.fadeRow ?? 7.7, 2, 0.5, 2, 1) : 0.5;
+      let dFrac = depthBase * (0.55 + 0.9 * tv);
+      dFrac += mistK * 1.1 * Math.pow(Math.max(0, (anchor - 0.55) / 0.45), 1.3);
+      let depth = Hb * Math.max(0, Math.min(1, dFrac));
       const reachAmp = lerp(0.1, 0.4, mistK);
       depth *= 1 - reachAmp + 2 * reachAmp * craft.rng();
-      if (shade.fadeNoise && depth < Hb) depth *= 1 + 0.25 * shade.fadeNoise.noise2D(x * 0.015, 3.3);
       const b2 = a + Math.min(Hb, depth);
       if (b2 - a > 1.5) emitHatchRun(out, { x: O.x + dir.x * a, y: O.y + dir.y * a }, { x: O.x + dir.x * b2, y: O.y + dir.y * b2 }, layer, craft, maxLen);
     }

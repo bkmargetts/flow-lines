@@ -212,29 +212,6 @@ function makeProfile(
   return pts;
 }
 
-/** Break a silhouette into 2–4 pieces separated by small gaps — a contour
- *  emerging from mist is drawn lost-and-found, not as one continuous line. */
-function breakProfile(profile: Point[], rng: () => number): Point[][] {
-  const m = profile.length;
-  if (m < 12) return [profile];
-  const gaps = 1 + Math.floor(rng() * 2);
-  const cuts: [number, number][] = [];
-  for (let g = 0; g < gaps; g++) {
-    const c = Math.floor(m * (0.2 + 0.6 * rng()));
-    const half = Math.max(2, Math.floor(m * (0.03 + 0.05 * rng())));
-    cuts.push([c - half, c + half]);
-  }
-  cuts.sort((a, b) => a[0] - b[0]);
-  const out: Point[][] = [];
-  let start = 0;
-  for (const [lo, hi] of cuts) {
-    if (lo - start > 1) out.push(profile.slice(start, lo));
-    start = Math.max(start, hi);
-  }
-  if (m - start > 1) out.push(profile.slice(start));
-  return out.filter((p) => p.length > 1);
-}
-
 /** Push a closed blob outward from its centroid by ~`px` — occlusion polys are
  *  inflated a hair so the hand-drawn wobble (applied after occlusion) can't
  *  bend background strokes back across a mass's contour. */
@@ -341,6 +318,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     formFollow: boolean;
     crossHatch: number;
     mist?: number; // 0..1 — this band's share of the depth haze
+    fadeRow?: number; // noise row for this band's mist banks
     maxLenFrac?: number; // stroke length cap as a fraction of usableH
   }
   const bands: Band[] = [];
@@ -461,18 +439,35 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         // scratches; only the near ridges have earned cross-hatch darks.
         crossHatch: f > 0.55 ? o.crossHatch : 0,
         mist,
+        fadeRow: 7.7 + k * 3.1,
         maxLenFrac: lerp(0.09, 0.18, f),
       });
       // Contour only where the crest clears the nearer envelope. Far ridges fade
-      // to a single light pass (lost-and-found edges), broken up when the haze
-      // is heavy — a silhouette emerging from mist is drawn in pieces.
+      // to a single light pass, and under heavy haze the crest line vanishes
+      // exactly where the band ABOVE it faded high — mist eats the hatch and
+      // the contour together, so a gap never gets a firm dark bottom edge (the
+      // "floating shelf" tell).
       const passes = f < 0.4 ? 1 : f < 0.75 ? 2 : 3;
       const breakUp = o.atmosphere > 0.5 && f < 0.5;
+      const mistRow = 7.7 + (k - 1) * 3.1;
+      const filterMist = (profile: Point[]): Point[][] => {
+        const pieces: Point[][] = [];
+        let piece: Point[] = [];
+        for (const pt of profile) {
+          if (0.5 + 0.5 * patchNoise.fbm(pt.x * 0.008, mistRow, 2, 0.5, 2, 1) > 0.42) piece.push(pt);
+          else {
+            if (piece.length >= 8) pieces.push(piece);
+            piece = [];
+          }
+        }
+        if (piece.length >= 8) pieces.push(piece);
+        return pieces;
+      };
       let run: Point[] = [];
       const flush = (): void => {
         if (run.length > 1) {
           const layer = k === 0 ? 'horizon' : 'contour';
-          if (breakUp) for (const piece of breakProfile(run, rng)) contours.push({ profile: piece, layer, passes });
+          if (breakUp) for (const piece of filterMist(run)) contours.push({ profile: piece, layer, passes });
           else contours.push({ profile: run, layer, passes });
         }
         run = [];
@@ -508,7 +503,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         patchiness: o.hatchPatchiness,
         patchNoise,
         maxLen: usableH * (band.maxLenFrac ?? 0.05),
-        shade: { mist: band.mist ?? 0, fadeNoise: patchNoise, shadeSlope: o.toneContrast * 0.8, lightX },
+        shade: { mist: band.mist ?? 0, fadeNoise: patchNoise, fadeRow: band.fadeRow, shadeSlope: o.toneContrast * 0.8, lightX },
       });
     }
   }
