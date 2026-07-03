@@ -21,6 +21,8 @@ export interface TreeParams {
   style: TreeStyle;
   lightX: number; // -1 | 1 — shade arcs go on the away side
   rng: () => number;
+  /** Optional 0..1 acceptance weight — cluster centres retry toward high spots. */
+  weight?: (x: number, y: number) => number;
 }
 
 interface TreeInstance {
@@ -147,7 +149,13 @@ export function drawTrees(out: FlowLine[], p: TreeParams): void {
   for (let c = 0; c < clusterCount; c++) {
     const kind: Exclude<TreeStyle, 'mixed'> =
       p.style !== 'mixed' ? p.style : p.rng() < 0.45 ? 'round' : p.rng() < 0.64 ? 'conifer' : 'scrub';
-    clusters.push({ x: lerp(x0 + p.usableW * 0.08, x1 - p.usableW * 0.08, p.rng()), kind });
+    let cx = lerp(x0 + p.usableW * 0.08, x1 - p.usableW * 0.08, p.rng());
+    if (p.weight) {
+      for (let att = 0; att < 3 && p.rng() > p.weight(cx, sampleProfileY(p.crest, cx)); att++) {
+        cx = lerp(x0 + p.usableW * 0.08, x1 - p.usableW * 0.08, p.rng());
+      }
+    }
+    clusters.push({ x: cx, kind });
   }
   const trees: TreeInstance[] = [];
   for (let i = 0; i < p.count; i++) {

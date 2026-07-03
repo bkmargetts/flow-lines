@@ -36,9 +36,22 @@ export const LANDSCAPE_PALETTES: Record<string, Record<string, string>> = {
 
 // Scene presets for the landscape command (a subset of each preset's character).
 export const LANDSCAPE_SCENES: Record<string, Partial<LandscapeOptions> & { palette?: string }> = {
-  'coastal-sunset': { hasWater: true, waterFrac: 0.6, horizonFrac: 0.44, sun: true, sunRays: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.5, foregroundSide: 'left', clouds: 0.35, birds: 5, rocks: 3, palette: 'sunset' },
-  'misty-ranges': { hasWater: false, horizonFrac: 0.3, sun: false, ridgeCount: 6, ridgeAmp: 46, ridgePersistence: 0.45, formFollow: true, toneContrast: 0.6, crossHatch: 1, birds: 3, palette: 'graphite' },
-  'rolling-hills': { hasWater: false, horizonFrac: 0.4, sun: true, ridgeCount: 4, ridgeAmp: 32, ridgeFreq: 1.6, formFollow: true, clouds: 0.32, trees: 6, palette: 'ink' },
-  'desert-dunes': { hasWater: false, horizonFrac: 0.36, sun: true, ridgeCount: 5, ridgeAmp: 26, ridgeFreq: 1.1, ridgePersistence: 0.6, formFollow: true, slopeFollow: true, crossHatch: 0, toneContrast: 0.55, palette: 'sanguine' },
-  'alpine-lake': { hasWater: true, waterFrac: 0.5, horizonFrac: 0.5, horizonWobble: 22, horizonFreq: 3.2, sun: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.35, foregroundSide: 'right', clouds: 0.35, rocks: 2, palette: 'cyanotype' },
+  // Each scene commits to a tonal plan: what stays paper, what goes dark,
+  // where the eye lands.
+  // coastal-sunset: paper = sun + mid-water; dark = foreground repoussoir;
+  // the focal glitter column hangs under the sun.
+  'coastal-sunset': { hasWater: true, waterFrac: 0.6, horizonFrac: 0.44, sun: true, sunRays: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.45, foregroundSide: 'left', focus: 0.55, clouds: 0.28, birds: 3, rocks: 2, skyToneTop: 0.18, skyToneHorizon: 0.6, atmosphere: 0.45, palette: 'sunset' },
+  // misty-ranges: paper = sky + mist gaps; far ridges whisper; dark = the
+  // nearest crest zone.
+  'misty-ranges': { hasWater: false, horizonFrac: 0.3, sun: false, ridgeCount: 5, ridgeAmp: 46, ridgePersistence: 0.45, ridgeSharpness: 0.55, formFollow: true, toneContrast: 0.6, crossHatch: 1, atmosphere: 0.85, focus: 0.3, trees: 5, treeStyle: 'conifer', birds: 2, skyToneTop: 0.08, skyToneHorizon: 0.28, palette: 'graphite' },
+  // rolling-hills: dark = tree clusters + near shadow flanks under big paper
+  // cloud masses.
+  'rolling-hills': { hasWater: false, horizonFrac: 0.4, sun: true, ridgeCount: 3, ridgeAmp: 36, ridgeFreq: 1.6, ridgeSharpness: 0.15, formFollow: true, clouds: 0.3, trees: 8, treeStyle: 'mixed', atmosphere: 0.35, focus: 0.45, skyToneTop: 0.2, skyToneHorizon: 0.42, palette: 'ink' },
+  // desert-dunes: slope shading carries everything — lit faces open to paper,
+  // slip-faces darken; near-paper sky with a clean sun. Straight low-angle
+  // strata hatch instead of the vertical comb.
+  'desert-dunes': { hasWater: false, horizonFrac: 0.36, sun: true, sunHalo: 0.9, ridgeCount: 5, ridgeAmp: 26, ridgeFreq: 1.1, ridgePersistence: 0.6, ridgeSharpness: 0.1, formFollow: false, ridgeHatchAngle: 8, slopeFollow: true, crossHatch: 0, toneContrast: 0.7, atmosphere: 0.3, focus: 0.4, trees: 2, treeStyle: 'scrub', skyToneTop: 0.12, skyToneHorizon: 0.4, palette: 'sanguine' },
+  // alpine-lake: jagged peaks over open mid-lake paper; dark = foreground +
+  // shore conifers.
+  'alpine-lake': { hasWater: true, waterFrac: 0.5, horizonFrac: 0.5, horizonWobble: 22, horizonFreq: 3.2, sun: true, reflection: true, formFollow: true, headlands: 3, foreground: 0.35, foregroundSide: 'right', focus: 0.45, clouds: 0.3, rocks: 2, trees: 6, treeStyle: 'conifer', ridgeSharpness: 0.7, atmosphere: 0.55, skyToneTop: 0.3, skyToneHorizon: 0.5, palette: 'cyanotype' },
 };

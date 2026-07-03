@@ -290,9 +290,10 @@ function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: 
       tv *= lerp(1 + 0.4 * shade.shadeSlope, 1 - 0.6 * shade.shadeSlope, lit);
     }
     // Tone also carries density beyond spacing: genuinely light passages hold
-    // clean paper, and pale ones lose whole strokes — a pale ridge is a broken
-    // patch, not a thin regular fringe of floating ticks.
-    if (best && tv >= 0.25 + 0.05 * craft.rng() && craft.rng() < 0.35 + tv) {
+    // clean paper, and pale ones lose most strokes — the survivors gather in
+    // the noise-dark patches instead of dripping evenly off the contour.
+    const keep = tv >= 0.6 ? 1 : Math.max(0, (tv - 0.2) * 2.2);
+    if (best && craft.rng() < keep) {
       const a = Math.max(0, best[0]) + craft.rng() * Math.min(4, (best[1] - best[0]) * 0.15);
       const b = best[1];
       const Hb = b - a;

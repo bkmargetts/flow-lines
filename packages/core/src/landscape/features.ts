@@ -13,13 +13,15 @@ export function closeRegion(upper: Point[], lower: Point[]): Point[] {
  *  5-point version stamped identical tents across the water. */
 export function rockShape(cx: number, baseY: number, w: number, h: number, rng: () => number): Point[] {
   const left = cx - w / 2;
+  const small = w < 30; // distant skerry: a low simple dome, not a jumble
+  if (small) h *= 0.65;
   const tStar = 0.3 + 0.4 * rng(); // dominant apex position
-  const twin = rng() < 0.35;
+  const twin = !small && rng() < 0.35;
   const t2 = tStar < 0.5 ? 0.68 + 0.2 * rng() : 0.12 + 0.2 * rng();
   const twinH = 0.3 + 0.25 * rng();
   // Vertex count and jitter scale with size — a small rock with many jittered
   // vertices folds into an unreadable spiky scribble.
-  const n = Math.max(4, Math.min(9, 3 + Math.floor(w / 12)));
+  const n = small ? 4 : Math.max(5, Math.min(9, 3 + Math.floor(w / 12)));
   const pts: Point[] = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n;

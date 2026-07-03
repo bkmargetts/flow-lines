@@ -23,6 +23,8 @@ import { closeRegion, rockShape, subtractPolygon, occludeBehind } from './featur
 import { drawSky } from './sky.js';
 import { drawTrees, drawBirds, type TreeStyle } from './flora.js';
 
+export type { TreeStyle } from './flora.js';
+
 /**
  * Procedural landscapes drawn as plottable pen-and-ink. The goal is work that
  * reads as *drawn by hand*, not three stacked texture swatches: tonal value
@@ -94,6 +96,8 @@ export interface LandscapeOptions {
   headlands?: number; // overlapping receding land fingers near the horizon
   foreground?: number; // 0..1 size of a dark foreground landform (0 = off)
   foregroundSide?: ForegroundSide;
+  focus?: number; // 0..1 focal hierarchy: darks/detail gather near a focal point
+  focusX?: number; // px focal column (defaults to the sun, else right-third)
 
   // Hatch craft
   toneContrast?: number; // 0..1 strength of the light/shadow modulation
@@ -119,7 +123,7 @@ export interface LandscapeOptions {
   sketchStyle?: SketchStyle;
 }
 
-const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 'seed' | 'sunX' | 'sunY'>> = {
+const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 'seed' | 'sunX' | 'sunY' | 'focusX'>> = {
   horizonFrac: 0.46,
   horizonWobble: 6,
   horizonFreq: 2.2,
@@ -152,6 +156,7 @@ const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 
   headlands: 0,
   foreground: 0,
   foregroundSide: 'left',
+  focus: 0.35,
   toneContrast: 0.5,
   crossHatch: 1,
   hatchPatchiness: 0.5,
@@ -333,11 +338,32 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   // Horizontal light direction for slope shading (from the sun's side).
   const lightX = sunX >= x0 + usableW / 2 ? 1 : -1;
 
+  // Focal hierarchy: a gaussian weight centred on the focal point scales the
+  // land tones — darks and detail gather near the focus, the frame edges
+  // lighten and loosen. Every scene gets one place the eye lands instead of
+  // an even mid-grey field.
+  const focusX = options.focusX ?? (sunActive ? sunX : x0 + 0.62 * usableW);
+  const focusY = horizonY;
+  const sigX = 0.3 * usableW;
+  const sigY = 0.45 * usableH;
+  const focusW = (x: number, y: number): number => {
+    const dx = (x - focusX) / sigX;
+    const dy = (y - focusY) / sigY;
+    return Math.exp(-(dx * dx + dy * dy) / 2);
+  };
+  const withFocus = (tone: ToneFn, strength = 1): ToneFn => {
+    const k = clamp01(o.focus) * strength;
+    if (k <= 0.01) return tone;
+    return (x, y) => clamp01(tone(x, y) * lerp(1 - 0.45 * k, 1 + 0.3 * k, focusW(x, y)));
+  };
+  // Detail placement keeps roughly this acceptance probability off-focus.
+  const focusAccept = (x: number, y: number): number => lerp(1 - 0.7 * clamp01(o.focus), 1, focusW(x, y));
+
   const ridgeTone = (f: number, mist = 0): ToneFn => {
     const base = lerp(0.3, 0.95, Math.pow(f, 1.15)) * lerp(1, 0.45, mist);
     const fx = 2.6 / usableW;
     const fy = 2.6 / usableH;
-    return (x, y) => clamp01(base + o.toneContrast * 0.42 * toneNoise.fbm(x * fx, y * fy + f * 3, 2, 0.5, 2, 1));
+    return withFocus((x, y) => clamp01(base + o.toneContrast * 0.42 * toneNoise.fbm(x * fx, y * fy + f * 3, 2, 0.5, 2, 1)));
   };
 
   // Deferred ground-plane call (the beach hatches after the water band so the
@@ -358,12 +384,12 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const fh = clamp01((y - waterTopY) / Math.max(1, waterBotY - waterTopY));
       return clamp01(0.18 + 0.75 * Math.exp(-fh * 5.5) + 0.35 * ss((fh - 0.82) / 0.18) + 0.06 * toneNoise.noise2D(x * 0.012, y * 0.05));
     };
-    bands.push({ upper: horizon, lower: shoreline, tone: waterTone, baseSpacing: o.waterHatchSpacing, angleDeg: 0, layer: 'water', formFollow: false, crossHatch: 0 });
+    bands.push({ upper: horizon, lower: shoreline, tone: withFocus(waterTone, 0.5), baseSpacing: o.waterHatchSpacing, angleDeg: 0, layer: 'water', formFollow: false, crossHatch: 0 });
     if (waterBotY < y1 - 4) {
       // A calm, light near-shore ground plane — the dark accent is the optional
       // foreground landform, so this stays a quiet beach rather than a second
       // heavy mass competing with it.
-      const beachTone: ToneFn = (x, y) => clamp01(0.48 + o.toneContrast * 0.3 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
+      const beachTone: ToneFn = withFocus((x, y) => clamp01(0.48 + o.toneContrast * 0.3 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1)));
       const beachCraft: Craft = { rng, taper: o.taper, jitter: 1.2 * DEG, subStep: 10 };
       beach = () => hatchGround(lines, shoreline, y1, beachTone, o.ridgeHatchSpacing * 1.2, 'ridge', beachCraft, toneNoise);
       contours.push({ profile: shoreline, layer: 'contour', passes: 3 });
@@ -536,11 +562,11 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     skyOccluders.push(poly);
     // Light top rim (paper picks out the edge) grounding to a dark base.
     const ridgeYAt = (x: number): number => sampleProfileY(ordered, x);
-    const fgTone: ToneFn = (x, y) => {
+    const fgTone: ToneFn = withFocus((x, y) => {
       const rY = ridgeYAt(x);
       const depth = clamp01((y - rY) / Math.max(8, y1 - rY));
       return clamp01(0.55 + 0.35 * depth + 0.15 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
-    };
+    });
     // Patch-built form shading: vertical strips, each hatched at its own
     // slope-derived angle — one continuous fixed-angle cross-hatch read as a
     // wire-mesh net over the whole mass.
@@ -593,7 +619,9 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     for (let i = 0; i < Math.round(o.rocks); i++) {
       const w = o.rockMaxSize * (0.5 + 0.6 * rng());
       const h = w * (0.55 + 0.5 * rng());
-      const cx = lerp(x0 + w, x1 - w, rng());
+      // Rocks gather toward the focal zone (a few placement retries).
+      let cx = lerp(x0 + w, x1 - w, rng());
+      for (let att = 0; att < 3 && rng() > focusAccept(cx, placeY); att++) cx = lerp(x0 + w, x1 - w, rng());
       const baseY = placeY + (rng() - 0.5) * (o.hasWater ? (waterBotY - waterTopY) * 0.5 : usableH * 0.12);
       const shape = rockShape(cx, baseY, w, h, rng);
       const poly = closeRegion(shape, [
@@ -609,10 +637,15 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const shadowEnd = lightFromLeft ? shape[shape.length - 1] : shape[0];
       const flankSlope = (shadowEnd.y - apex.y) / (shadowEnd.x - apex.x || 1);
       const flankDeg = Math.atan(flankSlope) / DEG;
-      const rockTone: ToneFn = (x, y) => {
-        const side = lightFromLeft ? clamp01((x - apex.x) / Math.max(4, Math.abs(shadowEnd.x - apex.x))) : clamp01((apex.x - x) / Math.max(4, Math.abs(apex.x - shadowEnd.x)));
-        return clamp01(0.3 + 0.65 * Math.pow(side, 0.8) + 0.12 * toneNoise.noise2D(x * 0.05, y * 0.05));
-      };
+      // Distant skerries read as one dark lump; only rocks with real size get
+      // the lit-side/shadow-side split.
+      const rockTone: ToneFn =
+        w < 30
+          ? () => 0.85
+          : (x, y) => {
+              const side = lightFromLeft ? clamp01((x - apex.x) / Math.max(4, Math.abs(shadowEnd.x - apex.x))) : clamp01((apex.x - x) / Math.max(4, Math.abs(apex.x - shadowEnd.x)));
+              return clamp01(0.3 + 0.65 * Math.pow(side, 0.8) + 0.12 * toneNoise.noise2D(x * 0.05, y * 0.05));
+            };
       const rockCraft: Craft = { rng, taper: o.taper * 0.7, jitter: 2.5 * DEG, subStep: 10 };
       // Small rocks take a plain steep hatch — a flank-parallel angle inside a
       // tiny polygon leaves a few long marks that read as scaffolding.
@@ -732,7 +765,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
 
   // —— Trees / foliage clumps along the nearest land crest ——————————————
   if (o.trees > 0) {
-    drawTrees(detail, { crest: treeCrest, count: Math.round(o.trees), usableW, style: o.treeStyle, lightX, rng });
+    drawTrees(detail, { crest: treeCrest, count: Math.round(o.trees), usableW, style: o.treeStyle, lightX, rng, weight: focusAccept });
   }
 
   // Occlude the after-mass detail (cloud outlines, sun rays, birds, trees) by the

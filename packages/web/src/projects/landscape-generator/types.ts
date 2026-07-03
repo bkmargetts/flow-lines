@@ -1,4 +1,4 @@
-import type { ForegroundSide, SketchStyle } from '@flow-lines/core';
+import type { ForegroundSide, SketchStyle, TreeStyle } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /**
@@ -49,11 +49,14 @@ export interface LandscapeState {
   ridgeHatchAngle: number; // degrees from horizontal
   slopeFollow: boolean;
   formFollow: boolean;
+  ridgeSharpness: number; // 0..1 rolling swell → peaked, skewed summits
+  atmosphere: number; // 0..1 depth haze / mist fade
 
   // Compositional depth
   headlands: number; // overlapping receding land fingers near the horizon
   foreground: number; // 0..1 size of a dark foreground landform (0 = off)
   foregroundSide: ForegroundSide;
+  focus: number; // 0..1 focal hierarchy strength
 
   // Hatch craft
   toneContrast: number; // 0..1
@@ -64,6 +67,7 @@ export interface LandscapeState {
   // Detail marks
   clouds: number; // 0..1 carved-cloud coverage
   trees: number; // count
+  treeStyle: TreeStyle; // mixed | round | conifer | scrub
   birds: number; // count
 
   // Rocks / islands
@@ -98,8 +102,8 @@ export const defaultLandscapeState: LandscapeState = {
   waterFrac: 0.6,
 
   skyHatchSpacingMm: 2,
-  skyToneTop: 1,
-  skyToneHorizon: 1,
+  skyToneTop: 0.32,
+  skyToneHorizon: 0.58,
 
   sun: true,
   sunXFrac: 0.52,
@@ -124,10 +128,13 @@ export const defaultLandscapeState: LandscapeState = {
   ridgeHatchAngle: 80,
   slopeFollow: false,
   formFollow: true,
+  ridgeSharpness: 0.3,
+  atmosphere: 0.4,
 
   headlands: 0,
   foreground: 0,
   foregroundSide: 'left',
+  focus: 0.35,
 
   toneContrast: 0.5,
   crossHatch: 1,
@@ -136,6 +143,7 @@ export const defaultLandscapeState: LandscapeState = {
 
   clouds: 0,
   trees: 0,
+  treeStyle: 'mixed',
   birds: 0,
 
   rocks: 3,
