@@ -50,6 +50,8 @@ export function registerLandscape(program: Command) {
     .option('--ridge-angle <number>', 'Straight-hatch angle in degrees (when not form-following; default 80)')
     .option('--no-form-follow', 'Straight hatch instead of cross-contour comb')
     .option('--slope-follow', 'Tilt straight ridge hatch toward its descent')
+    .option('--ridge-sharpness <number>', 'Rolling swell → peaked, skewed summits 0..1 (default 0.3)')
+    .option('--atmosphere <number>', 'Depth haze: far ridges lighter, hatch fades to mist 0..1 (default 0.4)')
     // compositional depth
     .option('--headlands <number>', 'Overlapping receding headlands on water (default per --scene)')
     .option('--foreground <number>', 'Dark foreground landform size 0..1 (default 0)')
@@ -116,6 +118,8 @@ export function registerLandscape(program: Command) {
         ridgeHatchAngle: num('ridgeAngle', scene?.ridgeHatchAngle ?? 80),
         slopeFollow: options.slopeFollow ?? scene?.slopeFollow ?? false,
         formFollow: scene ? (scene.formFollow ?? true) && options.formFollow : options.formFollow,
+        ridgeSharpness: num('ridgeSharpness', scene?.ridgeSharpness ?? 0.3),
+        atmosphere: num('atmosphere', scene?.atmosphere ?? 0.4),
         headlands: Math.round(num('headlands', scene?.headlands ?? 0)),
         foreground: num('foreground', scene?.foreground ?? 0),
         foregroundSide: (options.foregroundSide ?? scene?.foregroundSide ?? 'left') as LandscapeOptions['foregroundSide'],

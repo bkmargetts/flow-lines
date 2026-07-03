@@ -2,8 +2,6 @@ import { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
 import { createNoise, SimplexNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { getSketchStyleConfig, type SketchStyle } from '../sketch-styles.js';
-import { traceIsoContours } from '../iso-contours.js';
-import type { GrayscaleImage } from '../image.js';
 import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
 import { trimPolyline, offsetPolyline, clipSegmentToRect, pointInPolygon } from '../lib/polyline.js';
 import { lerp, clamp01 } from '../lib/math.js';
@@ -17,11 +15,11 @@ import {
   type Craft,
   type ToneFn,
   type BreakFn,
-  emitStroke,
   sweepHatch,
   hatchLand,
 } from './hatching.js';
 import { closeRegion, rockShape, subtractPolygon, occludeBehind, drawTrees } from './features.js';
+import { drawSky } from './sky.js';
 
 /**
  * Procedural landscapes drawn as plottable pen-and-ink. The goal is work that
@@ -58,8 +56,8 @@ export interface LandscapeOptions {
 
   // Sky
   skyHatchSpacing?: number; // px between vertical sky lines (darkest)
-  skyToneTop?: number; // 0..1 tone at the top of the sky
-  skyToneHorizon?: number; // 0..1 tone near the horizon
+  skyToneTop?: number; // 0..1 hatch coverage at the top of the sky (0 = paper)
+  skyToneHorizon?: number; // 0..1 hatch coverage near the horizon
 
   // Sun / moon (negative space)
   sun?: boolean;
@@ -87,6 +85,8 @@ export interface LandscapeOptions {
   ridgeHatchAngle?: number; // degrees; used when formFollow is off
   slopeFollow?: boolean; // tilt the straight ridge hatch toward its descent
   formFollow?: boolean; // cross-contour comb that wraps the hill (overrides angle)
+  ridgeSharpness?: number; // 0..1 rolling swell → peaked, skewed summits
+  atmosphere?: number; // 0..1 depth haze: far ridges lighter, hatch fades to mist
 
   // Compositional depth
   headlands?: number; // overlapping receding land fingers near the horizon
@@ -123,8 +123,8 @@ const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 
   hasWater: true,
   waterFrac: 0.62,
   skyHatchSpacing: 6,
-  skyToneTop: 0.5,
-  skyToneHorizon: 0.62,
+  skyToneTop: 0.32,
+  skyToneHorizon: 0.58,
   sun: true,
   sunRadius: 42,
   sunHalo: 0.7,
@@ -144,6 +144,8 @@ const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 
   ridgeHatchAngle: 80,
   slopeFollow: false,
   formFollow: true,
+  ridgeSharpness: 0.3,
+  atmosphere: 0.4,
   headlands: 0,
   foreground: 0,
   foregroundSide: 'left',
@@ -163,7 +165,12 @@ const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 
   sketchStyle: 'loose',
 };
 
-/** A 1-D fbm silhouette profile sampled L→R; peaks rise `amp` above `baseY`. */
+/** A 1-D fbm silhouette profile sampled L→R; peaks rise `amp` above `baseY`.
+ *  `sharpness` blends toward ridged noise (real peaks instead of rolling swell),
+ *  skews the flanks asymmetric, and both get shaped by a low-frequency peak
+ *  envelope so a ridge carries one or two dominant summits — uniform-amplitude
+ *  profiles stack into corrugated strips, the strongest "computer" tell in the
+ *  land scenes. */
 function makeProfile(
   noise: SimplexNoise,
   axis: number,
@@ -175,29 +182,48 @@ function makeProfile(
   freq: number,
   octaves: number,
   persistence: number,
-  span: number
+  span: number,
+  sharpness = 0
 ): Point[] {
+  const sample = (x: number): Point => {
+    const u0 = (x - x0) / Math.max(1, span);
+    const u = u0 + 0.18 * sharpness * noise.noise2D(u0 * 0.9, axis + 31.7);
+    const base = noise.fbm(u * freq, axis, octaves, persistence, 2, 1);
+    let h = base * 0.5 + 0.5;
+    if (sharpness > 0) {
+      const ridged = 1 - Math.abs(noise.fbm(u * freq, axis + 50, octaves, persistence, 2, 1));
+      h = lerp(h, ridged * ridged, sharpness);
+    }
+    const env = Math.min(1, Math.max(0.1, 0.55 + 0.45 * noise.noise2D(u0 * 1.1, axis * 0.7 + 9.3)));
+    return { x, y: baseY - amp * h * env };
+  };
   const pts: Point[] = [];
-  for (let x = x0; x <= x1 + 0.5; x += step) {
-    const u = (x - x0) / Math.max(1, span);
-    const h = noise.fbm(u * freq, axis, octaves, persistence, 2, 1);
-    pts.push({ x, y: baseY - amp * (h * 0.5 + 0.5) });
-  }
-  if (pts.length && pts[pts.length - 1].x < x1) {
-    const u = (x1 - x0) / Math.max(1, span);
-    const h = noise.fbm(u * freq, axis, octaves, persistence, 2, 1);
-    pts.push({ x: x1, y: baseY - amp * (h * 0.5 + 0.5) });
-  }
+  for (let x = x0; x <= x1 + 0.5; x += step) pts.push(sample(x));
+  if (pts.length && pts[pts.length - 1].x < x1) pts.push(sample(x1));
   return pts;
 }
 
-/** Subtract a closed interval [rlo,rhi] from [lo,hi], returning what remains. */
-function subtractInterval(lo: number, hi: number, rlo: number, rhi: number): [number, number][] {
-  if (rhi <= lo || rlo >= hi) return [[lo, hi]];
-  const out: [number, number][] = [];
-  if (rlo > lo) out.push([lo, rlo]);
-  if (rhi < hi) out.push([rhi, hi]);
-  return out;
+/** Break a silhouette into 2–4 pieces separated by small gaps — a contour
+ *  emerging from mist is drawn lost-and-found, not as one continuous line. */
+function breakProfile(profile: Point[], rng: () => number): Point[][] {
+  const m = profile.length;
+  if (m < 12) return [profile];
+  const gaps = 1 + Math.floor(rng() * 2);
+  const cuts: [number, number][] = [];
+  for (let g = 0; g < gaps; g++) {
+    const c = Math.floor(m * (0.2 + 0.6 * rng()));
+    const half = Math.max(2, Math.floor(m * (0.03 + 0.05 * rng())));
+    cuts.push([c - half, c + half]);
+  }
+  cuts.sort((a, b) => a[0] - b[0]);
+  const out: Point[][] = [];
+  let start = 0;
+  for (const [lo, hi] of cuts) {
+    if (lo - start > 1) out.push(profile.slice(start, lo));
+    start = Math.max(start, hi);
+  }
+  if (m - start > 1) out.push(profile.slice(start));
+  return out.filter((p) => p.length > 1);
 }
 
 /** A confident bold silhouette built from trimmed (tapered) offset passes. */
@@ -285,6 +311,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     layer: string;
     formFollow: boolean;
     crossHatch: number;
+    mist?: number; // 0..1 — this band's share of the depth haze
+    maxLenFrac?: number; // stroke length cap as a fraction of usableH
   }
   const bands: Band[] = [];
   const contours: { profile: Point[]; layer: string; passes: number }[] = [];
@@ -298,8 +326,11 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   // Reflective features feeding the water shimmer.
   const reflectors: { x: number; top: number; height: number; half: number }[] = [];
 
-  const ridgeTone = (f: number): ToneFn => {
-    const base = lerp(0.4, 0.92, f);
+  // Horizontal light direction for slope shading (from the sun's side).
+  const lightX = sunX >= x0 + usableW / 2 ? 1 : -1;
+
+  const ridgeTone = (f: number, mist = 0): ToneFn => {
+    const base = lerp(0.3, 0.95, Math.pow(f, 1.15)) * lerp(1, 0.45, mist);
     const fx = 2.6 / usableW;
     const fy = 2.6 / usableH;
     return (x, y) => clamp01(base + o.toneContrast * 0.42 * toneNoise.fbm(x * fx, y * fy + f * 3, 2, 0.5, 2, 1));
@@ -326,12 +357,16 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     contours.push({ profile: horizon, layer: 'horizon', passes: 2 });
   } else {
     const n = Math.max(1, Math.round(o.ridgeCount));
+    const gap = (y1 - horizonY) / n;
     const profiles: Point[][] = [];
     for (let k = 0; k < n; k++) {
       const f = (k + 1) / n;
-      const baseY = lerp(horizonY, y1, f);
-      const amp = o.ridgeAmp * (0.45 + 0.85 * f);
-      profiles.push(makeProfile(noise, 13.7 * (k + 1), x0, x1, profStep, baseY, amp, o.ridgeFreq * (1 + 0.12 * k), o.ridgeOctaves, o.ridgePersistence, usableW));
+      // Jittered stack: a metronomic lerp of baseY/amp reads as corrugation.
+      const baseY = lerp(horizonY, y1, f) + (k < n - 1 ? (rng() - 0.5) * 0.7 * gap : 0);
+      const amp = o.ridgeAmp * (0.45 + 0.85 * f) * (0.7 + 0.6 * rng());
+      profiles.push(
+        makeProfile(noise, 13.7 * (k + 1), x0, x1, profStep, baseY, amp, o.ridgeFreq * (1 + 0.12 * k), o.ridgeOctaves, o.ridgePersistence, usableW, o.ridgeSharpness)
+      );
     }
     skyBoundary = profiles[0];
     treeCrest = profiles[n - 1];
@@ -341,6 +376,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     // genuinely occludes it, and the far ridge shows only the sliver poking above.
     for (let k = 0; k < n; k++) {
       const f = (k + 1) / n;
+      const mist = o.atmosphere * (1 - f);
       const env: number[] = new Array(m);
       for (let i = 0; i < m; i++) {
         let e = y1;
@@ -349,20 +385,40 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       }
       const lower: Point[] = profiles[k].map((p, i) => ({ x: p.x, y: Math.max(p.y, env[i]) }));
       let angle = o.ridgeHatchAngle;
-      if (o.slopeFollow) angle += (k % 2 === 0 ? -1 : 1) * (12 + 8 * (1 - f));
-      bands.push({ upper: profiles[k], lower, tone: ridgeTone(f), baseSpacing: o.ridgeHatchSpacing, angleDeg: angle, layer: 'ridge', formFollow: o.formFollow, crossHatch: o.crossHatch });
+      if (o.slopeFollow) angle += (k % 2 === 0 ? -1 : 1) * (8 + 6 * (1 - f));
+      bands.push({
+        upper: profiles[k],
+        lower,
+        tone: ridgeTone(f, mist),
+        baseSpacing: o.ridgeHatchSpacing * lerp(1.9, 1.0, f),
+        angleDeg: angle,
+        layer: 'ridge',
+        formFollow: o.formFollow,
+        // The 33° shadow sweep across a distant band reads as stray diagonal
+        // scratches; only the near ridges have earned cross-hatch darks.
+        crossHatch: f > 0.55 ? o.crossHatch : 0,
+        mist,
+        maxLenFrac: lerp(0.03, 0.06, f),
+      });
       // Contour only where the crest clears the nearer envelope. Far ridges fade
-      // to a single light pass (lost-and-found edges).
+      // to a single light pass (lost-and-found edges), broken up when the haze
+      // is heavy — a silhouette emerging from mist is drawn in pieces.
       const passes = f < 0.4 ? 1 : f < 0.75 ? 2 : 3;
+      const breakUp = o.atmosphere > 0.5 && f < 0.5;
       let run: Point[] = [];
+      const flush = (): void => {
+        if (run.length > 1) {
+          const layer = k === 0 ? 'horizon' : 'contour';
+          if (breakUp) for (const piece of breakProfile(run, rng)) contours.push({ profile: piece, layer, passes });
+          else contours.push({ profile: run, layer, passes });
+        }
+        run = [];
+      };
       for (let i = 0; i < m; i++) {
         if (env[i] >= profiles[k][i].y - 0.5) run.push(profiles[k][i]);
-        else {
-          if (run.length > 1) contours.push({ profile: run, layer: k === 0 ? 'horizon' : 'contour', passes });
-          run = [];
-        }
+        else flush();
       }
-      if (run.length > 1) contours.push({ profile: run, layer: k === 0 ? 'horizon' : 'contour', passes });
+      flush();
     }
   }
 
@@ -383,7 +439,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         crossHatch: band.crossHatch,
         patchiness: o.hatchPatchiness,
         patchNoise,
-        maxLen: usableH * 0.05,
+        maxLen: usableH * (band.maxLenFrac ?? 0.05),
+        shade: { mist: band.mist ?? 0, fadeNoise: patchNoise, shadeSlope: o.toneContrast * 0.8, lightX },
       });
     }
   }
@@ -529,132 +586,27 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     for (const r of reflectors) drawColumn(r.x, Math.min(r.half, 10), Math.min(waterBotY - waterTopY, r.height * 1.1), 0.5);
   }
 
-  // —— Sky: vertical hatch with a tonal gradient, sun + clouds carved out ——
+  // —— Sky: broken vertical hatch carrying a continuous tonal gradient, sun +
+  // clouds carved out (sky.ts) ——
   {
     const skyTopY = y0;
-    // Cloud mass raster over the sky, traced as organic negative space.
-    let cloudRaster: GrayscaleImage | null = null;
-    let cloudIso = 0;
-    let skyMaxY = skyTopY;
-    for (const p of skyBoundary) if (p.y > skyMaxY) skyMaxY = p.y;
-    const skyH = Math.max(1, skyMaxY - skyTopY);
-    if (o.clouds > 0.01) {
-      const cw = 128;
-      const ch = 72;
-      const data = new Float32Array(cw * ch);
-      const cf = 2.4;
-      for (let cy = 0; cy < ch; cy++) {
-        for (let cx = 0; cx < cw; cx++) {
-          const u = cx / (cw - 1);
-          const v = cy / (ch - 1);
-          // Bias clouds to the upper sky and flatten them horizontally.
-          const n = cloudNoise.fbm(u * cf, v * cf * 2.2 + 11, 4, 0.5, 2, 1);
-          data[cy * cw + cx] = n * (1 - v * 0.35);
-        }
-      }
-      cloudRaster = { width: cw, height: ch, data };
-      cloudIso = 0.5 - o.clouds * 0.85;
-    }
-    const inCloud = (px: number, py: number): boolean => {
-      if (!cloudRaster) return false;
-      const u = (px - x0) / usableW;
-      const v = (py - skyTopY) / skyH;
-      if (u < 0 || u > 1 || v < 0 || v > 1) return false;
-      const fx = u * (cloudRaster.width - 1);
-      const fy = v * (cloudRaster.height - 1);
-      const ix = Math.min(cloudRaster.width - 2, Math.floor(fx));
-      const iy = Math.min(cloudRaster.height - 2, Math.floor(fy));
-      const tx = fx - ix;
-      const ty = fy - iy;
-      const d = cloudRaster.data;
-      const w = cloudRaster.width;
-      const v00 = d[iy * w + ix];
-      const v10 = d[iy * w + ix + 1];
-      const v01 = d[(iy + 1) * w + ix];
-      const v11 = d[(iy + 1) * w + ix + 1];
-      const val = lerp(lerp(v00, v10, tx), lerp(v01, v11, tx), ty);
-      return val > cloudIso;
-    };
-
-    const craft: Craft = { rng, taper: o.taper * 0.6, jitter: 0.8 * DEG, subStep: 14 };
-    const half = o.skyHatchSpacing / 2;
-    let i = 0;
-    for (let x = x0 + (rng() % 1) * o.skyHatchSpacing; x <= x1; x += half, i++) {
-      const skyline = sampleProfileY(skyBoundary, x);
-      if (skyline <= skyTopY + 2) continue;
-      const H = skyline - skyTopY;
-      // Base columns full; infill (odd) columns only where the graded tone is dark.
-      let segs: [number, number][];
-      if (i % 2 === 0) {
-        segs = [[skyTopY, skyline]];
-      } else {
-        const qTop = clamp01((o.skyToneTop - 0.42) / 0.45);
-        const qHor = clamp01((o.skyToneHorizon - 0.42) / 0.45);
-        segs = [];
-        if (qTop > 0.02) segs.push([skyTopY, skyTopY + qTop * H]);
-        if (qHor > 0.02) segs.push([skyline - qHor * H, skyline]);
-        if (!segs.length) continue;
-      }
-      // Carve the sun.
-      if (sunActive) {
-        const dx = x - sunX;
-        const adx = Math.abs(dx);
-        if (adx < haloR) {
-          const f = clamp01((haloR - adx) / Math.max(1, haloR - sunR));
-          let hh = adx < sunR ? Math.sqrt(Math.max(0, sunR * sunR - dx * dx)) : 0;
-          hh += f * (haloR - sunR) * (0.35 + 0.5 * rng());
-          if (hh > 0) {
-            const next: [number, number][] = [];
-            for (const [lo, hi] of segs) for (const piece of subtractInterval(lo, hi, sunY - hh, sunY + hh)) next.push(piece);
-            segs = next;
-          }
-        }
-      }
-      // Hide the sky behind opaque masses that poke above the horizon (headlands).
-      for (const occ of skyOccluders) {
-        const ivs = clipLineToPolygon(occ, { x, y: 0 }, { x: 0, y: 1 });
-        for (const [oy0, oy1] of ivs) {
-          const next: [number, number][] = [];
-          for (const [lo, hi] of segs) for (const piece of subtractInterval(lo, hi, oy0, oy1)) next.push(piece);
-          segs = next;
-        }
-      }
-      // Carve clouds (split each segment around cloudy spans, sampled cheaply).
-      if (cloudRaster) {
-        const refined: [number, number][] = [];
-        for (const [lo, hi] of segs) {
-          let runStart = lo;
-          let inside = inCloud(x, lo);
-          const stepY = 4;
-          for (let y = lo + stepY; y <= hi; y += stepY) {
-            const c = inCloud(x, y);
-            if (c !== inside) {
-              if (!inside && y - runStart > 2) refined.push([runStart, y - stepY * 0.5]);
-              runStart = y;
-              inside = c;
-            }
-          }
-          if (!inside && hi - runStart > 2) refined.push([runStart, hi]);
-        }
-        segs = refined;
-      }
-      for (const [lo, hi] of segs) {
-        if (hi - lo < 2) continue;
-        emitStroke(lines, { x, y: lo }, { x, y: hi }, 'sky', craft);
-      }
-    }
-
-    // The carved negative space already reads as clouds; a faint, lightly
-    // trimmed outline along the traced mass boundary just firms up the softest
-    // shapes without the scribble of an underside-only heuristic.
-    if (cloudRaster) {
-      const contoursC = traceIsoContours(cloudRaster, cloudIso);
-      for (const c of contoursC) {
-        if (c.length < 10) continue;
-        const mapped = c.map((p) => ({ x: x0 + (p.x / (cloudRaster!.width - 1)) * usableW, y: skyTopY + (p.y / (cloudRaster!.height - 1)) * skyH }));
-        pushRun(detail, trimPolyline(mapped, 0.12), 'cloud');
-      }
-    }
+    drawSky(lines, detail, {
+      x0,
+      x1,
+      skyTopY,
+      usableW,
+      skyBoundary,
+      skyOccluders,
+      spacing: o.skyHatchSpacing,
+      toneTop: o.skyToneTop,
+      toneHorizon: o.skyToneHorizon,
+      sun: { active: sunActive, x: sunX, y: sunY, r: sunR, haloR },
+      clouds: o.clouds,
+      taper: o.taper,
+      rng,
+      toneNoise,
+      cloudNoise,
+    });
 
     // Sun rays / glow (→ detail, so the land masses occlude them).
     if (sunActive && o.sunRays) {

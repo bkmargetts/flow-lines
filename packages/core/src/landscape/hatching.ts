@@ -150,8 +150,13 @@ function emitHatchRun(out: FlowLine[], A: Point, B: Point, layer: string, craft:
   while (t < len - 1 && guard++ < 200) {
     const seg = maxLen * (0.7 + 0.6 * craft.rng());
     const e = Math.min(len, t + seg);
-    emitStroke(out, { x: A.x + ux * t, y: A.y + uy * t }, { x: A.x + ux * e, y: A.y + uy * e }, layer, craft);
-    t = e + 1.5 + craft.rng() * 3.5;
+    // Stagger each mark a hair off the shared axis — collinear dashes with tiny
+    // gaps read as one long ruled line, which defeats the chopping entirely.
+    const off = (craft.rng() - 0.5) * 1.8;
+    const px = -uy * off;
+    const py = ux * off;
+    emitStroke(out, { x: A.x + ux * t + px, y: A.y + uy * t + py }, { x: A.x + ux * e + px, y: A.y + uy * e + py }, layer, craft);
+    t = e + 2.5 + craft.rng() * 4.5;
   }
 }
 
@@ -160,7 +165,9 @@ function emitHatchRun(out: FlowLine[], A: Point, B: Point, layer: string, craft:
 function makePatchMask(noise: SimplexNoise, x: number, y: number, layer: number, scale: number, amount: number): boolean {
   if (amount <= 0) return true;
   const freq = 1 / Math.max(1, scale);
-  const cut = -1 + amount * (0.5 + 0.35 * Math.max(0, layer - 1));
+  // At amount 0.5 roughly half the band passes — the mask must carve real
+  // holes or the cross-hatch fills in as an even net.
+  const cut = -1 + amount * (1.9 + 0.5 * Math.max(0, layer - 1));
   return noise.noise2D(x * freq, y * freq) > cut;
 }
 
@@ -196,43 +203,72 @@ export function sweepHatch(
   while (s <= sMax && guard++ < 6000) {
     const O: Point = { x: nrm.x * s, y: nrm.y * s };
     const runs = clipLineToPolygon(poly, O, dir);
-    let stepTone = 0.5;
+    // Tone is sampled piecewise along the row: a single midpoint (or max) let
+    // one dark spot keep a whole row tight, so light passages could never
+    // open to paper.
+    let toneSum = 0;
+    let toneN = 0;
     for (const [t0, t1] of runs) {
-      const mt = (t0 + t1) / 2;
-      const mx = O.x + dir.x * mt;
-      const my = O.y + dir.y * mt;
-      const tv = tone(mx, my);
-      if (tv > stepTone) stepTone = tv;
-      if (!gate(mx, my, tv)) continue;
-      const pieces = breakFn ? breakFn(t0, t1, O, dir, craft.rng) : ([[t0, t1]] as [number, number][]);
-      for (const [a, b] of pieces) {
-        emitHatchRun(out, { x: O.x + dir.x * a, y: O.y + dir.y * a }, { x: O.x + dir.x * b, y: O.y + dir.y * b }, layer, craft, maxLen);
+      const prePieces = breakFn ? breakFn(t0, t1, O, dir, craft.rng) : ([[t0, t1]] as [number, number][]);
+      for (const [a0, b0] of prePieces) {
+        const plen = b0 - a0;
+        const nPieces = Math.max(1, Math.ceil(plen / 30));
+        for (let pi = 0; pi < nPieces; pi++) {
+          const a = a0 + (plen * pi) / nPieces;
+          const b = a0 + (plen * (pi + 1)) / nPieces;
+          const mx = O.x + dir.x * ((a + b) / 2);
+          const my = O.y + dir.y * ((a + b) / 2);
+          const tv = tone(mx, my);
+          toneSum += tv;
+          toneN++;
+          if (!gate(mx, my, tv)) continue;
+          // Paper cutoff: genuinely light passages hold clean paper.
+          if (tv < 0.22 + 0.05 * craft.rng()) continue;
+          emitHatchRun(out, { x: O.x + dir.x * a, y: O.y + dir.y * a }, { x: O.x + dir.x * b, y: O.y + dir.y * b }, layer, craft, maxLen);
+        }
       }
     }
-    s += Math.max(0.8, baseSpacing / Math.max(0.18, stepTone));
+    const meanTone = toneN ? toneSum / toneN : 0.5;
+    s += Math.max(0.8, baseSpacing / Math.max(0.18, meanTone));
   }
 }
 
+/** How far comb strokes may tilt from vertical. An unclamped slope-normal at a
+ *  steep crest lays band-long diagonals that read as scratch marks. */
+const COMB_MAX_TILT = 35 * DEG;
+
+export interface CombShade {
+  mist?: number; // 0..1 — fade hatch out before the band base (lost-and-found)
+  fadeNoise?: SimplexNoise; // raggedises the fade edge so it never reads as a line
+  shadeSlope?: number; // 0..1 — darken away-facing flanks, lighten lit ones
+  lightX?: number; // -1 | 1 — horizontal light direction (from the sun side)
+}
+
 /** Cross-contour comb: short strokes dropped from the silhouette `upper` along
- *  the local slope-normal, clipped to the band — hatch that wraps the hill. */
-function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: number, tone: ToneFn, layer: string, craft: Craft, maxLen = 0): void {
+ *  the local slope-normal, clipped to the band — hatch that wraps the hill.
+ *  Strokes fade out before the band base when `mist` is up (paper below a
+ *  ragged edge — the lost-and-found silhouette of an ink wash), and flank
+ *  tone follows the light direction when `shadeSlope` is up. */
+function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: number, tone: ToneFn, layer: string, craft: Craft, maxLen = 0, shade: CombShade = {}): void {
   const x0 = upper[0].x;
   const x1 = upper[upper.length - 1].x;
+  const mist = shade.mist ?? 0;
+  const depthBase = lerp(1, 0.35, mist);
   let x = x0 + craft.rng() * baseSpacing;
   let guard = 0;
   while (x <= x1 && guard++ < 4000) {
     const yTop = sampleProfileY(upper, x);
-    const xa = Math.max(x0, x - 3);
-    const xb = Math.min(x1, x + 3);
+    // A wide, damped slope window: a ±3px window chased every silhouette
+    // wiggle and fanned the comb like grass tufts; on sharp profiles adjacent
+    // strokes flipped tilt and crossed like scattered sticks.
+    const xa = Math.max(x0, x - 14);
+    const xb = Math.min(x1, x + 14);
     const tx = xb - xa;
     const ty = sampleProfileY(upper, xb) - sampleProfileY(upper, xa);
-    const tl = Math.hypot(tx, ty) || 1;
-    let nx = -ty / tl;
-    let ny = tx / tl;
-    if (ny < 0) {
-      nx = -nx;
-      ny = -ny;
-    }
+    const slope = ty / Math.max(1e-6, tx);
+    const tilt = 0.8 * Math.max(-COMB_MAX_TILT, Math.min(COMB_MAX_TILT, Math.atan2(-ty, tx)));
+    const nx = Math.sin(tilt);
+    const ny = Math.cos(tilt);
     const O: Point = { x: x + nx * 0.5, y: yTop + ny * 0.5 + 0.5 };
     const dir: Point = { x: nx, y: ny };
     const runs = clipLineToPolygon(poly, O, dir);
@@ -246,11 +282,26 @@ function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: 
         best = iv;
       }
     }
-    const tv = tone(x, yTop);
-    if (best) {
-      const a = Math.max(0, best[0]);
+    let tv = tone(x, yTop);
+    if (shade.shadeSlope) {
+      // tanh steepens the response so gentle dune flanks still separate into
+      // lit and shadow sides.
+      const lit = Math.max(0, Math.min(1, 0.5 + 0.9 * Math.tanh(slope * 3) * (shade.lightX ?? 1)));
+      tv *= lerp(1 + 0.4 * shade.shadeSlope, 1 - 0.6 * shade.shadeSlope, lit);
+    }
+    // Tone also carries density beyond spacing: genuinely light passages hold
+    // clean paper, and pale ones lose whole strokes — a pale ridge is a broken
+    // patch, not a thin regular fringe of floating ticks.
+    if (best && tv >= 0.25 + 0.05 * craft.rng() && craft.rng() < 0.35 + tv) {
+      const a = Math.max(0, best[0]) + craft.rng() * Math.min(4, (best[1] - best[0]) * 0.15);
       const b = best[1];
-      if (b - a > 1.5) emitHatchRun(out, { x: O.x + dir.x * a, y: O.y + dir.y * a }, { x: O.x + dir.x * b, y: O.y + dir.y * b }, layer, craft, maxLen);
+      const Hb = b - a;
+      let depth = Hb * Math.max(0, Math.min(1, depthBase * (0.55 + 0.9 * tv)));
+      // Vary stroke reach — a comb of equal-length teeth reads as fringe.
+      depth *= 0.6 + 0.8 * craft.rng();
+      if (shade.fadeNoise && depth < Hb) depth *= 1 + 0.25 * shade.fadeNoise.noise2D(x * 0.015, 3.3);
+      const b2 = a + Math.min(Hb, depth);
+      if (b2 - a > 1.5) emitHatchRun(out, { x: O.x + dir.x * a, y: O.y + dir.y * a }, { x: O.x + dir.x * b2, y: O.y + dir.y * b2 }, layer, craft, maxLen);
     }
     x += Math.max(0.8, baseSpacing / Math.max(0.18, tv));
   }
@@ -266,6 +317,7 @@ export interface LandParams {
   patchiness: number;
   patchNoise: SimplexNoise;
   maxLen: number;
+  shade?: CombShade;
 }
 
 /** Hatch a land band: a base pass (form-following comb or straight sweep) plus
@@ -273,12 +325,29 @@ export interface LandParams {
  *  (`maxLen`) so the band reads as worked hatching, not band-long lines. */
 export function hatchLand(out: FlowLine[], upper: Point[], poly: Point[], tone: ToneFn, baseSpacing: number, layer: string, p: LandParams): void {
   const craft: Craft = { rng: p.rng, taper: p.taper, jitter: p.jitter, subStep: 12 };
-  if (p.formFollow) combHatch(out, upper, poly, baseSpacing, tone, layer, craft, p.maxLen);
-  else sweepHatch(out, poly, p.baseAngleDeg, baseSpacing, tone, () => true, layer, craft, undefined, p.maxLen);
+  // Straight hatch takes the same lit/shadow flank shading as the comb, read
+  // from the silhouette slope above each sample.
+  let shaded = tone;
+  const sh = p.shade;
+  if (!p.formFollow && sh?.shadeSlope) {
+    const xa0 = upper[0].x;
+    const xb0 = upper[upper.length - 1].x;
+    shaded = (x, y) => {
+      const xa = Math.max(xa0, x - 8);
+      const xb = Math.min(xb0, x + 8);
+      const slope = (sampleProfileY(upper, xb) - sampleProfileY(upper, xa)) / Math.max(1e-6, xb - xa);
+      const lit = Math.max(0, Math.min(1, 0.5 + 0.9 * Math.tanh(slope * 3) * (sh.lightX ?? 1)));
+      return tone(x, y) * lerp(1 + 0.4 * sh.shadeSlope!, 1 - 0.6 * sh.shadeSlope!, lit);
+    };
+  }
+  if (p.formFollow) combHatch(out, upper, poly, baseSpacing, tone, layer, craft, p.maxLen, p.shade);
+  else sweepHatch(out, poly, p.baseAngleDeg, baseSpacing, shaded, () => true, layer, craft, undefined, p.maxLen);
   const light: Craft = { rng: p.rng, taper: Math.min(1, p.taper + 0.2), jitter: p.jitter * 1.3, subStep: 12 };
   for (let k = 1; k <= p.crossHatch; k++) {
     const ang = 33 + (k - 1) * 27;
-    const thr = 0.5 + 0.12 * k;
-    sweepHatch(out, poly, ang, baseSpacing * 1.5, tone, (x, y, t) => t > thr && makePatchMask(p.patchNoise, x, y, k, baseSpacing * 4, p.patchiness), layer, light, undefined, p.maxLen * 0.8);
+    const thr = 0.62 + 0.15 * k;
+    // Patch scale ~16 spacings: the mask must gate whole hand-sized areas —
+    // stroke-sized blobs pass isolated marks that read as scattered sticks.
+    sweepHatch(out, poly, ang, baseSpacing * 1.75, shaded, (x, y, t) => t > thr && makePatchMask(p.patchNoise, x, y, k, baseSpacing * 16, p.patchiness), layer, light, undefined, p.maxLen * 0.55);
   }
 }
