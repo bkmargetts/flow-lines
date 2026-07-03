@@ -17,6 +17,7 @@ import {
   type BreakFn,
   sweepHatch,
   hatchLand,
+  hatchGround,
 } from './hatching.js';
 import { closeRegion, rockShape, subtractPolygon, occludeBehind, drawTrees } from './features.js';
 import { drawSky } from './sky.js';
@@ -336,21 +337,32 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     return (x, y) => clamp01(base + o.toneContrast * 0.42 * toneNoise.fbm(x * fx, y * fy + f * 3, 2, 0.5, 2, 1));
   };
 
+  // Deferred ground-plane call (the beach hatches after the water band so the
+  // draw order matches the old band sequence).
+  let beach: (() => void) | null = null;
+
   if (o.hasWater) {
     waterBotY = horizonY + clamp01(o.waterFrac) * (y1 - horizonY);
     const shoreline = makeProfile(noise, 21.1, x0, x1, profStep, waterBotY, o.horizonWobble * 1.4, o.horizonFreq * 1.3, 3, 0.5, usableW);
+    // Dark reflection strip under the horizon, near-paper middle distance, a
+    // slight darkening at the shore — the old symmetric curve kept the whole
+    // band above the paper cutoff, a full screen of dashes edge to edge.
+    const ss = (t: number): number => {
+      const u = clamp01(t);
+      return u * u * (3 - 2 * u);
+    };
     const waterTone: ToneFn = (x, y) => {
       const fh = clamp01((y - waterTopY) / Math.max(1, waterBotY - waterTopY));
-      const u = Math.abs(2 * fh - 1);
-      return clamp01(0.34 + 0.4 * Math.pow(u, 1.3) + 0.08 * toneNoise.noise2D(x * 0.012, y * 0.05));
+      return clamp01(0.18 + 0.75 * Math.exp(-fh * 5.5) + 0.35 * ss((fh - 0.82) / 0.18) + 0.06 * toneNoise.noise2D(x * 0.012, y * 0.05));
     };
     bands.push({ upper: horizon, lower: shoreline, tone: waterTone, baseSpacing: o.waterHatchSpacing, angleDeg: 0, layer: 'water', formFollow: false, crossHatch: 0 });
     if (waterBotY < y1 - 4) {
-      // A calm, light near-shore band — the dark accent is the optional
+      // A calm, light near-shore ground plane — the dark accent is the optional
       // foreground landform, so this stays a quiet beach rather than a second
       // heavy mass competing with it.
-      const beachTone: ToneFn = (x, y) => clamp01(0.48 + o.toneContrast * 0.18 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
-      bands.push({ upper: shoreline, lower: bottomLine, tone: beachTone, baseSpacing: o.ridgeHatchSpacing * 1.2, angleDeg: o.ridgeHatchAngle, layer: 'ridge', formFollow: o.formFollow, crossHatch: 0 });
+      const beachTone: ToneFn = (x, y) => clamp01(0.48 + o.toneContrast * 0.3 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
+      const beachCraft: Craft = { rng, taper: o.taper, jitter: 1.2 * DEG, subStep: 10 };
+      beach = () => hatchGround(lines, shoreline, y1, beachTone, o.ridgeHatchSpacing * 1.2, 'ridge', beachCraft, toneNoise);
       contours.push({ profile: shoreline, layer: 'contour', passes: 3 });
       treeCrest = shoreline;
     }
@@ -427,7 +439,12 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     const poly = closeRegion(band.upper, band.lower);
     if (band.layer === 'water') {
       const craft: Craft = { rng, taper: o.taper * 0.5, jitter: 1.2 * DEG, subStep: 16 };
-      const breakFn: BreakFn = (t0, t1, O, d, r) => dashRun(t0, t1, O, d, r, o.waterDash, o.waterGap);
+      // Rows are horizontal, so O.y is the row height: light mid-water rows
+      // break into shorter dashes with much wider gaps (open water on paper).
+      const breakFn: BreakFn = (t0, t1, O, d, r) => {
+        const tw = band.tone(x0 + usableW / 2, O.y);
+        return dashRun(t0, t1, O, d, r, o.waterDash * lerp(0.5, 1.2, tw), o.waterGap * lerp(3.5, 1, tw));
+      };
       sweepHatch(lines, poly, 0, band.baseSpacing, band.tone, () => true, 'water', craft, breakFn);
     } else {
       hatchLand(lines, band.upper, poly, band.tone, band.baseSpacing, band.layer, {
@@ -444,6 +461,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       });
     }
   }
+  if (beach) beach();
   // Ridge / horizon / shore contours (emitted now so nearer masses occlude them).
   for (const c of contours) emitContour(lines, c.profile, c.layer, o.penWidth, c.passes);
 
@@ -561,29 +579,32 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   }
 
   // —— Water reflections: a concentrated shimmer directly under each feature,
-  // not a wash of streaks. The sun gets a broader glitter column; rocks and
-  // headlands get a short, faint smear right below them.
+  // not a wash of streaks. Glints are short HORIZONTAL dashes — the water's
+  // own stroke language — bunched in a column that widens and thins with
+  // depth. (Vertical ticks fought the horizontal water hatch and read as
+  // scratches, not light on water.)
   if (o.hasWater && o.reflection && waterBotY > waterTopY + 4) {
-    const reflNoise = createNoise(seed + 4242);
-    const drawColumn = (cx: number, half: number, depth: number, density: number): void => {
-      const cols = Math.max(1, Math.min(4, Math.round(half / 9)));
-      for (let c = 0; c < cols; c++) {
-        const colX = cx + (cols === 1 ? 0 : (c / (cols - 1) - 0.5) * 2 * half);
-        let y = waterTopY + 2 + rng() * 5;
-        let guard = 0;
-        while (y < waterTopY + depth && guard++ < 40) {
-          const dlen = 3 + rng() * 6;
-          if (rng() < density) {
-            const wob = reflNoise.noise2D(colX * 0.05, y * 0.08) * Math.min(5, half * 0.35);
-            const b = Math.min(waterBotY - 1, y + dlen);
-            if (b > y + 1) pushRun(detail, [{ x: colX + wob, y }, { x: colX + wob + (rng() - 0.5) * 2.5, y: b }], 'reflection');
+    const waterH = Math.max(1, waterBotY - waterTopY);
+    const drawGlints = (cx: number, half: number, depth: number, density: number): void => {
+      let y = waterTopY + 2 + rng() * 4;
+      let guard = 0;
+      while (y < Math.min(waterBotY - 1, waterTopY + depth) && guard++ < 80) {
+        const fh = clamp01((y - waterTopY) / waterH);
+        if (rng() < lerp(density, density * 0.35, fh)) {
+          const nGlints = 1 + Math.floor(rng() * 3);
+          for (let g = 0; g < nGlints; g++) {
+            const w = half * (0.5 + 0.7 * fh);
+            const gx = cx + (rng() - 0.5) * 2 * w;
+            const len = 4 + rng() * 10;
+            const gy = y + (rng() - 0.5) * 2;
+            pushRun(detail, densifySegment({ x: gx - len / 2, y: gy }, { x: gx + len / 2, y: gy }, 6), 'reflection');
           }
-          y += dlen + 5 + rng() * 8;
         }
+        y += o.waterHatchSpacing * (0.8 + 1.2 * fh) + rng() * 3;
       }
     };
-    if (sunActive) drawColumn(sunX, o.reflectionWidth, waterBotY - waterTopY, 0.85);
-    for (const r of reflectors) drawColumn(r.x, Math.min(r.half, 10), Math.min(waterBotY - waterTopY, r.height * 1.1), 0.5);
+    if (sunActive) drawGlints(sunX, o.reflectionWidth, waterBotY - waterTopY, 0.9);
+    for (const r of reflectors) drawGlints(r.x, Math.min(r.half, 14), Math.min(waterBotY - waterTopY, r.height * 1.2), 0.55);
   }
 
   // —— Sky: broken vertical hatch carrying a continuous tonal gradient, sun +

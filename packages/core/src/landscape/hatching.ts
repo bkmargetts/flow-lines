@@ -307,6 +307,75 @@ function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: 
   }
 }
 
+/**
+ * A receding ground plane (beach, meadow flat): rows echo the shoreline just
+ * below it, flatten toward horizontal as they come forward, and open up —
+ * long light dashes with generous gaps and whole rows skipped where the tone
+ * is light. A tight wet-sand accent hugs the shore. The old treatment combed
+ * near-vertical strokes down from the shoreline, which read as a cliff
+ * curtain instead of ground.
+ */
+export function hatchGround(
+  out: FlowLine[],
+  upper: Point[],
+  yBottom: number,
+  tone: ToneFn,
+  spacing: number,
+  layer: string,
+  craft: Craft,
+  dither: SimplexNoise
+): void {
+  const x0 = upper[0].x;
+  const x1 = upper[upper.length - 1].x;
+  let shoreSum = 0;
+  for (const p of upper) shoreSum += p.y;
+  const avgShoreY = shoreSum / Math.max(1, upper.length);
+  const depthRange = Math.max(8, yBottom - avgShoreY);
+
+  // Row y at (x, d): the shore's shape relaxes to flat within ~60% of the depth.
+  const rowY = (x: number, d: number): number => {
+    const flat = Math.min(1, d / (0.6 * depthRange));
+    return lerp(sampleProfileY(upper, x), avgShoreY, flat) + d;
+  };
+
+  const emitRow = (d: number, dash: number, gap: number, jitter: number): void => {
+    let x = x0 + craft.rng() * gap;
+    let guard = 0;
+    while (x < x1 && guard++ < 300) {
+      const len = dash * (0.6 + 0.8 * craft.rng());
+      const xe = Math.min(x1, x + len);
+      const midY = rowY((x + xe) / 2, d);
+      if (midY > yBottom - 1) break;
+      const tv = tone((x + xe) / 2, midY);
+      // Whole passages of the ground hold paper; the dither keeps the skip
+      // boundary organic rather than a contour of its own.
+      if (tv >= 0.3 + 0.25 * dither.noise2D(x * 0.008, d * 0.05)) {
+        const yOff = (craft.rng() - 0.5) * jitter;
+        const pts: Point[] = [];
+        for (let sx = x; sx <= xe + 0.5; sx += 8) pts.push({ x: sx, y: rowY(sx, d) + yOff });
+        if (pts.length && pts[pts.length - 1].x < xe) pts.push({ x: xe, y: rowY(xe, d) + yOff });
+        pushRun(out, pts, layer);
+      }
+      x = xe + gap * (0.6 + 0.8 * craft.rng());
+    }
+  };
+
+  // Wet-sand accent: two or three tight long-dash rows right under the shore.
+  const accentRows = 2 + (craft.rng() < 0.5 ? 1 : 0);
+  for (let r = 0; r < accentRows; r++) {
+    emitRow(spacing * 0.6 * (r + 1), 40 + craft.rng() * 20, 8 + craft.rng() * 6, 0.8);
+  }
+
+  // Open ground rows, gap widening as they come forward (nearer = lighter).
+  let d = spacing * (2 + craft.rng());
+  let guard = 0;
+  while (avgShoreY + d < yBottom && guard++ < 200) {
+    const dNorm = Math.min(1, d / depthRange);
+    emitRow(d, 20 + 30 * craft.rng(), 15 + 25 * craft.rng(), 1.6);
+    d += spacing * lerp(1.2, 2.6, dNorm);
+  }
+}
+
 export interface LandParams {
   rng: () => number;
   taper: number;
