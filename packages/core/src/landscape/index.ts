@@ -508,41 +508,79 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     const sideX = left ? x0 : x1;
     const innerX = left ? x0 + (0.35 + 0.5 * amt) * usableW : x1 - (0.35 + 0.5 * amt) * usableW;
     const startY = lerp(y1, horizonY + (y1 - horizonY) * 0.25, amt);
-    const segs = 40;
+    // A coarse, faceted rocky silhouette — the old 40-segment fbm ramp read
+    // as a smooth monotone slide.
+    const segs = 14;
     const ridge: Point[] = [];
     for (let s = 0; s <= segs; s++) {
       const t = s / segs;
-      const x = lerp(sideX, innerX, t);
+      const x = lerp(sideX, innerX, t) + (s > 0 && s < segs ? (rng() - 0.5) * (usableW * 0.012) : 0);
       const baseY = lerp(startY, y1, t * t);
-      const wob = o.ridgeAmp * 0.8 * noise.fbm(t * 3.2, 71.1, 3, 0.55, 2, 1);
-      ridge.push({ x, y: baseY - wob });
+      const ridged = 1 - Math.abs(noise.fbm(t * 3.2, 71.1, 3, 0.55, 2, 1));
+      const wob = o.ridgeAmp * 0.9 * (ridged - 0.35) + (s > 0 && s < segs ? (rng() - 0.5) * o.ridgeAmp * 0.3 : 0);
+      ridge.push({ x, y: Math.min(y1 - 1, baseY - wob) });
     }
     // Order the silhouette L→R for sampling/clipping.
     const ordered = ridge.slice().sort((a, b) => a.x - b.x);
-    const lower: Point[] = left
-      ? [
-          { x: ordered[0].x, y: y1 },
-          { x: ordered[ordered.length - 1].x, y: y1 },
-        ]
-      : [
-          { x: ordered[0].x, y: y1 },
-          { x: ordered[ordered.length - 1].x, y: y1 },
-        ];
+    const fgX0 = ordered[0].x;
+    const fgX1 = ordered[ordered.length - 1].x;
+    const lower: Point[] = [
+      { x: fgX0, y: y1 },
+      { x: fgX1, y: y1 },
+    ];
     const poly = closeRegion(ordered, lower);
     lines = occludeBehind(lines, poly); // a near mass — hide everything behind it
     skyOccluders.push(poly);
-    const fgTone: ToneFn = (x, y) => clamp01(0.84 + o.toneContrast * 0.2 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
-    hatchLand(lines, ordered, poly, fgTone, o.ridgeHatchSpacing * 0.85, 'foreground', {
-      rng,
-      taper: o.taper,
-      jitter: 2.4 * DEG,
-      formFollow: o.formFollow,
-      baseAngleDeg: left ? 62 : 118,
-      crossHatch: Math.max(o.crossHatch, 1),
-      patchiness: o.hatchPatchiness,
-      patchNoise,
-      maxLen: usableH * 0.06,
-    });
+    // Light top rim (paper picks out the edge) grounding to a dark base.
+    const ridgeYAt = (x: number): number => sampleProfileY(ordered, x);
+    const fgTone: ToneFn = (x, y) => {
+      const rY = ridgeYAt(x);
+      const depth = clamp01((y - rY) / Math.max(8, y1 - rY));
+      return clamp01(0.55 + 0.35 * depth + 0.15 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1));
+    };
+    // Patch-built form shading: vertical strips, each hatched at its own
+    // slope-derived angle — one continuous fixed-angle cross-hatch read as a
+    // wire-mesh net over the whole mass.
+    const fgCraft: Craft = { rng, taper: o.taper, jitter: 2.4 * DEG, subStep: 12 };
+    const patchCount = 4 + Math.floor(rng() * 4);
+    let px = fgX0;
+    for (let pIdx = 0; pIdx < patchCount; pIdx++) {
+      const pxe = pIdx === patchCount - 1 ? fgX1 : px + ((fgX1 - fgX0) / patchCount) * (0.7 + 0.6 * rng());
+      if (pxe - px < 6) {
+        px = pxe;
+        continue;
+      }
+      // Strip sub-polygon: profile points inside [px, pxe] closed to the bottom.
+      const strip: Point[] = [{ x: px, y: ridgeYAt(px) }];
+      for (const p of ordered) if (p.x > px && p.x < pxe) strip.push(p);
+      strip.push({ x: pxe, y: ridgeYAt(pxe) });
+      const stripPoly = closeRegion(strip, [
+        { x: px, y: y1 },
+        { x: pxe, y: y1 },
+      ]);
+      const slope = (ridgeYAt(pxe) - ridgeYAt(px)) / Math.max(1e-6, pxe - px);
+      const surfDeg = Math.atan(slope) / DEG;
+      const angle = surfDeg + 90 + (rng() - 0.5) * 28;
+      sweepHatch(lines, stripPoly, angle, o.ridgeHatchSpacing * 0.85, fgTone, () => true, 'foreground', fgCraft, undefined, usableH * 0.05);
+      // Only the darkest patches earn a second layer, at a shallow offset.
+      const midTone = fgTone((px + pxe) / 2, (ridgeYAt((px + pxe) / 2) + y1) / 2);
+      if (midTone > 0.75) {
+        sweepHatch(lines, stripPoly, angle + 30, o.ridgeHatchSpacing * 1.4, fgTone, (xx, yy, t) => t > 0.7, 'foreground', fgCraft, undefined, usableH * 0.04);
+      }
+      px = pxe;
+    }
+    // A few confident interior contours echoing the silhouette.
+    const echoes = 2 + (rng() < 0.5 ? 1 : 0);
+    for (let e = 0; e < echoes; e++) {
+      const off = 5 + 7 * rng() + e * 4;
+      const echo = offsetPolyline(ordered, off);
+      const w0 = rng() * 0.5;
+      const w1 = w0 + 0.25 + rng() * 0.2;
+      const i0 = Math.floor(w0 * echo.length);
+      const i1 = Math.min(echo.length, Math.floor(w1 * echo.length));
+      const piece = echo.slice(i0, i1).filter((p) => p.y < y1 - 2);
+      if (piece.length > 2) pushRun(lines, trimPolyline(piece, 0.15), 'foreground');
+    }
     emitContour(lines, ordered, 'foreground', o.penWidth, 3);
   }
 
@@ -561,18 +599,44 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       ]);
       lines = occludeBehind(lines, poly); // a rock hides the water behind it
       skyOccluders.push(poly);
-      const rockTone: ToneFn = (x, y) => clamp01(0.8 + 0.18 * toneNoise.noise2D(x * 0.05, y * 0.05));
-      hatchLand(lines, shape, poly, rockTone, o.rockHatchSpacing, 'rock', {
-        rng,
-        taper: o.taper,
-        jitter: 2.5 * DEG,
-        formFollow: false,
-        baseAngleDeg: 62,
-        crossHatch: Math.max(o.crossHatch, 1),
-        patchiness: o.hatchPatchiness * 0.6,
-        patchNoise,
-        maxLen: Math.max(10, h * 0.6),
-      });
+      // Shade only the flank away from the sun; the lit side is held as paper
+      // with the contour carrying the form.
+      const apex = shape.reduce((a, b) => (b.y < a.y ? b : a), shape[0]);
+      const lightFromLeft = sunX < cx;
+      const shadowEnd = lightFromLeft ? shape[shape.length - 1] : shape[0];
+      const flankSlope = (shadowEnd.y - apex.y) / (shadowEnd.x - apex.x || 1);
+      const flankDeg = Math.atan(flankSlope) / DEG;
+      const rockTone: ToneFn = (x, y) => {
+        const side = lightFromLeft ? clamp01((x - apex.x) / Math.max(4, Math.abs(shadowEnd.x - apex.x))) : clamp01((apex.x - x) / Math.max(4, Math.abs(apex.x - shadowEnd.x)));
+        return clamp01(0.3 + 0.65 * Math.pow(side, 0.8) + 0.12 * toneNoise.noise2D(x * 0.05, y * 0.05));
+      };
+      const rockCraft: Craft = { rng, taper: o.taper * 0.7, jitter: 2.5 * DEG, subStep: 10 };
+      sweepHatch(lines, poly, flankDeg + 90, o.rockHatchSpacing * 0.75, rockTone, () => true, 'rock', rockCraft, undefined, Math.max(10, h * 0.6));
+      if (w > o.rockMaxSize * 0.75) {
+        sweepHatch(lines, poly, flankDeg + 60, o.rockHatchSpacing * 1.3, rockTone, (xx, yy, t) => t > 0.7, 'rock', rockCraft, undefined, Math.max(8, h * 0.45));
+      }
+      // A curved fracture stroke or two toward the base — big rocks only (on a
+      // small one they dangle below like legs).
+      const fractures = h > 20 ? 1 + (rng() < 0.5 ? 1 : 0) : 0;
+      for (let fr = 0; fr < fractures; fr++) {
+        const fx0 = apex.x + (rng() - 0.5) * w * 0.2;
+        const fy0 = apex.y + h * (0.1 + 0.15 * rng());
+        const fx1 = fx0 + (lightFromLeft ? 1 : -1) * w * (0.15 + 0.2 * rng());
+        const bow = (rng() - 0.5) * w * 0.12;
+        pushRun(lines, [
+          { x: fx0, y: fy0 },
+          { x: (fx0 + fx1) / 2 + bow, y: lerp(fy0, baseY - 1, 0.55) },
+          { x: fx1, y: baseY - 1 },
+        ], 'rock');
+      }
+      // Waterline: a couple of short horizontal dashes hugging each side.
+      if (o.hasWater) {
+        for (const sideSign of [-1, 1]) {
+          const wx = cx + sideSign * w * (0.55 + rng() * 0.2);
+          const wl = 4 + rng() * 7;
+          pushRun(lines, densifySegment({ x: wx, y: baseY + 1 + rng() * 2 }, { x: wx + sideSign * wl, y: baseY + 1 + rng() * 2 }, 5), 'rock');
+        }
+      }
       emitContour(lines, shape, 'rock', o.penWidth, 2);
       if (o.hasWater) reflectors.push({ x: cx, top: Math.max(waterTopY, baseY), height: h * 0.9, half: w * 0.4 });
     }

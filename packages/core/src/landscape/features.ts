@@ -10,23 +10,27 @@ export function closeRegion(upper: Point[], lower: Point[]): Point[] {
   return poly;
 }
 
-/** A small rough triangular rock silhouette centred at (cx, baseY). */
+/** A small rough rock silhouette centred at (cx, baseY): 6–9 vertices along an
+ *  off-centre peak envelope, occasionally with a second lump — the fixed
+ *  5-point version stamped identical tents across the water. */
 export function rockShape(cx: number, baseY: number, w: number, h: number, rng: () => number): Point[] {
-  const apexX = cx + (rng() - 0.5) * w * 0.5;
-  const apexY = baseY - h;
   const left = cx - w / 2;
-  const right = cx + w / 2;
-  const midL = lerp(left, apexX, 0.5) + (rng() - 0.5) * w * 0.12;
-  const midLY = lerp(baseY, apexY, 0.55) + (rng() - 0.5) * h * 0.15;
-  const midR = lerp(apexX, right, 0.5) + (rng() - 0.5) * w * 0.12;
-  const midRY = lerp(apexY, baseY, 0.45) + (rng() - 0.5) * h * 0.15;
-  return [
-    { x: left, y: baseY },
-    { x: midL, y: midLY },
-    { x: apexX, y: apexY },
-    { x: midR, y: midRY },
-    { x: right, y: baseY },
-  ];
+  const tStar = 0.3 + 0.4 * rng(); // dominant apex position
+  const twin = rng() < 0.35;
+  const t2 = tStar < 0.5 ? 0.68 + 0.2 * rng() : 0.12 + 0.2 * rng();
+  const twinH = 0.3 + 0.25 * rng();
+  const n = 6 + Math.floor(rng() * 4);
+  const pts: Point[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    // Piecewise peak envelope with jitter; faceted rather than smooth.
+    let env = t <= tStar ? t / Math.max(0.05, tStar) : (1 - t) / Math.max(0.05, 1 - tStar);
+    env = Math.pow(Math.max(0, env), 0.7);
+    if (twin) env = Math.max(env, twinH * Math.exp(-Math.pow((t - t2) / 0.14, 2)));
+    if (i > 0 && i < n) env *= 0.82 + 0.36 * rng();
+    pts.push({ x: left + t * w + (i > 0 && i < n ? (rng() - 0.5) * (w / n) * 0.6 : 0), y: baseY - h * env });
+  }
+  return pts;
 }
 
 // ——————————————————————————————————————————————————————————————————————
