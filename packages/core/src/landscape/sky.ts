@@ -2,7 +2,7 @@ import { FlowLine, Point } from '../flow-lines.js';
 import { SimplexNoise } from '../noise.js';
 import type { GrayscaleImage } from '../image.js';
 import { traceIsoContours } from '../iso-contours.js';
-import { trimPolyline } from '../lib/polyline.js';
+import { trimPolyline, smoothPolyline } from '../lib/polyline.js';
 import { lerp, clamp01 } from '../lib/math.js';
 import { type Craft, emitStroke, sampleProfileY, clipLineToPolygon } from './hatching.js';
 
@@ -146,12 +146,12 @@ export function buildCloudMask(clouds: number, cloudNoise: SimplexNoise): Graysc
   const data = new Float32Array(cw * ch);
   for (const { c, i } of kept) {
     // Flatten the underside: erase rows below ~72% of the mass height, with a
-    // ±1-cell noise ripple so the base isn't a ruled line.
+    // broad ±2.5-cell ripple so the base undulates instead of ruling a line.
     const cut = c.yMin + 0.72 * Math.max(1, c.yMax - c.yMin);
     for (const j of c.cells) {
       const jy = Math.floor(j / cw);
       const jx = j - jy * cw;
-      const ripple = cloudNoise.noise2D(jx * 0.35, i * 13.7);
+      const ripple = 2.5 * cloudNoise.noise2D(jx * 0.09, i * 13.7);
       if (jy <= cut + ripple) data[j] = 1;
     }
   }
@@ -320,16 +320,20 @@ export function drawSky(lines: FlowLine[], detail: FlowLine[], p: SkyParams): vo
   }
 
   // A faint, lightly trimmed outline along the cleaned cloud mass boundary
-  // firms up the carved negative space without scribble.
+  // firms up the carved negative space without scribble. The traced contour
+  // is smoothed and re-billowed — a raw raster trace is all straight runs and
+  // right-angle steps, which reads as a geometric cutout, not vapour.
   if (mask) {
     const contours = traceIsoContours(mask, 0.5);
+    const cellW = usableW / (mask.width - 1);
     for (const c of contours) {
       if (c.length < 24) continue;
-      const mapped = c.map((pt) => ({
-        x: x0 + (pt.x / (mask.width - 1)) * usableW,
-        y: skyTopY + (pt.y / (mask.height - 1)) * skyH,
+      const mapped = c.map((pt, idx) => ({
+        x: x0 + (pt.x / (mask.width - 1)) * usableW + 0.35 * cellW * p.cloudNoise.noise2D(idx * 0.35, pt.y * 0.2),
+        y: skyTopY + (pt.y / (mask.height - 1)) * skyH + 0.35 * cellW * p.cloudNoise.noise2D(idx * 0.35 + 50, pt.x * 0.2),
       }));
-      const trimmed = trimPolyline(mapped, 0.12);
+      const smoothed = smoothPolyline(mapped, 2);
+      const trimmed = trimPolyline(smoothed, 0.12);
       if (trimmed.length >= 2) detail.push({ points: trimmed, layer: 'cloud' });
     }
   }

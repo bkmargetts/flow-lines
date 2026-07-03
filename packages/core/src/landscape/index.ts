@@ -235,6 +235,26 @@ function breakProfile(profile: Point[], rng: () => number): Point[][] {
   return out.filter((p) => p.length > 1);
 }
 
+/** Push a closed blob outward from its centroid by ~`px` — occlusion polys are
+ *  inflated a hair so the hand-drawn wobble (applied after occlusion) can't
+ *  bend background strokes back across a mass's contour. */
+function inflatePoly(poly: Point[], px: number): Point[] {
+  let cx = 0;
+  let cy = 0;
+  for (const p of poly) {
+    cx += p.x;
+    cy += p.y;
+  }
+  cx /= poly.length;
+  cy /= poly.length;
+  return poly.map((p) => {
+    const dx = p.x - cx;
+    const dy = p.y - cy;
+    const d = Math.hypot(dx, dy) || 1;
+    return { x: p.x + (dx / d) * px, y: p.y + (dy / d) * px };
+  });
+}
+
 /** A confident bold silhouette built from trimmed (tapered) offset passes. */
 function emitContour(out: FlowLine[], profile: Point[], layer: string, penWidth: number, passes: number): void {
   const w = Math.max(1, passes);
@@ -521,7 +541,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         { x: hx0, y: baseY },
         { x: hx1, y: baseY },
       ]);
-      lines = occludeBehind(lines, poly); // hide water + farther headlands behind it
+      lines = occludeBehind(lines, inflatePoly(poly, 1.4)); // hide water + farther headlands behind it
       skyOccluders.push(poly);
       const tone = ridgeTone(0.3 + 0.4 * f);
       const craft: Craft = { rng, taper: o.taper, jitter: 2 * DEG, subStep: 10 };
@@ -560,7 +580,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       { x: fgX1, y: y1 },
     ];
     const poly = closeRegion(ordered, lower);
-    lines = occludeBehind(lines, poly); // a near mass — hide everything behind it
+    lines = occludeBehind(lines, inflatePoly(poly, 1.6)); // a near mass — hide everything behind it
     skyOccluders.push(poly);
     // Light top rim (paper picks out the edge) grounding to a dark base.
     const ridgeYAt = (x: number): number => sampleProfileY(ordered, x);
@@ -630,7 +650,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         { x: shape[0].x, y: baseY },
         { x: shape[shape.length - 1].x, y: baseY },
       ]);
-      lines = occludeBehind(lines, poly); // a rock hides the water behind it
+      lines = occludeBehind(lines, inflatePoly(poly, 1.6)); // a rock hides the water behind it
       skyOccluders.push(poly);
       // Shade only the flank away from the sun; the lit side is held as paper
       // with the contour carrying the form.
@@ -690,10 +710,12 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   // scratches, not light on water.)
   if (o.hasWater && o.reflection && waterBotY > waterTopY + 4) {
     const waterH = Math.max(1, waterBotY - waterTopY);
-    const drawGlints = (cx: number, half: number, depth: number, density: number): void => {
-      let y = waterTopY + 2 + rng() * 4;
+    // Glints hang BELOW their reflector (y0): a rock's shimmer starting at the
+    // horizon would run straight through the rock itself.
+    const drawGlints = (cx: number, half: number, y0: number, depth: number, density: number): void => {
+      let y = y0 + 2 + rng() * 4;
       let guard = 0;
-      while (y < Math.min(waterBotY - 1, waterTopY + depth) && guard++ < 80) {
+      while (y < Math.min(waterBotY - 1, y0 + depth) && guard++ < 80) {
         const fh = clamp01((y - waterTopY) / waterH);
         if (rng() < lerp(density, density * 0.35, fh)) {
           const nGlints = 1 + Math.floor(rng() * 3);
@@ -708,8 +730,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         y += o.waterHatchSpacing * (0.8 + 1.2 * fh) + rng() * 3;
       }
     };
-    if (sunActive) drawGlints(sunX, o.reflectionWidth, waterBotY - waterTopY, 0.9);
-    for (const r of reflectors) drawGlints(r.x, Math.min(r.half, 14), Math.min(waterBotY - waterTopY, r.height * 1.2), 0.55);
+    if (sunActive) drawGlints(sunX, o.reflectionWidth, waterTopY, waterBotY - waterTopY, 0.9);
+    for (const r of reflectors) drawGlints(r.x, Math.min(r.half, 14), r.top, Math.min(waterBotY - r.top, r.height * 1.2), 0.55);
   }
 
   // —— Sky: broken vertical hatch carrying a continuous tonal gradient, sun +
@@ -767,7 +789,10 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
 
   // —— Trees / foliage clumps along the nearest land crest ——————————————
   if (o.trees > 0) {
-    drawTrees(detail, { crest: treeCrest, count: Math.round(o.trees), usableW, style: o.treeStyle, lightX, rng, weight: focusAccept });
+    const hulls = drawTrees(detail, { crest: treeCrest, count: Math.round(o.trees), usableW, style: o.treeStyle, lightX, rng, weight: focusAccept });
+    // Erase the land/water hatch behind each canopy — a tree drawn over live
+    // shading reads as a translucent ghost.
+    for (const hull of hulls) lines = occludeBehind(lines, inflatePoly(hull, 1.2));
   }
 
   // Occlude the after-mass detail (cloud outlines, sun rays, birds, trees) by the

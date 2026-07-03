@@ -305,7 +305,9 @@ function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: 
     // real engraved hillside); only hazy far bands lose strokes and vary
     // reach, so the survivors gather in noise-dark patches emerging from mist.
     const mistK = Math.max(0, Math.min(1, (mist - 0.2) / 0.5));
-    const keep = lerp(1, tv >= 0.55 ? 1 : Math.max(0, (tv - 0.12) * 2.3), mistK);
+    // Even deep in mist most strokes survive at the crest — a ridge must stay
+    // a connected mass dissolving downward, or it floats as a detached fringe.
+    const keep = lerp(1, tv >= 0.5 ? 1 : Math.max(0, 0.35 + (tv - 0.05) * 2.2), mistK);
     if (best && tv >= 0.13 && craft.rng() < keep) {
       const a = Math.max(0, best[0]) + craft.rng() * Math.min(4, (best[1] - best[0]) * 0.15);
       const b = best[1];

@@ -129,13 +129,22 @@ function drawScrub(out: FlowLine[], t: TreeInstance, rng: () => number): Point[]
     const by = t.baseY - rng() * t.s * 0.2;
     pushRun(out, [{ x: bx, y: by }, { x: bx + (rng() - 0.5) * t.s * 0.2, y: by - t.s * (0.25 + 0.3 * rng()) }], 'tree');
   }
-  return []; // too small to occlude anything
+  // A low mound hull so background hatch doesn't run through the bushes.
+  return [
+    { x: t.x - t.s * 0.95, y: t.baseY + 1 },
+    { x: t.x - t.s * 0.5, y: t.baseY - t.s * 0.55 },
+    { x: t.x + t.s * 0.5, y: t.baseY - t.s * 0.55 },
+    { x: t.x + t.s * 0.95, y: t.baseY + 1 },
+  ];
 }
 
 /** Trees along a crest: clustered, depth-scaled, nearer canopies occluding
- *  farther ones. */
-export function drawTrees(out: FlowLine[], p: TreeParams): void {
-  if (p.count <= 0) return;
+ *  farther ones. Returns each tree's occlusion hull so the caller can erase
+ *  the already-drawn background hatch behind the canopies — otherwise trees
+ *  read as translucent outlines floating behind the shading. */
+export function drawTrees(out: FlowLine[], p: TreeParams): Point[][] {
+  const hulls: Point[][] = [];
+  if (p.count <= 0) return hulls;
   const x0 = p.crest[0].x;
   const x1 = p.crest[p.crest.length - 1].x;
   let yMin = Infinity;
@@ -175,10 +184,14 @@ export function drawTrees(out: FlowLine[], p: TreeParams): void {
     const pending: FlowLine[] = [];
     const hull =
       t.kind === 'round' ? drawRoundTree(pending, t, p.lightX, p.rng) : t.kind === 'conifer' ? drawConifer(pending, t, p.rng) : drawScrub(pending, t, p.rng);
-    if (hull.length >= 3) treeLines = occludeBehind(treeLines, hull);
+    if (hull.length >= 3) {
+      treeLines = occludeBehind(treeLines, hull);
+      hulls.push(hull);
+    }
     for (const l of pending) treeLines.push(l);
   }
   for (const l of treeLines) out.push(l);
+  return hulls;
 }
 
 export interface BirdParams {
