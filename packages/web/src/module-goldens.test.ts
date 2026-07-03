@@ -73,6 +73,29 @@ CASES['composite/stack'] = () => {
   return composite(borderFrame, page, layers).exportSvg;
 };
 
+// The same stack with the global hand-sketch finish on — pins the unified
+// sketch pass (breaks, overshoot, overdraw, steady border) at a fixed seed.
+CASES['composite/sketch'] = () => {
+  const sketchFrame: FrameSettings = {
+    ...frame,
+    borderEnabled: true,
+    borderCornerRadiusMm: 4,
+    sketchEnabled: true,
+    sketchIntensity: 0.6,
+    sketchSeed: 42,
+  };
+  const byId = new Map(pureModules.map((m) => [m.id, m]));
+  const mods = [byId.get('classic')!, byId.get('flow-field')!, byId.get('conway')!];
+  const layers: CompositeLayer[] = mods.map((mod, i) => ({
+    instanceId: `golden-${i}`,
+    module: mod as Module,
+    state: stateFor(mod),
+    visible: true,
+    holdOffMm: mod.id === 'classic' ? 1.5 : 0,
+  }));
+  return composite(sketchFrame, page, layers).exportSvg;
+};
+
 function hashOf(name: string, value: unknown): string {
   const json = JSON.stringify(value);
   if (json.length < 500) throw new Error(`${name}: suspiciously small output (${json.length} chars)`);

@@ -9,10 +9,10 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import { resolvePageFrame } from '../page.js';
+import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerConway(program: Command) {
-  program
-    .command('conway')
+  addSketchOptions(program.command('conway'))
     .description(
       "Render a 'long exposure' of Conway's Game of Life from an R-pentomino: " +
         'the final config sits solid and crisp while its history fades into comet trails'
@@ -86,7 +86,11 @@ export function registerConway(program: Command) {
       console.log(`  Size: ${width}x${height}`);
       console.log(`  Generations: ${conwayOptions.generations}, decay: ${conwayOptions.decay}`);
 
-      const result = generateConwayExposure(conwayOptions);
+      const result = applySketchFromFlags(
+        generateConwayExposure(conwayOptions),
+        options,
+        sketchScale(options)
+      );
 
       console.log(`  Seed: ${result.seed}`);
       console.log(`  Generated ${result.lines.length} strokes`);

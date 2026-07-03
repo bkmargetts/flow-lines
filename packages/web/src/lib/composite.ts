@@ -1,4 +1,6 @@
 import {
+  applySketch,
+  BASE_PX_PER_MM,
   limitStrokeDensity,
   toSVG,
   toSVGLayers,
@@ -149,9 +151,33 @@ export function composite(
     layerWidths.border = DEFAULT_PEN_WIDTH_MM * page.pxPerMm;
   }
 
-  // ---- 3. Density protection across the whole composite ----
+  // ---- 2.5 Global hand-sketch finish, then clip back to the sheet ----
+  // After namespacing so `pen` metadata still gates the steady bold treatment,
+  // and before density protection so overdraw can be clawed back by it. The
+  // border sketches as a steady layer (wobble only — no double rules), and the
+  // clip is to the page rect, not the margin box: the wobbled border sits at
+  // the margin and must not be sliced, and overshoot spill into the margin is
+  // small and plotter-safe.
   let outLines = finalLines;
-  if (frame.densityEnabled && finalLines.length) {
+  if (frame.sketchEnabled && outLines.length) {
+    outLines = applySketch(
+      { width, height, seed: frame.sketchSeed, lines: outLines },
+      {
+        style: frame.sketchStyle,
+        intensity: frame.sketchIntensity,
+        overshoot: frame.sketchOvershoot,
+        breaks: frame.sketchBreaks,
+        seed: frame.sketchSeed,
+        scale: page.pxPerMm / BASE_PX_PER_MM,
+        steadyLayers: ['border'],
+        maxLines: 60000,
+        clipRect: { x0: 0, y0: 0, x1: width, y1: height },
+      }
+    ).lines;
+  }
+
+  // ---- 3. Density protection across the whole composite ----
+  if (frame.densityEnabled && outLines.length) {
     // One coverage grid per (namespaced) pen layer, so an unrelated layer can't
     // thin another. Cell size tracks the heaviest pen in the stack.
     const widths = Object.values(layerWidths);
@@ -160,7 +186,7 @@ export function composite(
     const skipLayers = Object.keys(layerColors).filter((k) => k.endsWith('/bold'));
     skipLayers.push('border');
     const trimmed = limitStrokeDensity(
-      { width, height, seed: 0, lines: finalLines },
+      { width, height, seed: 0, lines: outLines },
       {
         maxPasses: frame.densityMaxPasses,
         cellPx,

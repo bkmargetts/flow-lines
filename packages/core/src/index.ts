@@ -105,6 +105,10 @@ export type { SemanticLabel, LabelImage, NamedMask } from './semantic-map.js';
 export { applyHandDrawnStyle } from './hand-drawn.js';
 export type { HandDrawnOptions } from './hand-drawn.js';
 
+// Unified hand-sketch finish (wobble + overdraw + overshoot + pen-lift breaks)
+export { applySketch } from './sketch.js';
+export type { SketchOptions } from './sketch.js';
+
 // Vine generator (organic procedural vines)
 export { generateVines } from './vines/index.js';
 export type { VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from './vines/index.js';

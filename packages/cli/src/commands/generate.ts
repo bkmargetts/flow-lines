@@ -7,10 +7,10 @@ import {
   type FlowLinesOptions,
   type SVGOptions,
 } from '@flow-lines/core';
+import { addSketchOptions, applySketchFromFlags } from '../sketch.js';
 
 export function registerGenerate(program: Command) {
-  program
-    .command('generate')
+  addSketchOptions(program.command('generate'))
     .description('Generate a flow lines SVG')
     .option('-w, --width <number>', 'Canvas width in pixels', '800')
     .option('-h, --height <number>', 'Canvas height in pixels', '800')
@@ -61,7 +61,7 @@ export function registerGenerate(program: Command) {
       console.log(`  Seed: ${result.seed}`);
       console.log(`  Generated ${result.lines.length} lines`);
 
-      const svg = toSVG(result, svgOptions);
+      const svg = toSVG(applySketchFromFlags(result, options), svgOptions);
       const outputPath = resolve(process.cwd(), options.output);
 
       writeFileSync(outputPath, svg, 'utf-8');

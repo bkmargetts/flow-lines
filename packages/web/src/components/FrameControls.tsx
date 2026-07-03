@@ -1,9 +1,10 @@
-import type { PaperFit } from '@flow-lines/core';
+import type { PaperFit, SketchStyle } from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
 import { InfoTip } from './InfoTip';
 import { ColorField } from './ColorField';
 import { EditableValue } from './EditableValue';
 import { PaperControls } from './PaperControls';
+import { SeedControl } from './controls/SeedControl';
 
 /** Paper-tone swatches shown behind the drawing in the preview (never plotted). */
 const PAPER_TONES: Array<{ id: string; label: string }> = [
@@ -191,6 +192,102 @@ export function FrameControls() {
             value={frame.densityMinOverlapMm}
             onChange={(e) => updateFrame({ densityMinOverlapMm: parseFloat(e.target.value) })}
           />
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.sketchEnabled}
+            onChange={(e) => updateFrame({ sketchEnabled: e.target.checked })}
+          />
+          Hand sketch
+          <InfoTip text="Redraws the whole sheet with a sketching hand as one finishing pass over every layer: strokes wobble and misregister, long lines lift and resume, open ends overshoot their stop, and higher intensity restates lines in extra overdraw passes. Any module-level wobble or sketch settings still apply underneath. Deterministic per sketch seed. Overdraw multiplies pen travel — if density protection is on with 1 max pass it will eat the restatements, so raise max passes. Heavy on photo renders at high intensity." />
+        </label>
+      </div>
+
+      {frame.sketchEnabled && (
+        <div className="control-group">
+          <label className="label-text">Sketch style</label>
+          <select
+            value={frame.sketchStyle}
+            onChange={(e) => updateFrame({ sketchStyle: e.target.value as SketchStyle })}
+          >
+            <option value="loose">Loose</option>
+            <option value="fine">Fine</option>
+            <option value="gestural">Gestural</option>
+            <option value="scratchy">Scratchy</option>
+          </select>
+          <label>
+            Intensity{" "}
+            <EditableValue
+              value={Math.round(frame.sketchIntensity * 100)}
+              min={0}
+              max={100}
+              step={5}
+              onChange={(v) => updateFrame({ sketchIntensity: v / 100 })}
+            >
+              {Math.round(frame.sketchIntensity * 100)}%
+            </EditableValue>
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={frame.sketchIntensity}
+            onChange={(e) => updateFrame({ sketchIntensity: parseFloat(e.target.value) })}
+          />
+          <label>
+            Overshoot{" "}
+            <EditableValue
+              value={Math.round(frame.sketchOvershoot * 100)}
+              min={0}
+              max={100}
+              step={5}
+              onChange={(v) => updateFrame({ sketchOvershoot: v / 100 })}
+            >
+              {Math.round(frame.sketchOvershoot * 100)}%
+            </EditableValue>
+            <InfoTip text="How far open line ends run past their stopping point, the way a quick hand doesn't brake exactly on the mark. Not every end overshoots." />
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={frame.sketchOvershoot}
+            onChange={(e) => updateFrame({ sketchOvershoot: parseFloat(e.target.value) })}
+          />
+          <label>
+            Pen lifts{" "}
+            <EditableValue
+              value={Math.round(frame.sketchBreaks * 100)}
+              min={0}
+              max={100}
+              step={5}
+              onChange={(v) => updateFrame({ sketchBreaks: v / 100 })}
+            >
+              {Math.round(frame.sketchBreaks * 100)}%
+            </EditableValue>
+            <InfoTip text="How often long strokes break where the pen lifts and resumes, so lines read as drawn in strokes rather than traced in one go." />
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={frame.sketchBreaks}
+            onChange={(e) => updateFrame({ sketchBreaks: parseFloat(e.target.value) })}
+          />
+          <SeedControl
+            seed={frame.sketchSeed}
+            onChange={(sketchSeed) => updateFrame({ sketchSeed })}
+            title="New random sketch seed"
+          >
+            <label className="label-text">Sketch seed</label>
+          </SeedControl>
         </div>
       )}
 

@@ -10,10 +10,10 @@ import {
 } from '@flow-lines/core';
 import { PLANET_PALETTES } from '../palettes.js';
 import { resolvePageFrame } from '../page.js';
+import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerPlanet(program: Command) {
-  program
-    .command('planet')
+  addSketchOptions(program.command('planet'))
     .description('Generate procedural, plottable pen-and-ink planets')
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '800')
@@ -228,7 +228,10 @@ export function registerPlanet(program: Command) {
         ...paperSvg,
       };
 
-      const svg = toSVG({ ...result, seed: planetOptions.seed ?? 0 }, svgOptions);
+      const svg = toSVG(
+        applySketchFromFlags({ ...result, seed: planetOptions.seed ?? 0 }, options, sketchScale(options)),
+        svgOptions
+      );
       const outputPath = resolve(process.cwd(), options.output);
       writeFileSync(outputPath, svg, 'utf-8');
       console.log(`\nSaved to: ${outputPath}`);

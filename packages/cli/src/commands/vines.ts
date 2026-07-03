@@ -25,10 +25,10 @@ import {
 import { VINE_PALETTES } from '../palettes.js';
 import { loadGuidePathsFromSvg } from '../guide-paths.js';
 import { resolvePageFrame } from '../page.js';
+import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerVines(program: Command) {
-  program
-    .command('vines')
+  addSketchOptions(program.command('vines'))
     .description('Grow procedural, plottable botanical-illustration vines')
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '1000')
@@ -201,7 +201,7 @@ export function registerVines(program: Command) {
         ...paperSvg,
       };
 
-      const svg = toSVG(result, svgOptions);
+      const svg = toSVG(applySketchFromFlags(result, options, sketchScale(options)), svgOptions);
       const outputPath = resolve(process.cwd(), options.output);
       writeFileSync(outputPath, svg, 'utf-8');
       console.log(`\nSaved to: ${outputPath}`);
