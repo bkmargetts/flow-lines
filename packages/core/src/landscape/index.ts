@@ -19,8 +19,9 @@ import {
   hatchLand,
   hatchGround,
 } from './hatching.js';
-import { closeRegion, rockShape, subtractPolygon, occludeBehind, drawTrees } from './features.js';
+import { closeRegion, rockShape, subtractPolygon, occludeBehind } from './features.js';
 import { drawSky } from './sky.js';
+import { drawTrees, drawBirds, type TreeStyle } from './flora.js';
 
 /**
  * Procedural landscapes drawn as plottable pen-and-ink. The goal is work that
@@ -103,6 +104,7 @@ export interface LandscapeOptions {
   // Detail marks
   clouds?: number; // 0..1 carved-cloud coverage
   trees?: number; // count of foliage clumps
+  treeStyle?: TreeStyle; // round canopies / conifers / low scrub / mixed
   birds?: number; // count of gull marks
 
   // Rocks / islands
@@ -156,6 +158,7 @@ const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 
   taper: 0.5,
   clouds: 0,
   trees: 0,
+  treeStyle: 'mixed',
   birds: 0,
   rocks: 0,
   rockMaxSize: 46,
@@ -611,7 +614,10 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         return clamp01(0.3 + 0.65 * Math.pow(side, 0.8) + 0.12 * toneNoise.noise2D(x * 0.05, y * 0.05));
       };
       const rockCraft: Craft = { rng, taper: o.taper * 0.7, jitter: 2.5 * DEG, subStep: 10 };
-      sweepHatch(lines, poly, flankDeg + 90, o.rockHatchSpacing * 0.75, rockTone, () => true, 'rock', rockCraft, undefined, Math.max(10, h * 0.6));
+      // Small rocks take a plain steep hatch — a flank-parallel angle inside a
+      // tiny polygon leaves a few long marks that read as scaffolding.
+      const rockAngle = h < 22 ? 74 : flankDeg + 90;
+      sweepHatch(lines, poly, rockAngle, o.rockHatchSpacing * 0.75, rockTone, () => true, 'rock', rockCraft, undefined, Math.max(10, h * 0.6));
       if (w > o.rockMaxSize * 0.75) {
         sweepHatch(lines, poly, flankDeg + 60, o.rockHatchSpacing * 1.3, rockTone, (xx, yy, t) => t > 0.7, 'rock', rockCraft, undefined, Math.max(8, h * 0.45));
       }
@@ -715,17 +721,9 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       pushRun(detail, rim, 'sun', 'bold');
     }
 
-    // Birds: a few shallow gull "vees" in the upper sky, clear of the sun.
+    // Birds: loose gull flocks in the upper sky, clear of the sun.
     if (o.birds > 0) {
-      for (let b = 0; b < Math.round(o.birds); b++) {
-        const bx = lerp(x0 + usableW * 0.1, x1 - usableW * 0.1, rng());
-        const by = lerp(skyTopY + usableH * 0.05, horizonY - usableH * 0.12, rng() * 0.7);
-        if (sunActive && Math.hypot(bx - sunX, by - sunY) < haloR * 1.2) continue;
-        const s = usableW * (0.012 + rng() * 0.012);
-        const dip = s * 0.42;
-        pushRun(detail, densifySegment({ x: bx - s, y: by }, { x: bx, y: by + dip }, 5), 'bird');
-        pushRun(detail, densifySegment({ x: bx, y: by + dip }, { x: bx + s, y: by }, 5), 'bird');
-      }
+      drawBirds(detail, { x0, x1, skyTopY, horizonY, usableW, usableH, count: o.birds, sunActive, sunX, sunY, haloR, rng });
     }
   }
 
@@ -734,7 +732,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
 
   // —— Trees / foliage clumps along the nearest land crest ——————————————
   if (o.trees > 0) {
-    drawTrees(detail, treeCrest, Math.round(o.trees), usableW, rng);
+    drawTrees(detail, { crest: treeCrest, count: Math.round(o.trees), usableW, style: o.treeStyle, lightX, rng });
   }
 
   // Occlude the after-mass detail (cloud outlines, sun rays, birds, trees) by the

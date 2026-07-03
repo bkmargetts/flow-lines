@@ -64,6 +64,7 @@ export function registerLandscape(program: Command) {
     // detail marks
     .option('--clouds <number>', 'Carved-cloud coverage 0..1 (default 0)')
     .option('--trees <number>', 'Foliage clumps on the nearest crest (default 0)')
+    .option('--tree-style <s>', 'Tree vocabulary: mixed | round | conifer | scrub (default mixed)')
     .option('--birds <number>', 'Gull marks in the sky (default 0)')
     // rocks
     .option('--rocks <number>', 'Small rocks / islands (default 0, or per --scene)')
@@ -129,6 +130,7 @@ export function registerLandscape(program: Command) {
         taper: num('taper', 0.5),
         clouds: num('clouds', scene?.clouds ?? 0),
         trees: Math.round(num('trees', scene?.trees ?? 0)),
+        treeStyle: (options.treeStyle ?? scene?.treeStyle ?? 'mixed') as LandscapeOptions['treeStyle'],
         birds: Math.round(num('birds', scene?.birds ?? 0)),
         rocks: Math.round(num('rocks', scene?.rocks ?? 0)),
         rockMaxSize: num('rockMaxSize', 46),
