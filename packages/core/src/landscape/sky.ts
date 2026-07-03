@@ -211,11 +211,20 @@ export function drawSky(lines: FlowLine[], detail: FlowLine[], p: SkyParams): vo
   const coverage = (x: number, y: number, skyline: number): number => {
     const v = clamp01((y - skyTopY) / Math.max(1, skyline - skyTopY));
     const t = clamp01(lerp(p.toneTop, p.toneHorizon, v) + 0.08 * p.toneNoise.fbm(x * 0.006, y * 0.006, 2, 0.5, 2, 1));
-    if (t < 0.22) return 0;
-    return smooth01((t - 0.22) / 0.66);
+    if (t < 0.14) return 0;
+    return smooth01((t - 0.14) / 0.72);
   };
 
-  for (let x = x0 + rng() * step; x <= x1; x += step) {
+  // Threshold-dithered LONG columns: tone is carried by the fraction of
+  // columns drawn and by where each stroke starts — not by shredding strokes
+  // into dashes (which reads as drizzle). Each column gets a low-discrepancy
+  // threshold (golden-ratio stratified, so surviving columns stay evenly
+  // interleaved) and draws the y-runs where coverage clears it. Every column
+  // crosses its threshold at its own height — no shared phase, no quantized
+  // infill, so the old parity banding cannot re-form.
+  let colIdx = 0;
+  for (let cx = x0 + rng() * step; cx <= x1; cx += step, colIdx++) {
+    const x = cx + (rng() - 0.5) * step * 0.7;
     const skyline = sampleProfileY(p.skyBoundary, x);
     if (skyline <= skyTopY + 2) continue;
 
@@ -227,81 +236,86 @@ export function drawSky(lines: FlowLine[], detail: FlowLine[], p: SkyParams): vo
 
     const dx = x - sun.x;
     const hd = sun.active && Math.abs(dx) < sun.r + 1.2 ? Math.sqrt(Math.max(0, sun.r * sun.r - dx * dx)) : -1;
+    // Halo: per-column radial erosion — a ragged ring of stroke ENDS biased
+    // close to the disk, not per-dash drop-out.
+    const rH = sun.active && Math.abs(dx) < sun.haloR ? Math.max(sun.r * 1.05 + 1.2, sun.r + (sun.haloR - sun.r) * rng() * rng()) : -1;
+    const hh = rH > 0 && Math.abs(dx) < rH ? Math.sqrt(Math.max(0, rH * rH - dx * dx)) : -1;
 
-    // Walk down the column: dash length and gap both ride the local coverage.
-    // The start offset spans a whole dash+gap cycle and every gap is jittered,
-    // so neighbouring columns never share a phase (aligned dash rows would
-    // read as a woven screen).
-    let y = skyTopY + rng() * 36;
-    let guard = 0;
-    while (y < skyline && guard++ < 400) {
-      const c = coverage(x, y, skyline);
-      if (c <= 0) {
-        y += 12 + rng() * 10;
-        continue;
-      }
-      const L = lerp(6, 44, c) * (0.75 + 0.5 * rng());
-      const yEnd = Math.min(skyline, y + L);
-      const gap = Math.min(60, Math.max(2, (L * (1 - c)) / Math.max(c, 0.08))) * (0.7 + 0.6 * rng());
-      // Feather light zones further: sparse coverage keeps only some dashes.
-      if (rng() >= Math.min(1, 0.3 + 1.4 * c)) {
-        y = yEnd + gap;
-        continue;
-      }
+    // Threshold floor sits above the coverage noise drift so a near-paper sky
+    // can't sprout isolated full-height strokes.
+    const u = ((colIdx * 0.61803399) % 1) * 0.88 + 0.08 + 0.03 * rng();
 
-      let segs: [number, number][] = [[y, yEnd]];
-      // Carve the sun disk exactly — no per-column randomness, so the hole is
-      // genuinely round (the old jittered carve read as a ragged diamond).
-      if (hd >= 0) {
-        const next: [number, number][] = [];
-        for (const [lo, hi] of segs) for (const piece of subtractInterval(lo, hi, sun.y - hd - 1.2, sun.y + hd + 1.2)) next.push(piece);
-        segs = next;
-      }
-      for (const [olo, ohi] of occ) {
-        const next: [number, number][] = [];
-        for (const [lo, hi] of segs) for (const piece of subtractInterval(lo, hi, olo, ohi)) next.push(piece);
-        segs = next;
-      }
-      // Carve clouds (sampled cheaply along the dash).
-      if (mask) {
-        const refined: [number, number][] = [];
-        for (const [lo, hi] of segs) {
-          let runStart = lo;
-          let inside = inCloud(x, lo);
-          const stepY = 4;
-          for (let yy = lo + stepY; yy <= hi; yy += stepY) {
-            const cIn = inCloud(x, yy);
-            if (cIn !== inside) {
-              if (!inside && yy - runStart > 2) refined.push([runStart, yy - stepY * 0.5]);
-              runStart = yy;
-              inside = cIn;
-            }
-          }
-          if (!inside && hi - runStart > 2) refined.push([runStart, hi]);
+    // Collect the y-runs where coverage clears this column's threshold.
+    let segs: [number, number][] = [];
+    {
+      const sampleStep = 6;
+      let runStart = -1;
+      for (let y = skyTopY; y <= skyline; y += sampleStep) {
+        const on = coverage(x, y, skyline) >= u;
+        if (on && runStart < 0) runStart = y === skyTopY ? y : y + rng() * 10;
+        else if (!on && runStart >= 0) {
+          if (y - runStart > 2) segs.push([runStart, y]);
+          runStart = -1;
         }
-        segs = refined;
       }
+      if (runStart >= 0 && skyline - runStart > 2) segs.push([runStart, skyline]);
+    }
 
-      for (let [lo, hi] of segs) {
-        if (hi - lo < 2) continue;
-        // The halo feathers radially: dashes near the disk drop out with rising
-        // probability and the survivors shorten — a stipple ring, not geometry.
-        if (sun.active) {
-          const mid = (lo + hi) / 2;
-          const r = Math.hypot(x - sun.x, mid - sun.y);
-          if (r < sun.haloR) {
-            const q = clamp01((r - sun.r) / Math.max(1, sun.haloR - sun.r));
-            if (rng() < Math.pow(1 - q, 1.5)) continue;
-            const keep = lerp(0.45, 1, q);
-            const half = ((hi - lo) * keep) / 2;
-            lo = mid - half;
-            hi = mid + half;
-            if (hi - lo < 2) continue;
+    const carve = (rlo: number, rhi: number): void => {
+      const next: [number, number][] = [];
+      for (const [lo, hi] of segs) for (const piece of subtractInterval(lo, hi, rlo, rhi)) next.push(piece);
+      segs = next;
+    };
+    // Carve the sun disk exactly — no per-column randomness, so the hole is
+    // genuinely round (the old jittered carve read as a ragged diamond) —
+    // then the eroded halo interval around it.
+    if (hd >= 0) carve(sun.y - hd - 1.2, sun.y + hd + 1.2);
+    if (hh >= 0) carve(sun.y - hh, sun.y + hh);
+    for (const [olo, ohi] of occ) carve(olo, ohi);
+    // Carve clouds (sampled cheaply along the run).
+    if (mask) {
+      const refined: [number, number][] = [];
+      for (const [lo, hi] of segs) {
+        let runStart = lo;
+        let inside = inCloud(x, lo);
+        const stepY = 4;
+        for (let yy = lo + stepY; yy <= hi; yy += stepY) {
+          const cIn = inCloud(x, yy);
+          if (cIn !== inside) {
+            if (!inside && yy - runStart > 2) refined.push([runStart, yy - stepY * 0.5]);
+            runStart = yy;
+            inside = cIn;
           }
         }
-        emitStroke(lines, { x, y: lo }, { x, y: hi }, 'sky', craft);
+        if (!inside && hi - runStart > 2) refined.push([runStart, hi]);
       }
-      y = yEnd + gap;
+      segs = refined;
+    }
+
+    // Occasional pen lifts: long runs break into 90-220px strokes with small
+    // gaps; breaks concentrate where coverage barely clears the threshold
+    // (the fabric loosens toward its paper edge). Any near-full-height run
+    // must break at least once.
+    const maxSkySpan = 0.8 * (skyline - skyTopY);
+    for (const [lo, hi] of segs) {
+      if (hi - lo < 2) continue;
+      let y = lo;
+      let guard = 0;
+      while (y < hi && guard++ < 60) {
+        // Stroke length rides the local coverage: a dense sky keeps long
+        // confident lines, a light sky drops to shorter (but still
+        // substantial) marks — isolated 200px strokes in a sparse field read
+        // as rain streaks.
+        const cHere = coverage(x, y, skyline);
+        const full = lerp(55, 220, Math.min(1, cHere / 0.55));
+        let run = full * (0.6 + 0.5 * rng());
+        const margin = coverage(x, (y + Math.min(hi, y + run)) / 2, skyline) - u;
+        if (margin < 0.12) run *= 0.5;
+        if (hi - lo > maxSkySpan) run = Math.min(run, maxSkySpan * (0.45 + 0.3 * rng()));
+        const yEnd = Math.min(hi, y + run);
+        if (yEnd - y > 2) emitStroke(lines, { x, y }, { x, y: yEnd }, 'sky', craft);
+        y = yEnd + 3 + rng() * 5;
+      }
     }
   }
 

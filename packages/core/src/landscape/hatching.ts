@@ -148,15 +148,15 @@ function emitHatchRun(out: FlowLine[], A: Point, B: Point, layer: string, craft:
   let t = 0;
   let guard = 0;
   while (t < len - 1 && guard++ < 200) {
-    const seg = maxLen * (0.7 + 0.6 * craft.rng());
+    const seg = maxLen * (0.8 + 0.4 * craft.rng());
     const e = Math.min(len, t + seg);
     // Stagger each mark a hair off the shared axis — collinear dashes with tiny
     // gaps read as one long ruled line, which defeats the chopping entirely.
-    const off = (craft.rng() - 0.5) * 1.8;
+    const off = (craft.rng() - 0.5) * 0.9;
     const px = -uy * off;
     const py = ux * off;
     emitStroke(out, { x: A.x + ux * t + px, y: A.y + uy * t + py }, { x: A.x + ux * e + px, y: A.y + uy * e + py }, layer, craft);
-    t = e + 2.5 + craft.rng() * 4.5;
+    t = e + 1.5 + craft.rng() * 2.5;
   }
 }
 
@@ -203,9 +203,10 @@ export function sweepHatch(
   while (s <= sMax && guard++ < 6000) {
     const O: Point = { x: nrm.x * s, y: nrm.y * s };
     const runs = clipLineToPolygon(poly, O, dir);
-    // Tone is sampled piecewise along the row: a single midpoint (or max) let
-    // one dark spot keep a whole row tight, so light passages could never
-    // open to paper.
+    // Tone is sampled piecewise along the row (a single midpoint or max let
+    // one dark spot keep a whole row tight), but contiguous passing pieces
+    // merge back into ONE run before emission — emitting each sampling piece
+    // as its own tapered stroke shredded every row into ~30px ticks.
     let toneSum = 0;
     let toneN = 0;
     for (const [t0, t1] of runs) {
@@ -213,6 +214,13 @@ export function sweepHatch(
       for (const [a0, b0] of prePieces) {
         const plen = b0 - a0;
         const nPieces = Math.max(1, Math.ceil(plen / 30));
+        let runStart = -1;
+        const flushRun = (end: number): void => {
+          if (runStart >= 0 && end - runStart > 1) {
+            emitHatchRun(out, { x: O.x + dir.x * runStart, y: O.y + dir.y * runStart }, { x: O.x + dir.x * end, y: O.y + dir.y * end }, layer, craft, maxLen);
+          }
+          runStart = -1;
+        };
         for (let pi = 0; pi < nPieces; pi++) {
           const a = a0 + (plen * pi) / nPieces;
           const b = a0 + (plen * (pi + 1)) / nPieces;
@@ -221,11 +229,14 @@ export function sweepHatch(
           const tv = tone(mx, my);
           toneSum += tv;
           toneN++;
-          if (!gate(mx, my, tv)) continue;
           // Paper cutoff: genuinely light passages hold clean paper.
-          if (tv < 0.22 + 0.05 * craft.rng()) continue;
-          emitHatchRun(out, { x: O.x + dir.x * a, y: O.y + dir.y * a }, { x: O.x + dir.x * b, y: O.y + dir.y * b }, layer, craft, maxLen);
+          if (!gate(mx, my, tv) || tv < 0.15 + 0.04 * craft.rng()) {
+            flushRun(a);
+            continue;
+          }
+          if (runStart < 0) runStart = a;
         }
+        flushRun(b0);
       }
     }
     const meanTone = toneN ? toneSum / toneN : 0.5;
@@ -289,22 +300,28 @@ function combHatch(out: FlowLine[], upper: Point[], poly: Point[], baseSpacing: 
       const lit = Math.max(0, Math.min(1, 0.5 + 0.9 * Math.tanh(slope * 3) * (shade.lightX ?? 1)));
       tv *= lerp(1 + 0.4 * shade.shadeSlope, 1 - 0.6 * shade.shadeSlope, lit);
     }
-    // Tone also carries density beyond spacing: genuinely light passages hold
-    // clean paper, and pale ones lose most strokes — the survivors gather in
-    // the noise-dark patches instead of dripping evenly off the contour.
-    const keep = tv >= 0.6 ? 1 : Math.max(0, (tv - 0.2) * 2.2);
-    if (best && craft.rng() < keep) {
+    // Stroke economy is a MIST effect, not the fabric: near and mid bands
+    // draw every stroke at near-full reach (density lives in spacing, like a
+    // real engraved hillside); only hazy far bands lose strokes and vary
+    // reach, so the survivors gather in noise-dark patches emerging from mist.
+    const mistK = Math.max(0, Math.min(1, (mist - 0.2) / 0.5));
+    const keep = lerp(1, tv >= 0.55 ? 1 : Math.max(0, (tv - 0.12) * 2.3), mistK);
+    if (best && tv >= 0.13 && craft.rng() < keep) {
       const a = Math.max(0, best[0]) + craft.rng() * Math.min(4, (best[1] - best[0]) * 0.15);
       const b = best[1];
       const Hb = b - a;
       let depth = Hb * Math.max(0, Math.min(1, depthBase * (0.55 + 0.9 * tv)));
-      // Vary stroke reach — a comb of equal-length teeth reads as fringe.
-      depth *= 0.6 + 0.8 * craft.rng();
+      const reachAmp = lerp(0.1, 0.4, mistK);
+      depth *= 1 - reachAmp + 2 * reachAmp * craft.rng();
       if (shade.fadeNoise && depth < Hb) depth *= 1 + 0.25 * shade.fadeNoise.noise2D(x * 0.015, 3.3);
       const b2 = a + Math.min(Hb, depth);
       if (b2 - a > 1.5) emitHatchRun(out, { x: O.x + dir.x * a, y: O.y + dir.y * a }, { x: O.x + dir.x * b2, y: O.y + dir.y * b2 }, layer, craft, maxLen);
     }
-    x += Math.max(0.8, baseSpacing / Math.max(0.18, tv));
+    // In mist, lightness lives in SHALLOW DEPTH and drop-out, not spacing —
+    // widely spaced long strokes read as stray hairs, while closely spaced
+    // short ones hugging the crest read as a ridge dissolving into haze.
+    const spacingTone = Math.max(tv, lerp(tv, 0.62, mistK));
+    x += Math.max(0.8, baseSpacing / Math.max(0.18, spacingTone));
   }
 }
 
@@ -350,7 +367,7 @@ export function hatchGround(
       const tv = tone((x + xe) / 2, midY);
       // Whole passages of the ground hold paper; the dither keeps the skip
       // boundary organic rather than a contour of its own.
-      if (tv >= 0.3 + 0.25 * dither.noise2D(x * 0.008, d * 0.05)) {
+      if (tv >= 0.22 + 0.18 * dither.noise2D(x * 0.008, d * 0.05)) {
         const yOff = (craft.rng() - 0.5) * jitter;
         const pts: Point[] = [];
         for (let sx = x; sx <= xe + 0.5; sx += 8) pts.push({ x: sx, y: rowY(sx, d) + yOff });
@@ -372,8 +389,8 @@ export function hatchGround(
   let guard = 0;
   while (avgShoreY + d < yBottom && guard++ < 200) {
     const dNorm = Math.min(1, d / depthRange);
-    emitRow(d, 20 + 30 * craft.rng(), 15 + 25 * craft.rng(), 1.6);
-    d += spacing * lerp(1.2, 2.6, dNorm);
+    emitRow(d, 40 + 40 * craft.rng(), 8 + 10 * craft.rng(), 1.6);
+    d += spacing * lerp(1.0, 1.9, dNorm);
   }
 }
 

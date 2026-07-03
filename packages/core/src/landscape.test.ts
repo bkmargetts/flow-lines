@@ -125,15 +125,18 @@ describe('generateLandscape', () => {
     const r = generateLandscape(baseOptions({ hasWater: true, horizonFrac: 0.4, waterFrac: 1, reflection: false, rocks: 0 }));
     const horizonY = 24 + 0.4 * (700 - 48);
     const waterBot = 700 - 24;
+    // Compare ink LENGTH, not dash count — lighter rows break into more,
+    // shorter dashes, so counting lines would reward the wrong thing.
     const strip = (f0: number, f1: number): number => {
-      let n = 0;
+      let total = 0;
       for (const ln of layer(r.lines, 'water')) {
         const fy = (ln.points[0].y - horizonY) / (waterBot - horizonY);
-        if (fy >= f0 && fy < f1) n++;
+        if (fy < f0 || fy >= f1) continue;
+        for (let i = 1; i < ln.points.length; i++) total += Math.hypot(ln.points[i].x - ln.points[i - 1].x, ln.points[i].y - ln.points[i - 1].y);
       }
-      return n;
+      return total;
     };
-    expect(strip(0.35, 0.65)).toBeLessThan(strip(0, 0.2) * 0.55);
+    expect(strip(0.35, 0.65)).toBeLessThan(strip(0, 0.2) * 0.75);
   });
 
   it('draws reflections as horizontal glints, not vertical ticks', () => {

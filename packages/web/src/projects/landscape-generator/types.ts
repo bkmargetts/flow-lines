@@ -102,8 +102,8 @@ export const defaultLandscapeState: LandscapeState = {
   waterFrac: 0.6,
 
   skyHatchSpacingMm: 2,
-  skyToneTop: 0.32,
-  skyToneHorizon: 0.58,
+  skyToneTop: 0.42,
+  skyToneHorizon: 0.68,
 
   sun: true,
   sunXFrac: 0.52,

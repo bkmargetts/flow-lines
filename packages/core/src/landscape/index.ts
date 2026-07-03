@@ -130,8 +130,8 @@ const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 
   hasWater: true,
   waterFrac: 0.62,
   skyHatchSpacing: 6,
-  skyToneTop: 0.32,
-  skyToneHorizon: 0.58,
+  skyToneTop: 0.42,
+  skyToneHorizon: 0.68,
   sun: true,
   sunRadius: 42,
   sunHalo: 0.7,
@@ -360,7 +360,9 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   const focusAccept = (x: number, y: number): number => lerp(1 - 0.7 * clamp01(o.focus), 1, focusW(x, y));
 
   const ridgeTone = (f: number, mist = 0): ToneFn => {
-    const base = lerp(0.3, 0.95, Math.pow(f, 1.15)) * lerp(1, 0.45, mist);
+    // Far ridges stay LIGHT, never absent: mist reads as strokes fading (the
+    // comb's depth-fade and drop-out), not as skipped bands of blank paper.
+    const base = lerp(0.42, 0.95, Math.pow(f, 0.9)) * lerp(1, 0.62, mist);
     const fx = 2.6 / usableW;
     const fy = 2.6 / usableH;
     return withFocus((x, y) => clamp01(base + o.toneContrast * 0.42 * toneNoise.fbm(x * fx, y * fy + f * 3, 2, 0.5, 2, 1)));
@@ -382,14 +384,14 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     };
     const waterTone: ToneFn = (x, y) => {
       const fh = clamp01((y - waterTopY) / Math.max(1, waterBotY - waterTopY));
-      return clamp01(0.18 + 0.75 * Math.exp(-fh * 5.5) + 0.35 * ss((fh - 0.82) / 0.18) + 0.06 * toneNoise.noise2D(x * 0.012, y * 0.05));
+      return clamp01(0.3 + 0.62 * Math.exp(-fh * 4.5) + 0.28 * ss((fh - 0.8) / 0.2) + 0.07 * toneNoise.noise2D(x * 0.012, y * 0.05));
     };
     bands.push({ upper: horizon, lower: shoreline, tone: withFocus(waterTone, 0.5), baseSpacing: o.waterHatchSpacing, angleDeg: 0, layer: 'water', formFollow: false, crossHatch: 0 });
     if (waterBotY < y1 - 4) {
       // A calm, light near-shore ground plane — the dark accent is the optional
       // foreground landform, so this stays a quiet beach rather than a second
       // heavy mass competing with it.
-      const beachTone: ToneFn = withFocus((x, y) => clamp01(0.48 + o.toneContrast * 0.3 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1)));
+      const beachTone: ToneFn = withFocus((x, y) => clamp01(0.52 + o.toneContrast * 0.3 * toneNoise.fbm(x * 0.01, y * 0.01, 2, 0.5, 2, 1)));
       const beachCraft: Craft = { rng, taper: o.taper, jitter: 1.2 * DEG, subStep: 10 };
       beach = () => hatchGround(lines, shoreline, y1, beachTone, o.ridgeHatchSpacing * 1.2, 'ridge', beachCraft, toneNoise);
       contours.push({ profile: shoreline, layer: 'contour', passes: 3 });
@@ -431,7 +433,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         upper: profiles[k],
         lower,
         tone: ridgeTone(f, mist),
-        baseSpacing: o.ridgeHatchSpacing * lerp(1.9, 1.0, f),
+        baseSpacing: o.ridgeHatchSpacing * lerp(1.45, 1.0, f),
         angleDeg: angle,
         layer: 'ridge',
         formFollow: o.formFollow,
@@ -439,7 +441,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
         // scratches; only the near ridges have earned cross-hatch darks.
         crossHatch: f > 0.55 ? o.crossHatch : 0,
         mist,
-        maxLenFrac: lerp(0.03, 0.06, f),
+        maxLenFrac: lerp(0.09, 0.18, f),
       });
       // Contour only where the crest clears the nearer envelope. Far ridges fade
       // to a single light pass (lost-and-found edges), broken up when the haze
@@ -472,7 +474,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       // break into shorter dashes with much wider gaps (open water on paper).
       const breakFn: BreakFn = (t0, t1, O, d, r) => {
         const tw = band.tone(x0 + usableW / 2, O.y);
-        return dashRun(t0, t1, O, d, r, o.waterDash * lerp(0.5, 1.2, tw), o.waterGap * lerp(3.5, 1, tw));
+        return dashRun(t0, t1, O, d, r, o.waterDash * lerp(0.75, 1.3, tw), o.waterGap * lerp(2.2, 1, tw));
       };
       sweepHatch(lines, poly, 0, band.baseSpacing, band.tone, () => true, 'water', craft, breakFn);
     } else {
@@ -523,7 +525,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       skyOccluders.push(poly);
       const tone = ridgeTone(0.3 + 0.4 * f);
       const craft: Craft = { rng, taper: o.taper, jitter: 2 * DEG, subStep: 10 };
-      sweepHatch(lines, poly, 78, o.ridgeHatchSpacing * lerp(1.7, 1.1, f), tone, () => true, 'headland', craft, undefined, usableH * 0.03);
+      sweepHatch(lines, poly, 78, o.ridgeHatchSpacing * lerp(1.7, 1.1, f), tone, () => true, 'headland', craft, undefined, usableH * 0.08);
       emitContour(lines, profile, 'headland', o.penWidth, f < 0.5 ? 1 : 2);
       const apex = profile.reduce((a, b) => (b.y < a.y ? b : a), profile[0]);
       reflectors.push({ x: apex.x, top: Math.max(waterTopY, baseY), height: (baseY - apex.y) * 0.9, half: halfW * 0.4 });
@@ -590,11 +592,11 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const slope = (ridgeYAt(pxe) - ridgeYAt(px)) / Math.max(1e-6, pxe - px);
       const surfDeg = Math.atan(slope) / DEG;
       const angle = surfDeg + 90 + (rng() - 0.5) * 28;
-      sweepHatch(lines, stripPoly, angle, o.ridgeHatchSpacing * 0.85, fgTone, () => true, 'foreground', fgCraft, undefined, usableH * 0.05);
+      sweepHatch(lines, stripPoly, angle, o.ridgeHatchSpacing * 0.85, fgTone, () => true, 'foreground', fgCraft, undefined, usableH * 0.12);
       // Only the darkest patches earn a second layer, at a shallow offset.
       const midTone = fgTone((px + pxe) / 2, (ridgeYAt((px + pxe) / 2) + y1) / 2);
       if (midTone > 0.75) {
-        sweepHatch(lines, stripPoly, angle + 30, o.ridgeHatchSpacing * 1.4, fgTone, (xx, yy, t) => t > 0.7, 'foreground', fgCraft, undefined, usableH * 0.04);
+        sweepHatch(lines, stripPoly, angle + 30, o.ridgeHatchSpacing * 1.4, fgTone, (xx, yy, t) => t > 0.7, 'foreground', fgCraft, undefined, usableH * 0.09);
       }
       px = pxe;
     }
