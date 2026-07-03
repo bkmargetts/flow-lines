@@ -214,12 +214,15 @@ export function sweepHatch(
       for (const [a0, b0] of prePieces) {
         const plen = b0 - a0;
         const nPieces = Math.max(1, Math.ceil(plen / 30));
-        let runStart = -1;
+        // null sentinel, NOT -1: the line parameter t is signed and goes
+        // negative whenever the row origin lands past the polygon — a -1
+        // sentinel silently swallowed every stroke in those regions.
+        let runStart: number | null = null;
         const flushRun = (end: number): void => {
-          if (runStart >= 0 && end - runStart > 1) {
+          if (runStart !== null && end - runStart > 1) {
             emitHatchRun(out, { x: O.x + dir.x * runStart, y: O.y + dir.y * runStart }, { x: O.x + dir.x * end, y: O.y + dir.y * end }, layer, craft, maxLen);
           }
-          runStart = -1;
+          runStart = null;
         };
         for (let pi = 0; pi < nPieces; pi++) {
           const a = a0 + (plen * pi) / nPieces;
@@ -234,7 +237,7 @@ export function sweepHatch(
             flushRun(a);
             continue;
           }
-          if (runStart < 0) runStart = a;
+          if (runStart === null) runStart = a;
         }
         flushRun(b0);
       }

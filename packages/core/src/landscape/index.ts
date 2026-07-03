@@ -519,7 +519,9 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const cx = lerp(x0 + usableW * 0.12, x1 - usableW * 0.12, (i + 0.5) / count) + (rng() - 0.5) * usableW * 0.1;
       const halfW = usableW * (0.16 + 0.12 * rng() + 0.08 * f);
       const height = usableH * (0.04 + 0.07 * f) * (0.8 + 0.5 * rng());
-      const baseY = lerp(horizonY + (waterBotY - horizonY) * 0.04, horizonY - usableH * 0.02, 1 - f);
+      // The base always sits IN the water — a far headland based above the
+      // horizon line hovers over the sea instead of rising out of it.
+      const baseY = horizonY + (waterBotY - horizonY) * lerp(0.015, 0.05, f);
       const hx0 = Math.max(x0, cx - halfW);
       const hx1 = Math.min(x1, cx + halfW);
       const profile: Point[] = [];
@@ -636,10 +638,12 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
     for (let i = 0; i < Math.round(o.rocks); i++) {
       const w = o.rockMaxSize * (0.5 + 0.6 * rng());
       const h = w * (0.55 + 0.5 * rng());
-      // Rocks gather toward the focal zone (a few placement retries).
+      // Rocks gather toward the focal zone (a few placement retries) and stay
+      // in OPEN water — a rock at the far edge of the band collides with the
+      // shoreline, beach and trees.
       let cx = lerp(x0 + w, x1 - w, rng());
       for (let att = 0; att < 3 && rng() > focusAccept(cx, placeY); att++) cx = lerp(x0 + w, x1 - w, rng());
-      const baseY = placeY + (rng() - 0.5) * (o.hasWater ? (waterBotY - waterTopY) * 0.5 : usableH * 0.12);
+      const baseY = o.hasWater ? waterTopY + (waterBotY - waterTopY) * (0.18 + 0.44 * rng()) : placeY + (rng() - 0.5) * usableH * 0.12;
       const shape = rockShape(cx, baseY, w, h, rng);
       const poly = closeRegion(shape, [
         { x: shape[0].x, y: baseY },
@@ -655,25 +659,38 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
       const flankSlope = (shadowEnd.y - apex.y) / (shadowEnd.x - apex.x || 1);
       const flankDeg = Math.atan(flankSlope) / DEG;
       // Distant skerries read as one dark lump; only rocks with real size get
-      // the lit-side/shadow-side split.
+      // the lit-side/shadow-side split — and even the lit flank keeps a real
+      // tone floor, or the rock renders as an empty outline arch with water
+      // apparently showing through it.
+      // A small or mid-size rock can't afford a near-paper lit flank: below
+      // ~55px the outline would dominate a handful of ticks and the rock
+      // reads as an empty arch with the water showing through.
+      const toneBase = w < 55 ? 0.55 : 0.42;
       const rockTone: ToneFn =
         w < 30
           ? () => 0.85
           : (x, y) => {
               const side = lightFromLeft ? clamp01((x - apex.x) / Math.max(4, Math.abs(shadowEnd.x - apex.x))) : clamp01((apex.x - x) / Math.max(4, Math.abs(apex.x - shadowEnd.x)));
-              return clamp01(0.3 + 0.65 * Math.pow(side, 0.8) + 0.12 * toneNoise.noise2D(x * 0.05, y * 0.05));
+              return clamp01(toneBase + (0.95 - toneBase) * Math.pow(side, 0.8) + 0.12 * toneNoise.noise2D(x * 0.05, y * 0.05));
             };
       const rockCraft: Craft = { rng, taper: o.taper * 0.7, jitter: 2.5 * DEG, subStep: 10 };
-      // Small rocks take a plain steep hatch — a flank-parallel angle inside a
-      // tiny polygon leaves a few long marks that read as scaffolding.
-      const rockAngle = h < 22 ? 74 : flankDeg + 90;
-      sweepHatch(lines, poly, rockAngle, o.rockHatchSpacing * 0.75, rockTone, () => true, 'rock', rockCraft, undefined, Math.max(10, h * 0.6));
+      // Small rocks fill with tight horizontal rows — a steep hatch angle
+      // inside a tiny polygon only lands a mark or two, leaving an empty
+      // outline tent perched on the water.
+      const small = w < 30 || h < 22;
+      const rockAngle = small ? 0 : flankDeg + 90;
+      sweepHatch(lines, poly, rockAngle, o.rockHatchSpacing * (small ? 0.5 : 0.75), rockTone, () => true, 'rock', rockCraft, undefined, Math.max(16, h * 0.8));
       if (w > o.rockMaxSize * 0.75) {
         sweepHatch(lines, poly, flankDeg + 60, o.rockHatchSpacing * 1.3, rockTone, (xx, yy, t) => t > 0.7, 'rock', rockCraft, undefined, Math.max(8, h * 0.45));
       }
-      // A curved fracture stroke or two toward the base — big rocks only (on a
-      // small one they dangle below like legs).
-      const fractures = h > 20 ? 1 + (rng() < 0.5 ? 1 : 0) : 0;
+      // Waterline shadow: a few dark horizontal rows across the base seat the
+      // rock in the water instead of leaving it perched on its outline.
+      if (o.hasWater) {
+        sweepHatch(lines, poly, 0, o.rockHatchSpacing * 1.05, () => 0.85, (xx, yy) => yy > baseY - h * 0.3, 'rock', rockCraft, undefined, Math.max(8, w * 0.5));
+      }
+      // A curved fracture stroke or two toward the base — genuinely large
+      // rocks only (on anything smaller they read as collapsing easel legs).
+      const fractures = h > 26 && w > 52 ? 1 + (rng() < 0.5 ? 1 : 0) : 0;
       for (let fr = 0; fr < fractures; fr++) {
         const fx0 = apex.x + (rng() - 0.5) * w * 0.2;
         const fy0 = apex.y + h * (0.1 + 0.15 * rng());
