@@ -1,6 +1,6 @@
 import type { FlowLine, Point } from '../flow-lines.js';
 import type { SimplexNoise } from '../noise.js';
-import { emitChimney } from './details.js';
+import { emitChimney, emitColonnade, emitCornice, emitStoop } from './details.js';
 import type { Morph } from './morph.js';
 import type { BuildingSpec, TierSpec } from './layout.js';
 import type { Proj, Spine, Face } from './project.js';
@@ -39,6 +39,9 @@ export interface StyleMassing {
   /** Height = storey count × storey (plus any roof rise) — low-rise styles
    *  are inherently storey-snapped. */
   storeys: { min: number; max: number };
+  /** Scale on the storey height — classical orders are taller than office
+   *  floors. Windows, details and roof rises all follow it. */
+  storeyMul?: number;
   /** Footprint = lot × (base + var × genome draw), per axis. */
   footW: { base: number; var: number };
   footD: { base: number; var: number };
@@ -128,9 +131,48 @@ const TOWERS: StyleDef = {
 
 export const STYLES: Record<BuildingStyle, StyleDef> = {
   towers: TOWERS,
-  // Placeholder descriptors — filled in as each style lands. Until then a
-  // non-tower style renders as towers rather than crashing.
-  'greek-villa': { ...TOWERS },
+
+  /** Greek villa: low 1–2 storey houses on roomy lots, a colonnaded portico
+   *  under an entablature instead of a window grid, most crowned with a low
+   *  classical pediment (the rest keep a flat Mediterranean roof). */
+  'greek-villa': {
+    massing: {
+      storeys: { min: 1, max: 2 },
+      storeyMul: 1.45,
+      footW: { base: 0.75, var: 0.25 },
+      footD: { base: 0.62, var: 0.28 },
+      jitterMul: 1,
+      vacancyMul: 1.6,
+      envelopePow: 0,
+      tiers: 'none',
+      roof: 'pediment',
+    },
+    leanMul: 0.6,
+    bendMul: 0.6,
+    waveMul: 0.4,
+    toneMul: 0.95,
+    crossAt: 0.8,
+    parapet: false,
+    windows: {
+      lit: 'none',
+      shadow: 'ticks',
+      pitchMul: 1,
+      widthFrac: 0.5,
+      heightFrac: 0.45,
+      densityMul: 0.8,
+      jitterMul: 1,
+    },
+    extras: (ctx) => {
+      emitColonnade(ctx.out, ctx.lit, ctx.craft, {
+        pitch: 0.62 * ctx.b.storey,
+        capDrop: 0.3 * ctx.b.storey,
+        inset: Math.max(1.5, 0.08 * ctx.lit.W),
+        budget: ctx.budget,
+      });
+      // The entablature wraps around onto the shadow face as a plain band.
+      emitCornice(ctx.out, ctx.shadow, ctx.craft, { drop: 0.3 * ctx.b.storey, double: true });
+    },
+  },
 
   /** European old town: narrow row houses packed nearly wall to wall, gable
    *  roofs with the ridge down the long axis, small irregular windows,
@@ -168,7 +210,45 @@ export const STYLES: Record<BuildingStyle, StyleDef> = {
       emitChimney(ctx.out, ctx.pr, ctx.b, ctx.spine, ctx.topTier, ctx.b.roof, ctx.b.styleG[4], ctx.occlude);
     },
   },
-  brownstone: { ...TOWERS },
+  /** Brownstone terrace: uniform mid-rise rows packed tight along the
+   *  street, regular window grids, a double cornice under a calm parapet
+   *  roof, and a stoop with steps up to the door. */
+  brownstone: {
+    massing: {
+      storeys: { min: 4, max: 6 },
+      footW: { base: 0.92, var: 0.08 },
+      footD: { base: 0.6, var: 0.2 },
+      jitterMul: 0.15,
+      vacancyMul: 0.6,
+      envelopePow: 0,
+      tiers: 'none',
+      roof: 'flat',
+    },
+    leanMul: 0.5,
+    bendMul: 0.4,
+    waveMul: 0.5,
+    toneMul: 1,
+    crossAt: 0.7,
+    parapet: true,
+    windows: {
+      lit: 'grid',
+      shadow: 'ticks',
+      pitchMul: 1,
+      widthFrac: 0.5,
+      heightFrac: 0.45,
+      densityMul: 1.1,
+      jitterMul: 0.5,
+    },
+    extras: (ctx) => {
+      emitCornice(ctx.out, ctx.lit, ctx.craft, { drop: 0.22 * ctx.b.storey, double: true });
+      emitCornice(ctx.out, ctx.shadow, ctx.craft, { drop: 0.22 * ctx.b.storey, double: true });
+      if (ctx.b.styleG[3] < 0.8) {
+        emitStoop(ctx.out, ctx.pr, ctx.b, ctx.spine, ctx.topTier, ctx.draw.lightSide, ctx.craft, {
+          doorT: ctx.b.styleG[4],
+        });
+      }
+    },
+  },
   brutalist: { ...TOWERS },
 };
 

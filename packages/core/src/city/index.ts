@@ -147,6 +147,7 @@ export function generateCity(options: CityOptions): FlowLinesResult {
       storey: o.storey,
       tiers: o.tiers,
       style: o.style,
+      lightSide: o.lightSide,
     },
     morph,
     seed

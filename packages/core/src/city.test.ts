@@ -73,6 +73,17 @@ describe('city generator', () => {
     expect(sloped.length).toBeGreaterThan(10);
   });
 
+  it('each new style is deterministic and reads differently from towers', () => {
+    const towers = JSON.stringify(generateCity(BASE).lines);
+    for (const style of ['greek-villa', 'brownstone'] as const) {
+      const a = generateCity({ ...BASE, style });
+      const b = generateCity({ ...BASE, style });
+      expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+      expect(a.lines.length).toBeGreaterThan(300);
+      expect(JSON.stringify(a.lines)).not.toBe(towers);
+    }
+  });
+
   it('morphs the same city rather than re-rolling: nearby orders stay similar in size', () => {
     const a = generateCity({ ...BASE, order: 0.5 });
     const b = generateCity({ ...BASE, order: 0.52 });

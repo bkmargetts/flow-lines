@@ -74,6 +74,9 @@ export interface CityLayoutOptions {
   storey: number;
   tiers: number;
   style: CityStyle;
+  /** Which side the light comes from — pedimented styles face their portico
+   *  (gable end + colonnade) toward the lit side. */
+  lightSide: 'left' | 'right';
 }
 
 export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): BuildingSpec[] {
@@ -138,7 +141,7 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
       const pSkip = def.massing ? clamp01(pSkipBase * def.massing.vacancyMul) : pSkipBase;
       if (g.skip < pSkip) continue;
 
-      const storey = o.storey * (1 + 0.15 * morph.F * g.storeyVar);
+      let storey = o.storey * (1 + 0.15 * morph.F * g.storeyVar);
       let tiers: TierSpec[];
       let h: number;
       let roof: RoofSpec = flatRoof();
@@ -211,8 +214,21 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
         // Heights are whole storey counts (low-rise typologies are inherently
         // snapped); footprints and jitter come from the style descriptor. ———
         const m = def.massing;
-        const w = o.lot * clamp(m.footW.base + m.footW.var * g.w, 0.2, 1);
-        const d = o.lot * clamp(m.footD.base + m.footD.var * g.d, 0.2, 1);
+        let w = o.lot * clamp(m.footW.base + m.footW.var * g.w, 0.2, 1);
+        let d = o.lot * clamp(m.footD.base + m.footD.var * g.d, 0.2, 1);
+        // A pedimented temple front is the *short* side, gable end toward the
+        // light so the portico (colonnade on the lit face) sits under it.
+        const pedimented = m.roof === 'pediment' && styleG[1] < 0.7;
+        const porticoAxis: 'u' | 'v' = o.lightSide === 'left' ? 'v' : 'u';
+        if (pedimented) {
+          const front = porticoAxis === 'v' ? w : d;
+          const flank = porticoAxis === 'v' ? d : w;
+          if (front > flank) {
+            const t = w;
+            w = d;
+            d = t;
+          }
+        }
         const jMaxU = Math.max(0, (pitch - w) / 2 - 1);
         const jMaxV = Math.max(0, (pitch - d) / 2 - 1);
         const jF = morph.placementJitterFrac * m.jitterMul;
@@ -229,6 +245,7 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
         const spread = clamp01(0.5 + ((g.h1 + g.h2 + g.h3 - 1.5) / 1.5) * Math.max(0.15, o.heightVariance));
         const span = m.storeys.max - m.storeys.min;
         const count = m.storeys.min + Math.floor(clamp01(spread * env) * (span + 0.999));
+        storey *= m.storeyMul ?? 1;
         const eave = count * storey;
 
         if (m.roof === 'gable') {
@@ -237,9 +254,10 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
             ridgeAxis: w >= d ? 'u' : 'v',
             rise: (0.5 + 0.35 * styleG[2]) * storey,
           };
-        } else if (m.roof === 'pediment' && styleG[1] < 0.7) {
-          // A low classical pediment; the rest keep the flat Mediterranean roof.
-          roof = { kind: 'gable', ridgeAxis: w >= d ? 'u' : 'v', rise: 0.18 * Math.min(w, d) };
+        } else if (pedimented) {
+          // A low classical pediment over the portico; the unpedimented rest
+          // keep the flat Mediterranean roof.
+          roof = { kind: 'gable', ridgeAxis: porticoAxis, rise: 0.18 * Math.min(w, d) };
         }
         h = eave + roof.rise;
         tiers = [{ u0, u1, v0, v1, z0: 0, z1: eave }];
