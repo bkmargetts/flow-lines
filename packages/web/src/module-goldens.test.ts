@@ -48,6 +48,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   'reaction-diffusion': { preset: 'coral' },
   lenia: { preset: 'cells' },
   physarum: { preset: 'veins' },
+  'city-generator': { style: 'mixed' },
 };
 for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const mod = pureModules.find((m) => m.id === id);
