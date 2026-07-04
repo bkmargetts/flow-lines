@@ -6,7 +6,7 @@ import { occludeBehind } from '../landscape/features.js';
 import type { Morph } from './morph.js';
 import type { BuildingSpec, TierSpec } from './layout.js';
 import { bodyPoint, makeSpine, roofWave, tierFaces, tierSilhouette, type Proj, type Spine } from './project.js';
-import { drawWindows, hatchFace, emitRing, inflatePoly, type FaceCraft } from './facade.js';
+import { drawWindows, drawStripWindows, hatchFace, emitRing, inflatePoly, type FaceCraft } from './facade.js';
 import { STYLES } from './styles.js';
 import { gableSilhouette, emitGableEdges } from './roof.js';
 
@@ -80,6 +80,14 @@ export function drawIsoCity(
       // 3. Windows: the lit face gets the full grid; the shadow face only
       //    sparse sill ticks (and only when windows are dense — outlines
       //    inside hatch read as noise).
+      if (o.windows > 0 && def.windows.lit === 'strip') {
+        drawStripWindows(lines, lit, craft, {
+          storey: b.storey,
+          density: o.windows * def.windows.densityMul,
+          phase: b.winPhase,
+          budget,
+        });
+      }
       if (o.windows > 0 && def.windows.lit === 'grid') {
         drawWindows(lines, lit, morph, craft, noise, {
           pitch: o.windowPitch * def.windows.pitchMul,

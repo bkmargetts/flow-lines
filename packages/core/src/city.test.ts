@@ -75,13 +75,24 @@ describe('city generator', () => {
 
   it('each new style is deterministic and reads differently from towers', () => {
     const towers = JSON.stringify(generateCity(BASE).lines);
-    for (const style of ['greek-villa', 'brownstone'] as const) {
+    for (const style of ['greek-villa', 'brownstone', 'brutalist'] as const) {
       const a = generateCity({ ...BASE, style });
       const b = generateCity({ ...BASE, style });
       expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
       expect(a.lines.length).toBeGreaterThan(300);
       expect(JSON.stringify(a.lines)).not.toBe(towers);
     }
+  });
+
+  it('brutalist draws long strip windows instead of a short-edged grid', () => {
+    const res = generateCity({ ...BASE, style: 'brutalist', order: 1, wobble: 0, sketch: 0 });
+    const longStrips = res.lines.filter((l) => {
+      if (l.layer !== 'window' || l.points.length < 2) return false;
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return Math.hypot(b.x - a.x, b.y - a.y) > 15;
+    });
+    expect(longStrips.length).toBeGreaterThan(30);
   });
 
   it('morphs the same city rather than re-rolling: nearby orders stay similar in size', () => {

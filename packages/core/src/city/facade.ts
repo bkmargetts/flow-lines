@@ -237,6 +237,38 @@ export function drawWindows(
   }
 }
 
+/**
+ * Long horizontal strip windows — the brutalist facade. One band of two
+ * strokes per (dropout-thinned) storey, spanning the face with the craft
+ * stream's taper and pen-lift gaps carrying the hand.
+ */
+export function drawStripWindows(
+  out: FlowLine[],
+  face: Face,
+  craft: FaceCraft,
+  o: { storey: number; density: number; phase: number; budget: { left: number } }
+): void {
+  if (o.density <= 0 || o.budget.left <= 0) return;
+  const H = face.z1 - face.z0;
+  const inset = Math.max(1.5, face.W * 0.08);
+  const rowOff = o.phase * 0.6 * o.storey;
+  const nRows = Math.floor((H - 0.35 * o.storey - rowOff) / o.storey);
+  if (face.W - 2 * inset < 4 || nRows < 1 || o.storey < 3.2) return;
+  for (let r = 0; r < nRows; r++) {
+    if (o.budget.left <= 0) return;
+    if (craft.rng() > o.density) continue;
+    const zBase = face.z0 + rowOff + (r + 0.4) * o.storey;
+    for (const z of [zBase, zBase + 0.32 * o.storey]) {
+      const pts: Point[] = [];
+      for (let i = 0; i <= 3; i++) {
+        pts.push(face.at(inset + ((face.W - 2 * inset) * i) / 3, z));
+      }
+      emitFaceStroke(out, pts, 'window', craft);
+      o.budget.left--;
+    }
+  }
+}
+
 export interface FaceHatchOptions {
   /** Base spacing (px) at full darkness. */
   spacing: number;

@@ -244,7 +244,8 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
         const env = m.envelopePow > 0 ? Math.pow(envelope, m.envelopePow) : 1;
         const spread = clamp01(0.5 + ((g.h1 + g.h2 + g.h3 - 1.5) / 1.5) * Math.max(0.15, o.heightVariance));
         const span = m.storeys.max - m.storeys.min;
-        const count = m.storeys.min + Math.floor(clamp01(spread * env) * (span + 0.999));
+        let count = m.storeys.min + Math.floor(clamp01(spread * env) * (span + 0.999));
+        if (m.slabP !== undefined && styleG[1] < m.slabP) count = Math.min(count, m.storeys.min + 1);
         storey *= m.storeyMul ?? 1;
         const eave = count * storey;
 
@@ -260,7 +261,23 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
           roof = { kind: 'gable', ridgeAxis: porticoAxis, rise: 0.18 * Math.min(w, d) };
         }
         h = eave + roof.rise;
-        tiers = [{ u0, u1, v0, v1, z0: 0, z1: eave }];
+        if (m.tiers === 'cantilever' && count >= 4 && styleG[5] < 0.7) {
+          // A cantilevered upper mass: per-side insets may be negative
+          // (overhang), clamped to the cell so neighbours never collide.
+          const zSplit = eave * (0.35 + 0.3 * styleG[2]);
+          const dSide = (t: number, dim: number, room: number): number =>
+            Math.max(-Math.max(0, room), (-0.18 + 0.28 * t) * dim);
+          const dU0 = dSide(styleG[6], w, u0 - c * pitch - 1);
+          const dU1 = dSide(styleG[7], w, (c + 1) * pitch - 1 - u1);
+          const dV0 = dSide(styleG[8], d, v0 - r * pitch - 1);
+          const dV1 = dSide(styleG[9], d, (r + 1) * pitch - 1 - v1);
+          tiers = [
+            { u0, u1, v0, v1, z0: 0, z1: zSplit },
+            { u0: u0 + dU0, u1: u1 - dU1, v0: v0 + dV0, v1: v1 - dV1, z0: zSplit, z1: eave },
+          ];
+        } else {
+          tiers = [{ u0, u1, v0, v1, z0: 0, z1: eave }];
+        }
       }
 
       specs.push({

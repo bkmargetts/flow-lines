@@ -42,6 +42,9 @@ export interface StyleMassing {
   /** Scale on the storey height — classical orders are taller than office
    *  floors. Windows, details and roof rises all follow it. */
   storeyMul?: number;
+  /** Probability a building is a low slab pinned to the bottom of the storey
+   *  range (the brutalist low-slab / mid-monolith bimodality). */
+  slabP?: number;
   /** Footprint = lot × (base + var × genome draw), per axis. */
   footW: { base: number; var: number };
   footD: { base: number; var: number };
@@ -249,7 +252,37 @@ export const STYLES: Record<BuildingStyle, StyleDef> = {
       }
     },
   },
-  brutalist: { ...TOWERS },
+  /** Futurist concrete: squarish monoliths and low slabs, a cantilevered
+   *  upper mass on many, sparse strip windows on the lit face and a dark
+   *  cross-hatched shadow mass. Nearly rigid at any order. */
+  brutalist: {
+    massing: {
+      storeys: { min: 2, max: 8 },
+      slabP: 0.4,
+      footW: { base: 0.7, var: 0.3 },
+      footD: { base: 0.7, var: 0.3 },
+      jitterMul: 0.6,
+      vacancyMul: 1.1,
+      envelopePow: 1,
+      tiers: 'cantilever',
+      roof: 'flat',
+    },
+    leanMul: 0.3,
+    bendMul: 0.2,
+    waveMul: 0,
+    toneMul: 1.15,
+    crossAt: 0.55,
+    parapet: false,
+    windows: {
+      lit: 'strip',
+      shadow: 'none',
+      pitchMul: 1,
+      widthFrac: 0.5,
+      heightFrac: 0.45,
+      densityMul: 0.7,
+      jitterMul: 0.3,
+    },
+  },
 };
 
 /**
