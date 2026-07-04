@@ -62,14 +62,6 @@ export function CityGeneratorControls({ state, update }: ControlsProps<CityState
         format={(v) => (v < 0.02 ? 'flowing' : v > 0.98 ? 'rigid' : `${Math.round(v * 100)}%`)}
       />
 
-      <div className="control-group">
-        <label className="label-text">Viewpoint</label>
-        <select value={state.viewpoint} onChange={(e) => update({ viewpoint: e.target.value as CityState['viewpoint'] })}>
-          <option value="isometric">Isometric</option>
-          <option value="skyline">Skyline</option>
-        </select>
-      </div>
-
       <Slider label="Density" value={state.density} min={0.3} max={1} step={0.01} onChange={(v) => update({ density: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Building height" value={state.heightMm} min={8} max={80} step={1} onChange={(v) => update({ heightMm: v })} format={(v) => `${v.toFixed(0)}mm`} />
       <Slider label="Zoom" value={state.zoom} min={0.3} max={3} step={0.05} onChange={(v) => update({ zoom: v })} format={(v) => `${v.toFixed(2)}×`} />
@@ -106,12 +98,6 @@ export function CityGeneratorControls({ state, update }: ControlsProps<CityState
             </select>
           </div>
         </AdvGroup>
-
-        {state.viewpoint === 'skyline' && (
-          <AdvGroup title="Skyline">
-            <Slider label="Depth rows" value={state.skylineRows} min={1} max={5} step={1} onChange={(v) => update({ skylineRows: v })} />
-          </AdvGroup>
-        )}
 
         <AdvGroup title="Pen & finish">
           <Slider label="Pen width" value={state.penWidthMm} min={0.15} max={1.2} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />

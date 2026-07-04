@@ -7,7 +7,6 @@ import { clipPolylineToRect } from '../lib/polyline.js';
 import { buildMorph } from './morph.js';
 import { layoutCity, fitCity } from './layout.js';
 import { drawIsoCity } from './buildings.js';
-import { drawSkyline } from './skyline.js';
 
 /**
  * Abstract cities of buildings, drawn as plottable pen-and-ink. The whole
@@ -19,11 +18,10 @@ import { drawSkyline } from './skyline.js';
  * slider (see morph.ts), so the same seed reads as the same city sliding
  * along the axis, never a re-roll.
  *
- * Two viewpoints share the facade machinery: 'isometric' (2:1 pixel-iso
- * blocks, painter's-algorithm occlusion back-to-front) and 'skyline'
- * (front-on elevation rows receding like the landscape's ridge stack).
- * A top-down map viewpoint is a deliberate later seam — it is a
- * street-network problem and shares none of the face machinery.
+ * One viewpoint: 2:1 pixel-iso blocks, painter's-algorithm occlusion drawn
+ * back-to-front. (A top-down map mode was considered and deliberately
+ * skipped — it is a street-network problem and shares none of the face
+ * machinery; the drawIsoCity call below is the seam if it ever returns.)
  *
  * Everything is single-pen stroked polylines, deterministic per seed — bold
  * is repeated offset passes, tone is spacing. Buildings only: no ground, sky
@@ -31,7 +29,6 @@ import { drawSkyline } from './skyline.js';
  * Generators: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
  */
 
-export type CityViewpoint = 'isometric' | 'skyline';
 export type CityLightSide = 'left' | 'right';
 
 export interface CityOptions {
@@ -40,7 +37,6 @@ export interface CityOptions {
   margin: number;
   seed?: number;
 
-  viewpoint?: CityViewpoint;
   /** THE slider: 0 = flowing/organic/artistic, 1 = rigid/robotic. */
   order?: number;
 
@@ -68,9 +64,6 @@ export interface CityOptions {
   hatchSpacing?: number; // px at full darkness
   lightSide?: CityLightSide;
 
-  // Skyline
-  skylineRows?: number;
-
   // Pen / finishing
   penWidth?: number;
   wobble?: number;
@@ -79,7 +72,6 @@ export interface CityOptions {
 }
 
 const DEFAULTS: Required<Omit<CityOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
-  viewpoint: 'isometric',
   order: 0.5,
   blockCols: 7,
   blockRows: 7,
@@ -97,7 +89,6 @@ const DEFAULTS: Required<Omit<CityOptions, 'width' | 'height' | 'margin' | 'seed
   shadeStrength: 0.6,
   hatchSpacing: 3.2,
   lightSide: 'left',
-  skylineRows: 3,
   penWidth: 1.35,
   wobble: 0.9,
   sketch: 0,
@@ -134,59 +125,33 @@ export function generateCity(options: CityOptions): FlowLinesResult {
     : o.wobble * morph.wobbleScale * 1.6;
   const inflatePx = 1.0 + finishReach;
 
-  let lines: FlowLine[];
-  if (o.viewpoint === 'skyline') {
-    lines = drawSkyline(morph, noise, {
-      x0,
-      y0,
-      x1,
-      y1,
-      seed,
-      rows: o.skylineRows,
+  const specs = layoutCity(
+    {
+      cols: Math.max(1, Math.round(o.blockCols)),
+      rows: Math.max(1, Math.round(o.blockRows)),
       lot: o.lotSize,
       street: o.street,
+      density: o.density,
+      downtown: o.downtown,
       heightMean: o.buildingHeight,
       heightVariance: o.heightVariance,
       storey: o.storey,
       tiers: o.tiers,
-      downtown: o.downtown,
-      lightSide: o.lightSide,
-      windows: o.windows,
-      windowPitch: o.windowSize,
-      shadeStrength: o.shadeStrength,
-      hatchSpacing: o.hatchSpacing,
-      penWidth: o.penWidth,
-      inflatePx,
-    }, budget);
-  } else {
-    const specs = layoutCity(
-      {
-        cols: Math.max(1, Math.round(o.blockCols)),
-        rows: Math.max(1, Math.round(o.blockRows)),
-        lot: o.lotSize,
-        street: o.street,
-        density: o.density,
-        downtown: o.downtown,
-        heightMean: o.buildingHeight,
-        heightVariance: o.heightVariance,
-        storey: o.storey,
-        tiers: o.tiers,
-      },
-      morph,
-      seed
-    );
-    const { scale, proj } = fitCity(specs, morph, { x0, y0, x1, y1 });
-    lines = drawIsoCity(specs, proj, morph, noise, {
-      lightSide: o.lightSide,
-      windows: o.windows,
-      windowPitch: o.windowSize * scale,
-      shadeStrength: o.shadeStrength,
-      hatchSpacing: o.hatchSpacing,
-      penWidth: o.penWidth,
-      heightMean: o.buildingHeight * scale,
-      inflatePx,
-    }, budget);
-  }
+    },
+    morph,
+    seed
+  );
+  const { scale, proj } = fitCity(specs, morph, { x0, y0, x1, y1 });
+  let lines: FlowLine[] = drawIsoCity(specs, proj, morph, noise, {
+    lightSide: o.lightSide,
+    windows: o.windows,
+    windowPitch: o.windowSize * scale,
+    shadeStrength: o.shadeStrength,
+    hatchSpacing: o.hatchSpacing,
+    penWidth: o.penWidth,
+    heightMean: o.buildingHeight * scale,
+    inflatePx,
+  }, budget);
 
   // Hand finish: the wobble is order-scaled — at order 1 with the knob at 0
   // the city is truly ruled. Sketch passes trade that for overdraw looseness.

@@ -155,8 +155,6 @@ CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
 CASES['planet/ringed/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'ringed' });
-CASES['city/skyline/42'] = () =>
-  generateCity({ width: 300, height: 400, margin: 20, seed: 42, viewpoint: 'skyline' });
 CASES['city/rigid/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, order: 1, wobble: 0 });
 // Rings and craters need coverage of their own: with defaults the ringed case

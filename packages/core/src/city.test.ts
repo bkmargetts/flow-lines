@@ -10,21 +10,18 @@ describe('city generator', () => {
     expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
   });
 
-  it('draws a substantial city in both viewpoints', () => {
+  it('draws a substantial city', () => {
     expect(generateCity(BASE).lines.length).toBeGreaterThan(500);
-    expect(generateCity({ ...BASE, viewpoint: 'skyline' }).lines.length).toBeGreaterThan(300);
   });
 
   it('keeps every stroke inside the margin box', () => {
-    for (const viewpoint of ['isometric', 'skyline'] as const) {
-      const res = generateCity({ ...BASE, viewpoint, order: 0.1 });
-      for (const ln of res.lines) {
-        for (const p of ln.points) {
-          expect(p.x).toBeGreaterThanOrEqual(BASE.margin - 1e-6);
-          expect(p.x).toBeLessThanOrEqual(BASE.width - BASE.margin + 1e-6);
-          expect(p.y).toBeGreaterThanOrEqual(BASE.margin - 1e-6);
-          expect(p.y).toBeLessThanOrEqual(BASE.height - BASE.margin + 1e-6);
-        }
+    const res = generateCity({ ...BASE, order: 0.1 });
+    for (const ln of res.lines) {
+      for (const p of ln.points) {
+        expect(p.x).toBeGreaterThanOrEqual(BASE.margin - 1e-6);
+        expect(p.x).toBeLessThanOrEqual(BASE.width - BASE.margin + 1e-6);
+        expect(p.y).toBeGreaterThanOrEqual(BASE.margin - 1e-6);
+        expect(p.y).toBeLessThanOrEqual(BASE.height - BASE.margin + 1e-6);
       }
     }
   });

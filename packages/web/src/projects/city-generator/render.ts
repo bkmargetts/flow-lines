@@ -20,7 +20,6 @@ export function renderCity(state: CityState, env: RenderEnv): LayerOutput {
     margin: marginPx,
     seed: state.seed,
 
-    viewpoint: state.viewpoint,
     order: state.order,
 
     blockCols: Math.round(state.blockCols),
@@ -42,8 +41,6 @@ export function renderCity(state: CityState, env: RenderEnv): LayerOutput {
     shadeStrength: state.shadeStrength,
     hatchSpacing: Math.max(1, z(state.hatchSpacingMm * mm)),
     lightSide: state.lightSide,
-
-    skylineRows: Math.round(state.skylineRows),
 
     penWidth: z(state.penWidthMm * mm),
     wobble: z(state.wobbleMm * mm),

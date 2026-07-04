@@ -1,4 +1,4 @@
-import type { CityViewpoint, CityLightSide, SketchStyle } from '@flow-lines/core';
+import type { CityLightSide, SketchStyle } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /**
@@ -12,7 +12,6 @@ export interface CityState {
   seed: number;
   zoom: number;
 
-  viewpoint: CityViewpoint;
   order: number; // 0..1 — THE slider
 
   // Layout
@@ -39,9 +38,6 @@ export interface CityState {
   hatchSpacingMm: number;
   lightSide: CityLightSide;
 
-  // Skyline
-  skylineRows: number;
-
   // Pen / finishing
   penWidthMm: number;
   wobbleMm: number;
@@ -59,7 +55,6 @@ export const defaultCityState: CityState = {
   seed: randomSeed(),
   zoom: 1,
 
-  viewpoint: 'isometric',
   order: 0.55,
 
   blockCols: 7,
@@ -81,8 +76,6 @@ export const defaultCityState: CityState = {
   shadeStrength: 0.6,
   hatchSpacingMm: 1.1,
   lightSide: 'left',
-
-  skylineRows: 3,
 
   penWidthMm: 0.45,
   wobbleMm: 0.3,

@@ -7,7 +7,7 @@ import type { Morph } from './morph.js';
 import type { Face } from './project.js';
 
 /**
- * Facade marks, shared by both viewpoints: window grids that decay from
+ * Facade marks: window grids that decay from
  * perfect rectangles (rigid) to drifting sills and ticks (flow) through one
  * code path, and the shadow-face hatch. Everything is authored in face space
  * `[0, W] × [z0, z1]` — clipping there is trivial — and mapped to the page
