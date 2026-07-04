@@ -125,6 +125,15 @@ export function generateCity(options: CityOptions): FlowLinesResult {
   const noise = createNoise(subSeed(seed, 5));
   const budget = { left: WINDOW_BUDGET };
 
+  // The occlusion margin must cover the finish pass's peak displacement
+  // (wobble amplitude + whole-stroke misregistration), or the hand pass
+  // bends erased strokes back through the buildings in front of them.
+  const sketchCfg = o.sketch > 0.01 ? getSketchStyleConfig(o.sketchStyle, o.sketch) : null;
+  const finishReach = sketchCfg
+    ? sketchCfg.amplitude + sketchCfg.jitter
+    : o.wobble * morph.wobbleScale * 1.6;
+  const inflatePx = 1.0 + finishReach;
+
   let lines: FlowLine[];
   if (o.viewpoint === 'skyline') {
     lines = drawSkyline(morph, noise, {
@@ -147,6 +156,7 @@ export function generateCity(options: CityOptions): FlowLinesResult {
       shadeStrength: o.shadeStrength,
       hatchSpacing: o.hatchSpacing,
       penWidth: o.penWidth,
+      inflatePx,
     }, budget);
   } else {
     const specs = layoutCity(
@@ -174,6 +184,7 @@ export function generateCity(options: CityOptions): FlowLinesResult {
       hatchSpacing: o.hatchSpacing,
       penWidth: o.penWidth,
       heightMean: o.buildingHeight * scale,
+      inflatePx,
     }, budget);
   }
 

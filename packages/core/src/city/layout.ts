@@ -44,7 +44,12 @@ export interface BuildingSpec {
   /** Roof-detail draw: gates the parapet inset / lip (restraint — not every
    *  roof gets furniture). */
   parapetDraw: number;
-  /** Painter's-algorithm sort key (near corner u1 + v1). */
+  /** Painter's-algorithm sort key. Primary: grid diagonal (row + col) —
+   *  footprints are jitter-clamped inside their cells, so diagonal order is a
+   *  *correct* painter order (same-diagonal cells can never overlap in
+   *  projection); the raw near-corner sum alone inverts between adjacent
+   *  diagonals when a small set-back building meets a big neighbour, and the
+   *  loser's lines cross straight through the winner. */
   depth: number;
 }
 
@@ -184,7 +189,7 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
         winPhase: g.winPhase,
         toneMul: 0.85 + 0.45 * g.tone,
         parapetDraw: g.parapet,
-        depth: u1 + v1,
+        depth: (r + c) * 1e7 + (u1 + v1),
       });
     }
   }

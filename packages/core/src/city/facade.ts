@@ -22,24 +22,55 @@ export interface FaceCraft {
   jitter: number; // radians
 }
 
-/** Push a closed occlusion blob outward ~`px` from its centroid, so the
- *  hand-drawn wobble (applied after occlusion) can't bend background strokes
- *  back across the mass's contour. Same move as the landscape generator. */
+/** Push a closed occlusion polygon outward by `px` along its edge normals,
+ *  so the hand-drawn wobble (applied after occlusion) can't bend background
+ *  strokes back across the mass's contour. The landscape's centroid push is
+ *  wrong here: on a tall thin building the centroid direction is nearly
+ *  vertical at every vertex, so the sides barely inflate at all and
+ *  background lines leak through the walls. */
 export function inflatePoly(poly: Point[], px: number): Point[] {
-  let cx = 0;
-  let cy = 0;
-  for (const p of poly) {
-    cx += p.x;
-    cy += p.y;
+  const n = poly.length;
+  if (n < 3) return poly.slice();
+  // Winding via the shoelace sum decides which side is "out".
+  let area2 = 0;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    area2 += poly[j].x * poly[i].y - poly[i].x * poly[j].y;
   }
-  cx /= poly.length;
-  cy /= poly.length;
-  return poly.map((p) => {
-    const dx = p.x - cx;
-    const dy = p.y - cy;
-    const d = Math.hypot(dx, dy) || 1;
-    return { x: p.x + (dx / d) * px, y: p.y + (dy / d) * px };
-  });
+  const sign = area2 > 0 ? 1 : -1;
+  const out: Point[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const p = poly[i];
+    const a = poly[(i - 1 + n) % n];
+    const b = poly[(i + 1) % n];
+    // Adjacent edge normals (unit), averaged with a miter clamp.
+    let n1x = p.y - a.y;
+    let n1y = a.x - p.x;
+    const l1 = Math.hypot(n1x, n1y) || 1;
+    let n2x = b.y - p.y;
+    let n2y = p.x - b.x;
+    const l2 = Math.hypot(n2x, n2y) || 1;
+    n1x /= l1;
+    n1y /= l1;
+    n2x /= l2;
+    n2y /= l2;
+    let nx = n1x + n2x;
+    let ny = n1y + n2y;
+    const ln = Math.hypot(nx, ny);
+    let reach = px;
+    if (ln < 0.3) {
+      // Near-reversal (spike) — fall back to one edge's normal.
+      nx = n1x;
+      ny = n1y;
+    } else {
+      nx /= ln;
+      ny /= ln;
+      // Miter: the bisector must travel px / cos(θ/2) for both edges to end
+      // up a full px out, clamped so a sharp corner can't spike.
+      reach = Math.min(px / Math.max(0.34, nx * n1x + ny * n1y), px * 3);
+    }
+    out[i] = { x: p.x + sign * nx * reach, y: p.y + sign * ny * reach };
+  }
+  return out;
 }
 
 /** A confident bold outline for a CLOSED ring: repeated offset passes of the

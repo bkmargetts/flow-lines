@@ -37,6 +37,8 @@ export interface SkylineOptions {
   shadeStrength: number;
   hatchSpacing: number;
   penWidth: number;
+  /** Occlusion margin: at least the finish pass's peak displacement. */
+  inflatePx: number;
 }
 
 interface SkyBuilding {
@@ -173,7 +175,7 @@ function drawSkyBuilding(
   sil.push({ x: b.xL + b.w, y: b.yBase });
   // Corner indices over the CLOSED ring (emitRing appends the closing point).
   const silCorners = [0, 1, 1 + N, 2 + N, 3 + N];
-  lines = occludeBehind(lines, inflatePoly(sil, 1.2));
+  lines = occludeBehind(lines, inflatePoly(sil, o.inflatePx));
 
   // The front-view face: shear follows the trapezoid lean.
   const face: Face = {

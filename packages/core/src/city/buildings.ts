@@ -24,6 +24,9 @@ export interface IsoDrawOptions {
   hatchSpacing: number;
   penWidth: number;
   heightMean: number;
+  /** Occlusion margin: at least the finish pass's peak displacement, so the
+   *  wobble can never bend an erased stroke back into view. */
+  inflatePx: number;
 }
 
 export function drawIsoCity(
@@ -53,7 +56,7 @@ export function drawIsoCity(
 
       // 1. This box hides everything already drawn behind it.
       const sil = tierSilhouette(pr, b, spine, tier, noise, waveA);
-      lines = occludeBehind(lines, inflatePoly(sil.ring, 1.2));
+      lines = occludeBehind(lines, inflatePoly(sil.ring, o.inflatePx));
 
       const faces = tierFaces(pr, b, spine, tier);
       const lit = o.lightSide === 'left' ? faces.left : faces.right;

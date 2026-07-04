@@ -127,7 +127,19 @@ export function occludeBehind(lines: FlowLine[], poly: Point[]): FlowLine[] {
       continue;
     }
     const runs = subtractPolygon(ln.points, poly);
-    if (runs.length === 1 && runs[0].length === ln.points.length) out.push(ln);
+    // "Unchanged" must be checked by endpoints, not point count: a 2-point
+    // segment clipped at one end still has 2 points, and treating it as
+    // untouched pushed the ORIGINAL through the mass — background base and
+    // window edges leaked straight across foreground silhouettes.
+    const r0 = runs[0];
+    const unchanged =
+      runs.length === 1 &&
+      r0.length === ln.points.length &&
+      r0[0].x === ln.points[0].x &&
+      r0[0].y === ln.points[0].y &&
+      r0[r0.length - 1].x === ln.points[ln.points.length - 1].x &&
+      r0[r0.length - 1].y === ln.points[ln.points.length - 1].y;
+    if (unchanged) out.push(ln);
     else for (const r of runs) if (r.length >= 2) out.push({ ...ln, points: r });
   }
   return out;

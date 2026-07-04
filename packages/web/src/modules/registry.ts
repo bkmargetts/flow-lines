@@ -7,6 +7,7 @@ import { flowFieldModule } from '../projects/flow-field';
 import { vineGeneratorModule } from '../projects/vine-generator';
 import { planetGeneratorModule } from '../projects/planet-generator';
 import { landscapeGeneratorModule } from '../projects/landscape-generator';
+import { cityGeneratorModule } from '../projects/city-generator';
 import { conwayModule } from '../projects/conway';
 import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
@@ -31,6 +32,7 @@ export const MODULES: Module<any>[] = [
   vineGeneratorModule,
   planetGeneratorModule,
   landscapeGeneratorModule,
+  cityGeneratorModule,
   conwayModule,
   complexFlowModule,
   reactionDiffusionModule,
