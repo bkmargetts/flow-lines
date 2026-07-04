@@ -14,6 +14,7 @@ import { generateComplexFlow, type ComplexFlowOptions } from './complex-flow.js'
 import { generateVines } from './vines/index.js';
 import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape/index.js';
+import { generateCity } from './city/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
 import { imageToPenInk } from './pen-ink/index.js';
 import { toSVG } from './svg.js';
@@ -132,6 +133,8 @@ for (const seed of SEEDS) {
     generatePlanet({ width: 300, height: 400, margin: 20, seed });
   CASES[`landscape/default/${seed}`] = () =>
     generateLandscape({ width: 300, height: 400, margin: 20, seed });
+  CASES[`city/default/${seed}`] = () =>
+    generateCity({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -152,6 +155,8 @@ CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
 CASES['planet/ringed/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'ringed' });
+CASES['city/rigid/42'] = () =>
+  generateCity({ width: 300, height: 400, margin: 20, seed: 42, order: 1, wobble: 0 });
 // Rings and craters need coverage of their own: with defaults the ringed case
 // above renders identically to the gas giant (rings/bands are off).
 CASES['planet/ringed-rings/42'] = () =>
