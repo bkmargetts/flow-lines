@@ -1,5 +1,6 @@
 import type { FlowLine, Point } from '../flow-lines.js';
 import type { SimplexNoise } from '../noise.js';
+import { emitChimney } from './details.js';
 import type { Morph } from './morph.js';
 import type { BuildingSpec, TierSpec } from './layout.js';
 import type { Proj, Spine, Face } from './project.js';
@@ -47,7 +48,7 @@ export interface StyleMassing {
   vacancyMul: number;
   /** Downtown envelope exponent: 1 = ride it like towers, 0 = ignore it. */
   envelopePow: number;
-  tiers: 'none' | 'setback' | 'cantilever';
+  tiers: 'none' | 'cantilever';
   roof: 'flat' | 'gable' | 'pediment';
 }
 
@@ -130,7 +131,43 @@ export const STYLES: Record<BuildingStyle, StyleDef> = {
   // Placeholder descriptors — filled in as each style lands. Until then a
   // non-tower style renders as towers rather than crashing.
   'greek-villa': { ...TOWERS },
-  'old-town': { ...TOWERS },
+
+  /** European old town: narrow row houses packed nearly wall to wall, gable
+   *  roofs with the ridge down the long axis, small irregular windows,
+   *  chimneys. Leans and bows keep their full morph reach — a swaying row of
+   *  medieval houses is the whole charm. */
+  'old-town': {
+    massing: {
+      storeys: { min: 2, max: 4 },
+      footW: { base: 0.5, var: 0.2 },
+      footD: { base: 0.88, var: 0.12 },
+      jitterMul: 0.25,
+      vacancyMul: 0.85,
+      envelopePow: 0,
+      tiers: 'none',
+      roof: 'gable',
+    },
+    leanMul: 1,
+    bendMul: 1,
+    waveMul: 0,
+    toneMul: 1.05,
+    crossAt: 0.7,
+    parapet: false,
+    windows: {
+      lit: 'grid',
+      shadow: 'ticks',
+      pitchMul: 0.85,
+      widthFrac: 0.42,
+      heightFrac: 0.5,
+      densityMul: 0.9,
+      jitterMul: 1.8,
+    },
+    extras: (ctx) => {
+      // Chimneys on most roofs, placed off-centre along the ridge.
+      if (ctx.b.roof.kind !== 'gable' || ctx.b.styleG[3] >= 0.75) return;
+      emitChimney(ctx.out, ctx.pr, ctx.b, ctx.spine, ctx.topTier, ctx.b.roof, ctx.b.styleG[4], ctx.occlude);
+    },
+  },
   brownstone: { ...TOWERS },
   brutalist: { ...TOWERS },
 };

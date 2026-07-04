@@ -49,6 +49,30 @@ describe('city generator', () => {
     expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
   });
 
+  it('old town is deterministic and reads differently from towers', () => {
+    const a = generateCity({ ...BASE, style: 'old-town' });
+    const b = generateCity({ ...BASE, style: 'old-town' });
+    expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+    expect(a.lines.length).toBeGreaterThan(300);
+    const towers = generateCity(BASE);
+    expect(JSON.stringify(a.lines)).not.toBe(JSON.stringify(towers.lines));
+  });
+
+  it('old town at order 1 with wobble off draws sloped gable roof lines', () => {
+    const res = generateCity({ ...BASE, style: 'old-town', order: 1, wobble: 0, sketch: 0 });
+    // Gable slope edges are neither horizontal nor the iso ±0.5 roof slope.
+    const sloped = res.lines.filter((l) => {
+      if (l.layer !== 'roof' || l.points.length < 2) return false;
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      const dx = Math.abs(b.x - a.x);
+      if (dx < 1) return false;
+      const slope = Math.abs((b.y - a.y) / dx);
+      return slope > 0.05 && Math.abs(slope - 0.5) > 0.05;
+    });
+    expect(sloped.length).toBeGreaterThan(10);
+  });
+
   it('morphs the same city rather than re-rolling: nearby orders stay similar in size', () => {
     const a = generateCity({ ...BASE, order: 0.5 });
     const b = generateCity({ ...BASE, order: 0.52 });

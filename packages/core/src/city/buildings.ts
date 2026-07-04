@@ -8,6 +8,7 @@ import type { BuildingSpec, TierSpec } from './layout.js';
 import { bodyPoint, makeSpine, roofWave, tierFaces, tierSilhouette, type Proj, type Spine } from './project.js';
 import { drawWindows, hatchFace, emitRing, inflatePoly, type FaceCraft } from './facade.js';
 import { STYLES } from './styles.js';
+import { gableSilhouette, emitGableEdges } from './roof.js';
 
 /**
  * The isometric city: buildings drawn back-to-front, each tier box first
@@ -53,11 +54,15 @@ export function drawIsoCity(
     for (let ti = 0; ti < b.tiers.length; ti++) {
       const tier = b.tiers[ti];
       const isTop = ti === b.tiers.length - 1;
+      // A gabled crown replaces the parapet-wave box entirely.
+      const gableTop = isTop && b.roof.kind === 'gable';
       // Lower tiers keep a calmer parapet — their roofs are ledges, not crowns.
-      const waveA = morph.waveAmp * def.waveMul * (isTop ? 1 : 0.45);
+      const waveA = gableTop ? 0 : morph.waveAmp * def.waveMul * (isTop ? 1 : 0.45);
 
       // 1. This box hides everything already drawn behind it.
-      const sil = tierSilhouette(pr, b, spine, tier, noise, waveA);
+      const sil = gableTop
+        ? gableSilhouette(pr, b, spine, tier, b.roof)
+        : tierSilhouette(pr, b, spine, tier, noise, waveA);
       lines = occludeBehind(lines, inflatePoly(sil.ring, o.inflatePx));
 
       const faces = tierFaces(pr, b, spine, tier);
@@ -104,9 +109,10 @@ export function drawIsoCity(
 
       // 4. Structural edges: the near roof fold (top face meets the two
       //    visible faces) and, for setback tiers, the base ledge line.
-      emitNearRoofEdges(lines, pr, b, spine, tier, noise, waveA);
+      if (gableTop) emitGableEdges(lines, pr, b, spine, tier, b.roof);
+      else emitNearRoofEdges(lines, pr, b, spine, tier, noise, waveA);
       if (ti > 0) emitBaseEdges(lines, pr, b, spine, tier);
-      if (isTop && def.parapet) emitParapet(lines, pr, b, spine, tier, noise, waveA, morph);
+      if (isTop && def.parapet && !gableTop) emitParapet(lines, pr, b, spine, tier, noise, waveA, morph);
 
       // 5. The bold contour: closed silhouette in offset passes; the shared
       //    near corner vertical is drawn with the same commitment.
