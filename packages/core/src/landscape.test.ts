@@ -81,6 +81,83 @@ describe('generateLandscape', () => {
     expect(long.length).toBeLessThan(layer(r.lines, 'ridge').length * 0.1);
   });
 
+  it('never draws a full-height sky column (the banding tell)', () => {
+    const r = generateLandscape(baseOptions({ skyToneTop: 0.3, skyToneHorizon: 0.5, hasWater: true, horizonFrac: 0.46 }));
+    const skyH = 0.46 * (700 - 48);
+    for (const ln of layer(r.lines, 'sky')) {
+      let minY = Infinity;
+      let maxY = -Infinity;
+      for (const p of ln.points) {
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+      }
+      expect(maxY - minY).toBeLessThan(skyH * 0.9);
+    }
+  });
+
+  it('cleans clouds to a handful of masses, not confetti', () => {
+    const r = generateLandscape(baseOptions({ clouds: 0.7 }));
+    const n = layer(r.lines, 'cloud').length;
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThanOrEqual(10);
+  });
+
+  it('atmosphere lightens far ridges much more than near ones', () => {
+    const inkIn = (r: FlowLine[], y0: number, y1: number): number => {
+      let total = 0;
+      for (const ln of r) {
+        for (let i = 1; i < ln.points.length; i++) {
+          const my = (ln.points[i].y + ln.points[i - 1].y) / 2;
+          if (my >= y0 && my < y1) total += Math.hypot(ln.points[i].x - ln.points[i - 1].x, ln.points[i].y - ln.points[i - 1].y);
+        }
+      }
+      return total;
+    };
+    const misty = generateLandscape(baseOptions({ hasWater: false, ridgeCount: 4, atmosphere: 1, horizonFrac: 0.2, crossHatch: 0 }));
+    const ridges = layer(misty.lines, 'ridge');
+    // Land spans ~y=160..676; compare its top third against its bottom third.
+    const far = inkIn(ridges, 160, 332);
+    const near = inkIn(ridges, 504, 676);
+    expect(far).toBeLessThan(near * 0.5);
+  });
+
+  it('opens the mid-water to far fewer marks than the horizon strip', () => {
+    const r = generateLandscape(baseOptions({ hasWater: true, horizonFrac: 0.4, waterFrac: 1, reflection: false, rocks: 0 }));
+    const horizonY = 24 + 0.4 * (700 - 48);
+    const waterBot = 700 - 24;
+    // Compare ink LENGTH, not dash count — lighter rows break into more,
+    // shorter dashes, so counting lines would reward the wrong thing.
+    const strip = (f0: number, f1: number): number => {
+      let total = 0;
+      for (const ln of layer(r.lines, 'water')) {
+        const fy = (ln.points[0].y - horizonY) / (waterBot - horizonY);
+        if (fy < f0 || fy >= f1) continue;
+        for (let i = 1; i < ln.points.length; i++) total += Math.hypot(ln.points[i].x - ln.points[i - 1].x, ln.points[i].y - ln.points[i - 1].y);
+      }
+      return total;
+    };
+    expect(strip(0.35, 0.65)).toBeLessThan(strip(0, 0.2) * 0.75);
+  });
+
+  it('draws reflections as horizontal glints, not vertical ticks', () => {
+    const r = generateLandscape(baseOptions({ hasWater: true, reflection: true, sun: true, rocks: 2 }));
+    const glints = layer(r.lines, 'reflection');
+    expect(glints.length).toBeGreaterThan(0);
+    for (const ln of glints) {
+      const a = ln.points[0];
+      const b = ln.points[ln.points.length - 1];
+      expect(Math.abs(b.y - a.y)).toBeLessThan(Math.abs(b.x - a.x));
+    }
+  });
+
+  it('treeStyle changes the tree stroke vocabulary', () => {
+    const conifer = generateLandscape(baseOptions({ hasWater: false, trees: 4, treeStyle: 'conifer' }));
+    const round = generateLandscape(baseOptions({ hasWater: false, trees: 4, treeStyle: 'round' }));
+    expect(layer(conifer.lines, 'tree').length).toBeGreaterThan(0);
+    expect(layer(round.lines, 'tree').length).toBeGreaterThan(0);
+    expect(layer(conifer.lines, 'tree')).not.toEqual(layer(round.lines, 'tree'));
+  });
+
   it('holds the sun as clean negative space in the sky band', () => {
     const sunX = 300;
     const sunY = 150;

@@ -27,6 +27,8 @@ export function registerLandscape(program: Command) {
     .option('--water-frac <number>', 'Share of the below-horizon space given to water (0-1; default 0.6)')
     // sky / sun
     .option('--sky-spacing <number>', 'Vertical sky hatch spacing in px', '6')
+    .option('--sky-tone-top <number>', 'Sky hatch coverage at the top 0..1 (default 0.42)')
+    .option('--sky-tone-horizon <number>', 'Sky hatch coverage at the horizon 0..1 (default 0.68)')
     .option('--no-sun', 'Do not hold a sun/moon as negative space')
     .option('--sun-x <number>', 'Sun centre x in px (defaults to ~middle)')
     .option('--sun-y <number>', 'Sun centre y in px (defaults to upper sky)')
@@ -50,10 +52,14 @@ export function registerLandscape(program: Command) {
     .option('--ridge-angle <number>', 'Straight-hatch angle in degrees (when not form-following; default 80)')
     .option('--no-form-follow', 'Straight hatch instead of cross-contour comb')
     .option('--slope-follow', 'Tilt straight ridge hatch toward its descent')
+    .option('--ridge-sharpness <number>', 'Rolling swell → peaked, skewed summits 0..1 (default 0.3)')
+    .option('--atmosphere <number>', 'Depth haze: far ridges lighter, hatch fades to mist 0..1 (default 0.4)')
     // compositional depth
     .option('--headlands <number>', 'Overlapping receding headlands on water (default per --scene)')
     .option('--foreground <number>', 'Dark foreground landform size 0..1 (default 0)')
     .option('--foreground-side <s>', 'Foreground landform side: left | right (default per --scene)')
+    .option('--focus <number>', 'Focal hierarchy: darks/detail gather at a focal point 0..1 (default 0.35)')
+    .option('--focus-x <number>', 'Focal column x in px (defaults to the sun)')
     // hatch craft
     .option('--tone-contrast <number>', 'Light/shadow modulation 0..1 (default 0.5)')
     .option('--cross-hatch <number>', 'Extra shadow hatch layers 0..2 (default 1)')
@@ -62,6 +68,7 @@ export function registerLandscape(program: Command) {
     // detail marks
     .option('--clouds <number>', 'Carved-cloud coverage 0..1 (default 0)')
     .option('--trees <number>', 'Foliage clumps on the nearest crest (default 0)')
+    .option('--tree-style <s>', 'Tree vocabulary: mixed | round | conifer | scrub (default mixed)')
     .option('--birds <number>', 'Gull marks in the sky (default 0)')
     // rocks
     .option('--rocks <number>', 'Small rocks / islands (default 0, or per --scene)')
@@ -95,6 +102,8 @@ export function registerLandscape(program: Command) {
         hasWater: scene ? (scene.hasWater ?? true) && options.water : options.water,
         waterFrac: num('waterFrac', scene?.waterFrac ?? 0.6),
         skyHatchSpacing: num('skySpacing', 6),
+        skyToneTop: num('skyToneTop', scene?.skyToneTop ?? 0.42),
+        skyToneHorizon: num('skyToneHorizon', scene?.skyToneHorizon ?? 0.68),
         sun: scene ? (scene.sun ?? true) && options.sun : options.sun,
         sunX: options.sunX !== undefined ? parseFloat(options.sunX) : undefined,
         sunY: options.sunY !== undefined ? parseFloat(options.sunY) : undefined,
@@ -116,15 +125,20 @@ export function registerLandscape(program: Command) {
         ridgeHatchAngle: num('ridgeAngle', scene?.ridgeHatchAngle ?? 80),
         slopeFollow: options.slopeFollow ?? scene?.slopeFollow ?? false,
         formFollow: scene ? (scene.formFollow ?? true) && options.formFollow : options.formFollow,
+        ridgeSharpness: num('ridgeSharpness', scene?.ridgeSharpness ?? 0.3),
+        atmosphere: num('atmosphere', scene?.atmosphere ?? 0.4),
         headlands: Math.round(num('headlands', scene?.headlands ?? 0)),
         foreground: num('foreground', scene?.foreground ?? 0),
         foregroundSide: (options.foregroundSide ?? scene?.foregroundSide ?? 'left') as LandscapeOptions['foregroundSide'],
+        focus: num('focus', scene?.focus ?? 0.35),
+        focusX: options.focusX !== undefined ? parseFloat(options.focusX) : undefined,
         toneContrast: num('toneContrast', scene?.toneContrast ?? 0.5),
         crossHatch: Math.round(num('crossHatch', scene?.crossHatch ?? 1)),
         hatchPatchiness: num('patchiness', 0.5),
         taper: num('taper', 0.5),
         clouds: num('clouds', scene?.clouds ?? 0),
         trees: Math.round(num('trees', scene?.trees ?? 0)),
+        treeStyle: (options.treeStyle ?? scene?.treeStyle ?? 'mixed') as LandscapeOptions['treeStyle'],
         birds: Math.round(num('birds', scene?.birds ?? 0)),
         rocks: Math.round(num('rocks', scene?.rocks ?? 0)),
         rockMaxSize: num('rockMaxSize', 46),

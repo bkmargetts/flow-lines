@@ -58,10 +58,13 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     ridgeHatchAngle: state.ridgeHatchAngle,
     slopeFollow: state.slopeFollow,
     formFollow: state.formFollow,
+    ridgeSharpness: state.ridgeSharpness,
+    atmosphere: state.atmosphere,
 
     headlands: Math.round(state.headlands),
     foreground: state.foreground,
     foregroundSide: state.foregroundSide,
+    focus: state.focus,
 
     toneContrast: state.toneContrast,
     crossHatch: Math.round(state.crossHatch),
@@ -70,6 +73,7 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
 
     clouds: state.clouds,
     trees: Math.round(state.trees),
+    treeStyle: state.treeStyle,
     birds: Math.round(state.birds),
 
     rocks: Math.round(state.rocks),

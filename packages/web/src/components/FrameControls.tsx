@@ -312,6 +312,9 @@ export function FrameControls() {
         value={frame.paperTone}
         onChange={(paperTone) => updateFrame({ paperTone })}
       />
+      {/* Deploys lag and browsers cache the bundle hard — show which build
+          this actually is, so "did the fix land?" is answerable at a glance. */}
+      <div style={{ fontSize: 11, opacity: 0.45, textAlign: 'right', marginTop: 8 }}>build {__BUILD_STAMP__}</div>
     </div>
   );
 }

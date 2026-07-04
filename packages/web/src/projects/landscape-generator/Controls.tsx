@@ -95,6 +95,7 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
       )}
       <Slider label="Ridge height" value={state.ridgeAmpMm} min={2} max={36} step={0.5} onChange={(v) => update({ ridgeAmpMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Hatch spacing" value={state.ridgeHatchSpacingMm} min={0.8} max={4} step={0.1} onChange={(v) => update({ ridgeHatchSpacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      <Slider label="Peak sharpness" value={state.ridgeSharpness} min={0} max={1} step={0.05} onChange={(v) => update({ ridgeSharpness: v })} format={(v) => v.toFixed(2)} />
       <Toggle label="Form-following hatch (wraps the hill)" checked={state.formFollow} onChange={(v) => update({ formFollow: v })} />
       <Slider label="Hatch angle" value={state.ridgeHatchAngle} min={0} max={90} step={1} onChange={(v) => update({ ridgeHatchAngle: v })} format={(v) => `${v}°`} disabled={state.formFollow} />
       {!state.formFollow && (
@@ -117,6 +118,8 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
       )}
 
       <h3 className="section-title">Hatch craft</h3>
+      <Slider label="Atmosphere (mist)" value={state.atmosphere} min={0} max={1} step={0.05} onChange={(v) => update({ atmosphere: v })} format={(v) => v.toFixed(2)} />
+      <Slider label="Focal emphasis" value={state.focus} min={0} max={1} step={0.05} onChange={(v) => update({ focus: v })} format={(v) => v.toFixed(2)} />
       <Slider label="Tonal depth" value={state.toneContrast} min={0} max={1} step={0.05} onChange={(v) => update({ toneContrast: v })} format={(v) => v.toFixed(2)} />
       <Slider label="Cross-hatch (shadow)" value={state.crossHatch} min={0} max={2} step={1} onChange={(v) => update({ crossHatch: v })} />
       <Slider label="Patchiness" value={state.hatchPatchiness} min={0} max={1} step={0.05} onChange={(v) => update({ hatchPatchiness: v })} format={(v) => v.toFixed(2)} />
@@ -124,8 +127,17 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
 
       <h3 className="section-title">Detail</h3>
       <Slider label="Clouds" value={state.clouds} min={0} max={1} step={0.05} onChange={(v) => update({ clouds: v })} format={(v) => (v < 0.01 ? 'off' : `${Math.round(v * 100)}%`)} />
-      {!state.hasWater && (
-        <Slider label="Trees" value={state.trees} min={0} max={12} step={1} onChange={(v) => update({ trees: v })} />
+      <Slider label="Trees" value={state.trees} min={0} max={12} step={1} onChange={(v) => update({ trees: v })} />
+      {state.trees > 0 && (
+        <div className="control-group">
+          <label className="label-text">Tree style</label>
+          <select value={state.treeStyle} onChange={(e) => update({ treeStyle: e.target.value as LandscapeState['treeStyle'] })}>
+            <option value="mixed">Mixed</option>
+            <option value="round">Round canopy</option>
+            <option value="conifer">Conifer</option>
+            <option value="scrub">Low scrub</option>
+          </select>
+        </div>
       )}
       <Slider label="Birds" value={state.birds} min={0} max={10} step={1} onChange={(v) => update({ birds: v })} />
 
@@ -156,8 +168,8 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
       )}
 
       <AdvancedSection>
-        <Slider label="Sky tone (top)" value={state.skyToneTop} min={0.3} max={1} step={0.05} onChange={(v) => update({ skyToneTop: v })} format={(v) => v.toFixed(2)} />
-        <Slider label="Sky tone (horizon)" value={state.skyToneHorizon} min={0.3} max={1} step={0.05} onChange={(v) => update({ skyToneHorizon: v })} format={(v) => v.toFixed(2)} />
+        <Slider label="Sky tone (top)" value={state.skyToneTop} min={0} max={1} step={0.02} onChange={(v) => update({ skyToneTop: v })} format={(v) => v.toFixed(2)} />
+        <Slider label="Sky tone (horizon)" value={state.skyToneHorizon} min={0} max={1} step={0.02} onChange={(v) => update({ skyToneHorizon: v })} format={(v) => v.toFixed(2)} />
         <Slider label="Horizon detail" value={state.horizonFreq} min={0.6} max={5} step={0.1} onChange={(v) => update({ horizonFreq: v })} format={(v) => v.toFixed(1)} />
         <Slider label="Ridge detail (octaves)" value={state.ridgeOctaves} min={1} max={6} step={1} onChange={(v) => update({ ridgeOctaves: v })} />
         <Slider label="Ridge roughness" value={state.ridgePersistence} min={0.3} max={0.75} step={0.05} onChange={(v) => update({ ridgePersistence: v })} format={(v) => v.toFixed(2)} />
