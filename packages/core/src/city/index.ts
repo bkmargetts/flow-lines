@@ -7,6 +7,10 @@ import { clipPolylineToRect } from '../lib/polyline.js';
 import { buildMorph } from './morph.js';
 import { layoutCity, fitCity } from './layout.js';
 import { drawIsoCity } from './buildings.js';
+import type { CityStyle } from './styles.js';
+
+export { CITY_STYLES } from './styles.js';
+export type { BuildingStyle, CityStyle } from './styles.js';
 
 /**
  * Abstract cities of buildings, drawn as plottable pen-and-ink. The whole
@@ -39,6 +43,10 @@ export interface CityOptions {
 
   /** THE slider: 0 = flowing/organic/artistic, 1 = rigid/robotic. */
   order?: number;
+
+  /** Architectural vocabulary for the whole city; 'mixed' rolls one per
+   *  building. Orthogonal to `order` — every style morphs flow↔rigid. */
+  style?: CityStyle;
 
   // Layout
   blockCols?: number;
@@ -73,6 +81,7 @@ export interface CityOptions {
 
 const DEFAULTS: Required<Omit<CityOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
   order: 0.5,
+  style: 'towers',
   blockCols: 7,
   blockRows: 7,
   lotSize: 39,
@@ -137,6 +146,7 @@ export function generateCity(options: CityOptions): FlowLinesResult {
       heightVariance: o.heightVariance,
       storey: o.storey,
       tiers: o.tiers,
+      style: o.style,
     },
     morph,
     seed

@@ -43,6 +43,12 @@ describe('city generator', () => {
     expect(off.lines.filter((l) => l.layer === 'window').length).toBe(0);
   });
 
+  it('explicit style "towers" is byte-identical to the default (the compat contract)', () => {
+    const a = generateCity({ ...BASE, order: 0.35 });
+    const b = generateCity({ ...BASE, order: 0.35, style: 'towers' });
+    expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+  });
+
   it('morphs the same city rather than re-rolling: nearby orders stay similar in size', () => {
     const a = generateCity({ ...BASE, order: 0.5 });
     const b = generateCity({ ...BASE, order: 0.52 });

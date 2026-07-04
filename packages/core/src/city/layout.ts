@@ -3,6 +3,8 @@ import { makeRandom, subSeed } from '../lib/rng.js';
 import { lerp, clamp, clamp01 } from '../lib/math.js';
 import type { Morph } from './morph.js';
 import { KX, KY, type Proj } from './project.js';
+import { STYLES, rollMixedStyle, type BuildingStyle, type CityStyle } from './styles.js';
+import { flatRoof, type RoofSpec } from './roof.js';
 
 /**
  * City layout: a blockCols × blockRows grid of lots, one candidate building
@@ -44,6 +46,13 @@ export interface BuildingSpec {
   /** Roof-detail draw: gates the parapet inset / lip (restraint — not every
    *  roof gets furniture). */
   parapetDraw: number;
+  /** Resolved architectural style ('mixed' is resolved per building here). */
+  style: BuildingStyle;
+  /** Roof cap above the top tier (flat for towers; rise included in `h`). */
+  roof: RoofSpec;
+  /** Style genome: a fixed-length vector from a dedicated per-cell stream —
+   *  separate from the main genome so styles never re-roll existing cities. */
+  styleG: number[];
   /** Painter's-algorithm sort key. Primary: grid diagonal (row + col) —
    *  footprints are jitter-clamped inside their cells, so diagonal order is a
    *  *correct* painter order (same-diagonal cells can never overlap in
@@ -64,6 +73,7 @@ export interface CityLayoutOptions {
   heightVariance: number;
   storey: number;
   tiers: number;
+  style: CityStyle;
 }
 
 export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): BuildingSpec[] {
@@ -108,6 +118,18 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
         skip: rng(),
         parapet: rng(),
       };
+      // The style genome: a second fixed-length vector from its own stream.
+      // Drawn for every cell, always, whether or not the style uses it — and
+      // never interleaved with the draws above, so pre-styles seeds keep
+      // their cities exactly.
+      const sRng = makeRandom(subSeed(cellSeed, 977));
+      const styleG: number[] = [];
+      for (let i = 0; i < 10; i++) styleG.push(sRng());
+      // Mixed mode resolves per building from the cell centre (jitter-free,
+      // so the roll never depends on other knobs).
+      const ddCell = Math.hypot((c + 0.5) * pitch - dcU, (r + 0.5) * pitch - dcV) / dcR;
+      const style: BuildingStyle = o.style === 'mixed' ? rollMixedStyle(styleG[0], ddCell) : o.style;
+      const def = STYLES[style];
 
       // Vacancy: the density knob plus a flow-scaled extra, gated through
       // low-frequency noise so gaps clump into plazas instead of salt-and-pepper.
@@ -180,6 +202,9 @@ export function layoutCity(o: CityLayoutOptions, morph: Morph, seed: number): Bu
         seed: cellSeed,
         tiers,
         h,
+        style,
+        roof: flatRoof(),
+        styleG,
         leanU: g.leanU,
         leanV: g.leanV,
         bendU: g.bendU,
@@ -216,10 +241,13 @@ export function fitCity(
   let maxY = -Infinity;
   for (const b of specs) {
     const reach = (morph.leanFrac + morph.bendFrac) * b.h;
-    for (const t of b.tiers) {
+    for (let ti = 0; ti < b.tiers.length; ti++) {
+      const t = b.tiers[ti];
+      // The roof cap (gable rise) sits above the top tier's z1.
+      const cap = ti === b.tiers.length - 1 ? b.roof.rise : 0;
       minX = Math.min(minX, (t.u0 - t.v1) * KX - 2 * reach);
       maxX = Math.max(maxX, (t.u1 - t.v0) * KX + 2 * reach);
-      minY = Math.min(minY, (t.u0 + t.v0) * KY - t.z1 - morph.waveAmp - reach);
+      minY = Math.min(minY, (t.u0 + t.v0) * KY - t.z1 - cap - morph.waveAmp - reach);
       maxY = Math.max(maxY, (t.u1 + t.v1) * KY - t.z0);
     }
   }
@@ -233,6 +261,7 @@ export function fitCity(
     for (const b of specs) {
       b.h *= scale;
       b.storey *= scale;
+      b.roof.rise *= scale;
       for (const t of b.tiers) {
         t.u0 *= scale;
         t.u1 *= scale;

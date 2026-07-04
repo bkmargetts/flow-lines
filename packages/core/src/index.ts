@@ -122,8 +122,8 @@ export { generateLandscape } from './landscape/index.js';
 export type { LandscapeOptions, ForegroundSide, TreeStyle } from './landscape/index.js';
 
 // City generator (abstract pen-and-ink cities, flowing → rigid)
-export { generateCity } from './city/index.js';
-export type { CityOptions, CityLightSide } from './city/index.js';
+export { generateCity, CITY_STYLES } from './city/index.js';
+export type { CityOptions, CityLightSide, BuildingStyle, CityStyle } from './city/index.js';
 
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
