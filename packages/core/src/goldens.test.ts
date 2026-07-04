@@ -157,6 +157,16 @@ CASES['planet/ringed/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'ringed' });
 CASES['city/rigid/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, order: 1, wobble: 0 });
+CASES['city/greek-villa/42'] = () =>
+  generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'greek-villa' });
+CASES['city/old-town/42'] = () =>
+  generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'old-town' });
+CASES['city/brownstone/42'] = () =>
+  generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'brownstone' });
+CASES['city/brutalist/42'] = () =>
+  generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'brutalist' });
+CASES['city/mixed/42'] = () =>
+  generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'mixed' });
 // Rings and craters need coverage of their own: with defaults the ringed case
 // above renders identically to the gas giant (rings/bands are off).
 CASES['planet/ringed-rings/42'] = () =>

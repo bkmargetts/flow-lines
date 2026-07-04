@@ -84,6 +84,16 @@ describe('city generator', () => {
     }
   });
 
+  it('mixed mode is deterministic and morphs without re-rolling', () => {
+    const a = generateCity({ ...BASE, style: 'mixed', order: 0.5 });
+    const b = generateCity({ ...BASE, style: 'mixed', order: 0.5 });
+    expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+    const c = generateCity({ ...BASE, style: 'mixed', order: 0.52 });
+    const ratio = c.lines.length / a.lines.length;
+    expect(ratio).toBeGreaterThan(0.85);
+    expect(ratio).toBeLessThan(1.15);
+  });
+
   it('brutalist draws long strip windows instead of a short-edged grid', () => {
     const res = generateCity({ ...BASE, style: 'brutalist', order: 1, wobble: 0, sketch: 0 });
     const longStrips = res.lines.filter((l) => {

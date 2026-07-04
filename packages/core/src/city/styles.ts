@@ -288,8 +288,24 @@ export const STYLES: Record<BuildingStyle, StyleDef> = {
 /**
  * Roll one building's style in 'mixed' mode from its style genome draw `t`
  * and the cell's distance to the downtown centre `dd` (0 = core). Weighted
- * so the core stays towers and villas drift to the outskirts.
+ * so the core stays towers and villas drift to the outskirts; everything
+ * shares the same storey, grid and light so the mix reads as one city.
  */
-export function rollMixedStyle(_t: number, _dd: number): BuildingStyle {
+export function rollMixedStyle(t: number, dd: number): BuildingStyle {
+  const near = Math.exp(-dd * dd * 1.6);
+  const weights: [BuildingStyle, number][] = [
+    ['towers', 0.22 + 0.55 * near],
+    ['brownstone', 0.26],
+    ['old-town', 0.24],
+    ['brutalist', 0.14],
+    ['greek-villa', 0.05 + 0.18 * (1 - near)],
+  ];
+  let total = 0;
+  for (const [, wt] of weights) total += wt;
+  let x = t * total;
+  for (const [s, wt] of weights) {
+    x -= wt;
+    if (x <= 0) return s;
+  }
   return 'towers';
 }
