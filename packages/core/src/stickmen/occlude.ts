@@ -12,19 +12,30 @@ import type { FigureBuild } from './figure.js';
  * strictly nearer.
  */
 
-export function stampScene(zbuf: ZBuffer, builds: FigureBuild[]): void {
+/** The ZBuffer covers [0,w]×[0,h], but the crowd overflows the page, so we
+ *  translate every point by (offX, offY) into buffer space — the buffer is
+ *  sized to the whole crowd so off-page heads occlude too. */
+export interface ZOffset {
+  offX: number;
+  offY: number;
+}
+
+export function stampScene(zbuf: ZBuffer, builds: FigureBuild[], off: ZOffset): void {
   for (const b of builds) {
-    for (const occ of b.occluders) zbuf.fill(occ.poly, b.depth);
+    for (const occ of b.occluders) {
+      zbuf.fill(occ.poly.map((p) => ({ x: p.x + off.offX, y: p.y + off.offY })), b.depth);
+    }
   }
 }
 
-/** Split a polyline into the runs that survive occlusion at `depth`. */
-export function splitVisible(points: Point[], depth: number, zbuf: ZBuffer, step: number): Point[][] {
+/** Split a polyline into the runs that survive occlusion at `depth`. Points are
+ *  queried in buffer space (via `off`) but returned in their original space. */
+export function splitVisible(points: Point[], depth: number, zbuf: ZBuffer, step: number, off: ZOffset): Point[][] {
   const dense = densify(points, step);
   const runs: Point[][] = [];
   let run: Point[] = [];
   for (const p of dense) {
-    if (zbuf.hidden(p.x, p.y, depth)) {
+    if (zbuf.hidden(p.x + off.offX, p.y + off.offY, depth)) {
       if (run.length >= 2) runs.push(run);
       run = [];
     } else {

@@ -6,7 +6,7 @@ import { ellipse } from '../planet/geometry.js';
 import { ZBuffer } from '../vines/spatial.js';
 import { placeFigures, fitFigures, type FacingMode } from './layout.js';
 import { buildFigure, type FigureBuild } from './figure.js';
-import { stampScene, splitVisible } from './occlude.js';
+import { stampScene, splitVisible, type ZOffset } from './occlude.js';
 import type { PoseMode } from './poses.js';
 
 export type { FacingMode } from './layout.js';
@@ -130,11 +130,35 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
   );
 
   // Hidden-line removal against a shared depth buffer holding every figure's
-  // head — so a limb never appears to pass through a nearer head.
+  // head — so a limb never appears to pass through a nearer head. The crowd
+  // overflows the page (revealed on zoom-out), so the buffer is sized to the
+  // whole crowd's bounds, not the page, or off-page heads wouldn't occlude.
   const cell = Math.max(0.6, o.penWidth * 0.5);
-  const zbuf = o.occlude ? new ZBuffer(width, height, cell) : null;
-  if (zbuf) stampScene(zbuf, builds);
   const step = Math.max(1, o.penWidth * 0.8);
+  let zbuf: ZBuffer | null = null;
+  let off: ZOffset = { offX: 0, offY: 0 };
+  if (o.occlude) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const b of builds) {
+      for (const s of b.strokes) {
+        for (const p of s.points) {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        }
+      }
+    }
+    if (isFinite(minX)) {
+      const pad = 4 * cell;
+      off = { offX: -minX + pad, offY: -minY + pad };
+      zbuf = new ZBuffer(maxX - minX + 2 * pad, maxY - minY + 2 * pad, cell);
+      stampScene(zbuf, builds, off);
+    }
+  }
 
   const lines: FlowLine[] = [];
   for (const b of builds) {
@@ -147,7 +171,7 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
 
     for (const s of emit) {
       if (zbuf) {
-        for (const run of splitVisible(s.points, b.depth, zbuf, step)) {
+        for (const run of splitVisible(s.points, b.depth, zbuf, step, off)) {
           lines.push({ ...s, points: run });
         }
       } else {

@@ -7,15 +7,17 @@ const DEG = Math.PI / 180;
 
 /**
  * Pure render for the Stick Men generator: state + page → lines. mm settings
- * convert to px at the page density; px sizes are pre-divided by zoom so they
- * land back at true size after the zoom transform, exactly as the City /
- * Landscape / Planet Generators do.
+ * convert to px at the page density. Zoom is a true camera magnification: the
+ * crowd is generated once at page scale (zoom-independent), then every point is
+ * uniformly scaled about the page centre — so figures AND spacing grow together
+ * on zoom-in, and zoom-out shrinks everything and reveals the off-page crowd.
+ * (The other generators pre-divide sizes by zoom because they fit-to-page; this
+ * one is sized to the page directly, so a plain post-scale is the honest zoom.)
  */
 export function renderStickmen(state: StickmenState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
   const mm = page.pxPerMm;
   const zoom = Math.max(0.2, state.zoom);
-  const z = (px: number): number => px / zoom;
 
   const options: StickmenOptions = {
     width: page.widthPx,
@@ -26,26 +28,27 @@ export function renderStickmen(state: StickmenState, env: RenderEnv): LayerOutpu
     count: Math.round(state.count),
     spread: state.spread,
     clustering: state.clustering,
-    minSeparation: z(state.minSeparationMm * mm),
+    minSeparation: state.minSeparationMm * mm,
     facing: state.facing,
     facingAngle: state.facingAngleDeg * DEG,
     facingJitter: state.facingJitterDeg * DEG,
 
-    figureScale: z(state.figureHeightMm * mm),
+    figureScale: state.figureHeightMm * mm,
     scaleVariance: state.scaleVariance,
     limbCurve: state.limbCurve,
-    penWidth: z(state.penWidthMm * mm),
+    penWidth: state.penWidthMm * mm,
 
     poseEnergy: state.poseEnergy,
 
     occlude: state.occlude,
     groundContact: state.groundContact,
-    wobble: z(state.wobbleMm * mm),
+    wobble: state.wobbleMm * mm,
   };
 
   const result = generateStickmen(options);
 
-  // Zoom: scale the whole crowd about the page centre, like the other generators.
+  // Zoom: uniformly scale the whole crowd about the page centre — figures and
+  // spacing together, a real camera zoom.
   const zoomed =
     zoom === 1
       ? result.lines
