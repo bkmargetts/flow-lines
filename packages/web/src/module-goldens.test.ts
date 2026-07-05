@@ -49,6 +49,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   lenia: { preset: 'cells' },
   physarum: { preset: 'veins' },
   'city-generator': { style: 'mixed' },
+  stickmen: { poseEnergy: 1 },
 };
 for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const mod = pureModules.find((m) => m.id === id);

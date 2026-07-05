@@ -15,6 +15,7 @@ import { generateVines } from './vines/index.js';
 import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape/index.js';
 import { generateCity } from './city/index.js';
+import { generateStickmen } from './stickmen/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
 import { imageToPenInk } from './pen-ink/index.js';
 import { toSVG } from './svg.js';
@@ -135,6 +136,8 @@ for (const seed of SEEDS) {
     generateLandscape({ width: 300, height: 400, margin: 20, seed });
   CASES[`city/default/${seed}`] = () =>
     generateCity({ width: 300, height: 400, margin: 20, seed });
+  CASES[`stickmen/default/${seed}`] = () =>
+    generateStickmen({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -151,6 +154,8 @@ CASES['physarum/veins/42'] = () =>
   generatePhysarum({ width: 300, height: 400, seed: 42, preset: 'veins' });
 CASES['vines/wreath/42'] = () =>
   generateVines({ width: 300, height: 400, seed: 42, composition: 'wreath' });
+CASES['stickmen/energetic/42'] = () =>
+  generateStickmen({ width: 300, height: 400, margin: 20, seed: 42, poseEnergy: 1, count: 90 });
 CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
 CASES['planet/ringed/42'] = () =>
