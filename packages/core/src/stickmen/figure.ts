@@ -3,8 +3,8 @@ import { ellipse } from '../planet/geometry.js';
 import { project, type Proj } from '../city/project.js';
 import { smoothPolyline } from '../lib/polyline.js';
 import { densify } from '../vines/spatial.js';
-import { buildLocalSkeleton, PROP, type Joint, type Vec3 } from './skeleton.js';
-import { resolvePose } from './poses.js';
+import { buildLocalSkeleton, resolveProportions, type Joint, type Vec3 } from './skeleton.js';
+import { resolvePose, type PoseMode } from './poses.js';
 
 const TAU = Math.PI * 2;
 
@@ -17,6 +17,8 @@ export interface FigureSpec {
   H: number;
   /** Pose-angle draws (POSE_DRAWS of them), fixed order. */
   poseG: number[];
+  /** Proportion draws (PROP_DRAWS of them), fixed order. */
+  propG: number[];
   /** Painter's / occlusion depth key = u0 + v0 (larger = nearer). */
   depth: number;
 }
@@ -30,6 +32,9 @@ export interface Occluder {
 
 export interface FigureOpts {
   poseEnergy: number;
+  poseMode: PoseMode;
+  /** 0 = every figure the canonical body, 1 = full per-figure variation. */
+  proportionVariance: number;
   penWidth: number;
   /** 0 = angular hinged limbs, 1 = limbs curve in a smooth continuous arc. */
   limbCurve: number;
@@ -50,8 +55,9 @@ export interface FigureBuild {
  * for the scene hidden-line pass.
  */
 export function buildFigure(spec: FigureSpec, proj: Proj, o: FigureOpts): FigureBuild {
-  const pose = resolvePose(spec.poseG, { poseEnergy: o.poseEnergy });
-  const local = buildLocalSkeleton(pose);
+  const pose = resolvePose(spec.poseG, { poseEnergy: o.poseEnergy, mode: o.poseMode });
+  const prop = resolveProportions(spec.propG, o.proportionVariance);
+  const local = buildLocalSkeleton(pose, prop);
   const cosF = Math.cos(spec.facing);
   const sinF = Math.sin(spec.facing);
   const H = spec.H;
@@ -95,7 +101,7 @@ export function buildFigure(spec: FigureSpec, proj: Proj, o: FigureOpts): Figure
 
   // Head: a screen-space circle (a ball head projects to a circle under iso).
   const head = P('headCenter');
-  const rHead = PROP.rHead * H;
+  const rHead = prop.rHead * H;
   const headRing = ellipse(head.x, head.y, rHead, rHead, 0, 0, TAU);
   strokes.push({ points: headRing, pen: 'fine', layer: 'head' });
   // Occlude a hair beyond the drawn circle so a limb behind it stops cleanly
