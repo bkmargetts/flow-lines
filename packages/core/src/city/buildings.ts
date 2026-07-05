@@ -6,7 +6,9 @@ import { occludeBehind } from '../landscape/features.js';
 import type { Morph } from './morph.js';
 import type { BuildingSpec, TierSpec } from './layout.js';
 import { bodyPoint, makeSpine, roofWave, tierFaces, tierSilhouette, type Proj, type Spine } from './project.js';
-import { drawWindows, hatchFace, emitRing, inflatePoly, type FaceCraft } from './facade.js';
+import { drawWindows, drawStripWindows, hatchFace, emitRing, inflatePoly, type FaceCraft } from './facade.js';
+import { STYLES } from './styles.js';
+import { gableSilhouette, emitGableEdges } from './roof.js';
 
 /**
  * The isometric city: buildings drawn back-to-front, each tier box first
@@ -40,9 +42,10 @@ export function drawIsoCity(
   let lines: FlowLine[] = [];
 
   for (const b of specs) {
+    const def = STYLES[b.style];
     const rng = makeRandom(subSeed(b.seed, 2));
     const craft: FaceCraft = { rng, taper: morph.taper, jitter: morph.jitterAng };
-    const spine = makeSpine(b, morph);
+    const spine = makeSpine(b, morph, def.leanMul, def.bendMul);
     // Hatch angle wanders off exact 45° per building at the flow end, keyed
     // on the genome (not the craft stream) so it never re-rolls.
     const hatchAng = 45 + (b.wavePhase * 2 - 1) * morph.hatchWanderDeg;
@@ -51,11 +54,15 @@ export function drawIsoCity(
     for (let ti = 0; ti < b.tiers.length; ti++) {
       const tier = b.tiers[ti];
       const isTop = ti === b.tiers.length - 1;
+      // A gabled crown replaces the parapet-wave box entirely.
+      const gableTop = isTop && b.roof.kind === 'gable';
       // Lower tiers keep a calmer parapet — their roofs are ledges, not crowns.
-      const waveA = morph.waveAmp * (isTop ? 1 : 0.45);
+      const waveA = gableTop ? 0 : morph.waveAmp * def.waveMul * (isTop ? 1 : 0.45);
 
       // 1. This box hides everything already drawn behind it.
-      const sil = tierSilhouette(pr, b, spine, tier, noise, waveA);
+      const sil = gableTop
+        ? gableSilhouette(pr, b, spine, tier, b.roof)
+        : tierSilhouette(pr, b, spine, tier, noise, waveA);
       lines = occludeBehind(lines, inflatePoly(sil.ring, o.inflatePx));
 
       const faces = tierFaces(pr, b, spine, tier);
@@ -65,40 +72,55 @@ export function drawIsoCity(
       // 2. Shadow-face hatch (tone carries the form; tops stay paper).
       hatchFace(lines, shadow, morph, craft, noise, {
         spacing: o.hatchSpacing,
-        tone: o.shadeStrength * b.toneMul,
+        tone: o.shadeStrength * b.toneMul * def.toneMul,
         angleDeg: hatchAng,
-        cross: o.shadeStrength > 0.7,
+        cross: o.shadeStrength > def.crossAt,
       });
 
       // 3. Windows: the lit face gets the full grid; the shadow face only
       //    sparse sill ticks (and only when windows are dense — outlines
       //    inside hatch read as noise).
-      if (o.windows > 0) {
-        drawWindows(lines, lit, morph, craft, noise, {
-          pitch: o.windowPitch,
+      if (o.windows > 0 && def.windows.lit === 'strip') {
+        drawStripWindows(lines, lit, craft, {
           storey: b.storey,
-          density: o.windows,
+          density: o.windows * def.windows.densityMul,
+          phase: b.winPhase,
+          budget,
+        });
+      }
+      if (o.windows > 0 && def.windows.lit === 'grid') {
+        drawWindows(lines, lit, morph, craft, noise, {
+          pitch: o.windowPitch * def.windows.pitchMul,
+          storey: b.storey,
+          density: o.windows * def.windows.densityMul,
           phase: b.winPhase,
           style: 'full',
           budget,
+          widthFrac: def.windows.widthFrac,
+          heightFrac: def.windows.heightFrac,
+          jitterMul: def.windows.jitterMul,
         });
-        if (o.windows > 0.6) {
-          drawWindows(lines, shadow, morph, craft, noise, {
-            pitch: o.windowPitch,
-            storey: b.storey,
-            density: o.windows * 0.4,
-            phase: b.winPhase,
-            style: 'ticks',
-            budget,
-          });
-        }
+      }
+      if (o.windows > 0.6 && def.windows.shadow === 'ticks') {
+        drawWindows(lines, shadow, morph, craft, noise, {
+          pitch: o.windowPitch * def.windows.pitchMul,
+          storey: b.storey,
+          density: o.windows * def.windows.densityMul * 0.4,
+          phase: b.winPhase,
+          style: 'ticks',
+          budget,
+          widthFrac: def.windows.widthFrac,
+          heightFrac: def.windows.heightFrac,
+          jitterMul: def.windows.jitterMul,
+        });
       }
 
       // 4. Structural edges: the near roof fold (top face meets the two
       //    visible faces) and, for setback tiers, the base ledge line.
-      emitNearRoofEdges(lines, pr, b, spine, tier, noise, waveA);
+      if (gableTop) emitGableEdges(lines, pr, b, spine, tier, b.roof);
+      else emitNearRoofEdges(lines, pr, b, spine, tier, noise, waveA);
       if (ti > 0) emitBaseEdges(lines, pr, b, spine, tier);
-      if (isTop) emitParapet(lines, pr, b, spine, tier, noise, waveA, morph);
+      if (isTop && def.parapet && !gableTop) emitParapet(lines, pr, b, spine, tier, noise, waveA, morph);
 
       // 5. The bold contour: closed silhouette in offset passes; the shared
       //    near corner vertical is drawn with the same commitment.
@@ -108,6 +130,33 @@ export function drawIsoCity(
         nearEdge.push(bodyPoint(pr, b, spine, tier.u1, tier.v1, tier.z0 + ((tier.z1 - tier.z0) * i) / 8));
       }
       pushRun(lines, nearEdge, 'edge', 'bold');
+    }
+
+    // 6. Style-specific details (colonnades, stoops, chimneys …), emitted
+    //    once per building with the full drawing context in hand.
+    if (def.extras) {
+      const topTier = b.tiers[b.tiers.length - 1];
+      const tf = tierFaces(pr, b, spine, topTier);
+      def.extras({
+        out: lines,
+        pr,
+        b,
+        spine,
+        morph,
+        craft,
+        noise,
+        draw: o,
+        lit: o.lightSide === 'left' ? tf.left : tf.right,
+        shadow: o.lightSide === 'left' ? tf.right : tf.left,
+        topTier,
+        budget,
+        // In-place so ctx.out stays the live array after an occlusion pass.
+        occlude: (ring) => {
+          const kept = occludeBehind(lines, inflatePoly(ring, o.inflatePx));
+          lines.length = 0;
+          for (const l of kept) lines.push(l);
+        },
+      });
     }
   }
   return lines;

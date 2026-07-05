@@ -43,6 +43,68 @@ describe('city generator', () => {
     expect(off.lines.filter((l) => l.layer === 'window').length).toBe(0);
   });
 
+  it('explicit style "towers" is byte-identical to the default (the compat contract)', () => {
+    const a = generateCity({ ...BASE, order: 0.35 });
+    const b = generateCity({ ...BASE, order: 0.35, style: 'towers' });
+    expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+  });
+
+  it('old town is deterministic and reads differently from towers', () => {
+    const a = generateCity({ ...BASE, style: 'old-town' });
+    const b = generateCity({ ...BASE, style: 'old-town' });
+    expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+    expect(a.lines.length).toBeGreaterThan(300);
+    const towers = generateCity(BASE);
+    expect(JSON.stringify(a.lines)).not.toBe(JSON.stringify(towers.lines));
+  });
+
+  it('old town at order 1 with wobble off draws sloped gable roof lines', () => {
+    const res = generateCity({ ...BASE, style: 'old-town', order: 1, wobble: 0, sketch: 0 });
+    // Gable slope edges are neither horizontal nor the iso ±0.5 roof slope.
+    const sloped = res.lines.filter((l) => {
+      if (l.layer !== 'roof' || l.points.length < 2) return false;
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      const dx = Math.abs(b.x - a.x);
+      if (dx < 1) return false;
+      const slope = Math.abs((b.y - a.y) / dx);
+      return slope > 0.05 && Math.abs(slope - 0.5) > 0.05;
+    });
+    expect(sloped.length).toBeGreaterThan(10);
+  });
+
+  it('each new style is deterministic and reads differently from towers', () => {
+    const towers = JSON.stringify(generateCity(BASE).lines);
+    for (const style of ['greek-villa', 'brownstone', 'brutalist'] as const) {
+      const a = generateCity({ ...BASE, style });
+      const b = generateCity({ ...BASE, style });
+      expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+      expect(a.lines.length).toBeGreaterThan(300);
+      expect(JSON.stringify(a.lines)).not.toBe(towers);
+    }
+  });
+
+  it('mixed mode is deterministic and morphs without re-rolling', () => {
+    const a = generateCity({ ...BASE, style: 'mixed', order: 0.5 });
+    const b = generateCity({ ...BASE, style: 'mixed', order: 0.5 });
+    expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));
+    const c = generateCity({ ...BASE, style: 'mixed', order: 0.52 });
+    const ratio = c.lines.length / a.lines.length;
+    expect(ratio).toBeGreaterThan(0.85);
+    expect(ratio).toBeLessThan(1.15);
+  });
+
+  it('brutalist draws long strip windows instead of a short-edged grid', () => {
+    const res = generateCity({ ...BASE, style: 'brutalist', order: 1, wobble: 0, sketch: 0 });
+    const longStrips = res.lines.filter((l) => {
+      if (l.layer !== 'window' || l.points.length < 2) return false;
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return Math.hypot(b.x - a.x, b.y - a.y) > 15;
+    });
+    expect(longStrips.length).toBeGreaterThan(30);
+  });
+
   it('morphs the same city rather than re-rolling: nearby orders stay similar in size', () => {
     const a = generateCity({ ...BASE, order: 0.5 });
     const b = generateCity({ ...BASE, order: 0.52 });

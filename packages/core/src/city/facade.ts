@@ -162,6 +162,12 @@ export interface WindowOptions {
   style: 'full' | 'ticks';
   /** Shared mutable budget: window marks stop when the city's allowance runs out. */
   budget: { left: number };
+  /** Window width as a fraction of the column pitch (default: the towers 0.55). */
+  widthFrac?: number;
+  /** Window height as a fraction of the storey (default 0.45). */
+  heightFrac?: number;
+  /** Scale on the morph's corner jitter (old town shakes, brownstone rules). */
+  jitterMul?: number;
 }
 
 /**
@@ -191,8 +197,9 @@ export function drawWindows(
   // A grid the pen can't resolve is mud: skip sub-1px storeys outright.
   if (nCols < 1 || nRows < 1 || o.storey < 3.2) return;
   const colPitch = usable / nCols;
-  const winW = 0.55 * colPitch;
-  const winH = 0.45 * o.storey;
+  const winW = (o.widthFrac ?? 0.55) * colPitch;
+  const winH = (o.heightFrac ?? 0.45) * o.storey;
+  const jitterMul = o.jitterMul ?? 1;
   const tickOnly = o.style === 'ticks';
 
   for (let r = 0; r < nRows; r++) {
@@ -206,7 +213,7 @@ export function drawWindows(
       if (exists > o.density) continue;
       if (craft.rng() < morph.winDropout * (0.4 + 1.2 * clump)) continue;
       const s0 = insetS + c * colPitch + (colPitch - winW) / 2 + drift;
-      const jit = (): number => (craft.rng() * 2 - 1) * morph.winJitter * winW;
+      const jit = (): number => (craft.rng() * 2 - 1) * morph.winJitter * jitterMul * winW;
       const sA = clamp(s0 + jit(), 1, face.W - 1);
       const sB = clamp(s0 + winW + jit(), 1, face.W - 1);
       const zA = zBase + jit() * 0.6;
@@ -226,6 +233,38 @@ export function drawWindows(
       if (!tickOnly && craft.rng() > morph.edgeDrop * 0.8) edge(sA, zA, sA, zB); // left
       if (!tickOnly && craft.rng() > morph.edgeDrop * 0.8) edge(sB, zA, sB, zB); // right
       if (craft.rng() > morph.edgeDrop * 0.3) edge(sA, zA, sB, zA); // sill
+    }
+  }
+}
+
+/**
+ * Long horizontal strip windows — the brutalist facade. One band of two
+ * strokes per (dropout-thinned) storey, spanning the face with the craft
+ * stream's taper and pen-lift gaps carrying the hand.
+ */
+export function drawStripWindows(
+  out: FlowLine[],
+  face: Face,
+  craft: FaceCraft,
+  o: { storey: number; density: number; phase: number; budget: { left: number } }
+): void {
+  if (o.density <= 0 || o.budget.left <= 0) return;
+  const H = face.z1 - face.z0;
+  const inset = Math.max(1.5, face.W * 0.08);
+  const rowOff = o.phase * 0.6 * o.storey;
+  const nRows = Math.floor((H - 0.35 * o.storey - rowOff) / o.storey);
+  if (face.W - 2 * inset < 4 || nRows < 1 || o.storey < 3.2) return;
+  for (let r = 0; r < nRows; r++) {
+    if (o.budget.left <= 0) return;
+    if (craft.rng() > o.density) continue;
+    const zBase = face.z0 + rowOff + (r + 0.4) * o.storey;
+    for (const z of [zBase, zBase + 0.32 * o.storey]) {
+      const pts: Point[] = [];
+      for (let i = 0; i <= 3; i++) {
+        pts.push(face.at(inset + ((face.W - 2 * inset) * i) / 3, z));
+      }
+      emitFaceStroke(out, pts, 'window', craft);
+      o.budget.left--;
     }
   }
 }

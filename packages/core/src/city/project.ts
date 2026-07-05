@@ -32,9 +32,9 @@ export function project(pr: Proj, u: number, v: number, z: number): Point {
  *  order = 1 the spine is identically zero — a perfect prism. */
 export type Spine = (t: number) => { du: number; dv: number };
 
-export function makeSpine(b: BuildingSpec, morph: Morph): Spine {
-  const leanA = morph.leanFrac * b.h;
-  const bendA = morph.bendFrac * b.h;
+export function makeSpine(b: BuildingSpec, morph: Morph, leanMul = 1, bendMul = 1): Spine {
+  const leanA = morph.leanFrac * b.h * leanMul;
+  const bendA = morph.bendFrac * b.h * bendMul;
   return (t: number) => ({
     du: b.leanU * leanA * t + b.bendU * bendA * t * t,
     dv: b.leanV * leanA * t + b.bendV * bendA * t * t,

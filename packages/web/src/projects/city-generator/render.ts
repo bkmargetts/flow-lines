@@ -21,6 +21,7 @@ export function renderCity(state: CityState, env: RenderEnv): LayerOutput {
     seed: state.seed,
 
     order: state.order,
+    style: state.style,
 
     blockCols: Math.round(state.blockCols),
     blockRows: Math.round(state.blockRows),

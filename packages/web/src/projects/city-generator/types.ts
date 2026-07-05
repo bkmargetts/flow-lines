@@ -1,4 +1,4 @@
-import type { CityLightSide, SketchStyle } from '@flow-lines/core';
+import type { CityLightSide, CityStyle, SketchStyle } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /**
@@ -13,6 +13,7 @@ export interface CityState {
   zoom: number;
 
   order: number; // 0..1 — THE slider
+  style: CityStyle; // architectural vocabulary ('mixed' rolls per building)
 
   // Layout
   blockCols: number;
@@ -56,6 +57,7 @@ export const defaultCityState: CityState = {
   zoom: 1,
 
   order: 0.55,
+  style: 'towers',
 
   blockCols: 7,
   blockRows: 7,

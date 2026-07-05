@@ -1,3 +1,4 @@
+import type { CityStyle } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { Slider } from '../../components/controls/Slider';
@@ -6,6 +7,15 @@ import type { ControlsProps } from '../../modules/types';
 import type { CityState } from './types';
 import { CITY_PRESETS, getCityPreset } from './presets';
 
+const STYLE_LABELS: { id: CityStyle; label: string }[] = [
+  { id: 'towers', label: 'Box towers' },
+  { id: 'greek-villa', label: 'Greek villa' },
+  { id: 'old-town', label: 'European old town' },
+  { id: 'brownstone', label: 'Brownstone terrace' },
+  { id: 'brutalist', label: 'Futurist concrete' },
+  { id: 'mixed', label: 'Mixed city' },
+];
+
 /** Sidebar controls for the City Generator. The master Flow ↔ Rigid slider
  *  is the module's identity; everything finer lives in Advanced. */
 export function CityGeneratorControls({ state, update }: ControlsProps<CityState>) {
@@ -13,6 +23,11 @@ export function CityGeneratorControls({ state, update }: ControlsProps<CityState
     const preset = getCityPreset(id);
     update(preset ? { ...preset.state, preset: id } : { preset: id });
   };
+
+  // Capability flags: fixed-storey styles ignore the tower-family knobs, so
+  // hide what would be a dead slider (planet-generator convention).
+  const towersFamily = state.style === 'towers' || state.style === 'mixed';
+  const hasDowntown = towersFamily || state.style === 'brutalist';
 
   return (
     <div className="controls">
@@ -35,6 +50,15 @@ export function CityGeneratorControls({ state, update }: ControlsProps<CityState
           </button>
         </div>
         <p className="paint-hint">Pick a style, then slide between flowing and rigid.</p>
+      </div>
+
+      <div className="control-group">
+        <label className="label-text">Building style</label>
+        <select value={state.style} onChange={(e) => update({ style: e.target.value as CityStyle })}>
+          {STYLE_LABELS.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
+        </select>
       </div>
 
       <div className="control-group">
@@ -63,7 +87,9 @@ export function CityGeneratorControls({ state, update }: ControlsProps<CityState
       />
 
       <Slider label="Density" value={state.density} min={0.3} max={1} step={0.01} onChange={(v) => update({ density: v })} format={(v) => `${Math.round(v * 100)}%`} />
-      <Slider label="Building height" value={state.heightMm} min={8} max={80} step={1} onChange={(v) => update({ heightMm: v })} format={(v) => `${v.toFixed(0)}mm`} />
+      {towersFamily && (
+        <Slider label="Building height" value={state.heightMm} min={8} max={80} step={1} onChange={(v) => update({ heightMm: v })} format={(v) => `${v.toFixed(0)}mm`} />
+      )}
       <Slider label="Zoom" value={state.zoom} min={0.3} max={3} step={0.05} onChange={(v) => update({ zoom: v })} format={(v) => `${v.toFixed(2)}×`} />
 
       <AdvancedSection>
@@ -72,13 +98,17 @@ export function CityGeneratorControls({ state, update }: ControlsProps<CityState
           <Slider label="Blocks deep" value={state.blockRows} min={2} max={14} step={1} onChange={(v) => update({ blockRows: v })} />
           <Slider label="Lot size" value={state.lotSizeMm} min={6} max={26} step={0.5} onChange={(v) => update({ lotSizeMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
           <Slider label="Street width" value={state.streetMm} min={1} max={14} step={0.5} onChange={(v) => update({ streetMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
-          <Slider label="Downtown" value={state.downtown} min={0} max={1} step={0.05} onChange={(v) => update({ downtown: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          {hasDowntown && (
+            <Slider label="Downtown" value={state.downtown} min={0} max={1} step={0.05} onChange={(v) => update({ downtown: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          )}
         </AdvGroup>
 
         <AdvGroup title="Buildings">
           <Slider label="Height variety" value={state.heightVariance} min={0} max={1} step={0.05} onChange={(v) => update({ heightVariance: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Storey height" value={state.storeyMm} min={1.5} max={7} step={0.1} onChange={(v) => update({ storeyMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
-          <Slider label="Setback tiers" value={state.tiers} min={0} max={1} step={0.05} onChange={(v) => update({ tiers: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          {towersFamily && (
+            <Slider label="Setback tiers" value={state.tiers} min={0} max={1} step={0.05} onChange={(v) => update({ tiers: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          )}
           <Slider label="Lean & bow" value={state.lean} min={0} max={1} step={0.05} onChange={(v) => update({ lean: v })} format={(v) => `${Math.round(v * 100)}%`} />
         </AdvGroup>
 
