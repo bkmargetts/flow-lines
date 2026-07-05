@@ -125,6 +125,9 @@ export type { LandscapeOptions, ForegroundSide, TreeStyle } from './landscape/in
 export { generateCity, CITY_STYLES } from './city/index.js';
 export type { CityOptions, CityLightSide, BuildingStyle, CityStyle } from './city/index.js';
 
+export { generateStickmen } from './stickmen/index.js';
+export type { StickmenOptions, FacingMode, PoseMode } from './stickmen/index.js';
+
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
 
