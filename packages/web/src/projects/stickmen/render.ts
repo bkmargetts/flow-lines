@@ -1,6 +1,7 @@
 import { generateStickmen, type StickmenOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
 import type { StickmenState } from './types';
+import { clipLinesToRect } from './clip';
 
 const DEG = Math.PI / 180;
 
@@ -45,7 +46,7 @@ export function renderStickmen(state: StickmenState, env: RenderEnv): LayerOutpu
   const result = generateStickmen(options);
 
   // Zoom: scale the whole crowd about the page centre, like the other generators.
-  const lines =
+  const zoomed =
     zoom === 1
       ? result.lines
       : result.lines.map((ln) => ({
@@ -55,6 +56,12 @@ export function renderStickmen(state: StickmenState, env: RenderEnv): LayerOutpu
             y: page.heightPx / 2 + (p.y - page.heightPx / 2) * zoom,
           })),
         }));
+
+  // The core leaves the crowd unclipped (the ground overflows the sheet on
+  // purpose). Clip to the drawable box HERE, after zoom, so the page and the
+  // exported plot stay inside the sheet — and zooming out pulls the previously
+  // off-page figures into the box, revealing them.
+  const lines = clipLinesToRect(zoomed, marginPx, marginPx, page.widthPx - marginPx, page.heightPx - marginPx);
 
   return {
     lines,

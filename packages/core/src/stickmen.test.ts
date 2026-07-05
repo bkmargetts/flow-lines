@@ -28,17 +28,19 @@ describe('generateStickmen', () => {
     expect(totalLength(many.lines)).toBeGreaterThan(totalLength(few.lines));
   });
 
-  it('keeps every point finite and inside the page', () => {
+  it('keeps every point finite (crowd may overflow the page by design)', () => {
+    // Core no longer clips to the page — the ground diamond overflows the sheet
+    // on purpose so the web zoom-out can reveal it; the web layer clips. So we
+    // assert finiteness (the real NaN-from-FK guard) and a sane overall bound,
+    // not strict in-page containment.
     const r = generateStickmen(BASE);
     expect(r.lines.length).toBeGreaterThan(0);
     for (const l of r.lines) {
       for (const p of l.points) {
         expect(Number.isFinite(p.x)).toBe(true);
         expect(Number.isFinite(p.y)).toBe(true);
-        expect(p.x).toBeGreaterThanOrEqual(-0.001);
-        expect(p.x).toBeLessThanOrEqual(300.001);
-        expect(p.y).toBeGreaterThanOrEqual(-0.001);
-        expect(p.y).toBeLessThanOrEqual(400.001);
+        expect(Math.abs(p.x)).toBeLessThan(5000);
+        expect(Math.abs(p.y)).toBeLessThan(5000);
       }
     }
   });

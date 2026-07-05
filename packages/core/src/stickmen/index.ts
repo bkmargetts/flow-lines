@@ -2,7 +2,6 @@ import type { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
 import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
-import { clipPolylineToRect } from '../lib/polyline.js';
 import { ellipse } from '../planet/geometry.js';
 import { ZBuffer } from '../vines/spatial.js';
 import { placeFigures, fitFigures, type FacingMode } from './layout.js';
@@ -157,14 +156,14 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
     }
   }
 
-  // Hand finish: a light wobble, then clip to the drawable box.
-  let finished = applyHandDrawnStyle(
+  // Hand finish: a light wobble. Deliberately NOT clipped to the page — the
+  // ground diamond is wider than the sheet, and the crowd overflows on purpose.
+  // Keeping the overflow lets the web zoom-out pull those figures into view; the
+  // web layer clips to the sheet (post-zoom) for a clean page and plot.
+  const finished = applyHandDrawnStyle(
     { lines, width, height, seed },
     { amplitude: o.wobble, wavelength: 38, seed }
   ).lines;
-  finished = finished.flatMap((l) =>
-    clipPolylineToRect(l.points, x0, y0, x1, y1).map((pts) => ({ ...l, points: pts }))
-  );
 
   return { lines: finished, width, height, seed };
 }
