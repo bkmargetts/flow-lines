@@ -22,14 +22,14 @@ const FACING_MODES: FacingMode[] = ['random', 'procession', 'toward'];
  *  lands ugly-angular; the pen/ink/zoom aesthetic prefs are left alone. */
 function randomStickmenGenome(rng: () => number): Partial<StickmenState> {
   return {
-    count: 20 + Math.floor(rng() * 180),
+    count: 40 + Math.floor(rng() * 700),
     poseEnergy: Number(rng().toFixed(2)),
     limbCurve: Number((0.5 + rng() * 0.5).toFixed(2)),
     spread: Number((0.6 + rng() * 1).toFixed(2)),
     clustering: Number(rng().toFixed(2)),
-    minSeparationMm: Number((3 + rng() * 9).toFixed(1)),
+    minSeparationMm: Number((2 + rng() * 8).toFixed(1)),
     scaleVariance: Number((rng() * 0.5).toFixed(2)),
-    figureHeightMm: Number((8 + rng() * 14).toFixed(1)),
+    figureHeightMm: Number((16 + rng() * 16).toFixed(1)),
     facing: FACING_MODES[Math.floor(rng() * FACING_MODES.length)],
     facingAngleDeg: Math.round(rng() * 360),
     facingJitterDeg: Math.round(rng() * 180),
@@ -65,13 +65,13 @@ export function StickmenControls({ state, update }: ControlsProps<StickmenState>
       <Slider
         labelNode={
           <span className="label-text">
-            How many
-            <InfoTip text="Number of stick men scattered across the ground plane." />
+            Density
+            <InfoTip text="How many stick men pack the ground. Crank it right up to saturate the whole ground plane." />
           </span>
         }
         value={state.count}
         min={1}
-        max={400}
+        max={3000}
         step={1}
         onChange={(v) => update({ count: v })}
       />

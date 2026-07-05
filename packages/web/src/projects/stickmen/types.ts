@@ -41,15 +41,15 @@ export const defaultStickmenState: StickmenState = {
   seed: randomSeed(),
   zoom: 1,
 
-  count: 60,
+  count: 150,
   spread: 1,
   clustering: 0.35,
-  minSeparationMm: 7,
+  minSeparationMm: 6,
   facing: 'random',
   facingAngleDeg: 45,
   facingJitterDeg: 30,
 
-  figureHeightMm: 14,
+  figureHeightMm: 24,
   scaleVariance: 0.25,
   limbCurve: 0.7,
   penWidthMm: 0.4,

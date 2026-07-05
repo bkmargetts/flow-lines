@@ -60,10 +60,10 @@ export interface StickmenOptions {
 }
 
 const DEFAULTS: Required<Omit<StickmenOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
-  count: 60,
+  count: 150,
   spread: 1,
   clustering: 0.35,
-  minSeparation: 26,
+  minSeparation: 18,
   facing: 'random',
   facingAngle: Math.PI * 0.25,
   facingJitter: 0.5,
@@ -78,8 +78,9 @@ const DEFAULTS: Required<Omit<StickmenOptions, 'width' | 'height' | 'margin' | '
   wobble: 0.8,
 };
 
-/** Hard cap so a runaway count knob can't blow up plot time. */
-const MAX_FIGURES = 1200;
+/** Hard cap so a runaway count knob can't blow up plot time — high enough to
+ *  fully saturate the ground (a few thousand figures ≈ 10–20k polylines). */
+const MAX_FIGURES = 6000;
 
 /** A short flat contact ellipse under the feet, grounding the figure. */
 function contactShadow(feet: Point[]): FlowLine | null {
@@ -113,6 +114,8 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
       facingJitter: o.facingJitter,
       figureScale: o.figureScale,
       scaleVariance: o.scaleVariance,
+      boxW: x1 - x0,
+      boxH: y1 - y0,
     },
     noise,
     seed

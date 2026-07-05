@@ -12,7 +12,9 @@ export type FacingMode = 'random' | 'toward' | 'procession';
 
 export interface LayoutOptions {
   count: number;
-  /** World-region multiplier: >1 spreads figures out, <1 packs them in. */
+  /** Ground-region multiplier: >1 spreads the ground out (smaller figures on
+   *  page), <1 pulls it in. It does NOT scale with count — so `count` is a
+   *  true density knob: more figures on a fixed ground = saturation. */
   spread: number;
   /** 0 = even scatter, 1 = figures clump into noise-driven groups. */
   clustering: number;
@@ -24,6 +26,9 @@ export interface LayoutOptions {
   /** Mean standing height, world px. */
   figureScale: number;
   scaleVariance: number;
+  /** Drawable box (page px) the ground region is sized to fill. */
+  boxW: number;
+  boxH: number;
 }
 
 /** Conservative figure extents (fractions of H) for the fit bbox. */
@@ -41,7 +46,11 @@ const Z_TOP = 1.3; // head top / raised wrist
  */
 export function placeFigures(o: LayoutOptions, noise: SimplexNoise, seed: number): FigureSpec[] {
   const count = Math.max(1, Math.round(o.count));
-  const S = Math.max(1, Math.sqrt(count) * o.figureScale * 1.1 * Math.max(0.2, o.spread));
+  // Region is sized to the drawable box, NOT to count. The 2:1 iso ground
+  // diamond spans (2S wide × S tall); sizing S to fill the box's vertical span
+  // means `count` alone sets how densely the fixed ground is packed — crank it
+  // and the ground saturates. Horizontal overflow is clipped downstream.
+  const S = Math.max(1, Math.max(o.boxH, o.boxW / 2) * Math.max(0.2, o.spread));
   const freq = 3 / S;
   const cluster = clamp(o.clustering, 0, 1);
   const minSep = Math.max(0, o.minSeparation);
@@ -85,10 +94,11 @@ export function placeFigures(o: LayoutOptions, noise: SimplexNoise, seed: number
 }
 
 /**
- * Fit the scattered figures into the drawable box: a conservative projected
- * bounding box (each figure a REACH×H world box up to Z_TOP×H tall),
- * downscale-only, and the page offsets that centre the crowd. Mirrors
- * `fitCity` — a sparse scene sits centred rather than being blown up.
+ * Fit the crowd to the drawable box. The ground region is already sized to the
+ * box (2:1 iso diamond, wider than the page), so we fit the *vertical* span
+ * only — the diamond is meant to overflow left/right and be clipped, filling
+ * the frame. A height-only downscale guards against oversized figures poking
+ * out the top; horizontal centring lets the overflow clip symmetrically.
  */
 export function fitFigures(
   specs: FigureSpec[],
@@ -110,9 +120,9 @@ export function fitFigures(
   if (!isFinite(minX)) {
     return { scale: 1, proj: { offX: (frame.x0 + frame.x1) / 2, offY: (frame.y0 + frame.y1) / 2 } };
   }
-  const bw = Math.max(1, maxX - minX);
   const bh = Math.max(1, maxY - minY);
-  const scale = Math.min(1, (frame.x1 - frame.x0) / bw, (frame.y1 - frame.y0) / bh);
+  // Height-only fit: allow the wide ground to overflow the page width (clipped).
+  const scale = Math.min(1, (frame.y1 - frame.y0) / bh);
   if (scale < 1) {
     for (const s of specs) {
       s.u0 *= scale;
