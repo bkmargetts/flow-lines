@@ -5,6 +5,7 @@ import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSec
 import { Slider } from '../../components/controls/Slider';
 import { Toggle } from '../../components/controls/Toggle';
 import { SeedControl } from '../../components/controls/SeedControl';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { StickmenState } from './types';
 
@@ -14,14 +15,45 @@ const FACING_LABELS: { id: FacingMode; label: string }[] = [
   { id: 'toward', label: 'Toward a direction' },
 ];
 
+const FACING_MODES: FacingMode[] = ['random', 'procession', 'toward'];
+
+/** Roll a whole fresh scene — every scene/figure/pose knob within its slider
+ *  range. Limb roundness is biased to the rounded end so a surprise never
+ *  lands ugly-angular; the pen/ink/zoom aesthetic prefs are left alone. */
+function randomStickmenGenome(rng: () => number): Partial<StickmenState> {
+  return {
+    count: 20 + Math.floor(rng() * 180),
+    poseEnergy: Number(rng().toFixed(2)),
+    limbCurve: Number((0.5 + rng() * 0.5).toFixed(2)),
+    spread: Number((0.6 + rng() * 1).toFixed(2)),
+    clustering: Number(rng().toFixed(2)),
+    minSeparationMm: Number((3 + rng() * 9).toFixed(1)),
+    scaleVariance: Number((rng() * 0.5).toFixed(2)),
+    figureHeightMm: Number((8 + rng() * 14).toFixed(1)),
+    facing: FACING_MODES[Math.floor(rng() * FACING_MODES.length)],
+    facingAngleDeg: Math.round(rng() * 360),
+    facingJitterDeg: Math.round(rng() * 180),
+    occlude: rng() < 0.85,
+    groundContact: rng() < 0.3,
+  };
+}
+
 /** Sidebar controls for the Stick Men generator. Primary knobs up top; the
  *  finer scene / figure / finish settings live in Advanced. */
 export function StickmenControls({ state, update }: ControlsProps<StickmenState>) {
   const directional = state.facing === 'procession' || state.facing === 'toward';
+  const surprise = () => update({ ...randomStickmenGenome(Math.random), seed: randomSeed() });
 
   return (
     <div className="controls">
       <h3 className="section-title">Stick Men</h3>
+
+      <div className="control-group">
+        <button type="button" className="secondary" onClick={surprise} title="Randomize everything" style={{ width: '100%' }}>
+          🎲 Randomize everything
+        </button>
+        <p className="paint-hint">One roll for a whole new crowd — or tune anything below.</p>
+      </div>
 
       <SeedControl seed={state.seed} onChange={(seed) => update({ seed })} title="New random crowd">
         <label className="label-text">
@@ -116,7 +148,7 @@ export function StickmenControls({ state, update }: ControlsProps<StickmenState>
         </AdvGroup>
 
         <AdvGroup title="Overlap">
-          <Toggle label="Nearer men hide farther men" checked={state.occlude} onChange={(v) => update({ occlude: v })} />
+          <Toggle label="Hide limbs behind nearer heads" checked={state.occlude} onChange={(v) => update({ occlude: v })} />
           <Toggle label="Ground contact shadow" checked={state.groundContact} onChange={(v) => update({ groundContact: v })} />
         </AdvGroup>
 

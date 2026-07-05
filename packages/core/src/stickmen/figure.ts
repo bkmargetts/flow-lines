@@ -21,11 +21,11 @@ export interface FigureSpec {
   depth: number;
 }
 
-/** A stamped occluder for the scene ZBuffer: a solid disc (head) or a stroke
- *  band (limb) that breaks lines passing behind it. */
+/** A stamped occluder for the scene ZBuffer: the solid head disc. Only heads
+ *  occlude — a limb may cross another figure's limbs freely, but it must not
+ *  appear to pass through a nearer head. */
 export interface Occluder {
   poly: Point[];
-  solid: boolean;
 }
 
 export interface FigureOpts {
@@ -80,10 +80,7 @@ export function buildFigure(spec: FigureSpec, proj: Proj, o: FigureOpts): Figure
   };
 
   const push = (points: Point[], layer: string): void => {
-    if (points.length >= 2) {
-      strokes.push({ points, pen: 'fine', layer });
-      occluders.push({ poly: points, solid: false });
-    }
+    if (points.length >= 2) strokes.push({ points, pen: 'fine', layer });
   };
 
   // Torso + neck (the spine every limb hangs from).
@@ -101,7 +98,10 @@ export function buildFigure(spec: FigureSpec, proj: Proj, o: FigureOpts): Figure
   const rHead = PROP.rHead * H;
   const headRing = ellipse(head.x, head.y, rHead, rHead, 0, 0, TAU);
   strokes.push({ points: headRing, pen: 'fine', layer: 'head' });
-  occluders.push({ poly: headRing, solid: true });
+  // Occlude a hair beyond the drawn circle so a limb behind it stops cleanly
+  // at the head's edge rather than poking a pixel through.
+  const rOcc = rHead + Math.max(0.6, o.penWidth * 0.75);
+  occluders.push({ poly: ellipse(head.x, head.y, rOcc, rOcc, 0, 0, TAU) });
 
   return { strokes, occluders, depth: spec.depth, feet: [P('ankleL'), P('ankleR')] };
 }

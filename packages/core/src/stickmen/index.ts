@@ -20,9 +20,10 @@ const TAU = Math.PI * 2;
  * pen-and-ink. Figures are scattered (with optional clustering), posed by
  * fully-procedural forward kinematics, projected through the shared 2:1
  * pixel-iso mapping (`city/project.ts`), and resolved back-to-front with
- * true hidden-line removal so nearer men break the wire of the men behind
- * them. The look is the classic thin stick figure: a circle head, single-pen
- * hairline limbs, and rounded joints. Single pen, tone is none — paper does
+ * head-only hidden-line removal so a limb never appears to pass through a
+ * nearer head (limbs otherwise overlap freely). The look is the classic thin
+ * stick figure: a circle head, single-pen curved (rounded) limbs that connect
+ * to the spine. Single pen, tone is none — paper does
  * the work. Deterministic per seed. Mirrors the City / Vine / Planet
  * Generators: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
  */
@@ -126,10 +127,11 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
     })
   );
 
-  // Hidden-line removal against a shared depth buffer holding every figure.
-  const cell = Math.max(1, o.penWidth * 0.7);
+  // Hidden-line removal against a shared depth buffer holding every figure's
+  // head — so a limb never appears to pass through a nearer head.
+  const cell = Math.max(0.6, o.penWidth * 0.5);
   const zbuf = o.occlude ? new ZBuffer(width, height, cell) : null;
-  if (zbuf) stampScene(zbuf, builds, o.penWidth * 1.2 + o.wobble);
+  if (zbuf) stampScene(zbuf, builds);
   const step = Math.max(1, o.penWidth * 0.8);
 
   const lines: FlowLine[] = [];

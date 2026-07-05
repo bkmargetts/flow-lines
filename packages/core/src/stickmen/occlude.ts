@@ -3,21 +3,18 @@ import { ZBuffer, densify } from '../vines/spatial.js';
 import type { FigureBuild } from './figure.js';
 
 /**
- * Scene hidden-line removal. Every figure stamps its ink into one shared
- * depth buffer at its ground depth (limb strokes as thin bands, the head as a
- * solid disc). A farther figure's lines are then cut wherever a nearer
- * figure's ink covers them — the "interrupt at crossings" look, so a foreground
- * arm cleanly breaks the wire of the man behind it. A figure never occludes
- * itself: its own marks share its depth, and `hidden` needs something strictly
- * nearer.
+ * Scene hidden-line removal — heads only. Every figure fills its head disc
+ * into one shared depth buffer at its ground depth; a farther figure's lines
+ * are then cut wherever a nearer figure's head covers them, so a limb never
+ * appears to pass through a nearer head. Limbs do NOT occlude each other —
+ * stamping every limb broke lines far too aggressively. A figure never
+ * occludes itself: its head shares its depth and `hidden` needs something
+ * strictly nearer.
  */
 
-export function stampScene(zbuf: ZBuffer, builds: FigureBuild[], bandR: number): void {
+export function stampScene(zbuf: ZBuffer, builds: FigureBuild[]): void {
   for (const b of builds) {
-    for (const occ of b.occluders) {
-      if (occ.solid) zbuf.fill(occ.poly, b.depth);
-      else zbuf.stampOutline(occ.poly, b.depth, bandR);
-    }
+    for (const occ of b.occluders) zbuf.fill(occ.poly, b.depth);
   }
 }
 
