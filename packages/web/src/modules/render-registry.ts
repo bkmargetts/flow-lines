@@ -4,6 +4,7 @@ import { renderVineGenerator } from '../projects/vine-generator/render';
 import { renderPlanet } from '../projects/planet-generator/render';
 import { renderLandscape } from '../projects/landscape-generator/render';
 import { renderCity } from '../projects/city-generator/render';
+import { renderStickmen } from '../projects/stickmen/render';
 import { renderConway } from '../projects/conway/render';
 import { renderComplexFlow } from '../projects/complex-flow/render';
 import { renderReactionDiffusion } from '../projects/reaction-diffusion/render';
@@ -44,6 +45,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   'planet-generator': entry(renderPlanet),
   'landscape-generator': entry(renderLandscape),
   'city-generator': entry(renderCity),
+  stickmen: entry(renderStickmen),
   conway: entry(renderConway),
   'complex-flow': entry(renderComplexFlow),
   'reaction-diffusion': entry(renderReactionDiffusion),
