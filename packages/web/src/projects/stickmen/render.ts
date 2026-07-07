@@ -1,9 +1,39 @@
-import { generateStickmen, type StickmenOptions } from '@flow-lines/core';
+import {
+  generateStickmen,
+  starRegion,
+  heartRegion,
+  diamondRegion,
+  blobRegion,
+  type StickmenOptions,
+  type StickmenRegion,
+} from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
 import type { StickmenState } from './types';
 import { clipLinesToRect } from './clip';
 
 const DEG = Math.PI / 180;
+
+/**
+ * Compile the UI's crowd-shape state to a core region. Core region coords are
+ * box-relative (x scales by box width, y by height), so the picture shapes
+ * (star / heart / diamond / blob) are sized from the smaller box dimension and
+ * divided per-axis to stay aspect-correct on any page; the oval deliberately
+ * follows the page aspect, and the ring is circular by the core's contract.
+ */
+function compileShape(state: StickmenState, boxW: number, boxH: number): StickmenRegion | undefined {
+  const { regionShape: shape, regionSize: size, regionX: cx, regionY: cy, regionInner: inner } = state;
+  if (shape === 'full') return undefined;
+  if (shape === 'ellipse') return { kind: 'ellipse', cx, cy, rx: size / 2, ry: size / 2 };
+  if (shape === 'ring')
+    return { kind: 'ring', cx, cy, rOuter: size / 2, rInner: (size / 2) * inner };
+  const r = (size / 2) * Math.min(boxW, boxH);
+  const rx = r / boxW;
+  const ry = r / boxH;
+  if (shape === 'diamond') return diamondRegion(cx, cy, rx, ry);
+  if (shape === 'star') return starRegion(cx, cy, rx, ry, inner, 5);
+  if (shape === 'heart') return heartRegion(cx, cy, rx, ry);
+  return blobRegion(state.seed, cx, cy, rx, ry, 0.45);
+}
 
 /**
  * Pure render for the Stick Men generator: state + page → lines. mm settings
@@ -32,13 +62,17 @@ export function renderStickmen(state: StickmenState, env: RenderEnv): LayerOutpu
     facing: state.facing,
     facingAngle: state.facingAngleDeg * DEG,
     facingJitter: state.facingJitterDeg * DEG,
+    region: compileShape(state, page.widthPx - 2 * marginPx, page.heightPx - 2 * marginPx),
 
     figureScale: state.figureHeightMm * mm,
     scaleVariance: state.scaleVariance,
+    proportionVariance: state.proportionVariance,
+    depthGrade: state.depthGrade,
     limbCurve: state.limbCurve,
     penWidth: state.penWidthMm * mm,
 
     poseEnergy: state.poseEnergy,
+    poseMode: state.poseMode,
 
     occlude: state.occlude,
     groundContact: state.groundContact,

@@ -156,6 +156,17 @@ CASES['vines/wreath/42'] = () =>
   generateVines({ width: 300, height: 400, seed: 42, composition: 'wreath' });
 CASES['stickmen/energetic/42'] = () =>
   generateStickmen({ width: 300, height: 400, margin: 20, seed: 42, poseEnergy: 1, count: 90 });
+CASES['stickmen/region-ellipse/42'] = () =>
+  generateStickmen({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    count: 80,
+    region: { kind: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.35, ry: 0.3 },
+  });
+CASES['stickmen/library/42'] = () =>
+  generateStickmen({ width: 300, height: 400, margin: 20, seed: 42, count: 80, poseMode: 'library' });
 CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
 CASES['planet/ringed/42'] = () =>

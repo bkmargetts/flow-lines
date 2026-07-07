@@ -7,10 +7,13 @@ import { ZBuffer } from '../vines/spatial.js';
 import { placeFigures, fitFigures, type FacingMode } from './layout.js';
 import { buildFigure, type FigureBuild } from './figure.js';
 import { stampScene, splitVisible, type ZOffset } from './occlude.js';
+import { compileRegion, type StickmenRegion } from './region.js';
 import type { PoseMode } from './poses.js';
 
 export type { FacingMode } from './layout.js';
 export type { PoseMode } from './poses.js';
+export type { StickmenRegion } from './region.js';
+export { starRegion, heartRegion, diamondRegion, blobRegion } from './region.js';
 
 const TAU = Math.PI * 2;
 
@@ -40,17 +43,34 @@ export interface StickmenOptions {
   facing?: FacingMode;
   facingAngle?: number; // radians (procession / toward)
   facingJitter?: number; // radians
+  /** Confine the crowd's ground anchors (feet) to a shape on the page, in
+   *  normalized drawable-box coords — see `StickmenRegion` for the coordinate
+   *  contract (x scales by box width, y by height; the web compensates by
+   *  aspect for circular shapes). Unset / 'full' = the classic overflowing
+   *  ground diamond. When set, `spread` is inert (the region's size is the
+   *  explicit control) and figures keep their exact `figureScale` (no
+   *  auto-fit); a dense small region may not honor `minSeparation` — `count`
+   *  stays exact, same soft semantics as the full ground. */
+  region?: StickmenRegion;
 
   // Figure
   figureScale?: number; // px mean standing height
   scaleVariance?: number; // 0..1
+  /** 0..1 — per-figure body variation (build, arm length, head size, width)
+   *  within the shared standing height. 0 = every figure the canonical body. */
+  proportionVariance?: number;
+  /** 0..0.5 — nearer figures grow, farther shrink (perspective size cue). */
+  depthGrade?: number;
   penWidth?: number;
   /** 0 = angular hinged limbs, 1 = smoothly curved (rounded) limbs. */
   limbCurve?: number;
 
   // Pose
   poseEnergy?: number; // 0..1
-  poseMode?: PoseMode; // reserved: only 'procedural' in v1
+  /** 'procedural' = independent joint noise (v1); 'library' = named jittered
+   *  archetypes (walkers, wavers, cheerers…); 'mixed' = mostly archetypes
+   *  with freeform figures in between. */
+  poseMode?: PoseMode;
 
   // Render
   occlude?: boolean;
@@ -58,7 +78,7 @@ export interface StickmenOptions {
   wobble?: number;
 }
 
-const DEFAULTS: Required<Omit<StickmenOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
+const DEFAULTS: Required<Omit<StickmenOptions, 'width' | 'height' | 'margin' | 'seed' | 'region'>> = {
   count: 150,
   spread: 1,
   clustering: 0.35,
@@ -68,6 +88,8 @@ const DEFAULTS: Required<Omit<StickmenOptions, 'width' | 'height' | 'margin' | '
   facingJitter: 0.5,
   figureScale: 46,
   scaleVariance: 0.25,
+  proportionVariance: 0.5,
+  depthGrade: 0.15,
   penWidth: 1.4,
   limbCurve: 0.7,
   poseEnergy: 0.6,
@@ -102,6 +124,8 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
   const y1 = height - margin;
 
   const noise = createNoise(subSeed(seed, 5));
+  const pageRegion =
+    o.region && o.region.kind !== 'full' ? compileRegion(o.region, { x0, y0, x1, y1 }) : null;
   const specs = placeFigures(
     {
       count: Math.min(MAX_FIGURES, Math.max(1, Math.round(o.count))),
@@ -113,17 +137,27 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
       facingJitter: o.facingJitter,
       figureScale: o.figureScale,
       scaleVariance: o.scaleVariance,
+      depthGrade: o.depthGrade,
       boxW: x1 - x0,
       boxH: y1 - y0,
+      region: pageRegion,
     },
     noise,
     seed
   );
-  const { proj } = fitFigures(specs, { x0, y0, x1, y1 });
+  // With a region the crowd is sampled under the identity projection — page
+  // coordinates ARE the projected world, and the figures land exactly where
+  // the user put the shape. fitFigures would drag an off-centre region back
+  // to the page centre, so it only runs on the legacy full ground.
+  const { proj } = pageRegion
+    ? { proj: { offX: 0, offY: 0 } }
+    : fitFigures(specs, { x0, y0, x1, y1 });
 
   const builds: FigureBuild[] = specs.map((s) =>
     buildFigure(s, proj, {
       poseEnergy: o.poseEnergy,
+      poseMode: o.poseMode,
+      proportionVariance: o.proportionVariance,
       penWidth: o.penWidth,
       limbCurve: o.limbCurve,
     })

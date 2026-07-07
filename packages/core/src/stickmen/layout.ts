@@ -4,7 +4,9 @@ import { KX, KY, type Proj } from '../city/project.js';
 import { ProximityGrid } from '../vines/spatial.js';
 import type { SimplexNoise } from '../noise.js';
 import { POSE_DRAWS } from './poses.js';
+import { PROP_DRAWS } from './skeleton.js';
 import type { FigureSpec } from './figure.js';
+import type { PageRegion } from './region.js';
 
 const TAU = Math.PI * 2;
 
@@ -26,9 +28,17 @@ export interface LayoutOptions {
   /** Mean standing height, world px. */
   figureScale: number;
   scaleVariance: number;
+  /** 0..0.5 — nearer figures grow, farther shrink, on top of scaleVariance.
+   *  A perspective cue the honest iso projection doesn't provide. */
+  depthGrade: number;
   /** Drawable box (page px) the ground region is sized to fill. */
   boxW: number;
   boxH: number;
+  /** Compiled page-space region confining ground anchors (feet). When set,
+   *  candidates are sampled under the identity projection (page x = u−v,
+   *  y = (u+v)·KY) so containment is testable during placement; `spread` is
+   *  inert. Null/undefined = the legacy square ground. */
+  region?: PageRegion | null;
 }
 
 /** Conservative figure extents (fractions of H) for the fit bbox. */
@@ -46,35 +56,89 @@ const Z_TOP = 1.3; // head top / raised wrist
  */
 export function placeFigures(o: LayoutOptions, noise: SimplexNoise, seed: number): FigureSpec[] {
   const count = Math.max(1, Math.round(o.count));
-  // Region is sized to the drawable box, NOT to count. The 2:1 iso ground
-  // diamond spans (2S wide × S tall); sizing S to fill the box's vertical span
-  // means `count` alone sets how densely the fixed ground is packed — crank it
-  // and the ground saturates. Horizontal overflow is clipped downstream.
-  const S = Math.max(1, Math.max(o.boxH, o.boxW / 2) * Math.max(0.2, o.spread));
-  const freq = 3 / S;
+  const region = o.region ?? null;
+
+  // World sampling box. Legacy: a square [0,S]² sized to the drawable box,
+  // NOT to count. The 2:1 iso ground diamond spans (2S wide × S tall); sizing
+  // S to fill the box's vertical span means `count` alone sets how densely
+  // the fixed ground is packed — crank it and the ground saturates.
+  // Horizontal overflow is clipped downstream.
+  // With a region: the inverse projection (under the identity Proj, at z=0:
+  // u = (x/KX + y/KY)/2, v = (y/KY − x/KX)/2) of the region's page bbox.
+  let uMin = 0;
+  let vMin = 0;
+  let uSpan: number;
+  let vSpan: number;
+  if (region) {
+    const { x0, y0, x1, y1 } = region.bbox;
+    uMin = (x0 / KX + y0 / KY) / 2;
+    const uMax = (x1 / KX + y1 / KY) / 2;
+    vMin = (y0 / KY - x1 / KX) / 2;
+    const vMax = (y1 / KY - x0 / KX) / 2;
+    uSpan = Math.max(1, uMax - uMin);
+    vSpan = Math.max(1, vMax - vMin);
+  } else {
+    const S = Math.max(1, Math.max(o.boxH, o.boxW / 2) * Math.max(0.2, o.spread));
+    uSpan = S;
+    vSpan = S;
+  }
+  const freq = 3 / Math.max(uSpan, vSpan);
   const cluster = clamp(o.clustering, 0, 1);
   const minSep = Math.max(0, o.minSeparation);
-  const grid = new ProximityGrid(S, S, Math.max(1, minSep));
+  const grid = new ProximityGrid(uSpan, vSpan, Math.max(1, minSep));
+
+  // Anchor is inside a region when its page projection (feet, z=0) is.
+  const inRegion = (u: number, v: number): boolean =>
+    !region || region.contains((u - v) * KX, (u + v) * KY);
+
+  // Deterministic (rng-free) fallback for degenerate / near-empty regions:
+  // the first contained cell centre of a coarse scan, else the box centre —
+  // so `count` stays exact instead of looping forever.
+  const fallback = (): { u: number; v: number } => {
+    const N = 16;
+    for (let gy = 0; gy < N; gy++) {
+      for (let gx = 0; gx < N; gx++) {
+        const u = uMin + ((gx + 0.5) / N) * uSpan;
+        const v = vMin + ((gy + 0.5) / N) * vSpan;
+        if (inRegion(u, v)) return { u, v };
+      }
+    }
+    return { u: uMin + uSpan / 2, v: vMin + vSpan / 2 };
+  };
 
   const specs: FigureSpec[] = [];
   for (let i = 0; i < count; i++) {
     const posRng = makeRandom(subSeed(seed, 4000 + i));
     const poseRng = makeRandom(subSeed(seed, 8000 + i));
     const miscRng = makeRandom(subSeed(seed, 12000 + i));
+    // Proportions get their own stream (not miscRng — its draw count varies
+    // by facing branch, and body shape must not change when facing knobs do).
+    const propRng = makeRandom(subSeed(seed, 16000 + i));
+
+    // One candidate: uniform over the world box; with a region, rejection-
+    // sampled until contained (HARD constraint — clustering/minSep below stay
+    // soft). Legacy draws exactly two rng values, byte-identical to v1.
+    const sample = (): { u: number; v: number } => {
+      if (!region) return { u: posRng() * uSpan, v: posRng() * vSpan };
+      for (let t = 0; t < 60; t++) {
+        const u = uMin + posRng() * uSpan;
+        const v = vMin + posRng() * vSpan;
+        if (inRegion(u, v)) return { u, v };
+      }
+      return fallback();
+    };
 
     // Position: reject too-clustered-away or too-close candidates, but always
     // place the figure (accept the last try) so `count` is exact.
-    let cu = posRng() * S;
-    let cv = posRng() * S;
+    let { u: cu, v: cv } = sample();
     for (let t = 0; t < 14; t++) {
       const p = 0.5 + 0.5 * noise.noise2D(cu * freq, cv * freq);
       const accept = posRng() < 1 - cluster * (1 - p);
-      const clear = minSep <= 0 || !grid.hasNear(cu, cv, minSep);
+      const clear = minSep <= 0 || !grid.hasNear(cu - uMin, cv - vMin, minSep);
       if (accept && clear) break;
-      cu = posRng() * S;
-      cv = posRng() * S;
+      ({ u: cu, v: cv } = sample());
     }
-    grid.add({ x: cu, y: cv });
+    grid.add({ x: cu - uMin, y: cv - vMin });
 
     let facing: number;
     const fRoll = miscRng();
@@ -85,8 +149,30 @@ export function placeFigures(o: LayoutOptions, noise: SimplexNoise, seed: number
 
     const poseG: number[] = new Array(POSE_DRAWS);
     for (let k = 0; k < POSE_DRAWS; k++) poseG[k] = poseRng();
+    const propG: number[] = new Array(PROP_DRAWS);
+    for (let k = 0; k < PROP_DRAWS; k++) propG[k] = propRng();
 
-    specs.push({ u0: cu, v0: cv, facing, H: Math.max(1, H), poseG, depth: cu + cv });
+    specs.push({ u0: cu, v0: cv, facing, H: Math.max(1, H), poseG, propG, depth: cu + cv });
+  }
+
+  // Depth size grading: a deterministic function of position (identities are
+  // already fixed), normalised over this crowd's depth span so the knob means
+  // the same thing whatever the region size.
+  const grade = clamp(o.depthGrade, 0, 0.5);
+  if (grade > 0 && specs.length > 1) {
+    let dMin = Infinity;
+    let dMax = -Infinity;
+    for (const s of specs) {
+      if (s.depth < dMin) dMin = s.depth;
+      if (s.depth > dMax) dMax = s.depth;
+    }
+    const span = dMax - dMin;
+    if (span > 0) {
+      for (const s of specs) {
+        const d = (s.depth - dMin) / span;
+        s.H = Math.max(1, s.H * (1 + grade * (d - 0.5)));
+      }
+    }
   }
 
   specs.sort((a, b) => a.depth - b.depth);
