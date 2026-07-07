@@ -17,7 +17,7 @@ import { generateLandscape } from './landscape/index.js';
 import { generateCity } from './city/index.js';
 import { generateStickmen } from './stickmen/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
-import { imageToPenInk } from './pen-ink/index.js';
+import { imageToPenInk, resolvePenInkStyle } from './pen-ink/index.js';
 import { toSVG } from './svg.js';
 import { optimizePlot } from './optimize.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
@@ -144,6 +144,16 @@ for (const seed of SEEDS) {
 }
 
 // Style/preset variants (single seed — the second seed above covers plumbing).
+CASES['pen-ink/solid-blacks/42'] = () =>
+  imageToPenInk(syntheticImage(), { width: 300, seed: 42, valueBands: 2, solidBlacks: true });
+CASES['pen-ink/style-comic/42'] = () =>
+  imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('comic') });
+CASES['pen-ink/style-dore/42'] = () =>
+  imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('dore') });
+CASES['pen-ink/style-ballpoint/42'] = () =>
+  imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('ballpoint') });
+CASES['pen-ink/style-sumie/42'] = () =>
+  imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('sumie') });
 CASES['conway/streaks/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'streaks' });
 CASES['reaction-diffusion/coral/42'] = () =>

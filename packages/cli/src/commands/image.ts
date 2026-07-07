@@ -8,6 +8,7 @@ import {
   pageMetrics,
   contentRect,
   getPaperSize,
+  PEN_INK_STYLES,
   type Orientation,
   type PaperFit,
   type PenInkOptions,
@@ -20,6 +21,10 @@ export function registerImage(program: Command) {
   addSketchOptions(program.command('image'))
     .description('Render an image as pen-and-ink style hatching for plotting')
     .requiredOption('-i, --input <file>', 'Input image (PNG or JPEG)')
+    .option(
+      '--style <id>',
+      `Artist style — a whole coherent ink philosophy (${Object.keys(PEN_INK_STYLES).join(', ')}); explicitly passed flags still override the style`
+    )
     .option('-w, --width <number>', 'Output width in pixels', '800')
     .option('-h, --height <number>', 'Output height in pixels (default: match image aspect)')
     .option(
@@ -73,13 +78,41 @@ export function registerImage(program: Command) {
     .option('--no-calm-water', 'Never use the calm-water treatment, even when labels report water')
     .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
     .option(
+      '--solid-blacks',
+      'Ink the darkest value band as committed solid fill instead of cross-hatch (needs --value-bands >= 2)'
+    )
+    .option(
+      '--fill-spacing <px>',
+      'Distance between solid-fill passes in px; slightly under your pen width (default 0.9)'
+    )
+    .option(
       '--counterchange <number>',
       'Darken tone where a dark mass borders a lighter one (0-1)',
       '0.5'
     )
     .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
+    .option(
+      '--line-swell <number>',
+      'Swelling line weight: hatch lines thicken through shadow and thin in the light (0-1)',
+      '0'
+    )
     .option('--facet-hatch', 'Hatch toned masses as straight-stroke facets with per-patch angles')
     .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
+    .option(
+      '--scribble-tone <number>',
+      'Continuous ballpoint scribble as the tone engine; replaces hatching (0-1)',
+      '0'
+    )
+    .option(
+      '--stroke-budget <number>',
+      'Stroke economy: cap total drawn length at this multiple of the canvas diagonal; best strokes survive (0 = off)',
+      '0'
+    )
+    .option(
+      '--stroke-weight <number>',
+      'Pen passes per surviving long stroke with --stroke-budget: >1 builds fat brush strokes',
+      '1'
+    )
     .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
     .option(
@@ -119,7 +152,7 @@ export function registerImage(program: Command) {
     .option('--background', 'Include background rectangle')
     .option('--background-color <color>', 'Background color', '#ffffff')
     .option('-o, --output <file>', 'Output file path', 'pen-ink.svg')
-    .action((options) => {
+    .action((options, cmd) => {
       const inputPath = resolve(process.cwd(), options.input);
 
       console.log(`Loading image: ${inputPath}`);
@@ -228,12 +261,84 @@ export function registerImage(program: Command) {
         skyStipple: options.skyStipple,
         calmWater: options.calmWater,
         richBlacks: options.richBlacks,
+        solidBlacks: options.solidBlacks ?? false,
+        // With a physical sheet the fill pitch follows the actual pen:
+        // slightly tighter than the pen width so passes overlap into solid
+        fillSpacing:
+          options.fillSpacing !== undefined
+            ? parseFloat(options.fillSpacing)
+            : paperStrokeWidth !== undefined
+              ? paperStrokeWidth * 0.95
+              : undefined,
         counterchange: parseFloat(options.counterchange),
         crossContour: options.crossContour ?? false,
+        lineSwell: parseFloat(options.lineSwell),
+        scribbleTone: parseFloat(options.scribbleTone),
+        strokeBudget: parseFloat(options.strokeBudget),
+        strokeWeight: parseFloat(options.strokeWeight),
         facetHatch: options.facetHatch ?? false,
         maxStrokeLength: parseFloat(options.maxStroke),
         workingSize: parseInt(options.workingSize, 10),
       };
+
+      // Artist style: the style's option bundle wins over every flag the
+      // user did NOT pass explicitly (commander fills defaults for all of
+      // them, so option-value sources — not values — decide precedence).
+      // Without --style, nothing here runs and output is byte-identical.
+      if (options.style) {
+        const style = PEN_INK_STYLES[String(options.style).toLowerCase()];
+        if (!style) {
+          console.error(
+            `Unknown --style "${options.style}" (available: ${Object.keys(PEN_INK_STYLES).join(', ')})`
+          );
+          process.exit(2);
+        }
+        // Which commander option feeds each style-settable PenInkOptions field
+        const OPTION_FLAG: Partial<Record<keyof PenInkOptions, string>> = {
+          layers: 'layers',
+          minSpacing: 'minSpacing',
+          maxSpacing: 'maxSpacing',
+          whiteCutoff: 'whiteCutoff',
+          toneGamma: 'toneGamma',
+          valueBands: 'valueBands',
+          massing: 'massing',
+          hatchPatchiness: 'hatchPatchiness',
+          hatchAngle: 'hatchAngle',
+          followTone: 'followTone',
+          fieldSmoothing: 'fieldSmoothing',
+          normalizeContrast: 'contrast',
+          drawOutlines: 'outlines',
+          outlineThreshold: 'outlineThreshold',
+          contourHalo: 'contourHalo',
+          wobble: 'wobble',
+          textureStrokes: 'texture',
+          textureStyle: 'textureStyle',
+          skyStipple: 'skyStipple',
+          calmWater: 'calmWater',
+          richBlacks: 'richBlacks',
+          solidBlacks: 'solidBlacks',
+          fillSpacing: 'fillSpacing',
+          counterchange: 'counterchange',
+          crossContour: 'crossContour',
+          lineSwell: 'lineSwell',
+          scribbleTone: 'scribbleTone',
+          strokeBudget: 'strokeBudget',
+          strokeWeight: 'strokeWeight',
+          facetHatch: 'facetHatch',
+          maxStrokeLength: 'maxStroke',
+          outlinePasses: 'outlinePasses',
+          autoStyle: 'autoStyle',
+          detailEmphasis: 'detail',
+          workingSize: 'workingSize',
+        };
+        for (const [key, value] of Object.entries(style.options)) {
+          const flag = OPTION_FLAG[key as keyof PenInkOptions];
+          if (!flag || cmd.getOptionValueSource(flag) !== 'cli') {
+            (penInkOptions as Record<string, unknown>)[key] = value;
+          }
+        }
+        console.log(`Style: ${style.label} — ${style.description}`);
+      }
 
       const svgOptions: SVGOptions = {
         strokeColor: options.strokeColor,
@@ -257,12 +362,13 @@ export function registerImage(program: Command) {
           options.densityMinOverlap !== undefined
             ? parseFloat(options.densityMinOverlap)
             : undefined;
-        // Bold outlines are deliberate multi-pass emphasis, not pile-up — exempt.
+        // Bold outlines are deliberate multi-pass emphasis, and solid fill
+        // is deliberate coverage at pen width — neither is pile-up. Exempt.
         const protect = limitStrokeDensity(result, {
           maxPasses,
           cellPx,
           minOverlapPx,
-          skipLayers: ['bold'],
+          skipLayers: ['bold', 'fill'],
         });
         result = protect.result;
         console.log(

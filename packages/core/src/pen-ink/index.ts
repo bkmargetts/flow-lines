@@ -13,13 +13,18 @@ import { createNoise } from '../noise.js';
 import { SemanticMap } from '../semantic-map.js';
 import { composeMassPlan } from '../value-plan.js';
 import { randomSeed } from '../lib/rng.js';
-import { trimPolyline, offsetPolyline } from '../lib/polyline.js';
 import { PenInkOptions, LAYER_ANGLES } from './options.js';
+import { planSolidFill } from './fill.js';
+import { applyLineSwell, offsetEmphasisPasses, swellPassCount, swellPasses } from './swell.js';
+import { scribblePass } from './scribble.js';
+import { budgetStrokes } from './economy.js';
 import { buildHaloMask, buildImportance } from './masks.js';
 import { tracePass, type StrokeParams } from './streamline.js';
 import { frameOntoPage } from './frame.js';
 
 export type { PenInkOptions, FocusOptions } from './options.js';
+export { PEN_INK_STYLES, resolvePenInkStyle } from './styles/index.js';
+export type { PenInkStyle } from './styles/index.js';
 
 /**
  * Render a grayscale image as pen-and-ink style strokes.
@@ -71,6 +76,10 @@ export function imageToPenInk(
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
   const facetHatch = options.facetHatch ?? false;
   const crossContour = options.crossContour ?? false;
+  const lineSwell = Math.max(0, Math.min(1, options.lineSwell ?? 0));
+  const scribbleTone = Math.max(0, Math.min(1, options.scribbleTone ?? 0));
+  const strokeBudget = Math.max(0, options.strokeBudget ?? 0);
+  const strokeWeight = Math.max(1, options.strokeWeight ?? 1);
   const maxStrokeLength = (options.maxStrokeLength ?? 0) * scale;
   const autoStyle = options.autoStyle ?? false;
 
@@ -329,40 +338,86 @@ export function imageToPenInk(
   const inLightestBand =
     bandFloor > 0 ? (x: number, y: number): boolean => field.getMassDarkness(x, y) < bandFloor : null;
 
+  // Solid blacks: the darkest value band is inked as one committed mass —
+  // serpentine fill at pen spacing with drawn boundary passes — instead of
+  // accumulating cross-hatch. Hatch layers treat the region as already
+  // inked (strokes stop at its border); tiny flecks stay hatched. The
+  // darkest-band test allows half a band of bilinear smear at the edge.
+  const solidFill =
+    (options.solidBlacks ?? false) && field.hasMassTone() && valueBands >= 2
+      ? (() => {
+          const { raster, scaleX, scaleY } = field.getMassRaster();
+          return planSolidFill({
+            width,
+            height,
+            margin,
+            rasterWidth: raster.width,
+            rasterHeight: raster.height,
+            scaleX,
+            scaleY,
+            darknessAt: (x, y) => field.getMassDarkness(x, y),
+            threshold: 1 - 0.5 / valueBands,
+            // An explicit fillSpacing is absolute output px (the caller
+            // ties it to the plotted pen width, a physical property);
+            // only the default tracks the sheet's render density
+            spacing: Math.max(0.5, options.fillSpacing ?? 0.9 * scale),
+            angle: ((options.hatchAngle ?? -45) * Math.PI) / 180,
+            // Hand-sized: a black mass earns solid ink, a speck stays hatched
+            minArea: Math.pow(maxSpacing * 2.5, 2),
+          });
+        })()
+      : null;
+
   const lines: FlowLine[] = [];
+
+  // The tone→spacing curve, shared by the hatch layers and the scribble
+  // engine (which carries the same curve on loop frequency instead)
+  const spacingAt = (x: number, y: number): number => {
+    let d = baseDarkness(x, y);
+    let spacingScale = 1;
+
+    if (importance) {
+      const imp = importance(x, y);
+      d = effectiveDarkness(x, y, imp);
+      spacingScale = 1 + (1 - imp) * 0.6;
+    }
+
+    const u = Math.min(1, Math.max(0, (d - whiteCutoff) / (1 - whiteCutoff)));
+    const t = Math.pow(u, toneGamma);
+    let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
+
+    // Deep shadows commit to near-solid black instead of plateauing at
+    // the regular minimum spacing. The ramp starts early enough that
+    // the darkest value band actually reaches it — real ink work
+    // anchors on a few solid black masses, not a uniform dark grey
+    if (richBlacks && d > 0.72) {
+      const deep = Math.min(1, (d - 0.72) / 0.2);
+      spacing *= 1 - 0.7 * deep;
+    }
+
+    // Ink compensation for swelling line weight: where lines earn extra
+    // passes, spacing opens up a little so the darks don't double-darken
+    // into mud. Deliberately mild — the swell should read as weight ON
+    // dense line systems; full proportional compensation thins the darks
+    // into sparse fat strokes that read as thorns, not engraving
+    if (lineSwell > 0) {
+      spacing *= 1 + lineSwell * 0.35 * swellPassCount(d, swellPasses(lineSwell));
+    }
+
+    return spacing;
+  };
+
+  // With the scribble engine on, it replaces the hatch layers as the tone
+  // engine entirely — contours, halos, portrait work, and the value plan
+  // all still apply around it
+  const hatchLayers = scribbleTone > 0 ? 0 : layers;
 
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
   // so shadows accumulate cross-hatched coverage.
-  for (let layer = 0; layer < layers; layer++) {
+  for (let layer = 0; layer < hatchLayers; layer++) {
     const threshold = whiteCutoff + (layer / layers) * (0.92 - whiteCutoff);
     const angleOffset =
       (LAYER_ANGLES[layer] * Math.PI) / 180 + (crossContour ? Math.PI / 2 : 0);
-
-    const spacingAt = (x: number, y: number): number => {
-      let d = baseDarkness(x, y);
-      let spacingScale = 1;
-
-      if (importance) {
-        const imp = importance(x, y);
-        d = effectiveDarkness(x, y, imp);
-        spacingScale = 1 + (1 - imp) * 0.6;
-      }
-
-      const u = Math.min(1, Math.max(0, (d - whiteCutoff) / (1 - whiteCutoff)));
-      const t = Math.pow(u, toneGamma);
-      let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
-
-      // Deep shadows commit to near-solid black instead of plateauing at
-      // the regular minimum spacing. The ramp starts early enough that
-      // the darkest value band actually reaches it — real ink work
-      // anchors on a few solid black masses, not a uniform dark grey
-      if (richBlacks && d > 0.72) {
-        const deep = Math.min(1, (d - 0.72) / 0.2);
-        spacing *= 1 - 0.7 * deep;
-      }
-
-      return spacing;
-    };
 
     const bandedDrawable = importance
       ? (x: number, y: number): boolean => {
@@ -419,12 +474,18 @@ export function imageToPenInk(
             patchedDrawable(x, y)
         : patchedDrawable;
 
+    // Solid-fill regions are already ink: hatch neither seeds inside them
+    // nor slides across their border
+    const fillFiltered = solidFill
+      ? (x: number, y: number): boolean => !solidFill.isSolid(x, y) && waterFiltered(x, y)
+      : waterFiltered;
+
     // Tone marks (hatch lines and stipple dots alike) stop short of long
     // contours, leaving the reserved-white sliver; strokes that wander
     // into a halo terminate there
     const isDrawable = haloAt
-      ? (x: number, y: number): boolean => !haloAt(x, y) && waterFiltered(x, y)
-      : waterFiltered;
+      ? (x: number, y: number): boolean => !haloAt(x, y) && fillFiltered(x, y)
+      : fillFiltered;
 
     // Busy regions (fur, foliage, fabric) read as texture, not form —
     // render them with short directional ticks instead of long streamlines
@@ -619,6 +680,45 @@ export function imageToPenInk(
     );
   }
 
+  // Continuous scribble tone engine: one meandering ballpoint habit whose
+  // loop density carries the tone (see scribble.ts). Honors the same
+  // white cutoff, halos, solid fill, and importance gates as the hatch.
+  if (scribbleTone > 0) {
+    const scribbleDrawable = (x: number, y: number): boolean => {
+      if (inLightestBand && inLightestBand(x, y)) return false;
+      if (solidFill && solidFill.isSolid(x, y)) return false;
+      if (haloAt && haloAt(x, y)) return false;
+      if (importance) {
+        const imp = importance(x, y);
+        return effectiveDarkness(x, y, imp) >= whiteCutoff + (1 - imp) * 0.25;
+      }
+      return baseDarkness(x, y) >= whiteCutoff;
+    };
+    lines.push(
+      ...scribblePass({
+        width,
+        height,
+        margin,
+        angle: ((options.hatchAngle ?? -45) * Math.PI) / 180,
+        amount: scribbleTone,
+        carrierGap: maxSpacing * 0.85,
+        stepLength,
+        scale,
+        seed: seed + 8117,
+        spacingAt,
+        isDrawable: scribbleDrawable,
+        darknessAt: baseDarkness,
+      })
+    );
+  }
+
+  // The committed blacks land after the tone layers: serpentine fill plus
+  // its drawn boundary, all on the 'fill' layer so density protection and
+  // wobble treat the solid mass as deliberate ink, not stroke pile-up
+  if (solidFill) {
+    lines.push(...solidFill.lines);
+  }
+
   // Contour pass: link edge ridges into long, confident outline strokes —
   // the committed lines an artist draws first. Drawn with the bold pen.
   if (drawOutlines) {
@@ -651,18 +751,12 @@ export function imageToPenInk(
 
     // Bold outlines are built from repeated single-pen passes with a
     // slight perpendicular offset, like an artist thickening a line by
-    // drawing over it — every stroke stays plottable with one pen
+    // drawing over it — every stroke stays plottable with one pen (the
+    // offset/trim recipe is shared with the swelling line weight)
     const pushEmphasized = (points: Point[]): void => {
       lines.push({ points, pen: 'bold' });
-      const spread = 1.1;
-      for (let pass = 1; pass < outlinePasses; pass++) {
-        const offset = spread * (pass - (outlinePasses - 1) / 2);
-        // Emphasis passes are trimmed at both ends so the built-up line
-        // tapers like a real ink stroke instead of ending in a blunt bar
-        const trimmed = trimPolyline(offsetPolyline(points, offset), 0.12);
-        if (trimmed.length >= 2) {
-          lines.push({ points: trimmed, pen: 'bold' });
-        }
+      for (const trimmed of offsetEmphasisPasses(points, outlinePasses, 1.1, 0.12)) {
+        lines.push({ points: trimmed, pen: 'bold' });
       }
     };
 
@@ -796,7 +890,51 @@ export function imageToPenInk(
       amplitudeScale: importance
         ? (x, y) => 1 + (1 - importance(x, y)) * field.getDetail(x, y) * 0.9
         : undefined,
+      // Solid fill must wobble as one calm mass: full-amplitude shake on
+      // passes one pen width apart opens white gaps through the black
+      layerAmplitude: solidFill ? { fill: 0.25 } : undefined,
     });
+  }
+
+  // Stroke economy: rank everything drawn so far by how much it says and
+  // keep only what fits the ink budget (see economy.ts) — most of the
+  // paper stays paper, and survivors above the length floor thicken into
+  // pressure-tapered brush strokes. After the wobble so weight passes hug
+  // their parent's drawn path; before the swell so swell only decorates
+  // strokes that survived.
+  if (strokeBudget > 0) {
+    const budgetPx = strokeBudget * Math.hypot(width, height);
+    result = {
+      ...result,
+      lines: budgetStrokes(result.lines, {
+        budgetPx,
+        width: result.width,
+        height: result.height,
+        scale,
+        // Information = edges AND committed dark masses: sumi-e keeps the
+        // loaded-brush blacks as eagerly as the contour gesture — a
+        // pure-edge score strands the tonal mass and leaves outline confetti
+        scoreAt: (x, y) =>
+          (importance ? importance(x, y) : 1) *
+          (0.4 + 0.6 * field.getEdgeStrength(x, y) + 0.8 * baseDarkness(x, y)),
+        strokeWeight,
+      }),
+    };
+  }
+
+  // Swelling line weight: shadow runs of the traced tone layers thicken
+  // with extra offset passes of the same pen and taper back to a single
+  // line in the light — the engraver's swelling line. Applied AFTER the
+  // wobble so every pass hugs its parent's drawn path exactly: passes
+  // that wobble independently read as crossing thorns, not built weight.
+  if (lineSwell > 0) {
+    result = {
+      ...result,
+      lines: [
+        ...result.lines,
+        ...applyLineSwell(result.lines, { lineSwell, scale, darknessAt: baseDarkness }),
+      ],
+    };
   }
 
   if (options.optimize ?? true) {

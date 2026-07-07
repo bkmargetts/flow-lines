@@ -171,17 +171,38 @@ export function ImageControls({
       <h3 className="section-title">Style</h3>
 
       <div className="preset-row">
-        {Object.entries(PRESETS).map(([name, def]) => (
-          <button
-            key={name}
-            type="button"
-            className={preset === name ? 'preset active' : 'preset'}
-            onClick={() => applyPreset(name)}
-            disabled={!imageName}
-          >
-            {def.label}
-          </button>
-        ))}
+        {Object.entries(PRESETS)
+          .filter(([, def]) => !def.artist)
+          .map(([name, def]) => (
+            <button
+              key={name}
+              type="button"
+              className={preset === name ? 'preset active' : 'preset'}
+              onClick={() => applyPreset(name)}
+              disabled={!imageName}
+            >
+              {def.label}
+            </button>
+          ))}
+      </div>
+
+      <h3 className="section-title">Artist styles</h3>
+
+      <div className="preset-row">
+        {Object.entries(PRESETS)
+          .filter(([, def]) => def.artist)
+          .map(([name, def]) => (
+            <button
+              key={name}
+              type="button"
+              className={preset === name ? 'preset active' : 'preset'}
+              onClick={() => applyPreset(name)}
+              disabled={!imageName}
+              title={def.hint}
+            >
+              {def.label}
+            </button>
+          ))}
       </div>
 
       <div className="button-group">
@@ -319,6 +340,15 @@ export function ImageControls({
               />
               Rich blacks (deep shadows go solid)
             </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.solidBlacks}
+                onChange={(e) => updateSettings({ solidBlacks: e.target.checked })}
+                disabled={settings.valueBands < 2}
+              />
+              Solid blacks (fill the darkest value band with ink)
+            </label>
           </div>
         </AdvGroup>
 
@@ -387,6 +417,59 @@ export function ImageControls({
             step={1}
             onChange={(v) => updateSettings({ fieldSmoothing: v })}
           />
+
+          <Slider
+            label="Stroke Budget"
+            value={settings.strokeBudget}
+            min={0}
+            max={20}
+            step={0.5}
+            onChange={(v) => updateSettings({ strokeBudget: v })}
+            format={(v) => (v === 0 ? 'off' : `${v.toFixed(1)}×`)}
+          >
+            <p className="paint-hint">
+              Cap total ink at this multiple of the page diagonal — only the strokes that say the most survive.
+            </p>
+          </Slider>
+
+          <Slider
+            label="Stroke Weight"
+            value={settings.strokeWeight}
+            min={1}
+            max={4}
+            step={1}
+            onChange={(v) => updateSettings({ strokeWeight: v })}
+            disabled={settings.strokeBudget === 0}
+            format={(v) => (v === 1 ? 'single pass' : `${v} passes`)}
+          />
+
+          <Slider
+            label="Scribble Tone"
+            value={settings.scribbleTone}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ scribbleTone: v })}
+            format={(v) => (v === 0 ? 'off' : v.toFixed(2))}
+          >
+            <p className="paint-hint">
+              One continuous ballpoint scribble carries the tone instead of hatching — loops in shadow, waves in light.
+            </p>
+          </Slider>
+
+          <Slider
+            label="Line Swell"
+            value={settings.lineSwell}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ lineSwell: v })}
+            format={(v) => (v === 0 ? 'off' : v.toFixed(2))}
+          >
+            <p className="paint-hint">
+              Hatch lines thicken through shadow and thin to hairlines in the light, like an engraving.
+            </p>
+          </Slider>
 
           <Slider
             label="Counterchange"
@@ -474,6 +557,27 @@ export function ImageControls({
               Bold contour outlines
             </label>
           </div>
+
+          <Slider
+            label="Outline Passes"
+            value={settings.outlinePasses}
+            min={1}
+            max={4}
+            step={1}
+            onChange={(v) => updateSettings({ outlinePasses: v })}
+            disabled={!settings.drawOutlines}
+          />
+
+          <Slider
+            label="Outline Threshold"
+            value={settings.outlineThreshold}
+            min={0.1}
+            max={0.8}
+            step={0.05}
+            onChange={(v) => updateSettings({ outlineThreshold: v })}
+            disabled={!settings.drawOutlines}
+            format={(v) => v.toFixed(2)}
+          />
         </AdvGroup>
 
         <AdvGroup title="Subject & Focus">

@@ -147,6 +147,26 @@ export interface PenInkOptions {
    */
   richBlacks?: boolean;
   /**
+   * Ink the darkest value band as committed solid black: the region is
+   * filled with serpentine passes one pen width apart, bounded by
+   * concentric boundary passes for a crisp drawn edge, instead of
+   * accumulating cross-hatch — the decisive spot blacks of heavy comic
+   * ink. Hatch layers treat the region as already inked. Needs
+   * valueBands >= 2 to define "darkest band"; regions smaller than a
+   * hand-sized patch stay hatched (default false)
+   */
+  solidBlacks?: boolean;
+  /**
+   * Distance between solid-fill passes in output px — set it slightly
+   * tighter than the plotted pen width so passes overlap into true solid
+   * (the standard plotter fill practice): wider leaves paper streaks
+   * through the black, much tighter soaks the paper. Absolute, not
+   * multiplied by `scale` — pen width is a physical property. Solid fill
+   * is pen-time expensive by nature (default 0.9 at the reference render
+   * density, scaled with the sheet)
+   */
+  fillSpacing?: number;
+  /**
    * Counterchange strength, 0-1: tone darkens where a dark mass meets a
    * lighter one and relaxes away from the boundary — the background
    * swells behind a light subject, a shadow mass bites at its edge. The
@@ -161,10 +181,26 @@ export interface PenInkOptions {
    */
   crossContour?: boolean;
   /**
+   * Swelling line weight, 0-1 — the engraver's tool: where a hatch line
+   * passes through shadow it thickens (extra offset passes of the same
+   * pen, tapering back to a single line in the light), and stroke spacing
+   * opens up in compensation so shadow tone is carried by fewer, heavier
+   * lines. 0 disables (default 0)
+   */
+  lineSwell?: number;
+  /**
    * Cap on hatch stroke length in px — short strokes read as individually
    * placed marks rather than traced streamlines. 0 = unlimited (default 0)
    */
   maxStrokeLength?: number;
+  /**
+   * Continuous scribble as the tone engine, 0-1 — ballpoint shading: one
+   * long meandering line per carrier band whose loop density carries the
+   * tone (tight curls in shadow, lazy waves in light, pen lifted in the
+   * highlights). Replaces the hatch layers entirely when > 0; contours,
+   * halos, portrait work, and the value plan still apply (default 0)
+   */
+  scribbleTone?: number;
 
   /** Integration step length in px (default 1.5) */
   stepLength?: number;
@@ -175,6 +211,22 @@ export interface PenInkOptions {
 
   /** Hand-drawn wobble amplitude in px; 0 disables (default 0.8) */
   wobble?: number;
+
+  /**
+   * Stroke economy budget — the sumi-e discipline. Total drawn length is
+   * capped at this multiple of the canvas diagonal; strokes are ranked by
+   * how much they say (length × importance × edge presence, contours
+   * counting extra) and only the best survive, coherence-aware so the
+   * kept gesture clusters instead of stranding confetti. Scale-robust
+   * because it is length-based. 0 disables (default 0)
+   */
+  strokeBudget?: number;
+  /**
+   * Total pen passes per surviving long stroke when the economy budget is
+   * active: >1 thickens survivors into fat, pressure-tapered brush
+   * strokes built from offset passes of the same pen (default 1)
+   */
+  strokeWeight?: number;
 
   /**
    * Emphasize detailed/textured regions: flat areas get sparser, lighter,
