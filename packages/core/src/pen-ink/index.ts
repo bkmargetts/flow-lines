@@ -16,6 +16,7 @@ import { randomSeed } from '../lib/rng.js';
 import { PenInkOptions, LAYER_ANGLES } from './options.js';
 import { planSolidFill } from './fill.js';
 import { applyLineSwell, offsetEmphasisPasses, swellPassCount, swellPasses } from './swell.js';
+import { scribblePass } from './scribble.js';
 import { buildHaloMask, buildImportance } from './masks.js';
 import { tracePass, type StrokeParams } from './streamline.js';
 import { frameOntoPage } from './frame.js';
@@ -75,6 +76,7 @@ export function imageToPenInk(
   const facetHatch = options.facetHatch ?? false;
   const crossContour = options.crossContour ?? false;
   const lineSwell = Math.max(0, Math.min(1, options.lineSwell ?? 0));
+  const scribbleTone = Math.max(0, Math.min(1, options.scribbleTone ?? 0));
   const maxStrokeLength = (options.maxStrokeLength ?? 0) * scale;
   const autoStyle = options.autoStyle ?? false;
 
@@ -365,47 +367,54 @@ export function imageToPenInk(
 
   const lines: FlowLine[] = [];
 
+  // The tone→spacing curve, shared by the hatch layers and the scribble
+  // engine (which carries the same curve on loop frequency instead)
+  const spacingAt = (x: number, y: number): number => {
+    let d = baseDarkness(x, y);
+    let spacingScale = 1;
+
+    if (importance) {
+      const imp = importance(x, y);
+      d = effectiveDarkness(x, y, imp);
+      spacingScale = 1 + (1 - imp) * 0.6;
+    }
+
+    const u = Math.min(1, Math.max(0, (d - whiteCutoff) / (1 - whiteCutoff)));
+    const t = Math.pow(u, toneGamma);
+    let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
+
+    // Deep shadows commit to near-solid black instead of plateauing at
+    // the regular minimum spacing. The ramp starts early enough that
+    // the darkest value band actually reaches it — real ink work
+    // anchors on a few solid black masses, not a uniform dark grey
+    if (richBlacks && d > 0.72) {
+      const deep = Math.min(1, (d - 0.72) / 0.2);
+      spacing *= 1 - 0.7 * deep;
+    }
+
+    // Ink compensation for swelling line weight: where lines earn extra
+    // passes, spacing opens up a little so the darks don't double-darken
+    // into mud. Deliberately mild — the swell should read as weight ON
+    // dense line systems; full proportional compensation thins the darks
+    // into sparse fat strokes that read as thorns, not engraving
+    if (lineSwell > 0) {
+      spacing *= 1 + lineSwell * 0.35 * swellPassCount(d, swellPasses(lineSwell));
+    }
+
+    return spacing;
+  };
+
+  // With the scribble engine on, it replaces the hatch layers as the tone
+  // engine entirely — contours, halos, portrait work, and the value plan
+  // all still apply around it
+  const hatchLayers = scribbleTone > 0 ? 0 : layers;
+
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
   // so shadows accumulate cross-hatched coverage.
-  for (let layer = 0; layer < layers; layer++) {
+  for (let layer = 0; layer < hatchLayers; layer++) {
     const threshold = whiteCutoff + (layer / layers) * (0.92 - whiteCutoff);
     const angleOffset =
       (LAYER_ANGLES[layer] * Math.PI) / 180 + (crossContour ? Math.PI / 2 : 0);
-
-    const spacingAt = (x: number, y: number): number => {
-      let d = baseDarkness(x, y);
-      let spacingScale = 1;
-
-      if (importance) {
-        const imp = importance(x, y);
-        d = effectiveDarkness(x, y, imp);
-        spacingScale = 1 + (1 - imp) * 0.6;
-      }
-
-      const u = Math.min(1, Math.max(0, (d - whiteCutoff) / (1 - whiteCutoff)));
-      const t = Math.pow(u, toneGamma);
-      let spacing = (maxSpacing + (minSpacing - maxSpacing) * t) * spacingScale;
-
-      // Deep shadows commit to near-solid black instead of plateauing at
-      // the regular minimum spacing. The ramp starts early enough that
-      // the darkest value band actually reaches it — real ink work
-      // anchors on a few solid black masses, not a uniform dark grey
-      if (richBlacks && d > 0.72) {
-        const deep = Math.min(1, (d - 0.72) / 0.2);
-        spacing *= 1 - 0.7 * deep;
-      }
-
-      // Ink compensation for swelling line weight: where lines earn extra
-      // passes, spacing opens up a little so the darks don't double-darken
-      // into mud. Deliberately mild — the swell should read as weight ON
-      // dense line systems; full proportional compensation thins the darks
-      // into sparse fat strokes that read as thorns, not engraving
-      if (lineSwell > 0) {
-        spacing *= 1 + lineSwell * 0.35 * swellPassCount(d, swellPasses(lineSwell));
-      }
-
-      return spacing;
-    };
 
     const bandedDrawable = importance
       ? (x: number, y: number): boolean => {
@@ -664,6 +673,38 @@ export function imageToPenInk(
         minLineLength,
         seedSpacing: Math.max(minSpacing * 2, maxSpacing / 2),
         paramsFor,
+      })
+    );
+  }
+
+  // Continuous scribble tone engine: one meandering ballpoint habit whose
+  // loop density carries the tone (see scribble.ts). Honors the same
+  // white cutoff, halos, solid fill, and importance gates as the hatch.
+  if (scribbleTone > 0) {
+    const scribbleDrawable = (x: number, y: number): boolean => {
+      if (inLightestBand && inLightestBand(x, y)) return false;
+      if (solidFill && solidFill.isSolid(x, y)) return false;
+      if (haloAt && haloAt(x, y)) return false;
+      if (importance) {
+        const imp = importance(x, y);
+        return effectiveDarkness(x, y, imp) >= whiteCutoff + (1 - imp) * 0.25;
+      }
+      return baseDarkness(x, y) >= whiteCutoff;
+    };
+    lines.push(
+      ...scribblePass({
+        width,
+        height,
+        margin,
+        angle: ((options.hatchAngle ?? -45) * Math.PI) / 180,
+        amount: scribbleTone,
+        carrierGap: maxSpacing * 0.85,
+        stepLength,
+        scale,
+        seed: seed + 8117,
+        spacingAt,
+        isDrawable: scribbleDrawable,
+        darknessAt: baseDarkness,
       })
     );
   }

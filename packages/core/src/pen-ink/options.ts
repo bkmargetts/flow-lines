@@ -193,6 +193,14 @@ export interface PenInkOptions {
    * placed marks rather than traced streamlines. 0 = unlimited (default 0)
    */
   maxStrokeLength?: number;
+  /**
+   * Continuous scribble as the tone engine, 0-1 — ballpoint shading: one
+   * long meandering line per carrier band whose loop density carries the
+   * tone (tight curls in shadow, lazy waves in light, pen lifted in the
+   * highlights). Replaces the hatch layers entirely when > 0; contours,
+   * halos, portrait work, and the value plan still apply (default 0)
+   */
+  scribbleTone?: number;
 
   /** Integration step length in px (default 1.5) */
   stepLength?: number;

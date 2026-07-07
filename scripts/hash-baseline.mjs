@@ -49,6 +49,7 @@ const IMAGE_PRESETS = {
   // Artist styles live in core (PEN_INK_STYLES) — one flag, no mirroring
   comic: ['--style', 'comic'],
   dore: ['--style', 'dore'],
+  ballpoint: ['--style', 'ballpoint'],
 };
 
 // Vine species mirror scripts/vines-gallery.mjs (a representative subset).

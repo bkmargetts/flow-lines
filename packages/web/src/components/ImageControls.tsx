@@ -419,6 +419,20 @@ export function ImageControls({
           />
 
           <Slider
+            label="Scribble Tone"
+            value={settings.scribbleTone}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ scribbleTone: v })}
+            format={(v) => (v === 0 ? 'off' : v.toFixed(2))}
+          >
+            <p className="paint-hint">
+              One continuous ballpoint scribble carries the tone instead of hatching — loops in shadow, waves in light.
+            </p>
+          </Slider>
+
+          <Slider
             label="Line Swell"
             value={settings.lineSwell}
             min={0}

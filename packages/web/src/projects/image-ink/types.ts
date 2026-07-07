@@ -49,6 +49,8 @@ export interface InkSettings {
   crossContour: boolean;
   /** Swelling line weight: hatch thickens through shadow, thins in light (0-1) */
   lineSwell: number;
+  /** Continuous ballpoint scribble as the tone engine; replaces hatching (0-1) */
+  scribbleTone: number;
   facetHatch: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
@@ -113,6 +115,7 @@ export const defaultInkSettings: InkSettings = {
   counterchange: 0.5,
   crossContour: false,
   lineSwell: 0,
+  scribbleTone: 0,
   facetHatch: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
@@ -136,7 +139,7 @@ export function styleToInkSettings(style: PenInkStyle): Partial<InkSettings> {
     'wobble', 'workingSize', 'crossContour', 'facetHatch', 'maxStrokeLength',
     'fieldSmoothing', 'hatchAngle', 'followTone', 'drawOutlines', 'contourHalo',
     'richBlacks', 'counterchange', 'solidBlacks', 'outlinePasses', 'outlineThreshold',
-    'lineSwell',
+    'lineSwell', 'scribbleTone',
   ] as const;
   for (const key of shared) {
     if (o[key] !== undefined) {
@@ -158,6 +161,7 @@ const PRESET_BASE: Partial<InkSettings> = {
   outlinePasses: 2,
   outlineThreshold: 0.35,
   lineSwell: 0,
+  scribbleTone: 0,
   richBlacks: true,
 };
 
@@ -336,5 +340,11 @@ export const PRESETS: Record<
     hint: PEN_INK_STYLES.dore.description,
     artist: true,
     settings: styleToInkSettings(PEN_INK_STYLES.dore),
+  },
+  ballpoint: {
+    label: PEN_INK_STYLES.ballpoint.label,
+    hint: PEN_INK_STYLES.ballpoint.description,
+    artist: true,
+    settings: styleToInkSettings(PEN_INK_STYLES.ballpoint),
   },
 };

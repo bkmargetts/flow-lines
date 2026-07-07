@@ -2,6 +2,7 @@ import type { PenInkOptions } from '../options.js';
 import type { PenInkStyle } from './types.js';
 import { COMIC_STYLE } from './comic.js';
 import { DORE_STYLE } from './dore.js';
+import { BALLPOINT_STYLE } from './ballpoint.js';
 
 export type { PenInkStyle } from './types.js';
 
@@ -9,6 +10,7 @@ export type { PenInkStyle } from './types.js';
 export const PEN_INK_STYLES: Record<string, PenInkStyle> = {
   [COMIC_STYLE.id]: COMIC_STYLE,
   [DORE_STYLE.id]: DORE_STYLE,
+  [BALLPOINT_STYLE.id]: BALLPOINT_STYLE,
 };
 
 /**
