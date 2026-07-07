@@ -15,6 +15,7 @@ import { composeMassPlan } from '../value-plan.js';
 import { randomSeed } from '../lib/rng.js';
 import { trimPolyline, offsetPolyline } from '../lib/polyline.js';
 import { PenInkOptions, LAYER_ANGLES } from './options.js';
+import { planSolidFill } from './fill.js';
 import { buildHaloMask, buildImportance } from './masks.js';
 import { tracePass, type StrokeParams } from './streamline.js';
 import { frameOntoPage } from './frame.js';
@@ -329,6 +330,33 @@ export function imageToPenInk(
   const inLightestBand =
     bandFloor > 0 ? (x: number, y: number): boolean => field.getMassDarkness(x, y) < bandFloor : null;
 
+  // Solid blacks: the darkest value band is inked as one committed mass —
+  // serpentine fill at pen spacing with drawn boundary passes — instead of
+  // accumulating cross-hatch. Hatch layers treat the region as already
+  // inked (strokes stop at its border); tiny flecks stay hatched. The
+  // darkest-band test allows half a band of bilinear smear at the edge.
+  const solidFill =
+    (options.solidBlacks ?? false) && field.hasMassTone() && valueBands >= 2
+      ? (() => {
+          const { raster, scaleX, scaleY } = field.getMassRaster();
+          return planSolidFill({
+            width,
+            height,
+            margin,
+            rasterWidth: raster.width,
+            rasterHeight: raster.height,
+            scaleX,
+            scaleY,
+            darknessAt: (x, y) => field.getMassDarkness(x, y),
+            threshold: 1 - 0.5 / valueBands,
+            spacing: Math.max(0.5, (options.fillSpacing ?? 0.9) * scale),
+            angle: ((options.hatchAngle ?? -45) * Math.PI) / 180,
+            // Hand-sized: a black mass earns solid ink, a speck stays hatched
+            minArea: Math.pow(maxSpacing * 2.5, 2),
+          });
+        })()
+      : null;
+
   const lines: FlowLine[] = [];
 
   // Tone layers: layer i only hatches where darkness exceeds its threshold,
@@ -419,12 +447,18 @@ export function imageToPenInk(
             patchedDrawable(x, y)
         : patchedDrawable;
 
+    // Solid-fill regions are already ink: hatch neither seeds inside them
+    // nor slides across their border
+    const fillFiltered = solidFill
+      ? (x: number, y: number): boolean => !solidFill.isSolid(x, y) && waterFiltered(x, y)
+      : waterFiltered;
+
     // Tone marks (hatch lines and stipple dots alike) stop short of long
     // contours, leaving the reserved-white sliver; strokes that wander
     // into a halo terminate there
     const isDrawable = haloAt
-      ? (x: number, y: number): boolean => !haloAt(x, y) && waterFiltered(x, y)
-      : waterFiltered;
+      ? (x: number, y: number): boolean => !haloAt(x, y) && fillFiltered(x, y)
+      : fillFiltered;
 
     // Busy regions (fur, foliage, fabric) read as texture, not form —
     // render them with short directional ticks instead of long streamlines
@@ -619,6 +653,13 @@ export function imageToPenInk(
     );
   }
 
+  // The committed blacks land after the tone layers: serpentine fill plus
+  // its drawn boundary, all on the 'fill' layer so density protection and
+  // wobble treat the solid mass as deliberate ink, not stroke pile-up
+  if (solidFill) {
+    lines.push(...solidFill.lines);
+  }
+
   // Contour pass: link edge ridges into long, confident outline strokes —
   // the committed lines an artist draws first. Drawn with the bold pen.
   if (drawOutlines) {
@@ -796,6 +837,9 @@ export function imageToPenInk(
       amplitudeScale: importance
         ? (x, y) => 1 + (1 - importance(x, y)) * field.getDetail(x, y) * 0.9
         : undefined,
+      // Solid fill must wobble as one calm mass: full-amplitude shake on
+      // passes one pen width apart opens white gaps through the black
+      layerAmplitude: solidFill ? { fill: 0.25 } : undefined,
     });
   }
 

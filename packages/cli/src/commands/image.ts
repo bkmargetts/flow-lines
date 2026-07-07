@@ -73,6 +73,14 @@ export function registerImage(program: Command) {
     .option('--no-calm-water', 'Never use the calm-water treatment, even when labels report water')
     .option('--no-rich-blacks', 'Keep deep shadows at regular hatch density instead of saturating')
     .option(
+      '--solid-blacks',
+      'Ink the darkest value band as committed solid fill instead of cross-hatch (needs --value-bands >= 2)'
+    )
+    .option(
+      '--fill-spacing <px>',
+      'Distance between solid-fill passes in px; slightly under your pen width (default 0.9)'
+    )
+    .option(
       '--counterchange <number>',
       'Darken tone where a dark mass borders a lighter one (0-1)',
       '0.5'
@@ -228,6 +236,9 @@ export function registerImage(program: Command) {
         skyStipple: options.skyStipple,
         calmWater: options.calmWater,
         richBlacks: options.richBlacks,
+        solidBlacks: options.solidBlacks ?? false,
+        fillSpacing:
+          options.fillSpacing !== undefined ? parseFloat(options.fillSpacing) : undefined,
         counterchange: parseFloat(options.counterchange),
         crossContour: options.crossContour ?? false,
         facetHatch: options.facetHatch ?? false,
@@ -257,12 +268,13 @@ export function registerImage(program: Command) {
           options.densityMinOverlap !== undefined
             ? parseFloat(options.densityMinOverlap)
             : undefined;
-        // Bold outlines are deliberate multi-pass emphasis, not pile-up — exempt.
+        // Bold outlines are deliberate multi-pass emphasis, and solid fill
+        // is deliberate coverage at pen width — neither is pile-up. Exempt.
         const protect = limitStrokeDensity(result, {
           maxPasses,
           cellPx,
           minOverlapPx,
-          skipLayers: ['bold'],
+          skipLayers: ['bold', 'fill'],
         });
         result = protect.result;
         console.log(

@@ -144,6 +144,8 @@ for (const seed of SEEDS) {
 }
 
 // Style/preset variants (single seed — the second seed above covers plumbing).
+CASES['pen-ink/solid-blacks/42'] = () =>
+  imageToPenInk(syntheticImage(), { width: 300, seed: 42, valueBands: 2, solidBlacks: true });
 CASES['conway/streaks/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'streaks' });
 CASES['reaction-diffusion/coral/42'] = () =>

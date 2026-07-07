@@ -147,6 +147,24 @@ export interface PenInkOptions {
    */
   richBlacks?: boolean;
   /**
+   * Ink the darkest value band as committed solid black: the region is
+   * filled with serpentine passes one pen width apart, bounded by
+   * concentric boundary passes for a crisp drawn edge, instead of
+   * accumulating cross-hatch — the decisive spot blacks of heavy comic
+   * ink. Hatch layers treat the region as already inked. Needs
+   * valueBands >= 2 to define "darkest band"; regions smaller than a
+   * hand-sized patch stay hatched (default false)
+   */
+  solidBlacks?: boolean;
+  /**
+   * Distance between solid-fill passes in px — set it slightly tighter
+   * than the plotted pen width so passes overlap into true solid (the
+   * standard plotter fill practice): wider leaves paper streaks through
+   * the black, much tighter soaks the paper. Solid fill is pen-time
+   * expensive by nature (default 0.9)
+   */
+  fillSpacing?: number;
+  /**
    * Counterchange strength, 0-1: tone darkens where a dark mass meets a
    * lighter one and relaxes away from the boundary — the background
    * swells behind a light subject, a shadow mass bites at its edge. The

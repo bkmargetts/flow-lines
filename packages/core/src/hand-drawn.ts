@@ -15,6 +15,13 @@ export interface HandDrawnOptions {
    * each stroke's midpoint (e.g. to loosen background strokes)
    */
   amplitudeScale?: (x: number, y: number) => number;
+  /**
+   * Per-layer wobble multipliers keyed by `FlowLine.layer` (e.g.
+   * `{ fill: 0.25 }` keeps solid-fill passes calm so no paper gaps open
+   * between them). Applies to both wobble and misregistration jitter;
+   * layers not listed are unaffected
+   */
+  layerAmplitude?: Record<string, number>;
 }
 
 /**
@@ -45,6 +52,10 @@ export function applyHandDrawnStyle(
 
     // Bold contour lines are drawn with commitment — less shake
     const penScale = line.pen === 'bold' ? 0.55 : 1;
+    // Whole layers can be calmed by name (solid fill must stay tight or
+    // paper gaps open between its passes)
+    const layerScale =
+      (line.layer !== undefined && options.layerAmplitude?.[line.layer]) || 1;
 
     // Per-line noise track, offset so strokes are decorrelated
     const track = lineIndex * 0.731 + 0.5;
@@ -56,10 +67,14 @@ export function applyHandDrawnStyle(
 
     // Vary how shaky this particular stroke is
     const lineAmplitude =
-      amplitude * localScale * penScale * (0.7 + 0.6 * (noise.noise2D(track, -7.3) * 0.5 + 0.5));
+      amplitude *
+      localScale *
+      penScale *
+      layerScale *
+      (0.7 + 0.6 * (noise.noise2D(track, -7.3) * 0.5 + 0.5));
 
-    const offsetX = jitter * noise.noise2D(track, 11.7);
-    const offsetY = jitter * noise.noise2D(track, 23.1);
+    const offsetX = jitter * layerScale * noise.noise2D(track, 11.7);
+    const offsetY = jitter * layerScale * noise.noise2D(track, 23.1);
 
     const points: Point[] = new Array(line.points.length);
     let arc = 0;
