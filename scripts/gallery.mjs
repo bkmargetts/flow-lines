@@ -53,6 +53,7 @@ const PRESETS = {
   comic: ['--style', 'comic'],
   dore: ['--style', 'dore'],
   ballpoint: ['--style', 'ballpoint'],
+  sumie: ['--style', 'sumie'],
 };
 
 if (!existsSync(cli)) {

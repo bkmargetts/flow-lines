@@ -103,6 +103,16 @@ export function registerImage(program: Command) {
       'Continuous ballpoint scribble as the tone engine; replaces hatching (0-1)',
       '0'
     )
+    .option(
+      '--stroke-budget <number>',
+      'Stroke economy: cap total drawn length at this multiple of the canvas diagonal; best strokes survive (0 = off)',
+      '0'
+    )
+    .option(
+      '--stroke-weight <number>',
+      'Pen passes per surviving long stroke with --stroke-budget: >1 builds fat brush strokes',
+      '1'
+    )
     .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
     .option(
@@ -264,6 +274,8 @@ export function registerImage(program: Command) {
         crossContour: options.crossContour ?? false,
         lineSwell: parseFloat(options.lineSwell),
         scribbleTone: parseFloat(options.scribbleTone),
+        strokeBudget: parseFloat(options.strokeBudget),
+        strokeWeight: parseFloat(options.strokeWeight),
         facetHatch: options.facetHatch ?? false,
         maxStrokeLength: parseFloat(options.maxStroke),
         workingSize: parseInt(options.workingSize, 10),
@@ -310,6 +322,8 @@ export function registerImage(program: Command) {
           crossContour: 'crossContour',
           lineSwell: 'lineSwell',
           scribbleTone: 'scribbleTone',
+          strokeBudget: 'strokeBudget',
+          strokeWeight: 'strokeWeight',
           facetHatch: 'facetHatch',
           maxStrokeLength: 'maxStroke',
           outlinePasses: 'outlinePasses',

@@ -17,6 +17,7 @@ import { PenInkOptions, LAYER_ANGLES } from './options.js';
 import { planSolidFill } from './fill.js';
 import { applyLineSwell, offsetEmphasisPasses, swellPassCount, swellPasses } from './swell.js';
 import { scribblePass } from './scribble.js';
+import { budgetStrokes } from './economy.js';
 import { buildHaloMask, buildImportance } from './masks.js';
 import { tracePass, type StrokeParams } from './streamline.js';
 import { frameOntoPage } from './frame.js';
@@ -77,6 +78,8 @@ export function imageToPenInk(
   const crossContour = options.crossContour ?? false;
   const lineSwell = Math.max(0, Math.min(1, options.lineSwell ?? 0));
   const scribbleTone = Math.max(0, Math.min(1, options.scribbleTone ?? 0));
+  const strokeBudget = Math.max(0, options.strokeBudget ?? 0);
+  const strokeWeight = Math.max(1, options.strokeWeight ?? 1);
   const maxStrokeLength = (options.maxStrokeLength ?? 0) * scale;
   const autoStyle = options.autoStyle ?? false;
 
@@ -891,6 +894,32 @@ export function imageToPenInk(
       // passes one pen width apart opens white gaps through the black
       layerAmplitude: solidFill ? { fill: 0.25 } : undefined,
     });
+  }
+
+  // Stroke economy: rank everything drawn so far by how much it says and
+  // keep only what fits the ink budget (see economy.ts) — most of the
+  // paper stays paper, and survivors above the length floor thicken into
+  // pressure-tapered brush strokes. After the wobble so weight passes hug
+  // their parent's drawn path; before the swell so swell only decorates
+  // strokes that survived.
+  if (strokeBudget > 0) {
+    const budgetPx = strokeBudget * Math.hypot(width, height);
+    result = {
+      ...result,
+      lines: budgetStrokes(result.lines, {
+        budgetPx,
+        width: result.width,
+        height: result.height,
+        scale,
+        // Information = edges AND committed dark masses: sumi-e keeps the
+        // loaded-brush blacks as eagerly as the contour gesture — a
+        // pure-edge score strands the tonal mass and leaves outline confetti
+        scoreAt: (x, y) =>
+          (importance ? importance(x, y) : 1) *
+          (0.4 + 0.6 * field.getEdgeStrength(x, y) + 0.8 * baseDarkness(x, y)),
+        strokeWeight,
+      }),
+    };
   }
 
   // Swelling line weight: shadow runs of the traced tone layers thicken

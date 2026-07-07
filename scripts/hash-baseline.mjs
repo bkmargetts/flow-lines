@@ -50,6 +50,7 @@ const IMAGE_PRESETS = {
   comic: ['--style', 'comic'],
   dore: ['--style', 'dore'],
   ballpoint: ['--style', 'ballpoint'],
+  sumie: ['--style', 'sumie'],
 };
 
 // Vine species mirror scripts/vines-gallery.mjs (a representative subset).

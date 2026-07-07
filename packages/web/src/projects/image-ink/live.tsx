@@ -437,6 +437,8 @@ export function useImageInkInstance(args: LiveInstanceArgs<ImageInkLayerState>):
         crossContour: settings.crossContour,
         lineSwell: settings.lineSwell,
         scribbleTone: settings.scribbleTone,
+        strokeBudget: settings.strokeBudget,
+        strokeWeight: settings.strokeWeight,
         facetHatch: settings.facetHatch,
         maxStrokeLength: settings.maxStrokeLength,
         fieldSmoothing: settings.fieldSmoothing,

@@ -213,6 +213,22 @@ export interface PenInkOptions {
   wobble?: number;
 
   /**
+   * Stroke economy budget — the sumi-e discipline. Total drawn length is
+   * capped at this multiple of the canvas diagonal; strokes are ranked by
+   * how much they say (length × importance × edge presence, contours
+   * counting extra) and only the best survive, coherence-aware so the
+   * kept gesture clusters instead of stranding confetti. Scale-robust
+   * because it is length-based. 0 disables (default 0)
+   */
+  strokeBudget?: number;
+  /**
+   * Total pen passes per surviving long stroke when the economy budget is
+   * active: >1 thickens survivors into fat, pressure-tapered brush
+   * strokes built from offset passes of the same pen (default 1)
+   */
+  strokeWeight?: number;
+
+  /**
    * Emphasize detailed/textured regions: flat areas get sparser, lighter,
    * looser strokes. 0 disables, 1 is maximum effect (default 0.3)
    */

@@ -51,6 +51,10 @@ export interface InkSettings {
   lineSwell: number;
   /** Continuous ballpoint scribble as the tone engine; replaces hatching (0-1) */
   scribbleTone: number;
+  /** Stroke economy: cap drawn length at this multiple of the canvas diagonal (0 = off) */
+  strokeBudget: number;
+  /** Pen passes per surviving long stroke under the budget (1 = single pass) */
+  strokeWeight: number;
   facetHatch: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
@@ -116,6 +120,8 @@ export const defaultInkSettings: InkSettings = {
   crossContour: false,
   lineSwell: 0,
   scribbleTone: 0,
+  strokeBudget: 0,
+  strokeWeight: 1,
   facetHatch: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
@@ -139,7 +145,7 @@ export function styleToInkSettings(style: PenInkStyle): Partial<InkSettings> {
     'wobble', 'workingSize', 'crossContour', 'facetHatch', 'maxStrokeLength',
     'fieldSmoothing', 'hatchAngle', 'followTone', 'drawOutlines', 'contourHalo',
     'richBlacks', 'counterchange', 'solidBlacks', 'outlinePasses', 'outlineThreshold',
-    'lineSwell', 'scribbleTone',
+    'lineSwell', 'scribbleTone', 'strokeBudget', 'strokeWeight',
   ] as const;
   for (const key of shared) {
     if (o[key] !== undefined) {
@@ -162,6 +168,8 @@ const PRESET_BASE: Partial<InkSettings> = {
   outlineThreshold: 0.35,
   lineSwell: 0,
   scribbleTone: 0,
+  strokeBudget: 0,
+  strokeWeight: 1,
   richBlacks: true,
 };
 
@@ -346,5 +354,11 @@ export const PRESETS: Record<
     hint: PEN_INK_STYLES.ballpoint.description,
     artist: true,
     settings: styleToInkSettings(PEN_INK_STYLES.ballpoint),
+  },
+  sumie: {
+    label: PEN_INK_STYLES.sumie.label,
+    hint: PEN_INK_STYLES.sumie.description,
+    artist: true,
+    settings: styleToInkSettings(PEN_INK_STYLES.sumie),
   },
 };

@@ -419,6 +419,31 @@ export function ImageControls({
           />
 
           <Slider
+            label="Stroke Budget"
+            value={settings.strokeBudget}
+            min={0}
+            max={20}
+            step={0.5}
+            onChange={(v) => updateSettings({ strokeBudget: v })}
+            format={(v) => (v === 0 ? 'off' : `${v.toFixed(1)}×`)}
+          >
+            <p className="paint-hint">
+              Cap total ink at this multiple of the page diagonal — only the strokes that say the most survive.
+            </p>
+          </Slider>
+
+          <Slider
+            label="Stroke Weight"
+            value={settings.strokeWeight}
+            min={1}
+            max={4}
+            step={1}
+            onChange={(v) => updateSettings({ strokeWeight: v })}
+            disabled={settings.strokeBudget === 0}
+            format={(v) => (v === 1 ? 'single pass' : `${v} passes`)}
+          />
+
+          <Slider
             label="Scribble Tone"
             value={settings.scribbleTone}
             min={0}
