@@ -47,6 +47,8 @@ export interface InkSettings {
   outlineThreshold: number;
   counterchange: number;
   crossContour: boolean;
+  /** Swelling line weight: hatch thickens through shadow, thins in light (0-1) */
+  lineSwell: number;
   facetHatch: boolean;
   maxStrokeLength: number;
   fieldSmoothing: number;
@@ -110,6 +112,7 @@ export const defaultInkSettings: InkSettings = {
   outlineThreshold: 0.35,
   counterchange: 0.5,
   crossContour: false,
+  lineSwell: 0,
   facetHatch: false,
   maxStrokeLength: 0,
   fieldSmoothing: 4,
@@ -133,6 +136,7 @@ export function styleToInkSettings(style: PenInkStyle): Partial<InkSettings> {
     'wobble', 'workingSize', 'crossContour', 'facetHatch', 'maxStrokeLength',
     'fieldSmoothing', 'hatchAngle', 'followTone', 'drawOutlines', 'contourHalo',
     'richBlacks', 'counterchange', 'solidBlacks', 'outlinePasses', 'outlineThreshold',
+    'lineSwell',
   ] as const;
   for (const key of shared) {
     if (o[key] !== undefined) {
@@ -153,6 +157,8 @@ const PRESET_BASE: Partial<InkSettings> = {
   solidBlacks: false,
   outlinePasses: 2,
   outlineThreshold: 0.35,
+  lineSwell: 0,
+  richBlacks: true,
 };
 
 /** Curated parameter bundles — the only decision most users need to make.
@@ -324,5 +330,11 @@ export const PRESETS: Record<
     hint: PEN_INK_STYLES.comic.description,
     artist: true,
     settings: styleToInkSettings(PEN_INK_STYLES.comic),
+  },
+  dore: {
+    label: PEN_INK_STYLES.dore.label,
+    hint: PEN_INK_STYLES.dore.description,
+    artist: true,
+    settings: styleToInkSettings(PEN_INK_STYLES.dore),
   },
 };

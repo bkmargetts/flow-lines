@@ -51,6 +51,7 @@ const PRESETS = {
   ],
   // Artist styles live in core (PEN_INK_STYLES) — one flag, no mirroring
   comic: ['--style', 'comic'],
+  dore: ['--style', 'dore'],
 };
 
 if (!existsSync(cli)) {

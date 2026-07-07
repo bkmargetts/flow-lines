@@ -181,6 +181,14 @@ export interface PenInkOptions {
    */
   crossContour?: boolean;
   /**
+   * Swelling line weight, 0-1 — the engraver's tool: where a hatch line
+   * passes through shadow it thickens (extra offset passes of the same
+   * pen, tapering back to a single line in the light), and stroke spacing
+   * opens up in compensation so shadow tone is carried by fewer, heavier
+   * lines. 0 disables (default 0)
+   */
+  lineSwell?: number;
+  /**
    * Cap on hatch stroke length in px — short strokes read as individually
    * placed marks rather than traced streamlines. 0 = unlimited (default 0)
    */

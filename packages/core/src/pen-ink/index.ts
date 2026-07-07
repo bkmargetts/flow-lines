@@ -13,9 +13,9 @@ import { createNoise } from '../noise.js';
 import { SemanticMap } from '../semantic-map.js';
 import { composeMassPlan } from '../value-plan.js';
 import { randomSeed } from '../lib/rng.js';
-import { trimPolyline, offsetPolyline } from '../lib/polyline.js';
 import { PenInkOptions, LAYER_ANGLES } from './options.js';
 import { planSolidFill } from './fill.js';
+import { applyLineSwell, offsetEmphasisPasses, swellPassCount, swellPasses } from './swell.js';
 import { buildHaloMask, buildImportance } from './masks.js';
 import { tracePass, type StrokeParams } from './streamline.js';
 import { frameOntoPage } from './frame.js';
@@ -74,6 +74,7 @@ export function imageToPenInk(
   const hatchPatchiness = Math.max(0, Math.min(1, options.hatchPatchiness ?? 0.35));
   const facetHatch = options.facetHatch ?? false;
   const crossContour = options.crossContour ?? false;
+  const lineSwell = Math.max(0, Math.min(1, options.lineSwell ?? 0));
   const maxStrokeLength = (options.maxStrokeLength ?? 0) * scale;
   const autoStyle = options.autoStyle ?? false;
 
@@ -394,6 +395,15 @@ export function imageToPenInk(
         spacing *= 1 - 0.7 * deep;
       }
 
+      // Ink compensation for swelling line weight: where lines earn extra
+      // passes, spacing opens up a little so the darks don't double-darken
+      // into mud. Deliberately mild — the swell should read as weight ON
+      // dense line systems; full proportional compensation thins the darks
+      // into sparse fat strokes that read as thorns, not engraving
+      if (lineSwell > 0) {
+        spacing *= 1 + lineSwell * 0.35 * swellPassCount(d, swellPasses(lineSwell));
+      }
+
       return spacing;
     };
 
@@ -697,18 +707,12 @@ export function imageToPenInk(
 
     // Bold outlines are built from repeated single-pen passes with a
     // slight perpendicular offset, like an artist thickening a line by
-    // drawing over it — every stroke stays plottable with one pen
+    // drawing over it — every stroke stays plottable with one pen (the
+    // offset/trim recipe is shared with the swelling line weight)
     const pushEmphasized = (points: Point[]): void => {
       lines.push({ points, pen: 'bold' });
-      const spread = 1.1;
-      for (let pass = 1; pass < outlinePasses; pass++) {
-        const offset = spread * (pass - (outlinePasses - 1) / 2);
-        // Emphasis passes are trimmed at both ends so the built-up line
-        // tapers like a real ink stroke instead of ending in a blunt bar
-        const trimmed = trimPolyline(offsetPolyline(points, offset), 0.12);
-        if (trimmed.length >= 2) {
-          lines.push({ points: trimmed, pen: 'bold' });
-        }
+      for (const trimmed of offsetEmphasisPasses(points, outlinePasses, 1.1, 0.12)) {
+        lines.push({ points: trimmed, pen: 'bold' });
       }
     };
 
@@ -846,6 +850,21 @@ export function imageToPenInk(
       // passes one pen width apart opens white gaps through the black
       layerAmplitude: solidFill ? { fill: 0.25 } : undefined,
     });
+  }
+
+  // Swelling line weight: shadow runs of the traced tone layers thicken
+  // with extra offset passes of the same pen and taper back to a single
+  // line in the light — the engraver's swelling line. Applied AFTER the
+  // wobble so every pass hugs its parent's drawn path exactly: passes
+  // that wobble independently read as crossing thorns, not built weight.
+  if (lineSwell > 0) {
+    result = {
+      ...result,
+      lines: [
+        ...result.lines,
+        ...applyLineSwell(result.lines, { lineSwell, scale, darknessAt: baseDarkness }),
+      ],
+    };
   }
 
   if (options.optimize ?? true) {

@@ -435,6 +435,7 @@ export function useImageInkInstance(args: LiveInstanceArgs<ImageInkLayerState>):
         skyStipple: settings.skyStipple === 'auto' ? undefined : settings.skyStipple,
         calmWater: settings.calmWater === 'auto' ? undefined : settings.calmWater,
         crossContour: settings.crossContour,
+        lineSwell: settings.lineSwell,
         facetHatch: settings.facetHatch,
         maxStrokeLength: settings.maxStrokeLength,
         fieldSmoothing: settings.fieldSmoothing,

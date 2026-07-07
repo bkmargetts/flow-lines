@@ -48,6 +48,7 @@ const IMAGE_PRESETS = {
   etching: ['--layers', '2', '--min-spacing', '2.8', '--white-cutoff', '0.15', '--tone-gamma', '1.8', '--texture', '0.15', '--wobble', '0.4', '--working-size', '800', '--cross-contour', '--max-stroke', '48', '--field-smoothing', '8', '--value-bands', '5', '--hatch-patchiness', '0.5', '--facet-hatch', '--massing', '0.5'],
   // Artist styles live in core (PEN_INK_STYLES) — one flag, no mirroring
   comic: ['--style', 'comic'],
+  dore: ['--style', 'dore'],
 };
 
 // Vine species mirror scripts/vines-gallery.mjs (a representative subset).

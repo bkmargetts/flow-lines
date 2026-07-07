@@ -148,6 +148,8 @@ CASES['pen-ink/solid-blacks/42'] = () =>
   imageToPenInk(syntheticImage(), { width: 300, seed: 42, valueBands: 2, solidBlacks: true });
 CASES['pen-ink/style-comic/42'] = () =>
   imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('comic') });
+CASES['pen-ink/style-dore/42'] = () =>
+  imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('dore') });
 CASES['conway/streaks/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'streaks' });
 CASES['reaction-diffusion/coral/42'] = () =>

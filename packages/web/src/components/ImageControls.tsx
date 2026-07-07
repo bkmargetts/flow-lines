@@ -419,6 +419,20 @@ export function ImageControls({
           />
 
           <Slider
+            label="Line Swell"
+            value={settings.lineSwell}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateSettings({ lineSwell: v })}
+            format={(v) => (v === 0 ? 'off' : v.toFixed(2))}
+          >
+            <p className="paint-hint">
+              Hatch lines thicken through shadow and thin to hairlines in the light, like an engraving.
+            </p>
+          </Slider>
+
+          <Slider
             label="Counterchange"
             value={settings.counterchange}
             min={0}

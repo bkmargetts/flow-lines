@@ -91,6 +91,11 @@ export function registerImage(program: Command) {
       '0.5'
     )
     .option('--cross-contour', 'Hatch across forms (etching style) instead of along them')
+    .option(
+      '--line-swell <number>',
+      'Swelling line weight: hatch lines thicken through shadow and thin in the light (0-1)',
+      '0'
+    )
     .option('--facet-hatch', 'Hatch toned masses as straight-stroke facets with per-patch angles')
     .option('--max-stroke <number>', 'Cap hatch stroke length in px (0 = unlimited)', '0')
     .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
@@ -252,6 +257,7 @@ export function registerImage(program: Command) {
               : undefined,
         counterchange: parseFloat(options.counterchange),
         crossContour: options.crossContour ?? false,
+        lineSwell: parseFloat(options.lineSwell),
         facetHatch: options.facetHatch ?? false,
         maxStrokeLength: parseFloat(options.maxStroke),
         workingSize: parseInt(options.workingSize, 10),
@@ -296,6 +302,7 @@ export function registerImage(program: Command) {
           fillSpacing: 'fillSpacing',
           counterchange: 'counterchange',
           crossContour: 'crossContour',
+          lineSwell: 'lineSwell',
           facetHatch: 'facetHatch',
           maxStrokeLength: 'maxStroke',
           outlinePasses: 'outlinePasses',
