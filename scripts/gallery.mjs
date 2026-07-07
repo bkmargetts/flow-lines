@@ -49,6 +49,8 @@ const PRESETS = {
     '--max-stroke', '48', '--field-smoothing', '8', '--value-bands', '5',
     '--hatch-patchiness', '0.5', '--facet-hatch', '--massing', '0.5',
   ],
+  // Artist styles live in core (PEN_INK_STYLES) — one flag, no mirroring
+  comic: ['--style', 'comic'],
 };
 
 if (!existsSync(cli)) {

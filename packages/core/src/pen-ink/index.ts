@@ -21,6 +21,8 @@ import { tracePass, type StrokeParams } from './streamline.js';
 import { frameOntoPage } from './frame.js';
 
 export type { PenInkOptions, FocusOptions } from './options.js';
+export { PEN_INK_STYLES, resolvePenInkStyle } from './styles/index.js';
+export type { PenInkStyle } from './styles/index.js';
 
 /**
  * Render a grayscale image as pen-and-ink style strokes.
@@ -349,7 +351,10 @@ export function imageToPenInk(
             scaleY,
             darknessAt: (x, y) => field.getMassDarkness(x, y),
             threshold: 1 - 0.5 / valueBands,
-            spacing: Math.max(0.5, (options.fillSpacing ?? 0.9) * scale),
+            // An explicit fillSpacing is absolute output px (the caller
+            // ties it to the plotted pen width, a physical property);
+            // only the default tracks the sheet's render density
+            spacing: Math.max(0.5, options.fillSpacing ?? 0.9 * scale),
             angle: ((options.hatchAngle ?? -45) * Math.PI) / 180,
             // Hand-sized: a black mass earns solid ink, a speck stays hatched
             minArea: Math.pow(maxSpacing * 2.5, 2),

@@ -171,17 +171,38 @@ export function ImageControls({
       <h3 className="section-title">Style</h3>
 
       <div className="preset-row">
-        {Object.entries(PRESETS).map(([name, def]) => (
-          <button
-            key={name}
-            type="button"
-            className={preset === name ? 'preset active' : 'preset'}
-            onClick={() => applyPreset(name)}
-            disabled={!imageName}
-          >
-            {def.label}
-          </button>
-        ))}
+        {Object.entries(PRESETS)
+          .filter(([, def]) => !def.artist)
+          .map(([name, def]) => (
+            <button
+              key={name}
+              type="button"
+              className={preset === name ? 'preset active' : 'preset'}
+              onClick={() => applyPreset(name)}
+              disabled={!imageName}
+            >
+              {def.label}
+            </button>
+          ))}
+      </div>
+
+      <h3 className="section-title">Artist styles</h3>
+
+      <div className="preset-row">
+        {Object.entries(PRESETS)
+          .filter(([, def]) => def.artist)
+          .map(([name, def]) => (
+            <button
+              key={name}
+              type="button"
+              className={preset === name ? 'preset active' : 'preset'}
+              onClick={() => applyPreset(name)}
+              disabled={!imageName}
+              title={def.hint}
+            >
+              {def.label}
+            </button>
+          ))}
       </div>
 
       <div className="button-group">
@@ -318,6 +339,15 @@ export function ImageControls({
                 onChange={(e) => updateSettings({ richBlacks: e.target.checked })}
               />
               Rich blacks (deep shadows go solid)
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={settings.solidBlacks}
+                onChange={(e) => updateSettings({ solidBlacks: e.target.checked })}
+                disabled={settings.valueBands < 2}
+              />
+              Solid blacks (fill the darkest value band with ink)
             </label>
           </div>
         </AdvGroup>
@@ -474,6 +504,27 @@ export function ImageControls({
               Bold contour outlines
             </label>
           </div>
+
+          <Slider
+            label="Outline Passes"
+            value={settings.outlinePasses}
+            min={1}
+            max={4}
+            step={1}
+            onChange={(v) => updateSettings({ outlinePasses: v })}
+            disabled={!settings.drawOutlines}
+          />
+
+          <Slider
+            label="Outline Threshold"
+            value={settings.outlineThreshold}
+            min={0.1}
+            max={0.8}
+            step={0.05}
+            onChange={(v) => updateSettings({ outlineThreshold: v })}
+            disabled={!settings.drawOutlines}
+            format={(v) => v.toFixed(2)}
+          />
         </AdvGroup>
 
         <AdvGroup title="Subject & Focus">

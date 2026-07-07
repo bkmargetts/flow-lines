@@ -1,4 +1,4 @@
-import { type PortraitOptions } from '@flow-lines/core';
+import { PEN_INK_STYLES, type PenInkStyle, type PortraitOptions } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /**
@@ -39,6 +39,12 @@ export interface InkSettings {
   /** 'auto' defers to the scene labels: calm water when water is in frame */
   calmWater: boolean | 'auto';
   richBlacks: boolean;
+  /** Ink the darkest value band as committed solid fill (needs valueBands >= 2) */
+  solidBlacks: boolean;
+  /** Single-pen passes used to build bold contour outlines (1-4) */
+  outlinePasses: number;
+  /** Edge strength needed for outlines, 0-1 */
+  outlineThreshold: number;
   counterchange: number;
   crossContour: boolean;
   facetHatch: boolean;
@@ -99,6 +105,9 @@ export const defaultInkSettings: InkSettings = {
   skyStipple: 'auto',
   calmWater: 'auto',
   richBlacks: true,
+  solidBlacks: false,
+  outlinePasses: 2,
+  outlineThreshold: 0.35,
   counterchange: 0.5,
   crossContour: false,
   facetHatch: false,
@@ -109,11 +118,54 @@ export const defaultInkSettings: InkSettings = {
   autoStyle: true,
 };
 
-/** Curated parameter bundles — the only decision most users need to make */
-export const PRESETS: Record<string, { label: string; settings: Partial<InkSettings> }> = {
+/**
+ * Map a core artist style's option bundle onto the web layer's InkSettings.
+ * Field names are shared for everything a style may set except the label
+ * auto-toggles, which the web models as an explicit 'auto' state where core
+ * models them as "unset".
+ */
+export function styleToInkSettings(style: PenInkStyle): Partial<InkSettings> {
+  const o = style.options;
+  const settings: Partial<InkSettings> = {};
+  const shared = [
+    'layers', 'minSpacing', 'maxSpacing', 'whiteCutoff', 'toneGamma', 'valueBands',
+    'massing', 'hatchPatchiness', 'detailEmphasis', 'textureStrokes', 'textureStyle',
+    'wobble', 'workingSize', 'crossContour', 'facetHatch', 'maxStrokeLength',
+    'fieldSmoothing', 'hatchAngle', 'followTone', 'drawOutlines', 'contourHalo',
+    'richBlacks', 'counterchange', 'solidBlacks', 'outlinePasses', 'outlineThreshold',
+  ] as const;
+  for (const key of shared) {
+    if (o[key] !== undefined) {
+      (settings as Record<string, unknown>)[key] = o[key];
+    }
+  }
+  settings.skyStipple = o.skyStipple === undefined ? 'auto' : o.skyStipple;
+  settings.calmWater = o.calmWater === undefined ? 'auto' : o.calmWater;
+  return settings;
+}
+
+/**
+ * Fields the standard presets reset so switching away from an artist style
+ * never inherits its committed choices (each artist style sets its own).
+ */
+const PRESET_BASE: Partial<InkSettings> = {
+  contourHalo: 2.2,
+  solidBlacks: false,
+  outlinePasses: 2,
+  outlineThreshold: 0.35,
+};
+
+/** Curated parameter bundles — the only decision most users need to make.
+ *  Entries flagged `artist` are whole artist styles from core, rendered as
+ *  their own picker row; `hint` carries the style's one-line philosophy. */
+export const PRESETS: Record<
+  string,
+  { label: string; settings: Partial<InkSettings>; artist?: boolean; hint?: string }
+> = {
   classic: {
     label: 'Classic',
     settings: {
+      ...PRESET_BASE,
       layers: 3,
       minSpacing: 2.5,
       maxSpacing: 14,
@@ -139,6 +191,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
   portrait: {
     label: 'Portrait',
     settings: {
+      ...PRESET_BASE,
       layers: 3,
       minSpacing: 2.5,
       maxSpacing: 14,
@@ -165,6 +218,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
   pet: {
     label: 'Pet',
     settings: {
+      ...PRESET_BASE,
       layers: 2,
       minSpacing: 2.5,
       maxSpacing: 12,
@@ -190,6 +244,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
   landscape: {
     label: 'Landscape',
     settings: {
+      ...PRESET_BASE,
       layers: 5,
       minSpacing: 1.8,
       maxSpacing: 16,
@@ -215,6 +270,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
   sketch: {
     label: 'Sketch',
     settings: {
+      ...PRESET_BASE,
       layers: 1,
       minSpacing: 3.2,
       maxSpacing: 24,
@@ -240,6 +296,7 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
   etching: {
     label: 'Etching',
     settings: {
+      ...PRESET_BASE,
       layers: 2,
       minSpacing: 2.8,
       maxSpacing: 14,
@@ -261,5 +318,11 @@ export const PRESETS: Record<string, { label: string; settings: Partial<InkSetti
       calmWater: 'auto',
       textureStyle: 'ticks',
     },
+  },
+  comic: {
+    label: PEN_INK_STYLES.comic.label,
+    hint: PEN_INK_STYLES.comic.description,
+    artist: true,
+    settings: styleToInkSettings(PEN_INK_STYLES.comic),
   },
 };

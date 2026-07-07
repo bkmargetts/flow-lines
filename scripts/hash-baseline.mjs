@@ -46,6 +46,8 @@ const IMAGE_PRESETS = {
   landscape: ['--layers', '5', '--min-spacing', '1.8', '--max-spacing', '16', '--tone-gamma', '1', '--texture', '0.7', '--wobble', '0.9', '--working-size', '800', '--white-cutoff', '0.14', '--hatch-angle', '0', '--sky-stipple', '--calm-water', '--max-stroke', '70', '--field-smoothing', '5', '--value-bands', '4', '--hatch-patchiness', '0.7', '--facet-hatch', '--massing', '0.4'],
   sketch: ['--layers', '1', '--min-spacing', '3.2', '--max-spacing', '24', '--tone-gamma', '1.35', '--texture', '0.8', '--texture-style', 'scribble', '--wobble', '2.2', '--value-bands', '3', '--hatch-patchiness', '0.6', '--detail', '0.4', '--white-cutoff', '0.1', '--hatch-angle', '-30', '--field-smoothing', '3', '--massing', '0.5'],
   etching: ['--layers', '2', '--min-spacing', '2.8', '--white-cutoff', '0.15', '--tone-gamma', '1.8', '--texture', '0.15', '--wobble', '0.4', '--working-size', '800', '--cross-contour', '--max-stroke', '48', '--field-smoothing', '8', '--value-bands', '5', '--hatch-patchiness', '0.5', '--facet-hatch', '--massing', '0.5'],
+  // Artist styles live in core (PEN_INK_STYLES) — one flag, no mirroring
+  comic: ['--style', 'comic'],
 };
 
 // Vine species mirror scripts/vines-gallery.mjs (a representative subset).

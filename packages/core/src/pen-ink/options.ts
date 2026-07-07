@@ -157,11 +157,13 @@ export interface PenInkOptions {
    */
   solidBlacks?: boolean;
   /**
-   * Distance between solid-fill passes in px — set it slightly tighter
-   * than the plotted pen width so passes overlap into true solid (the
-   * standard plotter fill practice): wider leaves paper streaks through
-   * the black, much tighter soaks the paper. Solid fill is pen-time
-   * expensive by nature (default 0.9)
+   * Distance between solid-fill passes in output px — set it slightly
+   * tighter than the plotted pen width so passes overlap into true solid
+   * (the standard plotter fill practice): wider leaves paper streaks
+   * through the black, much tighter soaks the paper. Absolute, not
+   * multiplied by `scale` — pen width is a physical property. Solid fill
+   * is pen-time expensive by nature (default 0.9 at the reference render
+   * density, scaled with the sheet)
    */
   fillSpacing?: number;
   /**

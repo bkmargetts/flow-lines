@@ -451,6 +451,12 @@ export function useImageInkInstance(args: LiveInstanceArgs<ImageInkLayerState>):
         workingSize: Math.min(settings.workingSize, wsCap),
         layers: lowMemory ? Math.min(2, settings.layers) : settings.layers,
         richBlacks: lowMemory ? false : settings.richBlacks,
+        solidBlacks: settings.solidBlacks,
+        // The fill pitch follows the actual pen: slightly tighter than the
+        // plotted width so passes overlap into true solid
+        fillSpacing: settings.penWidthMm * page.pxPerMm * 0.95,
+        outlinePasses: settings.outlinePasses,
+        outlineThreshold: settings.outlineThreshold,
         counterchange: settings.counterchange,
         // Focus points are normalised to the photo, so they live in the
         // content rect's coordinate space (the renderer frames it onto the page)

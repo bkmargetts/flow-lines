@@ -8,6 +8,7 @@ import {
   pageMetrics,
   contentRect,
   getPaperSize,
+  PEN_INK_STYLES,
   type Orientation,
   type PaperFit,
   type PenInkOptions,
@@ -20,6 +21,10 @@ export function registerImage(program: Command) {
   addSketchOptions(program.command('image'))
     .description('Render an image as pen-and-ink style hatching for plotting')
     .requiredOption('-i, --input <file>', 'Input image (PNG or JPEG)')
+    .option(
+      '--style <id>',
+      `Artist style — a whole coherent ink philosophy (${Object.keys(PEN_INK_STYLES).join(', ')}); explicitly passed flags still override the style`
+    )
     .option('-w, --width <number>', 'Output width in pixels', '800')
     .option('-h, --height <number>', 'Output height in pixels (default: match image aspect)')
     .option(
@@ -127,7 +132,7 @@ export function registerImage(program: Command) {
     .option('--background', 'Include background rectangle')
     .option('--background-color <color>', 'Background color', '#ffffff')
     .option('-o, --output <file>', 'Output file path', 'pen-ink.svg')
-    .action((options) => {
+    .action((options, cmd) => {
       const inputPath = resolve(process.cwd(), options.input);
 
       console.log(`Loading image: ${inputPath}`);
@@ -237,14 +242,75 @@ export function registerImage(program: Command) {
         calmWater: options.calmWater,
         richBlacks: options.richBlacks,
         solidBlacks: options.solidBlacks ?? false,
+        // With a physical sheet the fill pitch follows the actual pen:
+        // slightly tighter than the pen width so passes overlap into solid
         fillSpacing:
-          options.fillSpacing !== undefined ? parseFloat(options.fillSpacing) : undefined,
+          options.fillSpacing !== undefined
+            ? parseFloat(options.fillSpacing)
+            : paperStrokeWidth !== undefined
+              ? paperStrokeWidth * 0.95
+              : undefined,
         counterchange: parseFloat(options.counterchange),
         crossContour: options.crossContour ?? false,
         facetHatch: options.facetHatch ?? false,
         maxStrokeLength: parseFloat(options.maxStroke),
         workingSize: parseInt(options.workingSize, 10),
       };
+
+      // Artist style: the style's option bundle wins over every flag the
+      // user did NOT pass explicitly (commander fills defaults for all of
+      // them, so option-value sources — not values — decide precedence).
+      // Without --style, nothing here runs and output is byte-identical.
+      if (options.style) {
+        const style = PEN_INK_STYLES[String(options.style).toLowerCase()];
+        if (!style) {
+          console.error(
+            `Unknown --style "${options.style}" (available: ${Object.keys(PEN_INK_STYLES).join(', ')})`
+          );
+          process.exit(2);
+        }
+        // Which commander option feeds each style-settable PenInkOptions field
+        const OPTION_FLAG: Partial<Record<keyof PenInkOptions, string>> = {
+          layers: 'layers',
+          minSpacing: 'minSpacing',
+          maxSpacing: 'maxSpacing',
+          whiteCutoff: 'whiteCutoff',
+          toneGamma: 'toneGamma',
+          valueBands: 'valueBands',
+          massing: 'massing',
+          hatchPatchiness: 'hatchPatchiness',
+          hatchAngle: 'hatchAngle',
+          followTone: 'followTone',
+          fieldSmoothing: 'fieldSmoothing',
+          normalizeContrast: 'contrast',
+          drawOutlines: 'outlines',
+          outlineThreshold: 'outlineThreshold',
+          contourHalo: 'contourHalo',
+          wobble: 'wobble',
+          textureStrokes: 'texture',
+          textureStyle: 'textureStyle',
+          skyStipple: 'skyStipple',
+          calmWater: 'calmWater',
+          richBlacks: 'richBlacks',
+          solidBlacks: 'solidBlacks',
+          fillSpacing: 'fillSpacing',
+          counterchange: 'counterchange',
+          crossContour: 'crossContour',
+          facetHatch: 'facetHatch',
+          maxStrokeLength: 'maxStroke',
+          outlinePasses: 'outlinePasses',
+          autoStyle: 'autoStyle',
+          detailEmphasis: 'detail',
+          workingSize: 'workingSize',
+        };
+        for (const [key, value] of Object.entries(style.options)) {
+          const flag = OPTION_FLAG[key as keyof PenInkOptions];
+          if (!flag || cmd.getOptionValueSource(flag) !== 'cli') {
+            (penInkOptions as Record<string, unknown>)[key] = value;
+          }
+        }
+        console.log(`Style: ${style.label} — ${style.description}`);
+      }
 
       const svgOptions: SVGOptions = {
         strokeColor: options.strokeColor,
