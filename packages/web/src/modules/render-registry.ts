@@ -6,6 +6,7 @@ import { renderLandscape } from '../projects/landscape-generator/render';
 import { renderCity } from '../projects/city-generator/render';
 import { renderStickmen } from '../projects/stickmen/render';
 import { renderRibbonWeave } from '../projects/ribbon-weave/render';
+import { renderGesture } from '../projects/gesture/render';
 import { renderConway } from '../projects/conway/render';
 import { renderComplexFlow } from '../projects/complex-flow/render';
 import { renderReactionDiffusion } from '../projects/reaction-diffusion/render';
@@ -48,6 +49,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   'city-generator': entry(renderCity),
   stickmen: entry(renderStickmen),
   'ribbon-weave': entry(renderRibbonWeave),
+  gesture: entry(renderGesture),
   conway: entry(renderConway),
   'complex-flow': entry(renderComplexFlow),
   'reaction-diffusion': entry(renderReactionDiffusion),

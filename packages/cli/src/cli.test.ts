@@ -71,4 +71,22 @@ describe('CLI', () => {
     expect(svg).toContain('<path');
     expect(result.lines.some((l) => l.layer === 'ring')).toBe(true);
   });
+
+  it('exposes the gesture generator and renders a kline SVG', async () => {
+    const { generateGesture, toSVG } = await import('@flow-lines/core');
+    expect(generateGesture).toBeDefined();
+
+    const result = generateGesture({
+      width: 444,
+      height: 630,
+      margin: 24,
+      seed: 42,
+      preset: 'kline',
+    });
+
+    const svg = toSVG(result, { strokeWidth: 2 });
+
+    expect(svg).toContain('<path');
+    expect(result.lines.some((l) => l.layer === 'gesture')).toBe(true);
+  });
 });

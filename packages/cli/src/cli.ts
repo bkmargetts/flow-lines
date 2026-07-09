@@ -8,6 +8,7 @@ import { registerConway } from './commands/conway.js';
 import { registerVines } from './commands/vines.js';
 import { registerPlanet } from './commands/planet.js';
 import { registerLandscape } from './commands/landscape.js';
+import { registerGesture } from './commands/gesture.js';
 
 const program = new Command();
 
@@ -25,5 +26,6 @@ registerConway(program);
 registerVines(program);
 registerPlanet(program);
 registerLandscape(program);
+registerGesture(program);
 
 program.parse();
