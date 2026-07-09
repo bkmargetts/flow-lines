@@ -4,6 +4,18 @@
   padding: 0;
 }
 
+/* Mobile browsers zoom the page on double-tap unless a control opts out;
+   `manipulation` keeps panning/pinch but kills double-tap-zoom (and the
+   legacy 300ms tap delay) on everything interactive. */
+button,
+input,
+select,
+textarea,
+label,
+summary {
+  touch-action: manipulation;
+}
+
 :root {
   /* Minimal studio palette: quiet greys, ink-black accent — the artwork is
      the only colour on screen. */
@@ -34,6 +46,9 @@ html,
 body,
 #root {
   height: 100%;
+  /* Don't let WebKit's text inflation rescale the fixed bottom sheet. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -1039,5 +1054,19 @@ button:disabled {
 
   .canvas-stage {
     padding: 16px;
+  }
+
+  /* iOS Safari auto-zooms the page when a focused input's font-size is under
+     16px — the main way the sheet "ends up zoomed in". Floor every text-entry
+     control at 16px on phones; desktop keeps the denser type. The :not() chain
+     keeps the rule's specificity above the per-control desktop rules. */
+  input:not([type='range']):not([type='checkbox']):not([type='color']),
+  .app select:not([multiple]),
+  textarea {
+    font-size: 16px;
+  }
+
+  .control-group label .editable-value-input {
+    width: 80px; /* the desktop 68px clips at 16px type */
   }
 }
