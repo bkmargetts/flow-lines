@@ -50,6 +50,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   physarum: { preset: 'veins' },
   'city-generator': { style: 'mixed' },
   stickmen: { poseEnergy: 1 },
+  'ribbon-weave': { order: 0.1 },
 };
 for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const mod = pureModules.find((m) => m.id === id);

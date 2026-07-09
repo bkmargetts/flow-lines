@@ -128,6 +128,10 @@ export type { CityOptions, CityLightSide, BuildingStyle, CityStyle } from './cit
 export { generateStickmen, starRegion, heartRegion, diamondRegion, blobRegion } from './stickmen/index.js';
 export type { StickmenOptions, FacingMode, PoseMode, StickmenRegion } from './stickmen/index.js';
 
+// Ribbon weave / knotwork (interlaced bands, tangle → Celtic lattice)
+export { generateRibbonWeave } from './ribbons/index.js';
+export type { RibbonWeaveOptions, RibbonEdgeMode } from './ribbons/index.js';
+
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
 
