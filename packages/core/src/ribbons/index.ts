@@ -143,12 +143,20 @@ export function generateRibbonWeave(options: RibbonWeaveOptions): FlowLinesResul
     : o.wobble * morph.wobbleScale * 1.6;
   const inflatePx = 1.0 + finishReach;
 
-  // 1. One canonical structure, then flow-energy shaping.
+  // 1. One canonical structure, then flow-energy shaping. In closed mode the
+  // finish reach pads every containment margin so wobbled ink stays inside
+  // the frame instead of being clipped flat along it.
+  const bleed = o.edge === 'bleed';
+  const pad = bleed ? 0 : finishReach;
   const lattice = buildLattice(
-    { x0, y0, x1, y1, cell, breaks: o.breaks, bleed: o.edge === 'bleed', bandWidth, seed },
+    { x0, y0, x1, y1, cell, breaks: o.breaks, bleed, bandWidth, pad, seed },
     morph
   );
-  const strands = shapeStrands(lattice.strands, { cell, bandWidth, seed }, morph);
+  const strands = shapeStrands(
+    lattice.strands,
+    { cell, bandWidth, seed, x0, y0, x1, y1, bleed, pad },
+    morph
+  );
 
   // 2. Crossings + the weave.
   const crossings = findCrossings(strands, bandWidth, MAX_CROSSINGS);

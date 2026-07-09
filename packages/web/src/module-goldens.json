@@ -5,7 +5,7 @@
   "landscape-generator/default": "65598e6ff82aff9bcd1a13b0e4fb05966e1066af532eaa4a9593cef91d35a988",
   "city-generator/default": "6ea7a96297b21ff587e5108a0d061f5015593d98cdc53284c503fed3b529cc79",
   "stickmen/default": "5ef610e0d2a889b5eb2fe5c446eb9b76612730d2bdf58d4c2162d0fd1d4ce1a6",
-  "ribbon-weave/default": "9e67b9893545f5021735e2a9d23d83bc9327ccada227196f43e9d1ca7d479d21",
+  "ribbon-weave/default": "da8426f172312ce811bd3a28280b0298fd55b83d692c70a1177576fbf7192185",
   "conway/default": "1d11a16b84a4a7d8b118ee9b2255b410ab4b28d84f596d51673bce74134df717",
   "complex-flow/default": "67d06e1b2c69dc5dcc6718b5355f34a3f72f35802ea3fcfccb51a65d3641ba4a",
   "reaction-diffusion/default": "8a95f05b8a1966246ca2dc5a7e44d0a782da6b1d3a0352f0e5b71c16aaec15ae",
@@ -20,7 +20,7 @@
   "physarum/veins": "07493a63ca2d4709e12192d611dfe49b78216befa309823b6fc1124d1211845e",
   "city-generator/mixed": "380a43baf6d766e7599dec543605088ebea57ab5435dccfd94106ca0c427fb41",
   "stickmen/1": "ac4c63a8ce9e8f196fafbce34b8fba8f8c3fed45bfcd4bf98831a4810a2fc38b",
-  "ribbon-weave/0.1": "1045107b214fb866fae3e4b45e7d9abc552019804b8e17be60335d796965e4b4",
+  "ribbon-weave/0.1": "b666386ea801954c6e15fb21171b9557f19829d393f0fdc86a2ca6aadd276c45",
   "composite/stack": "4fb6aacb292e5701f718d13c0876b60095dc9e7a08d853d50a37470801cbb4c1",
   "composite/sketch": "c7acc810c060e767fa08bb837794d355b65214d69aca3522b80519803670c045"
 }

@@ -30,6 +30,9 @@ export interface LatticeOptions {
   bleed: boolean;
   /** Ribbon width, px — sets how far turns pull back from break edges. */
   bandWidth: number;
+  /** Extra pull-back at turns beyond the band half-width — the finish pass's
+   *  displacement reach, so wobbled/sketched ink can't poke past the frame. */
+  pad: number;
   seed: number;
 }
 
@@ -150,7 +153,10 @@ export function buildLattice(o: LatticeOptions, morph: WeaveMorph): Lattice {
   // How far a turn pulls back from the break edge. Deep enough that two
   // strands turning at the same edge from opposite sides clear each other's
   // band, shallow enough to stay inside the adjacent cells.
-  const depth = Math.min(0.42 * cellMin, Math.max(0.2 * cellMin, o.bandWidth * 0.5 + 3));
+  const depth = Math.min(
+    0.42 * cellMin,
+    Math.max(0.2 * cellMin, o.bandWidth * 0.5 + 3 + o.pad)
+  );
 
   const dirIndex = (d: Dir) =>
     (d.dx > 0 ? 0 : 2) + (d.dy > 0 ? 0 : 1);

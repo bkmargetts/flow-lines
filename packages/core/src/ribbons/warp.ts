@@ -35,6 +35,15 @@ export interface ShapeOptions {
   cell: number;
   bandWidth: number;
   seed: number;
+  /** Drawable box (the margin frame). */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** In bleed mode strands run off-page on purpose — no containment. */
+  bleed: boolean;
+  /** Finish-pass displacement reach, folded into the containment inset. */
+  pad: number;
 }
 
 /** One Chaikin corner-cut round on a closed loop. Collinear runs are
@@ -275,6 +284,20 @@ export function shapeStrands(
   const meanderAmp = morph.meanderAmpFrac * o.cell;
   const step = Math.max(2, Math.min(o.cell / 5, o.bandWidth / 2));
 
+  // Containment (closed mode): displacement fades to zero near the frame so
+  // border turnarounds stay pinned inside it — otherwise the warp shoves them
+  // past the margin and the final clip chops the bands flat along the box,
+  // the one place a clipped edge reads as a bug rather than a choice.
+  const rampZone = 0.7 * o.cell;
+  const borderRamp = (p: Point): number => {
+    if (o.bleed) return 1;
+    const d = Math.min(p.x - o.x0, o.x1 - p.x, p.y - o.y0, o.y1 - p.y);
+    if (d <= 0) return 0;
+    if (d >= rampZone) return 1;
+    const t = d / rampZone;
+    return t * t * (3 - 2 * t);
+  };
+
   const shaped: Point[][] = [];
   for (let k = 0; k < raw.length; k++) {
     let pts = raw[k];
@@ -288,9 +311,11 @@ export function shapeStrands(
     // Global domain warp — one shared field for all strands.
     if (warpAmp > 0.01) {
       pts = pts.map((p) => {
+        const amp = warpAmp * borderRamp(p);
+        if (amp < 0.01) return p;
         const nx = warpNoise.noise2D(p.x / warpScale, p.y / warpScale);
         const ny = warpNoise.noise2D(p.x / warpScale + 421.7, p.y / warpScale + 137.3);
-        return { x: p.x + nx * warpAmp, y: p.y + ny * warpAmp };
+        return { x: p.x + nx * amp, y: p.y + ny * amp };
       });
     }
 
@@ -310,12 +335,14 @@ export function shapeStrands(
       const wavelength = 3 * o.cell;
       const radius = total / (2 * Math.PI * wavelength);
       pts = pts.map((p, i) => {
+        const amp = meanderAmp * borderRamp(p);
+        if (amp < 0.01) return p;
         const theta = (2 * Math.PI * arc[i]) / total;
         const d =
           meanderNoise.noise2D(
             Math.cos(theta) * radius + 19.3 * k,
             Math.sin(theta) * radius + 7.13 * k
-          ) * meanderAmp;
+          ) * amp;
         return { x: p.x + normals[i].x * d, y: p.y + normals[i].y * d };
       });
       pts = smoothClosed(pts, 1);
@@ -328,6 +355,28 @@ export function shapeStrands(
   // width — see separateStrands. The lattice itself already satisfies this;
   // the warp and meander are what can squeeze neighbours together.
   separateStrands(shaped, o.bandWidth + 4, 3);
+
+  // Containment backstop (closed mode): the repulsion pass can nudge a
+  // border strand outward past the attenuated zone. Clamp centerlines into
+  // the box inset by the band half-width plus the finish reach; offenders
+  // are a couple of px at most, and the final smoothing rounds the residue.
+  if (!o.bleed) {
+    const inset = o.bandWidth / 2 + 2 + o.pad;
+    const cx0 = o.x0 + inset;
+    const cy0 = o.y0 + inset;
+    const cx1 = o.x1 - inset;
+    const cy1 = o.y1 - inset;
+    if (cx1 > cx0 && cy1 > cy0) {
+      for (const pts of shaped) {
+        for (const p of pts) {
+          if (p.x < cx0) p.x = cx0;
+          else if (p.x > cx1) p.x = cx1;
+          if (p.y < cy0) p.y = cy0;
+          else if (p.y > cy1) p.y = cy1;
+        }
+      }
+    }
+  }
 
   return shaped.map((pts) => finalize(smoothClosed(pts, 1)));
 }

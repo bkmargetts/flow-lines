@@ -5,7 +5,7 @@ import { Slider } from '../../components/controls/Slider';
 import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { RibbonWeaveState } from './types';
-import { RIBBON_WEAVE_PRESETS, getRibbonWeavePreset } from './presets';
+import { RIBBON_WEAVE_PRESETS, getRibbonWeavePreset, randomRibbonGenome } from './presets';
 
 /** Sidebar controls for the Ribbon Weave. The master Tangle ↔ Knot slider is
  *  the module's identity; everything finer lives in Advanced. */
@@ -16,10 +16,18 @@ export function RibbonWeaveControls({ state, update }: ControlsProps<RibbonWeave
   };
 
   const groups = Math.max(1, Math.min(3, Math.round(state.inkGroups)));
+  const surprise = () => update({ ...randomRibbonGenome(Math.random), seed: randomSeed() });
 
   return (
     <div className="controls">
       <h3 className="section-title">Ribbon Weave</h3>
+
+      <div className="control-group">
+        <button type="button" className="secondary" onClick={surprise} title="Randomize everything" style={{ width: '100%' }}>
+          🎲 Randomize everything
+        </button>
+        <p className="paint-hint">One roll for a whole new weave — or tune anything below.</p>
+      </div>
 
       <div className="control-group">
         <div className="seed-input">

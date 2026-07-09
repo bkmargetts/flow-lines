@@ -129,3 +129,34 @@ export const RIBBON_WEAVE_PRESETS: RibbonWeavePreset[] = [
 export function getRibbonWeavePreset(id: string): RibbonWeavePreset | undefined {
   return RIBBON_WEAVE_PRESETS.find((p) => p.id === id);
 }
+
+const pick = <T,>(rng: () => number, arr: T[]): T => arr[Math.floor(rng() * arr.length) % arr.length];
+
+/**
+ * A coherent random weave: style, point on the tangle↔knot axis, structure
+ * and mark treatment all rolled together, biased to ranges that render well.
+ * Pen width, crossing gap, ink groups and colors stay fixed — those are
+ * physical pen choices, not aesthetics to gamble (the planet genome's rule).
+ */
+export function randomRibbonGenome(rng: () => number): Partial<RibbonWeaveState> {
+  const style = rng() < 0.5 ? ('band' as const) : ('silk' as const);
+  const cellMm = Number((10 + rng() * 18).toFixed(1));
+  return {
+    style,
+    order: Number((0.08 + rng() * 0.9).toFixed(2)),
+    edge: rng() < 0.7 ? ('closed' as const) : ('bleed' as const),
+    breaks: rng() < 0.15 ? 0 : Number((0.1 + rng() * 0.5).toFixed(2)),
+    cellMm,
+    bandMm: Number(Math.min(9, Math.max(2, cellMm * (0.2 + rng() * 0.2))).toFixed(1)),
+    meander: Number((0.6 + rng() * 0.4).toFixed(2)),
+    rungs: Number((0.25 + rng() * 0.65).toFixed(2)),
+    rungCurve: Number((0.3 + rng() * 0.6).toFixed(2)),
+    shading: Number((0.15 + rng() * 0.75).toFixed(2)),
+    shadowHatch: Number((0.4 + rng() * 0.6).toFixed(2)),
+    lightAngleDeg: Math.round(rng() * 360 - 180),
+    twists: rng() < 0.4 ? 0 : Number((rng() * 0.6).toFixed(2)),
+    sketch: rng() < 0.5 ? 0 : Number((rng() * 0.45).toFixed(2)),
+    sketchStyle: pick(rng, ['loose', 'fine', 'gestural'] as const),
+    wobbleMm: Number((0.1 + rng() * 0.4).toFixed(2)),
+  };
+}
