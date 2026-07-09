@@ -1,4 +1,4 @@
-import type { RibbonEdgeMode } from '@flow-lines/core';
+import type { RibbonEdgeMode, RibbonStyle } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { Slider } from '../../components/controls/Slider';
@@ -38,6 +38,14 @@ export function RibbonWeaveControls({ state, update }: ControlsProps<RibbonWeave
           </button>
         </div>
         <p className="paint-hint">Pick a weave, then slide between tangle and knot.</p>
+      </div>
+
+      <div className="control-group">
+        <label className="label-text">Ribbon style</label>
+        <select value={state.style} onChange={(e) => update({ style: e.target.value as RibbonStyle })}>
+          <option value="band">Woven band</option>
+          <option value="silk">Flat silk</option>
+        </select>
       </div>
 
       <div className="control-group">

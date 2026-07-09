@@ -16,6 +16,7 @@ export const RIBBON_WEAVE_PRESETS: RibbonWeavePreset[] = [
     id: 'knot-garden',
     label: 'Knot garden',
     state: {
+      style: 'band',
       order: 0.78,
       breaks: 0.4,
       edge: 'closed',
@@ -33,6 +34,7 @@ export const RIBBON_WEAVE_PRESETS: RibbonWeavePreset[] = [
     id: 'plait',
     label: 'Plait',
     state: {
+      style: 'band',
       order: 0.95,
       breaks: 0,
       edge: 'closed',
@@ -50,6 +52,7 @@ export const RIBBON_WEAVE_PRESETS: RibbonWeavePreset[] = [
     id: 'tangle',
     label: 'Tangle',
     state: {
+      style: 'band',
       order: 0.1,
       breaks: 0.15,
       edge: 'bleed',
@@ -68,6 +71,7 @@ export const RIBBON_WEAVE_PRESETS: RibbonWeavePreset[] = [
     id: 'op-art',
     label: 'Op art',
     state: {
+      style: 'band',
       order: 0.6,
       breaks: 0.1,
       edge: 'bleed',
@@ -83,9 +87,29 @@ export const RIBBON_WEAVE_PRESETS: RibbonWeavePreset[] = [
     },
   },
   {
+    id: 'silk',
+    label: 'Silk ribbon',
+    state: {
+      style: 'silk',
+      order: 0.55,
+      breaks: 0.35,
+      edge: 'closed',
+      cellMm: 20,
+      bandMm: 6,
+      rungs: 0.5,
+      shading: 0.65,
+      shadowHatch: 0.7,
+      twists: 0.3,
+      sketch: 0.15,
+      sketchStyle: 'loose',
+      wobbleMm: 0.35,
+    },
+  },
+  {
     id: 'ink-ribbons',
     label: 'Ink ribbons',
     state: {
+      style: 'band',
       order: 0.35,
       breaks: 0.3,
       edge: 'closed',

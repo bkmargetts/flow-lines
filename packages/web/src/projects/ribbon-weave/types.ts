@@ -1,4 +1,4 @@
-import type { RibbonEdgeMode, SketchStyle } from '@flow-lines/core';
+import type { RibbonEdgeMode, RibbonStyle, SketchStyle } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /**
@@ -13,6 +13,7 @@ export interface RibbonWeaveState {
   seed: number;
 
   order: number; // 0..1 — THE slider
+  style: RibbonStyle; // woven band vs flat silk ribbon
 
   // Structure
   cellMm: number; // lattice pitch
@@ -49,6 +50,7 @@ export const defaultRibbonWeaveState: RibbonWeaveState = {
   seed: randomSeed(),
 
   order: 0.78,
+  style: 'band',
 
   cellMm: 16,
   bandMm: 4.6,

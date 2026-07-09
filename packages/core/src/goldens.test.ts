@@ -202,6 +202,8 @@ CASES['ribbons/tangle/42'] = () =>
   generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, order: 0, edge: 'bleed' });
 CASES['ribbons/twists/42'] = () =>
   generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, twists: 1, inkGroups: 2 });
+CASES['ribbons/silk/42'] = () =>
+  generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, style: 'silk', twists: 0.3 });
 // Rings and craters need coverage of their own: with defaults the ringed case
 // above renders identically to the gas giant (rings/bands are off).
 CASES['planet/ringed-rings/42'] = () =>

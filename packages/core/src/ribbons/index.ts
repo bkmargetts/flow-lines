@@ -10,7 +10,9 @@ import { buildLattice } from './lattice.js';
 import { shapeStrands } from './warp.js';
 import { findCrossings } from './crossings.js';
 import { solveWeave } from './weave.js';
-import { bandProfile, buildBandMarks, type Mark } from './band.js';
+import { bandProfile, buildBandMarks, type Mark, type RibbonStyle } from './band.js';
+
+export type { RibbonStyle } from './band.js';
 import { buildOccluders, contactShadows, occludeMarks } from './occlude.js';
 
 /**
@@ -41,6 +43,11 @@ export interface RibbonWeaveOptions {
 
   /** THE slider: 0 = free-flowing tangle, 1 = strict knot lattice. */
   order?: number;
+
+  /** 'band': constant-width woven band. 'silk': flat-ribbon treatment —
+   *  width follows travel direction, edge-hugging cross-contour arcs,
+   *  oblique shade hatch. */
+  style?: RibbonStyle;
 
   // Structure
   /** Lattice pitch, px. */
@@ -85,6 +92,7 @@ export interface RibbonWeaveOptions {
 
 const DEFAULTS: Required<Omit<RibbonWeaveOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
   order: 0.5,
+  style: 'band',
   cell: 48,
   bandWidth: 14,
   breaks: 0.25,
@@ -148,6 +156,7 @@ export function generateRibbonWeave(options: RibbonWeaveOptions): FlowLinesResul
 
   // 3. Band marks.
   const bandOpts = {
+    style: o.style,
     bandWidth,
     rungs: o.rungs,
     rungCurve: o.rungCurve,
@@ -165,8 +174,9 @@ export function generateRibbonWeave(options: RibbonWeaveOptions): FlowLinesResul
     crossingArcsByStrand[c.b.strand].push(c.b.arc);
   }
   const shadeNoise = createNoise(subSeed(seed, 7));
+  const drapeNoise = createNoise(subSeed(seed, 8));
   const profiles = strands.map((s, k) =>
-    bandProfile(s, k, crossingArcsByStrand[k], bandOpts)
+    bandProfile(s, k, crossingArcsByStrand[k], bandOpts, drapeNoise)
   );
   let marks: Mark[] = [];
   for (let k = 0; k < strands.length; k++) {

@@ -32,7 +32,14 @@ export interface BandProfile {
   twistArcs: number[];
 }
 
+export type RibbonStyle = 'band' | 'silk';
+
 export interface BandOptions {
+  /** 'band': constant-width woven band. 'silk': flat-ribbon treatment —
+   *  apparent width follows travel direction (a draped ribbon narrows as it
+   *  tilts away), cross-contour arcs hug one edge instead of spanning the
+   *  band, and shading is oblique hatch rather than cylinder-longitudinal. */
+  style: RibbonStyle;
   bandWidth: number;
   rungs: number;
   rungCurve: number;
@@ -61,7 +68,8 @@ export function bandProfile(
   strand: Strand,
   k: number,
   crossingArcs: number[],
-  o: BandOptions
+  o: BandOptions,
+  drapeNoise: SimplexNoise
 ): { profile: BandProfile; rungPhase: number } {
   const rand = makeRandom(subSeed(o.seed, 5) + k * 17);
   const gate = rand();
@@ -115,6 +123,20 @@ export function bandProfile(
     let v = 1;
     for (const t of twistArcs) {
       v *= twistRamp(circularDelta(strand.arc[i], t, strand.len), window);
+    }
+    if (o.style === 'silk') {
+      // Flat-ribbon drape: apparent width follows travel direction — full
+      // width face-on, narrowing as the ribbon "tilts away". The drape axis
+      // drifts slowly across the page so the modulation reads as cloth
+      // hanging, not as a mechanical rule.
+      const n = strand.normals[i];
+      const theta = Math.atan2(-n.x, n.y); // tangent angle
+      const drift = drapeNoise.noise2D(
+        strand.pts[i].x / (6 * o.cell),
+        strand.pts[i].y / (6 * o.cell)
+      );
+      const axis = -Math.PI / 4 + drift * 0.7;
+      v *= 0.38 + 0.62 * Math.pow(Math.abs(Math.sin(theta - axis)), 0.9);
     }
     m[i] = v;
   }
@@ -184,7 +206,7 @@ export function buildBandMarks(
   }
 
   // --- Rungs ---------------------------------------------------------------
-  if (o.rungs > 0.02) {
+  if (o.rungs > 0.02 && o.style === 'band') {
     const step = o.bandWidth * (0.6 + 1.5 * (1 - o.rungs));
     const bow = o.rungCurve * o.bandWidth * 0.22;
     for (let a = rungPhase * step; a < strand.len - step * 0.25; a += step) {
@@ -210,9 +232,76 @@ export function buildBandMarks(
     }
   }
 
+  // Silk cross-contour: sparse one-sided arcs that hug alternating edges and
+  // die out near the centre — the surface-curvature cue of a flat ribbon,
+  // without the segmented-hose reading of full-width rungs.
+  if (o.rungs > 0.02 && o.style === 'silk') {
+    const step = o.bandWidth * (0.9 + 2.2 * (1 - o.rungs));
+    const bow = o.rungCurve * o.bandWidth * 0.2;
+    let side = 1;
+    for (let a = rungPhase * step; a < strand.len - step * 0.25; a += step) {
+      const s = sampleAt(strand, a);
+      const mv = m[s.i];
+      if (Math.abs(mv) < 0.45) continue;
+      const reach = h * mv;
+      const pts: Point[] = [];
+      const arcs: number[] = [];
+      const SAMPLES = 4;
+      for (let j = 0; j < SAMPLES; j++) {
+        const t = j / (SAMPLES - 1);
+        const off = reach * side * (0.86 - 1.05 * t); // near edge → past centre
+        const bowOff = bow * Math.sin(Math.PI * t);
+        pts.push({
+          x: s.p.x + s.n.x * off + s.t.x * bowOff,
+          y: s.p.y + s.n.y * off + s.t.y * bowOff,
+        });
+        arcs.push(a);
+      }
+      marks.push({ points: pts, arcs, layer: 'rung', strand: k });
+      side = -side;
+    }
+  }
+
+  // Silk shading: short oblique hatch ticks slanting inward from the shadow
+  // edge, in noise-gated patches — longitudinal strokes are precisely how a
+  // CYLINDER is shaded, so the band style keeps them and silk must not.
+  // Emitted on the 'shadow' layer so occlusion whole-drops a touched tick
+  // (a clipped sliver of hatch reads as dirt).
+  if (o.shading > 0.05 && o.style === 'silk') {
+    const lx = Math.cos(o.lightAngle);
+    const ly = Math.sin(o.lightAngle);
+    const step = o.penWidth * 2.6;
+    for (let a = rungPhase * step; a < strand.len - step * 0.25; a += step) {
+      const s = sampleAt(strand, a);
+      const mv = m[s.i];
+      const edgeDist = Math.abs(h * mv);
+      if (edgeDist < 0.2 * o.bandWidth) continue;
+      const sSign = s.n.x * lx + s.n.y * ly < 0 ? 1 : -1;
+      const gate = shadeNoise.noise2D(a / (2.4 * o.cell), 3.7 + k * 13.1);
+      if (gate > o.shading * 1.3 - 0.42) continue;
+      // From just inside the shadow edge, slanting inward and backward.
+      let dx = -s.n.x * sSign * 0.78 + s.t.x * 0.63;
+      let dy = -s.n.y * sSign * 0.78 + s.t.y * 0.63;
+      const dl = Math.hypot(dx, dy) || 1;
+      dx /= dl;
+      dy /= dl;
+      const tickLen = edgeDist * 0.95;
+      const x0 = s.p.x + s.n.x * sSign * edgeDist * 0.88;
+      const y0 = s.p.y + s.n.y * sSign * edgeDist * 0.88;
+      const pts: Point[] = [];
+      const arcs: number[] = [];
+      for (let j = 0; j < 3; j++) {
+        const t = j / 2;
+        pts.push({ x: x0 + dx * tickLen * t, y: y0 + dy * tickLen * t });
+        arcs.push(a);
+      }
+      marks.push({ points: pts, arcs, layer: 'shadow', strand: k });
+    }
+  }
+
   // --- Shade hatch -----------------------------------------------------------
   // Longitudinal strokes hugging the shadow-side edge, in noise-gated patches.
-  if (o.shading > 0.05) {
+  if (o.shading > 0.05 && o.style === 'band') {
     const lx = Math.cos(o.lightAngle);
     const ly = Math.sin(o.lightAngle);
     const K = Math.max(1, Math.round(1 + o.shading * 2.6));

@@ -60,6 +60,20 @@ describe('generateRibbonWeave', () => {
     expect([...groupLayers].every((l) => /^g[01]-/.test(l as string))).toBe(true);
   });
 
+  it('renders the silk style with drape-modulated marks', () => {
+    const r = generateRibbonWeave({ ...BASE, style: 'silk', twists: 0.3 });
+    expect(r.lines.length).toBeGreaterThan(50);
+    const layers = new Set(r.lines.map((l) => l.layer));
+    expect(layers.has('edge')).toBe(true);
+    // Silk trades the longitudinal 'shade' strokes for oblique ticks on the
+    // shadow layer.
+    expect(layers.has('shade')).toBe(false);
+    expect(layers.has('shadow')).toBe(true);
+    // And it must differ from the band render of the same seed.
+    const band = generateRibbonWeave({ ...BASE, twists: 0.3 });
+    expect(JSON.stringify(r.lines)).not.toEqual(JSON.stringify(band.lines));
+  });
+
   it('morphs rather than re-rolls: adjacent order values stay similar', () => {
     const a = generateRibbonWeave({ ...BASE, order: 0.5 });
     const b = generateRibbonWeave({ ...BASE, order: 0.52 });

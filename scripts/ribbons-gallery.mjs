@@ -34,6 +34,8 @@ const PRESETS = [
   ['ink-ribbons', { order: 0.35, breaks: 0.3, cell: 62, bandWidth: 18, shading: 0.85, shadowHatch: 1, twists: 0.35, sketch: 0.3 }],
   ['op-art', { order: 0.6, breaks: 0.1, edge: 'bleed', cell: 56, bandWidth: 20, rungs: 0.95, rungCurve: 0.75, shading: 0.15 }],
   ['tangle', { order: 0.1, breaks: 0.15, edge: 'bleed', cell: 50, twists: 0.15, sketch: 0.2 }],
+  ['silk', { style: 'silk', order: 0.55, breaks: 0.35, cell: 56, bandWidth: 17, shading: 0.65, twists: 0.3, sketch: 0.15 }],
+  ['silk-loose', { style: 'silk', order: 0.3, breaks: 0.3, cell: 64, bandWidth: 20, shading: 0.7, twists: 0.4, sketch: 0.15 }],
 ];
 
 const cells = [];

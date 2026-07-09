@@ -130,7 +130,7 @@ export type { StickmenOptions, FacingMode, PoseMode, StickmenRegion } from './st
 
 // Ribbon weave / knotwork (interlaced bands, tangle → Celtic lattice)
 export { generateRibbonWeave } from './ribbons/index.js';
-export type { RibbonWeaveOptions, RibbonEdgeMode } from './ribbons/index.js';
+export type { RibbonWeaveOptions, RibbonEdgeMode, RibbonStyle } from './ribbons/index.js';
 
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';

@@ -21,6 +21,7 @@ export function renderRibbonWeave(state: RibbonWeaveState, env: RenderEnv): Laye
     seed: state.seed,
 
     order: state.order,
+    style: state.style,
 
     cell: Math.max(6 * mm, state.cellMm * mm),
     bandWidth: state.bandMm * mm,
