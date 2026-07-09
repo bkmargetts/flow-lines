@@ -16,6 +16,7 @@ import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape/index.js';
 import { generateCity } from './city/index.js';
 import { generateStickmen } from './stickmen/index.js';
+import { generateRibbonWeave } from './ribbons/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
 import { imageToPenInk, resolvePenInkStyle } from './pen-ink/index.js';
 import { toSVG } from './svg.js';
@@ -138,6 +139,8 @@ for (const seed of SEEDS) {
     generateCity({ width: 300, height: 400, margin: 20, seed });
   CASES[`stickmen/default/${seed}`] = () =>
     generateStickmen({ width: 300, height: 400, margin: 20, seed });
+  CASES[`ribbons/default/${seed}`] = () =>
+    generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -193,6 +196,14 @@ CASES['city/brutalist/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'brutalist' });
 CASES['city/mixed/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'mixed' });
+CASES['ribbons/plait/42'] = () =>
+  generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, order: 1, breaks: 0, wobble: 0 });
+CASES['ribbons/tangle/42'] = () =>
+  generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, order: 0, edge: 'bleed' });
+CASES['ribbons/twists/42'] = () =>
+  generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, twists: 1, inkGroups: 2 });
+CASES['ribbons/silk/42'] = () =>
+  generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, style: 'silk', twists: 0.3 });
 // Rings and craters need coverage of their own: with defaults the ringed case
 // above renders identically to the gas giant (rings/bands are off).
 CASES['planet/ringed-rings/42'] = () =>

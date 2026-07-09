@@ -9,6 +9,7 @@ import { planetGeneratorModule } from '../projects/planet-generator';
 import { landscapeGeneratorModule } from '../projects/landscape-generator';
 import { cityGeneratorModule } from '../projects/city-generator';
 import { stickmenModule } from '../projects/stickmen';
+import { ribbonWeaveModule } from '../projects/ribbon-weave';
 import { conwayModule } from '../projects/conway';
 import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
@@ -35,6 +36,7 @@ export const MODULES: Module<any>[] = [
   landscapeGeneratorModule,
   cityGeneratorModule,
   stickmenModule,
+  ribbonWeaveModule,
   conwayModule,
   complexFlowModule,
   reactionDiffusionModule,
