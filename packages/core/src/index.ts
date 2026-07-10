@@ -132,6 +132,10 @@ export type { StickmenOptions, FacingMode, PoseMode, StickmenRegion } from './st
 export { generateRibbonWeave } from './ribbons/index.js';
 export type { RibbonWeaveOptions, RibbonEdgeMode, RibbonStyle } from './ribbons/index.js';
 
+// Gestural ink abstraction (Kline / Hartung / sumi — swept strokes, dry brush)
+export { generateGesture } from './gesture/index.js';
+export type { GestureOptions, GesturePreset } from './gesture/index.js';
+
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
 

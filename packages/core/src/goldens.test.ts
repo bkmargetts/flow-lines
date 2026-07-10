@@ -17,6 +17,7 @@ import { generateLandscape } from './landscape/index.js';
 import { generateCity } from './city/index.js';
 import { generateStickmen } from './stickmen/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
+import { generateGesture } from './gesture/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
 import { imageToPenInk, resolvePenInkStyle } from './pen-ink/index.js';
 import { toSVG } from './svg.js';
@@ -141,6 +142,8 @@ for (const seed of SEEDS) {
     generateStickmen({ width: 300, height: 400, margin: 20, seed });
   CASES[`ribbons/default/${seed}`] = () =>
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
+  CASES[`gesture/default/${seed}`] = () =>
+    generateGesture({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -204,6 +207,14 @@ CASES['ribbons/twists/42'] = () =>
   generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, twists: 1, inkGroups: 2 });
 CASES['ribbons/silk/42'] = () =>
   generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, style: 'silk', twists: 0.3 });
+CASES['gesture/kline/42'] = () =>
+  generateGesture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'kline' });
+CASES['gesture/sumi/42'] = () =>
+  generateGesture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'sumi' });
+CASES['gesture/hartung/42'] = () =>
+  generateGesture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'hartung' });
+CASES['gesture/tangle/42'] = () =>
+  generateGesture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'tangle' });
 // Rings and craters need coverage of their own: with defaults the ringed case
 // above renders identically to the gas giant (rings/bands are off).
 CASES['planet/ringed-rings/42'] = () =>
