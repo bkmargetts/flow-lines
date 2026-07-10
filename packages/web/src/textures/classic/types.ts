@@ -1,3 +1,4 @@
+import { DASH_DEFAULTS } from '@flow-lines/core';
 import type { DashTextureOptions, TextureShapeOptions, TextureStyle } from '@flow-lines/core';
 
 /** The original single-pen texture styles (hatch / grid / stipple / contours /
@@ -27,5 +28,5 @@ export const defaultClassicParams: ClassicParams = {
   color: '#c9c2b4',
   seed: 1,
   shapes: { kind: 'square', sizeMm: 4, overlap: 0 },
-  dashes: { dashLengthMm: 6, gapMm: 3, wobbleMm: 0.4, curvatureMm: 0.8, sparsity: 0.25 },
+  dashes: { ...DASH_DEFAULTS },
 };

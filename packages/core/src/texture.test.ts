@@ -177,7 +177,37 @@ describe('generateTexture', () => {
       wobbleMm: 0,
       curvatureMm: 0,
       sparsity: 0,
+      flowDeg: 0,
+      turbulence: 0,
+      gradient: 0,
     };
+
+    // Dashes with any endpoint near the rect edge may be margin-clipped, so
+    // their chord no longer reflects the intended dash length.
+    function fullDashes(lines: { points: { x: number; y: number }[] }[]) {
+      const inset = 6;
+      return lines.filter((l) =>
+        [l.points[0], l.points[l.points.length - 1]].every(
+          (p) =>
+            p.x > base.margin + inset &&
+            p.x < base.width - base.margin - inset &&
+            p.y > base.margin + inset &&
+            p.y < base.height - base.margin - inset
+        )
+      );
+    }
+
+    function chordLength(l: { points: { x: number; y: number }[] }) {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return Math.hypot(b.x - a.x, b.y - a.y);
+    }
+
+    function midpoint(l: { points: { x: number; y: number }[] }) {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
 
     function inkLength(lines: { points: { x: number; y: number }[] }[]) {
       let total = 0;
@@ -275,6 +305,94 @@ describe('generateTexture', () => {
     it('works without a dashes sub-object (built-in defaults)', () => {
       const lines = generateTexture({ ...base, style: 'dashes' });
       expect(lines.length).toBeGreaterThan(0);
+    });
+
+    it('flow drifts dash directions, bounded by flowDeg', () => {
+      const angleDeg = 0;
+      const flowDeg = 45;
+      const lines = fullDashes(
+        generateTexture({
+          ...base,
+          style: 'dashes',
+          angleDeg,
+          jitter: 0,
+          dashes: { ...straight, flowDeg },
+        })
+      );
+      const flowRad = (flowDeg * Math.PI) / 180;
+      let maxDrift = 0;
+      for (const l of lines) {
+        const a = l.points[0];
+        const b = l.points[l.points.length - 1];
+        const drift = Math.abs(Math.atan2(b.y - a.y, b.x - a.x));
+        const folded = Math.min(drift, Math.PI - drift); // direction is unsigned
+        expect(folded).toBeLessThanOrEqual(flowRad + 0.02);
+        maxDrift = Math.max(maxDrift, folded);
+      }
+      // The field genuinely drifts — it isn't stuck on the base angle.
+      expect(maxDrift).toBeGreaterThan(0.1);
+    });
+
+    it('turbulence varies dash length in patches across the page', () => {
+      const calm = fullDashes(
+        generateTexture({ ...base, style: 'dashes', jitter: 0, dashes: straight })
+      );
+      const lens = calm.map(chordLength);
+      const spreadCalm = Math.max(...lens) - Math.min(...lens);
+      expect(spreadCalm).toBeLessThan(0.1);
+
+      const churned = fullDashes(
+        generateTexture({
+          ...base,
+          style: 'dashes',
+          jitter: 0,
+          dashes: { ...straight, turbulence: 1 },
+        })
+      );
+      // Lengths genuinely vary…
+      const churnedLens = churned.map(chordLength);
+      expect(Math.max(...churnedLens) / Math.min(...churnedLens)).toBeGreaterThan(1.3);
+      // …and spatially: mean lengths differ across patch-sized cells (the
+      // turbulence field's wavelength is ~200px at this page size).
+      const cols = 3;
+      const rows = 4;
+      const cells: number[][] = Array.from({ length: cols * rows }, () => []);
+      for (const l of churned) {
+        const m = midpoint(l);
+        const ci = Math.min(cols - 1, Math.floor((m.x / base.width) * cols));
+        const cj = Math.min(rows - 1, Math.floor((m.y / base.height) * rows));
+        cells[cj * cols + ci].push(chordLength(l));
+      }
+      const means = cells
+        .filter((c) => c.length >= 5)
+        .map((c) => c.reduce((s, x) => s + x, 0) / c.length);
+      expect(means.length).toBeGreaterThan(3);
+      expect(Math.max(...means) / Math.min(...means)).toBeGreaterThan(1.1);
+    });
+
+    it('gradient sweeps dash length down the page and flips with sign', () => {
+      const bandMeans = (gradient: number) => {
+        const lines = fullDashes(
+          generateTexture({
+            ...base,
+            style: 'dashes',
+            angleDeg: 0,
+            jitter: 0,
+            dashes: { ...straight, gradient },
+          })
+        );
+        const bands: number[][] = [[], [], []];
+        for (const l of lines) {
+          const m = midpoint(l);
+          const bi = Math.min(2, Math.floor(((m.y - base.margin) / (base.height - 2 * base.margin)) * 3));
+          bands[bi].push(chordLength(l));
+        }
+        return bands.map((b) => b.reduce((s, x) => s + x, 0) / b.length);
+      };
+      const down = bandMeans(1);
+      expect(down[2]).toBeGreaterThan(down[0] * 1.2);
+      const up = bandMeans(-1);
+      expect(up[0]).toBeGreaterThan(up[2] * 1.2);
     });
   });
 

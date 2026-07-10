@@ -1,4 +1,5 @@
 import type { TextureStyle } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
 import { ColorField } from '../../components/ColorField';
@@ -18,8 +19,61 @@ const TEXTURE_STYLES: Array<{ id: TextureStyle; label: string }> = [
 
 const TEXTURE_INKS = ['#c9c2b4', '#b06a3c', '#5b6e7a', '#9aa0a6', '#1a1a1a'];
 
+/** Roll fresh values for every knob the current style shows — the style itself
+ *  and the ink colour are the user's choices and stay put. Ranges sit inside
+ *  the slider bounds, biased away from the extremes so a surprise never lands
+ *  unreadably dense or nearly blank. */
+export function randomClassicGenome(
+  style: TextureStyle,
+  rng: () => number
+): Partial<ClassicParams> {
+  const genome: Partial<ClassicParams> = {};
+  if (style === 'hatch' || style === 'grid' || style === 'stipple' || style === 'shapes' || style === 'dashes') {
+    genome.spacingMm = Number((2 + rng() * 8).toFixed(1));
+  }
+  if (style === 'hatch' || style === 'grid' || style === 'shapes' || style === 'dashes') {
+    genome.angleDeg = Math.round(rng() * 180);
+  }
+  if (style === 'hatch') {
+    genome.crossHatch = rng() < 0.35;
+  }
+  if (style === 'stipple' || style === 'contours') {
+    genome.density = Number((0.2 + rng() * 0.7).toFixed(2));
+  }
+  if (style !== 'shapes' && style !== 'dashes') {
+    genome.scale = Number((0.4 + rng() * 2).toFixed(2));
+  }
+  if (style !== 'grid') {
+    genome.jitter = Number((rng() * 0.8).toFixed(2));
+  }
+  if (style === 'shapes') {
+    const kinds = ['square', 'circle', 'line'] as const;
+    genome.shapes = {
+      kind: kinds[Math.floor(rng() * kinds.length)],
+      sizeMm: Number((2 + rng() * 10).toFixed(1)),
+      overlap: Number((rng() * 0.7).toFixed(2)),
+    };
+  }
+  if (style === 'dashes') {
+    genome.dashes = {
+      dashLengthMm: Number((2 + rng() * 12).toFixed(1)),
+      gapMm: Number((1 + rng() * 6).toFixed(1)),
+      wobbleMm: Number((rng() * 1).toFixed(2)),
+      curvatureMm: Number((rng() * 2.5).toFixed(1)),
+      sparsity: Number((rng() * 0.6).toFixed(2)),
+      flowDeg: Math.round(rng() * 60),
+      turbulence: Number((rng() * 0.8).toFixed(2)),
+      gradient: Number(((rng() - 0.5) * 1.6).toFixed(2)),
+    };
+  }
+  return genome;
+}
+
 /** Controls for the classic single-pen texture styles. */
 export function ClassicControls({ state, update }: ControlsProps<ClassicParams>) {
+  const surprise = () =>
+    update({ ...randomClassicGenome(state.style, Math.random), seed: randomSeed() });
+
   return (
     <>
       <div className="control-group">
@@ -34,6 +88,19 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="control-group">
+        <button
+          type="button"
+          className="secondary"
+          onClick={surprise}
+          title="Randomize everything"
+          style={{ width: '100%' }}
+        >
+          🎲 Randomize everything
+        </button>
+        <p className="paint-hint">One roll for a fresh take on this style — or tune anything below.</p>
       </div>
 
       {(state.style === 'hatch' ||
@@ -216,6 +283,48 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
             max={0.9}
             step={0.05}
             onChange={(v) => update({ dashes: { ...state.dashes, sparsity: v } })}
+            format={(v) => v.toFixed(2)}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Flow
+                <InfoTip text="Dash direction drifts across the page following a slow noise field — like wind-combed grass. 0 keeps every dash on the base angle; the value is the maximum drift." />
+              </span>
+            }
+            value={state.dashes.flowDeg ?? 0}
+            min={0}
+            max={90}
+            step={1}
+            onChange={(v) => update({ dashes: { ...state.dashes, flowDeg: v } })}
+            format={(v) => `${v}°`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Turbulence
+                <InfoTip text="Calm patches of long, even dashes against choppy patches of short, dense, agitated ones. 0 keeps the sheet uniform." />
+              </span>
+            }
+            value={state.dashes.turbulence ?? 0}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => update({ dashes: { ...state.dashes, turbulence: v } })}
+            format={(v) => v.toFixed(2)}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Gradient
+                <InfoTip text="Sweeps dash length down the page — positive grows toward the bottom, negative toward the top, 0 is even." />
+              </span>
+            }
+            value={state.dashes.gradient ?? 0}
+            min={-1}
+            max={1}
+            step={0.05}
+            onChange={(v) => update({ dashes: { ...state.dashes, gradient: v } })}
             format={(v) => v.toFixed(2)}
           />
         </>
