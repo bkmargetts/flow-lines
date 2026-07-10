@@ -152,6 +152,7 @@ export type {
   TextureOptions,
   TextureStyle,
   TextureShapeOptions,
+  DashTextureOptions,
   GratingTextureOptions,
 } from './texture.js';
 

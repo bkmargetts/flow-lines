@@ -13,6 +13,7 @@ const TEXTURE_STYLES: Array<{ id: TextureStyle; label: string }> = [
   { id: 'stipple', label: 'Stipple' },
   { id: 'contours', label: 'Contours' },
   { id: 'shapes', label: 'Shapes' },
+  { id: 'dashes', label: 'Dashes' },
 ];
 
 const TEXTURE_INKS = ['#c9c2b4', '#b06a3c', '#5b6e7a', '#9aa0a6', '#1a1a1a'];
@@ -38,7 +39,8 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
       {(state.style === 'hatch' ||
         state.style === 'grid' ||
         state.style === 'stipple' ||
-        state.style === 'shapes') && (
+        state.style === 'shapes' ||
+        state.style === 'dashes') && (
         <Slider
           label="Spacing"
           value={state.spacingMm}
@@ -50,7 +52,10 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
         />
       )}
 
-      {(state.style === 'hatch' || state.style === 'grid' || state.style === 'shapes') && (
+      {(state.style === 'hatch' ||
+        state.style === 'grid' ||
+        state.style === 'shapes' ||
+        state.style === 'dashes') && (
         <Slider
           label="Angle"
           value={state.angleDeg}
@@ -87,7 +92,7 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
         />
       )}
 
-      {state.style !== 'shapes' && (
+      {state.style !== 'shapes' && state.style !== 'dashes' && (
         <Slider
           label={state.style === 'contours' ? 'Scale' : 'Mark size'}
           value={state.scale}
@@ -159,6 +164,61 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
             onChange={(e) => update({ shapes: { ...state.shapes, overlap: parseFloat(e.target.value) } })}
           />
         </div>
+      )}
+
+      {state.style === 'dashes' && (
+        <>
+          <Slider
+            label="Dash length"
+            value={state.dashes.dashLengthMm}
+            min={1}
+            max={20}
+            step={0.5}
+            onChange={(v) => update({ dashes: { ...state.dashes, dashLengthMm: v } })}
+            format={(v) => `${v.toFixed(1)}mm`}
+          />
+          <Slider
+            label="Gap"
+            value={state.dashes.gapMm}
+            min={0.5}
+            max={15}
+            step={0.5}
+            onChange={(v) => update({ dashes: { ...state.dashes, gapMm: v } })}
+            format={(v) => `${v.toFixed(1)}mm`}
+          />
+          <Slider
+            label="Wobble"
+            value={state.dashes.wobbleMm}
+            min={0}
+            max={2}
+            step={0.05}
+            onChange={(v) => update({ dashes: { ...state.dashes, wobbleMm: v } })}
+            format={(v) => `${v.toFixed(2)}mm`}
+          />
+          <Slider
+            label="Curvature"
+            value={state.dashes.curvatureMm}
+            min={0}
+            max={4}
+            step={0.1}
+            onChange={(v) => update({ dashes: { ...state.dashes, curvatureMm: v } })}
+            format={(v) => `${v.toFixed(1)}mm`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Sparsity
+                <InfoTip text="Noise-gated dropout — coverage thins in organic hand-sized patches rather than uniformly." />
+              </span>
+            }
+            value={state.dashes.sparsity}
+            min={0}
+            max={0.9}
+            step={0.05}
+            onChange={(v) => update({ dashes: { ...state.dashes, sparsity: v } })}
+            format={(v) => v.toFixed(2)}
+          />
+        </>
       )}
 
       <div className="control-group">

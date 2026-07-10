@@ -16,7 +16,7 @@ const base: TextureOptions = {
   seed: 7,
 };
 
-const STYLES: TextureStyle[] = ['hatch', 'grid', 'stipple', 'contours', 'shapes'];
+const STYLES: TextureStyle[] = ['hatch', 'grid', 'stipple', 'contours', 'shapes', 'dashes'];
 
 function allPoints(lines: { points: { x: number; y: number }[] }[]) {
   return lines.flatMap((l) => l.points);
@@ -48,7 +48,7 @@ describe('generateTexture', () => {
 
   it('varies with the seed for the randomized styles', () => {
     // grid is a regular lattice with no randomness — intentionally seed-stable.
-    for (const style of ['hatch', 'stipple', 'contours', 'shapes'] as TextureStyle[]) {
+    for (const style of ['hatch', 'stipple', 'contours', 'shapes', 'dashes'] as TextureStyle[]) {
       const a = generateTexture({ ...base, style });
       const c = generateTexture({ ...base, style, seed: 99 });
       expect(JSON.stringify(a), style).not.toBe(JSON.stringify(c));
@@ -166,6 +166,115 @@ describe('generateTexture', () => {
       const off = generateTexture({ ...base, style: 'stipple', avoid, haloMm: 0 });
       const none = generateTexture({ ...base, style: 'stipple' });
       expect(JSON.stringify(off)).toBe(JSON.stringify(none));
+    });
+  });
+
+  describe('dashes style', () => {
+    // Zeroed organic knobs: straight dashes of exactly dashLengthMm on the row.
+    const straight = {
+      dashLengthMm: 6,
+      gapMm: 3,
+      wobbleMm: 0,
+      curvatureMm: 0,
+      sparsity: 0,
+    };
+
+    function inkLength(lines: { points: { x: number; y: number }[] }[]) {
+      let total = 0;
+      for (const l of lines) {
+        for (let i = 1; i < l.points.length; i++) {
+          total += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+        }
+      }
+      return total;
+    }
+
+    // Max perpendicular deviation of interior points from each line's chord.
+    function maxChordDeviation(lines: { points: { x: number; y: number }[] }[]) {
+      let max = 0;
+      for (const l of lines) {
+        const a = l.points[0];
+        const b = l.points[l.points.length - 1];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        if (len < 1e-6) continue;
+        for (const p of l.points) {
+          const d = Math.abs(((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y)) / len);
+          max = Math.max(max, d);
+        }
+      }
+      return max;
+    }
+
+    it('breaks rows into many short dashes, never longer than the dash length', () => {
+      const lines = generateTexture({ ...base, style: 'dashes', jitter: 0, dashes: straight });
+      // Far more strokes than rows — the rows are broken, not continuous.
+      const rowSpan = Math.hypot(base.width, base.height);
+      const rows = Math.ceil(rowSpan / (base.spacingMm * base.pxPerMm));
+      expect(lines.length).toBeGreaterThan(rows * 3);
+      const maxChord = straight.dashLengthMm * base.pxPerMm + 1;
+      for (const l of lines) {
+        const a = l.points[0];
+        const b = l.points[l.points.length - 1];
+        expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThanOrEqual(maxChord);
+      }
+    });
+
+    it('keeps every dash on the shared direction', () => {
+      const angleDeg = 30;
+      const dx = Math.cos((angleDeg * Math.PI) / 180);
+      const dy = Math.sin((angleDeg * Math.PI) / 180);
+      const lines = generateTexture({
+        ...base,
+        style: 'dashes',
+        angleDeg,
+        jitter: 0,
+        dashes: straight,
+      });
+      for (const l of lines) {
+        const a = l.points[0];
+        const b = l.points[l.points.length - 1];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        if (len < 2) continue; // margin-clipped stub
+        const dot = ((b.x - a.x) * dx + (b.y - a.y) * dy) / len;
+        expect(Math.abs(dot)).toBeGreaterThan(0.99);
+      }
+    });
+
+    it('is ruler-straight with the organic knobs zeroed, wavy with them on', () => {
+      const flat = generateTexture({ ...base, style: 'dashes', jitter: 0, dashes: straight });
+      expect(maxChordDeviation(flat)).toBeLessThan(0.01);
+      const wavy = generateTexture({
+        ...base,
+        style: 'dashes',
+        jitter: 0,
+        dashes: { ...straight, wobbleMm: 1, curvatureMm: 2 },
+      });
+      expect(maxChordDeviation(wavy)).toBeGreaterThan(1);
+    });
+
+    it('thins coverage as sparsity rises', () => {
+      const full = generateTexture({ ...base, style: 'dashes', dashes: { ...straight, sparsity: 0 } });
+      const thin = generateTexture({
+        ...base,
+        style: 'dashes',
+        dashes: { ...straight, sparsity: 0.7 },
+      });
+      expect(inkLength(thin)).toBeLessThan(inkLength(full) * 0.7);
+      expect(inkLength(thin)).toBeGreaterThan(0);
+    });
+
+    it('holds the halo off the drawing', () => {
+      const avoid = [{ points: [{ x: 40, y: 400 }, { x: 560, y: 400 }] }];
+      const haloPx = 6 * base.pxPerMm;
+      const lines = generateTexture({ ...base, style: 'dashes', avoid, haloMm: 6 });
+      for (const p of allPoints(lines)) {
+        if (p.x >= 40 && p.x <= 560) expect(Math.abs(p.y - 400)).toBeGreaterThan(haloPx - 3);
+      }
+    });
+
+    it('works without a dashes sub-object (built-in defaults)', () => {
+      const lines = generateTexture({ ...base, style: 'dashes' });
+      expect(lines.length).toBeGreaterThan(0);
     });
   });
 

@@ -1,7 +1,7 @@
-import type { TextureShapeOptions, TextureStyle } from '@flow-lines/core';
+import type { DashTextureOptions, TextureShapeOptions, TextureStyle } from '@flow-lines/core';
 
 /** The original single-pen texture styles (hatch / grid / stipple / contours /
- * shapes), preserved as one module. */
+ * shapes / dashes), preserved as one module. */
 export interface ClassicParams {
   style: TextureStyle;
   spacingMm: number;
@@ -13,6 +13,7 @@ export interface ClassicParams {
   color: string;
   seed: number;
   shapes: TextureShapeOptions;
+  dashes: DashTextureOptions;
 }
 
 export const defaultClassicParams: ClassicParams = {
@@ -26,4 +27,5 @@ export const defaultClassicParams: ClassicParams = {
   color: '#c9c2b4',
   seed: 1,
   shapes: { kind: 'square', sizeMm: 4, overlap: 0 },
+  dashes: { dashLengthMm: 6, gapMm: 3, wobbleMm: 0.4, curvatureMm: 0.8, sparsity: 0.25 },
 };

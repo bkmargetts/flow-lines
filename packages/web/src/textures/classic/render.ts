@@ -23,6 +23,7 @@ export function renderClassicTexture(state: ClassicParams, env: RenderEnv): Laye
     crossHatch: state.crossHatch,
     seed: state.seed,
     shapes: state.shapes,
+    dashes: state.dashes,
     avoid: env.avoid,
     haloMm: env.haloPx != null ? env.haloPx / page.pxPerMm : undefined,
   });

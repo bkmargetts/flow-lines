@@ -15,7 +15,14 @@ import { makeRandom } from './lib/rng.js';
  * strokes (`avoid` + `haloMm`), the same reserved-paper idea the contour halos
  * use, so the art reads off the textured ground instead of being crowded by it.
  */
-export type TextureStyle = 'hatch' | 'stipple' | 'contours' | 'grid' | 'shapes' | 'grating';
+export type TextureStyle =
+  | 'hatch'
+  | 'stipple'
+  | 'contours'
+  | 'grid'
+  | 'shapes'
+  | 'dashes'
+  | 'grating';
 
 /**
  * Grating-style texture: an interleaved multi-ink line grating (the same engine
@@ -56,6 +63,27 @@ export interface TextureShapeOptions {
   overlap: number;
 }
 
+/**
+ * Organic broken dashes (style === 'dashes'): rows of short strokes that all
+ * follow one consistent direction (`angleDeg`), row pitch from `spacingMm`,
+ * length/gap variance from `jitter`. Each dash arcs gently and wobbles like a
+ * hand-pulled stroke; a low-frequency noise gate thins coverage in patches.
+ */
+export interface DashTextureOptions {
+  /** Mean dash length, mm */
+  dashLengthMm: number;
+  /** Mean gap between dashes along a row, mm */
+  gapMm: number;
+  /** Perpendicular hand-wobble amplitude, mm (0 = ruler-straight) */
+  wobbleMm: number;
+  /** Wobble wavelength along the stroke, mm (default 10) */
+  wobbleWavelengthMm?: number;
+  /** Max mid-dash arc deflection, mm (0 = no curvature) */
+  curvatureMm: number;
+  /** 0..1 — noise-gated dropout; coverage thins in organic patches */
+  sparsity: number;
+}
+
 export interface TextureOptions {
   /** Page rectangle in px */
   width: number;
@@ -79,6 +107,8 @@ export interface TextureOptions {
   crossHatch: boolean;
   seed: number;
   shapes?: TextureShapeOptions;
+  /** Broken-dash parameters (style === 'dashes') */
+  dashes?: DashTextureOptions;
   /** Grating-style parameters (style === 'grating') */
   grating?: GratingTextureOptions;
   /** Drawing strokes the texture should hold off (for the halo) */
@@ -488,6 +518,92 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
         }));
         if (hasHalo) pushClipped(out, mapped, isClear);
         else out.push(TEX(mapped));
+      }
+    }
+    return out;
+  }
+
+  if (style === 'dashes') {
+    // Organic broken dashes: rows of short strokes along one consistent
+    // direction. Each dash is traced as a polyline carrying a parabolic arc
+    // (zero at both ends, so endpoints stay on the row line) plus a
+    // perpendicular fBm wobble; lengths and gaps vary with `jitter`, and a
+    // low-frequency noise gate drops whole dashes so coverage thins in
+    // hand-sized patches rather than uniform confetti.
+    const d = options.dashes ?? {
+      dashLengthMm: 6,
+      gapMm: 3,
+      wobbleMm: 0.4,
+      curvatureMm: 0.8,
+      sparsity: 0.25,
+    };
+    const dashPx = Math.max(2, d.dashLengthMm * pxPerMm);
+    const gapPx = Math.max(1, d.gapMm * pxPerMm);
+    const wobblePx = Math.max(0, d.wobbleMm) * pxPerMm;
+    const wavelenPx = Math.max(1, (d.wobbleWavelengthMm ?? 10) * pxPerMm);
+    const curvePx = Math.max(0, d.curvatureMm) * pxPerMm;
+    const sparsity = Math.min(0.95, Math.max(0, d.sparsity));
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const nx = -dy;
+    const ny = dx;
+    const corners = [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x0, y: y1 },
+      { x: x1, y: y1 },
+    ];
+    let uMin = Infinity;
+    let uMax = -Infinity;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (const c of corners) {
+      const u = c.x * nx + c.y * ny;
+      const v = c.x * dx + c.y * dy;
+      uMin = Math.min(uMin, u);
+      uMax = Math.max(uMax, u);
+      vMin = Math.min(vMin, v);
+      vMax = Math.max(vMax, v);
+    }
+    const noise = createNoise(seed + 31);
+    const gateNoise = createNoise(seed + 67);
+    // Wobble and arc can push points past the margin, so the rect test rides
+    // along with the halo test in one clipped-emit predicate.
+    const clear = (x: number, y: number): boolean =>
+      x >= x0 && x <= x1 && y >= y0 && y <= y1 && isClear(x, y);
+    for (let u = uMin + spacing / 2; u <= uMax; u += spacing) {
+      // Per-row phase so dashes never align into columns across rows.
+      let v = vMin + random() * (dashPx + gapPx);
+      while (v < vMax) {
+        // Draw every random before the sparsity gate — a dropped dash must
+        // consume the same stream, or changing sparsity would reshuffle the
+        // whole texture instead of just thinning it.
+        const len = Math.max(2, dashPx * (1 + jitter * 0.8 * (random() - 0.5)));
+        const gap = Math.max(1, gapPx * (1 + jitter * 0.8 * (random() - 0.5)));
+        // Signed low-frequency bend: neighbouring dashes arc coherently while
+        // the overall direction stays consistent.
+        const bend = curvePx * noise.noise2D(u * 0.011, v * 0.007);
+        const mid = v + len / 2;
+        const gate =
+          gateNoise.fbm((nx * u + dx * mid) * 0.004, (ny * u + dy * mid) * 0.004, 2, 0.5, 2.0) *
+            0.5 +
+          0.5;
+        if (gate >= sparsity) {
+          const sampleStep = Math.max(1.5, Math.min(step, len / 4));
+          const n = Math.max(4, Math.ceil(len / sampleStep));
+          const pts: Point[] = [];
+          for (let i = 0; i <= n; i++) {
+            const s = i / n;
+            const a = v + s * len;
+            const wob =
+              wobblePx > 0 ? wobblePx * noise.fbm(a / wavelenPx, u * 0.017, 2, 0.5, 2.0) : 0;
+            const arc = bend * (1 - (2 * s - 1) ** 2);
+            const off = wob + arc;
+            pts.push({ x: nx * u + dx * a + nx * off, y: ny * u + dy * a + ny * off });
+          }
+          pushClipped(out, pts, clear);
+        }
+        v += len + gap;
       }
     }
     return out;

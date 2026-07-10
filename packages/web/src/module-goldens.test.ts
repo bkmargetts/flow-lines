@@ -52,6 +52,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   stickmen: { poseEnergy: 1 },
   'ribbon-weave': { order: 0.1 },
   gesture: { preset: 'kline' },
+  classic: { style: 'dashes' },
 };
 for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const mod = pureModules.find((m) => m.id === id);
