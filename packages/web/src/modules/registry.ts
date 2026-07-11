@@ -9,6 +9,7 @@ import { planetGeneratorModule } from '../projects/planet-generator';
 import { landscapeGeneratorModule } from '../projects/landscape-generator';
 import { cityGeneratorModule } from '../projects/city-generator';
 import { stickmenModule } from '../projects/stickmen';
+import { sportsBallsModule } from '../projects/sports-balls';
 import { ribbonWeaveModule } from '../projects/ribbon-weave';
 import { gestureModule } from '../projects/gesture';
 import { conwayModule } from '../projects/conway';
@@ -37,6 +38,7 @@ export const MODULES: Module<any>[] = [
   landscapeGeneratorModule,
   cityGeneratorModule,
   stickmenModule,
+  sportsBallsModule,
   ribbonWeaveModule,
   gestureModule,
   conwayModule,

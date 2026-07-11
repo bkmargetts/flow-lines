@@ -1,0 +1,16 @@
+import type { PureModule } from '../../modules/types';
+import { SportsBallsControls } from './Controls';
+import { renderSportsBalls } from './render';
+import { defaultSportsBallsState, type SportsBallsState } from './types';
+
+export const sportsBallsModule: PureModule<SportsBallsState> = {
+  kind: 'pure',
+  id: 'sports-balls',
+  label: 'Sports Balls',
+  defaultState: () => ({
+    ...defaultSportsBallsState,
+    mix: { ...defaultSportsBallsState.mix },
+  }),
+  Controls: SportsBallsControls,
+  render: renderSportsBalls,
+};
