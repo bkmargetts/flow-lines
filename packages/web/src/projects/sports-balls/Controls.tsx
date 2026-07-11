@@ -54,6 +54,7 @@ function randomSportsBallsGenome(rng: () => number): Partial<SportsBallsState> {
     regionX: Number((0.35 + rng() * 0.3).toFixed(2)),
     regionY: Number((0.35 + rng() * 0.3).toFixed(2)),
     regionInner: Number((0.3 + rng() * 0.4).toFixed(2)),
+    regionSoftEdge: rng() < 0.3,
     occlude: rng() < 0.9,
   };
 }
@@ -220,6 +221,11 @@ export function SportsBallsControls({ state, update }: ControlsProps<SportsBalls
                 format={(v) => `${Math.round(v * 100)}%`}
               />
             )}
+            <Toggle
+              label="Soft edge (balls poke past the outline)"
+              checked={state.regionSoftEdge}
+              onChange={(v) => update({ regionSoftEdge: v })}
+            />
           </AdvGroup>
         )}
 

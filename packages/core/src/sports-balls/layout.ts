@@ -37,11 +37,22 @@ export interface BallSpec {
   depth: number;
 }
 
+const TAU = Math.PI * 2;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+/** Two circles whose centre distance plus radius difference is under this
+ *  stay within a pen width of each other everywhere — they overdraw as one
+ *  doubled outline. */
+const DOUBLE_INK = 2;
+
 export interface BallLayoutOptions {
   count: number;
   clustering: number;
   /** Soft minimum gap between centres, px. Below the mean diameter ⇒ pile. */
   minSeparation: number;
+  /** Soft region edge: only ball CENTRES are confined to the region, so
+   *  balls poke up to a radius past the shape outline (the stickmen-feet
+   *  look). Default (false) holds the whole ball inside — crisp shapes. */
+  softEdge?: boolean;
   ballScale: number;
   scaleVariance: number;
   /** 0 = uniform diameters, 1 = real-world relative diameters. */
@@ -95,22 +106,36 @@ export function placeBalls(o: BallLayoutOptions, noise: SimplexNoise, seed: numb
 
   const trueSizes = clamp(o.trueSizes, 0, 1);
   const variance = clamp(o.scaleVariance, 0, 1);
+  const softEdge = o.softEdge ?? false;
 
-  const inRegion = (x: number, y: number): boolean => !region || region.contains(x, y);
+  const centreIn = (x: number, y: number): boolean => !region || region.contains(x, y);
+  // Whole-ball containment: centre plus 12 rim points — exact for convex
+  // shapes, close enough in a heart's cleft or a star's notches.
+  const RIM = 12;
+  const ballIn = (x: number, y: number, r: number): boolean => {
+    if (!region) return true;
+    if (!region.contains(x, y)) return false;
+    for (let k = 0; k < RIM; k++) {
+      const a = (k / RIM) * TAU;
+      if (!region.contains(x + Math.cos(a) * r, y + Math.sin(a) * r)) return false;
+    }
+    return true;
+  };
 
   // Deterministic (rng-free) fallback for degenerate / near-empty regions:
-  // the first contained cell centre of a coarse scan, else the box centre —
-  // so `count` stays exact instead of looping forever.
-  const fallback = (): { x: number; y: number } => {
+  // the first centre-contained cell of a coarse scan over the sampling
+  // window, else the window centre — so `count` stays exact instead of
+  // looping forever.
+  const fallback = (wx0: number, wy0: number, sw: number, sh: number): { x: number; y: number } => {
     const N = 16;
     for (let gy = 0; gy < N; gy++) {
       for (let gx = 0; gx < N; gx++) {
-        const x = o.x0 + ((gx + 0.5) / N) * boxW;
-        const y = o.y0 + ((gy + 0.5) / N) * boxH;
-        if (inRegion(x, y)) return { x, y };
+        const x = wx0 + ((gx + 0.5) / N) * sw;
+        const y = wy0 + ((gy + 0.5) / N) * sh;
+        if (centreIn(x, y)) return { x, y };
       }
     }
-    return { x: o.x0 + boxW / 2, y: o.y0 + boxH / 2 };
+    return { x: wx0 + sw / 2, y: wy0 + sh / 2 };
   };
 
   const specs: BallSpec[] = [];
@@ -128,25 +153,46 @@ export function placeBalls(o: BallLayoutOptions, noise: SimplexNoise, seed: numb
     const rotG: [number, number, number] = [rotRng(), rotRng(), rotRng()];
 
     // Sampling window: the drawable box inset by the radius (plus a little
-    // wobble allowance) so the ball's ink stays on the page. If the box is
-    // narrower than the ball, pin to the centre line.
+    // wobble allowance) so the ball's ink stays on the page — intersected
+    // with the region's bbox when a shape is set: rejection-sampling a small
+    // shape against the whole page would exhaust the tries and stack balls
+    // on the fallback point. Degenerate windows collapse to their midline.
     const inset = r + 2;
-    const sx0 = Math.min(o.x0 + inset, (o.x0 + o.x1) / 2);
-    const sy0 = Math.min(o.y0 + inset, (o.y0 + o.y1) / 2);
-    const sw = Math.max(0, o.x1 - inset - sx0);
-    const sh = Math.max(0, o.y1 - inset - sy0);
+    let wx0 = o.x0 + inset;
+    let wy0 = o.y0 + inset;
+    let wx1 = o.x1 - inset;
+    let wy1 = o.y1 - inset;
+    if (region) {
+      wx0 = Math.max(wx0, region.bbox.x0);
+      wy0 = Math.max(wy0, region.bbox.y0);
+      wx1 = Math.min(wx1, region.bbox.x1);
+      wy1 = Math.min(wy1, region.bbox.y1);
+    }
+    if (wx1 < wx0) wx0 = wx1 = (wx0 + wx1) / 2;
+    if (wy1 < wy0) wy0 = wy1 = (wy0 + wy1) / 2;
+    const sw = wx1 - wx0;
+    const sh = wy1 - wy0;
 
-    // One candidate: uniform over the inset box; with a region, rejection-
-    // sampled until the centre is contained (HARD — clustering/minSep below
-    // stay soft).
+    // One candidate: uniform over the window; with a region, rejection-
+    // sampled until contained (HARD — clustering/minSep below stay soft).
+    // Whole-ball containment may be unsatisfiable (a ball larger than the
+    // shape), so it degrades to centre containment before the deterministic
+    // fallback rather than stacking everyone on one point.
     const sample = (): { x: number; y: number } => {
-      if (!region) return { x: sx0 + posRng() * sw, y: sy0 + posRng() * sh };
+      if (!region) return { x: wx0 + posRng() * sw, y: wy0 + posRng() * sh };
       for (let t = 0; t < 60; t++) {
-        const x = sx0 + posRng() * sw;
-        const y = sy0 + posRng() * sh;
-        if (inRegion(x, y)) return { x, y };
+        const x = wx0 + posRng() * sw;
+        const y = wy0 + posRng() * sh;
+        if (softEdge ? centreIn(x, y) : ballIn(x, y, r)) return { x, y };
       }
-      return fallback();
+      if (!softEdge) {
+        for (let t = 0; t < 60; t++) {
+          const x = wx0 + posRng() * sw;
+          const y = wy0 + posRng() * sh;
+          if (centreIn(x, y)) return { x, y };
+        }
+      }
+      return fallback(wx0, wy0, sw, sh);
     };
 
     // Position: reject too-clustered-away or too-close candidates, but always
@@ -158,6 +204,40 @@ export function placeBalls(o: BallLayoutOptions, noise: SimplexNoise, seed: numb
       const clear = minSep <= 0 || !grid.hasNear(cx - o.x0, cy - o.y0, minSep);
       if (accept && clear) break;
       ({ x: cx, y: cy } = sample());
+    }
+
+    // Double-ink guard: a ball whose circle nearly coincides with an
+    // already-placed one (centres AND radii within a couple of px) overdraws
+    // it as one doubled outline. It happens — distinct per-ball streams are
+    // shifted copies of the one shared LCG cycle, so rare exact collisions
+    // are real, and a saturated small region crams similar balls together.
+    // Near centres with DIFFERENT radii are fine (concentric circles read as
+    // a pile). Nudge deterministically (rng-free) around a golden-angle
+    // spiral to the first clear spot that keeps this ball's own containment;
+    // regions too small to separate keep the stack so `count` stays exact.
+    // (Depth grading later rescales radii by ≤ ±25%, not enough to re-pair
+    // a cleared ball.)
+    const doubled = (x: number, y: number): boolean => {
+      for (const s of specs) {
+        if (Math.abs(s.r - r) + Math.hypot(s.x - x, s.y - y) < DOUBLE_INK) return true;
+      }
+      return false;
+    };
+    if (doubled(cx, cy)) {
+      const crisp = region !== null && !softEdge && ballIn(cx, cy, r);
+      for (let t = 1; t <= 40; t++) {
+        const a = t * GOLDEN_ANGLE;
+        const d = 2.5 + t * 0.75;
+        const nx = cx + Math.cos(a) * d;
+        const ny = cy + Math.sin(a) * d;
+        if (nx < wx0 || nx > wx1 || ny < wy0 || ny > wy1) continue;
+        if (!centreIn(nx, ny)) continue;
+        if (crisp && !ballIn(nx, ny, r)) continue;
+        if (doubled(nx, ny)) continue;
+        cx = nx;
+        cy = ny;
+        break;
+      }
     }
     grid.add({ x: cx - o.x0, y: cy - o.y0 });
 
@@ -179,7 +259,18 @@ export function placeBalls(o: BallLayoutOptions, noise: SimplexNoise, seed: numb
     if (span > 0) {
       for (const s of specs) {
         const d = (s.depth - dMin) / span;
-        s.r = Math.max(2.5, s.r * (1 + grade * (d - 0.5)));
+        const graded = Math.max(2.5, s.r * (1 + grade * (d - 0.5)));
+        if (graded <= s.r) {
+          s.r = graded; // shrinking never violates placement
+          continue;
+        }
+        // Growth happens AFTER containment was checked, so cap it at the
+        // page inset (placement guarantees edge ≥ r) and, for crisp-edged
+        // regions, refuse growth that would poke the ball past the shape.
+        const edge = Math.min(s.x - o.x0, o.x1 - s.x, s.y - o.y0, o.y1 - s.y) - 2;
+        let grown = Math.min(graded, Math.max(s.r, edge));
+        if (region && !softEdge && grown > s.r && !ballIn(s.x, s.y, grown)) grown = s.r;
+        s.r = grown;
       }
     }
   }

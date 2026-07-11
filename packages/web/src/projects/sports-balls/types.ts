@@ -24,6 +24,7 @@ export interface SportsBallsState {
   regionX: number; // 0..1 centre
   regionY: number; // 0..1 centre
   regionInner: number; // ring hole / star inner fraction, 0.1..0.9
+  regionSoftEdge: boolean; // centres-only containment: balls poke past the outline
 
   // Balls
   ballSizeMm: number; // mean diameter
@@ -57,6 +58,7 @@ export const defaultSportsBallsState: SportsBallsState = {
   regionX: 0.5,
   regionY: 0.5,
   regionInner: 0.5,
+  regionSoftEdge: false,
 
   ballSizeMm: 18,
   sizeVariance: 0.25,

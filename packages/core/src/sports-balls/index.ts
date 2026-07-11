@@ -39,10 +39,14 @@ export interface SportsBallsOptions {
   /** Soft minimum gap between centres, px. Below the mean diameter ⇒ balls
    *  overlap into a pile (the default look); `count` stays exact. */
   minSeparation?: number;
-  /** Confine ball centres to a shape on the page, in normalized drawable-box
+  /** Confine balls to a shape on the page, in normalized drawable-box
    *  coords — see `StickmenRegion` for the coordinate contract. Unset /
    *  'full' = the whole drawable box. */
   region?: SportsBallsRegion;
+  /** Soft region edge: only ball CENTRES are confined, so balls poke up to
+   *  a radius past the shape outline (the stickmen-feet look). Default
+   *  holds the whole ball inside — crisp shape silhouettes. */
+  softRegionEdge?: boolean;
 
   // Balls
   ballScale?: number; // px mean diameter
@@ -77,6 +81,7 @@ const DEFAULTS: Required<Omit<SportsBallsOptions, 'width' | 'height' | 'margin' 
   count: 60,
   clustering: 0.35,
   minSeparation: 30,
+  softRegionEdge: false,
   ballScale: 56,
   scaleVariance: 0.25,
   trueSizes: 0.5,
@@ -118,6 +123,7 @@ export function generateSportsBalls(options: SportsBallsOptions): FlowLinesResul
       count: Math.min(MAX_BALLS, Math.max(1, Math.round(o.count))),
       clustering: o.clustering,
       minSeparation: o.minSeparation,
+      softEdge: o.softRegionEdge,
       ballScale: o.ballScale,
       scaleVariance: o.scaleVariance,
       trueSizes: o.trueSizes,

@@ -65,6 +65,7 @@ export function renderSportsBalls(state: SportsBallsState, env: RenderEnv): Laye
     clustering: state.clustering,
     minSeparation: state.spacingMm * mm,
     region: compileShape(state, page.widthPx - 2 * marginPx, page.heightPx - 2 * marginPx),
+    softRegionEdge: state.regionSoftEdge,
 
     ballScale: state.ballSizeMm * mm,
     scaleVariance: state.sizeVariance,

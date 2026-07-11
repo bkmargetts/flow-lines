@@ -141,6 +141,71 @@ describe('placeBalls', () => {
     }
   });
 
+  it('never overdraws one ball outline with another, even in a crammed region', () => {
+    const frame = { x0: 20, y0: 20, x1: 280, y1: 380 };
+    const region = compileRegion(
+      { kind: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.125, ry: 0.125 },
+      frame
+    );
+    // depthGrade 0: grading rescales radii after placement (bounded, but it
+    // would blur the exact threshold this test pins).
+    const specs = placeBalls(
+      { ...LAYOUT_BASE, count: 200, minSeparation: 20, depthGrade: 0, region },
+      noise,
+      42
+    );
+    expect(specs.length).toBe(200);
+    // Two circles stay within a pen width of each other everywhere iff
+    // centre distance + radius difference is tiny — no pair may.
+    for (let i = 0; i < specs.length; i++) {
+      for (let j = i + 1; j < specs.length; j++) {
+        const d = Math.hypot(specs[i].x - specs[j].x, specs[i].y - specs[j].y);
+        expect(d + Math.abs(specs[i].r - specs[j].r)).toBeGreaterThanOrEqual(1.9);
+      }
+    }
+  });
+
+  it('holds whole balls inside the shape by default, centres-only when soft', () => {
+    const frame = { x0: 20, y0: 20, x1: 280, y1: 380 };
+    const region = compileRegion(
+      { kind: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.3, ry: 0.25 },
+      frame
+    );
+    const opts = { ...LAYOUT_BASE, count: 60, depthGrade: 0.3, region };
+    // Probe the same 12 rim points placement enforces.
+    const rimOut = (s: { x: number; y: number; r: number }): number => {
+      let out = 0;
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        if (!region!.contains(s.x + Math.cos(a) * s.r, s.y + Math.sin(a) * s.r)) out++;
+      }
+      return out;
+    };
+    const crisp = placeBalls(opts, noise, 7);
+    for (const s of crisp) expect(rimOut(s)).toBe(0);
+    const soft = placeBalls({ ...opts, softEdge: true }, noise, 7);
+    for (const s of soft) expect(region!.contains(s.x, s.y)).toBe(true);
+    expect(soft.reduce((n, s) => n + rimOut(s), 0)).toBeGreaterThan(0);
+  });
+
+  it('places the exact count when the ball is larger than the shape', () => {
+    const frame = { x0: 20, y0: 20, x1: 280, y1: 380 };
+    const region = compileRegion(
+      { kind: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.04, ry: 0.04 },
+      frame
+    );
+    const specs = placeBalls(
+      { ...LAYOUT_BASE, count: 10, ballScale: 120, trueSizes: 0, scaleVariance: 0, region },
+      noise,
+      7
+    );
+    expect(specs.length).toBe(10);
+    for (const s of specs) {
+      expect(Number.isFinite(s.x)).toBe(true);
+      expect(region!.contains(s.x, s.y)).toBe(true);
+    }
+  });
+
   it('grades size by depth', () => {
     const specs = placeBalls(
       { ...LAYOUT_BASE, count: 80, scaleVariance: 0, trueSizes: 0, depthGrade: 0.5 },
