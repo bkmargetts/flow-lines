@@ -7,6 +7,7 @@ import { compileRegion, type StickmenRegion } from '../stickmen/region.js';
 import { splitVisible, type ZOffset } from '../stickmen/occlude.js';
 import { placeBalls, type BallType } from './layout.js';
 import { buildBall, type BallBuild } from './ball.js';
+import { castShadowStrokes } from './shadows.js';
 
 export type { BallType } from './layout.js';
 
@@ -60,6 +61,11 @@ export interface SportsBallsOptions {
   // Render
   /** 0..1 — shadow-side hatch density (0 = pure line art). */
   shading?: number;
+  /** 0..1 — contact shadows: where a nearer ball crosses a farther one, the
+   *  farther ball is hatched with a tapered crescent hugging the nearer
+   *  ball's silhouette (away from the light), so the pile reads as stacked
+   *  spheres. 0 disables. */
+  castShadows?: number;
   /** Page-space light direction, radians (default upper-left-ish). */
   lightAngle?: number;
   occlude?: boolean;
@@ -85,6 +91,7 @@ const DEFAULTS: Required<Omit<SportsBallsOptions, 'width' | 'height' | 'margin' 
   },
   spin: 1,
   shading: 0,
+  castShadows: 0.5,
   lightAngle: Math.PI * 1.75, // light from the upper right (page y is down)
   occlude: true,
   penWidth: 1.4,
@@ -126,14 +133,24 @@ export function generateSportsBalls(options: SportsBallsOptions): FlowLinesResul
     seed
   );
 
-  const builds: BallBuild[] = specs.map((s) =>
-    buildBall(s, {
+  const builds: BallBuild[] = specs.map((s, i) => {
+    const b = buildBall(s, {
       spin: o.spin,
       shading: o.shading,
       lightAngle: o.lightAngle,
       penWidth: o.penWidth,
-    })
-  );
+    });
+    // Contact shadows cast by nearer overlapping balls belong to the
+    // receiver, so they're cut by anything nearer than it (never by it).
+    b.strokes.push(
+      ...castShadowStrokes(specs, i, {
+        castShadows: o.castShadows,
+        lightAngle: o.lightAngle,
+        penWidth: o.penWidth,
+      })
+    );
+    return b;
+  });
 
   // Hidden-line removal against a shared depth buffer holding every ball's
   // silhouette — a farther ball's lines are cut wherever a nearer ball covers

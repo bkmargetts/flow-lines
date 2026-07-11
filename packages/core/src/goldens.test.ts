@@ -199,6 +199,8 @@ CASES['sports-balls/soccer-only/42'] = () =>
     minSeparation: 60,
     mix: { soccer: 1 },
   });
+CASES['sports-balls/no-shadows/42'] = () =>
+  generateSportsBalls({ width: 300, height: 400, margin: 20, seed: 42, castShadows: 0 });
 CASES['sports-balls/region-ellipse/42'] = () =>
   generateSportsBalls({
     width: 300,

@@ -74,6 +74,7 @@ export function renderSportsBalls(state: SportsBallsState, env: RenderEnv): Laye
     spin: state.spin,
 
     shading: state.shading,
+    castShadows: state.castShadows,
     lightAngle: state.lightAngleDeg * DEG,
     occlude: state.occlude,
     penWidth: state.penWidthMm * mm,

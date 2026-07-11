@@ -47,6 +47,7 @@ function randomSportsBallsGenome(rng: () => number): Partial<SportsBallsState> {
     depthGrade: Number((rng() * 0.3).toFixed(2)),
     spin: Number((0.4 + rng() * 0.6).toFixed(2)),
     shading: rng() < 0.5 ? 0 : Number((0.3 + rng() * 0.6).toFixed(2)),
+    castShadows: rng() < 0.25 ? 0 : Number((0.25 + rng() * 0.6).toFixed(2)),
     lightAngleDeg: Math.round(rng() * 360),
     regionShape: shaped ? shape : 'full',
     regionSize: Number((0.5 + rng() * 0.45).toFixed(2)),
@@ -129,6 +130,21 @@ export function SportsBallsControls({ state, update }: ControlsProps<SportsBalls
         max={1}
         step={0.01}
         onChange={(v) => update({ shading: v })}
+        format={(v) => `${Math.round(v * 100)}%`}
+      />
+
+      <Slider
+        labelNode={
+          <span className="label-text">
+            Contact shadows
+            <InfoTip text="Where a nearer ball overlaps a farther one, hatch a shadow crescent along the crossing edge — the pile reads as stacked spheres." />
+          </span>
+        }
+        value={state.castShadows}
+        min={0}
+        max={1}
+        step={0.01}
+        onChange={(v) => update({ castShadows: v })}
         format={(v) => `${Math.round(v * 100)}%`}
       />
 
@@ -239,7 +255,7 @@ export function SportsBallsControls({ state, update }: ControlsProps<SportsBalls
           />
         </AdvGroup>
 
-        {state.shading > 0 && (
+        {(state.shading > 0 || state.castShadows > 0) && (
           <AdvGroup title="Light">
             <Slider label="Light direction" value={state.lightAngleDeg} min={0} max={360} step={5} onChange={(v) => update({ lightAngleDeg: v })} format={(v) => `${v.toFixed(0)}°`} />
           </AdvGroup>

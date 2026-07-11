@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateSportsBalls, type SportsBallsOptions } from './sports-balls/index.js';
-import { placeBalls, BALL_TYPES, type BallType } from './sports-balls/layout.js';
+import { placeBalls, BALL_TYPES, type BallType, type BallSpec } from './sports-balls/layout.js';
+import { castShadowStrokes } from './sports-balls/shadows.js';
 import { SOCCER_EDGES } from './sports-balls/polyhedron.js';
 import { compileRegion, heartRegion } from './stickmen/region.js';
 import { createNoise } from './noise.js';
@@ -162,6 +163,46 @@ describe('spin', () => {
     const outlines = (res: typeof spun): string =>
       JSON.stringify(res.lines.filter((l) => l.layer === 'outline'));
     expect(outlines(spun)).toBe(outlines(upright));
+  });
+});
+
+describe('cast shadows', () => {
+  const spec = (x: number, y: number, r: number): BallSpec => ({
+    x,
+    y,
+    r,
+    type: 'pingpong',
+    rotG: [0, 0, 0],
+    depth: y,
+  });
+  const OPTS = { castShadows: 0.8, lightAngle: Math.PI * 1.75, penWidth: 1.4 };
+
+  it('hatches the farther ball where a nearer one crosses it', () => {
+    // Depth-sorted back-to-front: the receiver (higher on page) comes first.
+    const specs = [spec(100, 80, 40), spec(100, 130, 40)];
+    const strokes = castShadowStrokes(specs, 0, OPTS);
+    expect(strokes.length).toBeGreaterThan(0);
+    // Every shadow point sits on the receiver, outside the caster.
+    for (const s of strokes) {
+      for (const p of s.points) {
+        expect(Math.hypot(p.x - 100, p.y - 80)).toBeLessThanOrEqual(40);
+        expect(Math.hypot(p.x - 100, p.y - 130)).toBeGreaterThan(40);
+      }
+    }
+  });
+
+  it('casts nothing between separated balls, and nothing at 0', () => {
+    const apart = [spec(60, 80, 30), spec(240, 300, 30)];
+    expect(castShadowStrokes(apart, 0, OPTS)).toEqual([]);
+    const overlapping = [spec(100, 80, 40), spec(100, 130, 40)];
+    expect(castShadowStrokes(overlapping, 0, { ...OPTS, castShadows: 0 })).toEqual([]);
+  });
+
+  it('adds ink to a dense pile end-to-end', () => {
+    const opts = { ...BASE, count: 60, minSeparation: 4 };
+    const off = generateSportsBalls({ ...opts, castShadows: 0 });
+    const on = generateSportsBalls({ ...opts, castShadows: 0.8 });
+    expect(totalLength(on.lines)).toBeGreaterThan(totalLength(off.lines));
   });
 });
 

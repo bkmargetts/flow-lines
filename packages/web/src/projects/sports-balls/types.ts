@@ -35,6 +35,7 @@ export interface SportsBallsState {
 
   // Render
   shading: number; // 0..1 shadow-side hatch
+  castShadows: number; // 0..1 contact-shadow crescents at overlaps
   lightAngleDeg: number; // page-space light direction
   occlude: boolean;
   penWidthMm: number;
@@ -72,6 +73,7 @@ export const defaultSportsBallsState: SportsBallsState = {
   spin: 1,
 
   shading: 0,
+  castShadows: 0.5,
   lightAngleDeg: 315,
   occlude: true,
   penWidthMm: 0.4,
