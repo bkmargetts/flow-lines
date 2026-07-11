@@ -316,6 +316,8 @@ CASES['planet/phenomena/42'] = () =>
   });
 CASES['texture/shapes/42'] = () =>
   generateTexture({ ...textureBase, style: 'shapes', seed: 42 });
+CASES['texture/dashes/42'] = () =>
+  generateTexture({ ...textureBase, style: 'dashes', seed: 42 });
 
 // Post-processing stages, applied to a fixed base drawing.
 CASES['optimize/flow-lines/42'] = () =>

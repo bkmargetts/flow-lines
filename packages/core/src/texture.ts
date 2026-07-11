@@ -15,7 +15,14 @@ import { makeRandom } from './lib/rng.js';
  * strokes (`avoid` + `haloMm`), the same reserved-paper idea the contour halos
  * use, so the art reads off the textured ground instead of being crowded by it.
  */
-export type TextureStyle = 'hatch' | 'stipple' | 'contours' | 'grid' | 'shapes' | 'grating';
+export type TextureStyle =
+  | 'hatch'
+  | 'stipple'
+  | 'contours'
+  | 'grid'
+  | 'shapes'
+  | 'dashes'
+  | 'grating';
 
 /**
  * Grating-style texture: an interleaved multi-ink line grating (the same engine
@@ -56,6 +63,52 @@ export interface TextureShapeOptions {
   overlap: number;
 }
 
+/**
+ * Organic broken dashes (style === 'dashes'): rows of short strokes that all
+ * follow one consistent direction (`angleDeg`), row pitch from `spacingMm`,
+ * length/gap variance from `jitter`. Each dash arcs gently and wobbles like a
+ * hand-pulled stroke; a low-frequency noise gate thins coverage in patches.
+ */
+export interface DashTextureOptions {
+  /** Mean dash length, mm */
+  dashLengthMm: number;
+  /** Mean gap between dashes along a row, mm */
+  gapMm: number;
+  /** Perpendicular hand-wobble amplitude, mm (0 = ruler-straight) */
+  wobbleMm: number;
+  /** Wobble wavelength along the stroke, mm (default 10) */
+  wobbleWavelengthMm?: number;
+  /** Max mid-dash arc deflection, mm (0 = no curvature) */
+  curvatureMm: number;
+  /** 0..1 — noise-gated dropout; coverage thins in organic patches */
+  sparsity: number;
+  /** Max direction drift, degrees (0 = every dash on `angleDeg`); each dash
+   * rotates about its row anchor following a very-low-frequency noise field,
+   * so the drift reads as wind-combing, not scatter */
+  flowDeg?: number;
+  /** 0..1 — patchy calm-vs-choppy variation: choppy patches get shorter,
+   * denser, more agitated dashes; calm patches longer, even ones */
+  turbulence?: number;
+  /** -1..1 — page-vertical dash-length sweep (positive = longer toward the
+   * bottom); 0 = off */
+  gradient?: number;
+}
+
+/** Per-field dash defaults — the single source of truth shared with the web
+ * module's `defaultClassicParams`; partial `dashes` sub-objects fall back
+ * field by field. */
+export const DASH_DEFAULTS: Required<DashTextureOptions> = {
+  dashLengthMm: 6,
+  gapMm: 3,
+  wobbleMm: 0.4,
+  wobbleWavelengthMm: 10,
+  curvatureMm: 0.8,
+  sparsity: 0.25,
+  flowDeg: 12,
+  turbulence: 0.3,
+  gradient: 0,
+};
+
 export interface TextureOptions {
   /** Page rectangle in px */
   width: number;
@@ -79,6 +132,8 @@ export interface TextureOptions {
   crossHatch: boolean;
   seed: number;
   shapes?: TextureShapeOptions;
+  /** Broken-dash parameters (style === 'dashes') */
+  dashes?: DashTextureOptions;
   /** Grating-style parameters (style === 'grating') */
   grating?: GratingTextureOptions;
   /** Drawing strokes the texture should hold off (for the halo) */
@@ -488,6 +543,128 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
         }));
         if (hasHalo) pushClipped(out, mapped, isClear);
         else out.push(TEX(mapped));
+      }
+    }
+    return out;
+  }
+
+  if (style === 'dashes') {
+    // Organic broken dashes: rows of short strokes along one consistent
+    // direction. Each dash is traced as a polyline carrying a parabolic arc
+    // (zero at both ends, so endpoints stay on the row line) plus a
+    // perpendicular fBm wobble; lengths and gaps vary with `jitter`, and a
+    // low-frequency noise gate drops whole dashes so coverage thins in
+    // hand-sized patches rather than uniform confetti. Three stateless noise
+    // fields make the sheet dynamic without any extra RNG draws (so the
+    // sliders modulate the texture instead of reshuffling it): a flow field
+    // drifts each dash's direction, a turbulence field varies length/gap/
+    // wobble in calm-vs-choppy patches, and a page-vertical gradient sweeps
+    // the dash length across the sheet.
+    const d = { ...DASH_DEFAULTS, ...(options.dashes ?? {}) };
+    const dashPx = Math.max(2, d.dashLengthMm * pxPerMm);
+    const gapPx = Math.max(1, d.gapMm * pxPerMm);
+    const wobblePx = Math.max(0, d.wobbleMm) * pxPerMm;
+    const wavelenPx = Math.max(1, d.wobbleWavelengthMm * pxPerMm);
+    const curvePx = Math.max(0, d.curvatureMm) * pxPerMm;
+    const sparsity = Math.min(0.95, Math.max(0, d.sparsity));
+    const flowRad = (Math.min(90, Math.max(0, d.flowDeg)) * Math.PI) / 180;
+    const turb = Math.min(1, Math.max(0, d.turbulence));
+    const grad = Math.min(1, Math.max(-1, d.gradient));
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const nx = -dy;
+    const ny = dx;
+    const corners = [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x0, y: y1 },
+      { x: x1, y: y1 },
+    ];
+    let uMin = Infinity;
+    let uMax = -Infinity;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (const c of corners) {
+      const u = c.x * nx + c.y * ny;
+      const v = c.x * dx + c.y * dy;
+      uMin = Math.min(uMin, u);
+      uMax = Math.max(uMax, u);
+      vMin = Math.min(vMin, v);
+      vMax = Math.max(vMax, v);
+    }
+    const noise = createNoise(seed + 31);
+    const gateNoise = createNoise(seed + 67);
+    const flowNoise = createNoise(seed + 97);
+    const turbNoise = createNoise(seed + 101);
+    // Wobble and arc can push points past the margin, so the rect test rides
+    // along with the halo test in one clipped-emit predicate.
+    const clear = (x: number, y: number): boolean =>
+      x >= x0 && x <= x1 && y >= y0 && y <= y1 && isClear(x, y);
+    for (let u = uMin + spacing / 2; u <= uMax; u += spacing) {
+      // Per-row phase so dashes never align into columns across rows.
+      let v = vMin + random() * (dashPx + gapPx);
+      while (v < vMax) {
+        // Draw every random before the sparsity gate — a dropped dash must
+        // consume the same stream, or changing sparsity would reshuffle the
+        // whole texture instead of just thinning it.
+        let len = Math.max(2, dashPx * (1 + jitter * 0.8 * (random() - 0.5)));
+        let gap = Math.max(1, gapPx * (1 + jitter * 0.8 * (random() - 0.5)));
+        // Turbulence, sampled at the slot start (the midpoint isn't known
+        // until the length is): t > 0 stretches into calm patches, t < 0
+        // chops into short, dense, agitated ones.
+        const sx = nx * u + dx * v;
+        const sy = ny * u + dy * v;
+        const t = turb > 0 ? turbNoise.fbm(sx * 0.005, sy * 0.005, 2, 0.5, 2.0) : 0;
+        if (turb > 0) {
+          len = Math.max(2, len * (1 + turb * 0.7 * t));
+          gap = Math.max(1, gap * (1 + turb * 0.5 * t));
+        }
+        const mid = v + len / 2;
+        let mx = nx * u + dx * mid;
+        let my = ny * u + dy * mid;
+        // Page-vertical length sweep; the anchor moves with the stretched
+        // length, so re-derive the midpoint after scaling.
+        if (grad !== 0) {
+          const gy01 = Math.min(1, Math.max(0, (my - y0) / (y1 - y0)));
+          const gFac = Math.max(0.25, 1 + grad * (2 * gy01 - 1) * 0.75);
+          len = Math.max(2, len * gFac);
+          gap = Math.max(1, gap * gFac);
+          const mid2 = v + len / 2;
+          mx = nx * u + dx * mid2;
+          my = ny * u + dy * mid2;
+        }
+        // Signed low-frequency bend: neighbouring dashes arc coherently while
+        // the overall direction stays consistent. Scaled with dash length so
+        // gradient/turbulence-shortened ticks stay straight instead of
+        // scalloping into little waves.
+        const bend = curvePx * Math.min(1, len / dashPx) * noise.noise2D(u * 0.011, v * 0.007);
+        const gate = gateNoise.fbm(mx * 0.004, my * 0.004, 2, 0.5, 2.0) * 0.5 + 0.5;
+        if (gate >= sparsity) {
+          // Direction flow: rotate the dash about its midpoint anchor. Much
+          // lower frequency than the sparsity gate, so neighbouring dashes
+          // comb together instead of scattering.
+          const th = flowRad > 0 ? flowRad * flowNoise.noise2D(mx * 0.0015, my * 0.0015) : 0;
+          const ddx = Math.cos(angle + th);
+          const ddy = Math.sin(angle + th);
+          const dnx = -ddy;
+          const dny = ddx;
+          // Choppy patches wobble harder, calm patches settle.
+          const wobAmp = wobblePx * Math.max(0, 1 - turb * t);
+          const sampleStep = Math.max(1.5, Math.min(step, len / 4));
+          const n = Math.max(4, Math.ceil(len / sampleStep));
+          const pts: Point[] = [];
+          for (let i = 0; i <= n; i++) {
+            const s = i / n;
+            const a = v + s * len;
+            const wob = wobAmp > 0 ? wobAmp * noise.fbm(a / wavelenPx, u * 0.017, 2, 0.5, 2.0) : 0;
+            const arc = bend * (1 - (2 * s - 1) ** 2);
+            const off = wob + arc;
+            const along = (s - 0.5) * len;
+            pts.push({ x: mx + ddx * along + dnx * off, y: my + ddy * along + dny * off });
+          }
+          pushClipped(out, pts, clear);
+        }
+        v += len + gap;
       }
     }
     return out;

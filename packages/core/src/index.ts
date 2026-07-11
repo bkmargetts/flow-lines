@@ -147,11 +147,12 @@ export type { ContourOptions } from './contours.js';
 export { traceIsoContours } from './iso-contours.js';
 
 // Plottable background texture (its own export layer, behind the drawing)
-export { generateTexture } from './texture.js';
+export { generateTexture, DASH_DEFAULTS } from './texture.js';
 export type {
   TextureOptions,
   TextureStyle,
   TextureShapeOptions,
+  DashTextureOptions,
   GratingTextureOptions,
 } from './texture.js';
 
