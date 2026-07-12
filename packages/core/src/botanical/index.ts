@@ -106,7 +106,11 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
     startPoints = [],
     seedCount = 6,
     stepLength = 6,
-    maxLength = 320,
+    // Growth and organ sizes default relative to the page, so an A3 sheet grows
+    // an A3-sized plant instead of an A6 plant floating in blank paper. The
+    // factors reproduce the old fixed defaults (320 / 8 / 26 / 30 / 18) at the
+    // classic 800×1000 canvas. Explicit caller values always win.
+    maxLength = Math.min(width, height) * 0.4,
     curl = 0.5,
     noiseScale = 0.004,
     gravitropism = 0.4,
@@ -115,7 +119,7 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
     attractorCount = 600,
     attractorRadius = 90,
     killRadius = 16,
-    stemWidth = 8,
+    stemWidth = Math.max(5, Math.min(width, height) * 0.01),
     penWidth = 1,
     taper = 0.85,
     stemFill = 'shaded',
@@ -133,9 +137,9 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
     leafStyle = 'shaded',
     leafType = 'ovate',
     veins = true,
-    leafSize = 26,
+    leafSize = Math.min(width, height) * 0.033,
     leafWidthRatio = 0.5,
-    leafSpacing = 30,
+    leafSpacing = leafSize * 1.15,
     leafArrangement = 'simple',
     leafletCount = 5,
     phyllotaxis = 'alternate',
@@ -145,7 +149,7 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
     flowers = true,
     flowerType = 'rose',
     flowerProb = 0.2,
-    flowerSize = 18,
+    flowerSize = Math.min(width, height) * 0.023,
     inflorescence = 'none',
     floretCount = 8,
     thorns = false,
@@ -230,7 +234,7 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
   // Composition routes the growth: `fill` colonizes a region; `free` respects
   // the mode/seeding; everything else grows along composed guide curves.
   let rawStems: Stem[];
-  let focal: Point | null = null;
+  const focals: Point[] = [];
   if (composition === 'fill') {
     const region = buildRegion(fillShape, startPoints, width, height, growMargin);
     const fillRoots: Root[] = region.seeds.map((p) => ({ x: p.x, y: p.y, angle: -Math.PI / 2, half: baseHalf, maxLength }));
@@ -241,7 +245,21 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
   } else {
     const roots = makeRoots({ width, height, margin: growMargin, mode, composition, seeding, startPoints, seedCount, baseHalf, maxLength, weightAt: growthWeightAt, baseOverride, guidePaths }, rng);
     // The specimen's focal point is the end of its master gesture.
-    if (composition === 'specimen' && roots[0]?.guide) focal = roots[0].guide[roots[0].guide.length - 1];
+    if (composition === 'specimen' && roots[0]?.guide) focals.push(roots[0].guide[roots[0].guide.length - 1]);
+    // A wreath gets 2–3 deliberate bloom clusters spread around the ring at
+    // golden-angle offsets — real wreaths mass their flowers in a few designed
+    // groups, not evenly (nor wherever per-tip dice happen to land).
+    if (composition === 'wreath') {
+      const cx = width / 2;
+      const cy = height / 2;
+      const R = Math.min(width - 2 * growMargin, height - 2 * growMargin) * 0.42;
+      const clusters = 2 + (rng() < 0.5 ? 1 : 0);
+      const a0 = rng() * Math.PI * 2;
+      for (let c = 0; c < clusters; c++) {
+        const a = a0 + c * 2.39996323;
+        focals.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R });
+      }
+    }
     // A wreath's arcs — and a 'guide' composition's traced paths — are *designed*
     // to overlap (a closed ring, a self-crossing letterform), so the proximity
     // break (which would stop each stem as it nears another and tear the shape)
@@ -320,7 +338,7 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
       leafArrangement, leafletCount, phyllotaxis, whorlCount,
       tendrils, tendrilProb, flowers, flowerType, flowerProb, flowerSize, penPx, light, shadeDensity,
       inflorescence, floretCount, fruitType, fruitProb, dewdrops, dewdropProb,
-      focal, focalR, density, weightAt, shadeMass: tonalMassing,
+      focals, focalR, density, weightAt, shadeMass: tonalMassing,
     },
     rng,
     add
@@ -607,9 +625,20 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
   // sweeping to a focal point on a rule-of-thirds intersection, leaving the
   // opposite side as negative space.
   if (o.composition === 'specimen' && o.mode === 'growth') {
-    const leftFocal = rng() < 0.5;
+    // The coin is always drawn (stable rng sequence); when negative space holds
+    // a region clear, the focal side flips to whichever candidate carries more
+    // mass, so the gesture is composed *away* from the held-clear third instead
+    // of being culled step-by-step inside it.
+    const coin = rng() < 0.5;
+    let leftFocal = coin;
+    if (o.weightAt) {
+      const cy = margin + 0.3 * (height - 2 * margin);
+      const wl = o.weightAt(margin + (1 / 3) * (width - 2 * margin), cy);
+      const wr = o.weightAt(margin + (2 / 3) * (width - 2 * margin), cy);
+      if (Math.abs(wl - wr) > 0.05) leftFocal = wl > wr;
+    }
     const fx = margin + (leftFocal ? 1 / 3 : 2 / 3) * (width - 2 * margin);
-    const fy = margin + (0.22 + rng() * 0.16) * (height - 2 * margin);
+    const fy = margin + (0.16 + rng() * 0.14) * (height - 2 * margin);
     const baseFromPaint = o.seeding === 'painted' || o.seeding === 'point' ? o.startPoints[0] : undefined;
     const bx = o.baseOverride?.x ?? baseFromPaint?.x ?? margin + (leftFocal ? 0.62 : 0.38) * (width - 2 * margin);
     const by = o.baseOverride?.y ?? baseFromPaint?.y ?? height - margin * 1.3;
@@ -624,8 +653,13 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
       { x: fx, y: fy },
     ], 1);
     const startAngle = Math.atan2(guide[1].y - by, guide[1].x - bx);
-    // A woody trunk that tapers up the gesture.
-    const roots: Root[] = [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: maxLength * 1.7, guide }];
+    // A woody trunk that tapers up the gesture. Its growth budget comes from
+    // the guide's actual length (like every other guided composition), not the
+    // free-growth maxLength — a fixed budget truncated the master gesture
+    // two-thirds of the way up the page. Side branches are capped so the
+    // silhouette stays a designed gesture rather than bushing into a thicket.
+    const guideLen = polylineLength(guide);
+    const roots: Root[] = [{ x: bx, y: by, angle: startAngle, half: baseHalf * 1.5, maxLength: guideLen * 1.3, guide, branchMaxLen: Math.max(maxLength * 0.4, guideLen * 0.3) }];
     // A shorter subordinate cane from the same base sweeping into the opposite
     // (weak) quadrant, so the frame reads as a balanced specimen rather than one
     // gesture beside a bare void. Capped shorter and thinner so it stays
@@ -636,7 +670,8 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     const smy = (by + sfy) / 2;
     const subGuide = smoothPolyline([{ x: bx, y: by }, { x: smx, y: smy }, { x: sfx, y: sfy }], 1);
     const subAngle = Math.atan2(subGuide[1].y - by, subGuide[1].x - bx);
-    roots.push({ x: bx, y: by, angle: subAngle, half: baseHalf * 1.05, maxLength: maxLength * 0.9, guide: subGuide, branchMaxLen: maxLength * 0.5 });
+    const subLen = polylineLength(subGuide);
+    roots.push({ x: bx, y: by, angle: subAngle, half: baseHalf * 1.05, maxLength: subLen * 1.25, guide: subGuide, branchMaxLen: Math.max(maxLength * 0.35, subLen * 0.3) });
     return roots;
   }
 
@@ -662,7 +697,9 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
     for (let k = 0; k < n; k++) {
       const a0 = k * step;
       const guide: Point[] = [];
-      const steps = 14;
+      // Sample the arc finely enough that the ring reads as a curve, not a
+      // polygon of chords — one guide point per ~20px of arc.
+      const steps = Math.max(14, Math.ceil((span * R) / 20));
       for (let s = 0; s <= steps; s++) {
         const a = a0 + span * (s / steps);
         const rr = R * (1 + 0.02 * Math.sin(a * 3));
@@ -687,11 +724,22 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
       [{ x: x1, y: y0 }, { x: x1, y: y1 }],
       [{ x: x1, y: y1 }, { x: x0, y: y1 }],
     ];
-    return corners.map(([a, b]) => {
+    // Side branches are capped short so the garland hugs the frame instead of
+    // flopping into the interior, and each edge overshoots its end corner a
+    // little way along the next edge so the corners read as a continuous
+    // wrapped garland rather than four stems that happen to end nearby.
+    return corners.map(([a, b], i) => {
       const guide: Point[] = [];
       const steps = 10;
       for (let s = 0; s <= steps; s++) guide.push({ x: a.x + (b.x - a.x) * (s / steps), y: a.y + (b.y - a.y) * (s / steps) });
-      return guided(guide, baseHalf);
+      const [na, nb] = corners[(i + 1) % 4];
+      const nLen = Math.hypot(nb.x - na.x, nb.y - na.y) || 1;
+      const over = Math.min(60, nLen * 0.1);
+      for (let s = 1; s <= 3; s++) {
+        const t = (over * s) / 3 / nLen;
+        guide.push({ x: na.x + (nb.x - na.x) * t, y: na.y + (nb.y - na.y) * t });
+      }
+      return guided(guide, baseHalf, maxLength * 0.3);
     });
   }
 
@@ -724,7 +772,9 @@ function makeRoots(o: RootOpts, rng: () => number): Root[] {
         const t = s / steps;
         guide.push({ x: x + Math.sin(t * Math.PI * 2 + k) * width * 0.03, y: (height - margin) + ((margin) - (height - margin)) * t });
       }
-      roots.push(guided(guide, baseHalf));
+      // Cap branch wander so the climbers read as trained up the support
+      // rather than sprawling sideways between columns.
+      roots.push(guided(guide, baseHalf, maxLength * 0.35));
     }
     return roots;
   }

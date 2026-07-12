@@ -61,14 +61,14 @@ export function registerBotanical(program: Command) {
     .option('--gravitropism <number>', 'Upward growth bias (0-1)', '0.4')
     .option('--branch-prob <number>', 'Side-branch probability per step (0-0.2)', '0.05')
     .option('--max-depth <number>', 'Branching recursion depth', '5')
-    .option('--max-length <number>', 'Max stem length in px', '320')
+    .option('--max-length <number>', 'Max stem length in px (default: scales with the page)')
     .option('--step-length <number>', 'Growth step length in px', '6')
     // colonization
     .option('--attractor-count <number>', 'Space-colonization attractor points', '600')
     .option('--attractor-radius <number>', 'Attractor reach in px', '90')
     .option('--kill-radius <number>', 'Attractor consume distance in px', '16')
     // stem body & shading
-    .option('--stem-width <number>', 'Base stem width in px', '8')
+    .option('--stem-width <number>', 'Base stem width in px (default: scales with the page)')
     .option('--taper <number>', 'Tapering toward the tip (0-1)', '0.85')
     .option('--stem-fill <f>', 'Stem rendering: shaded | solid | outline | highlight', 'shaded')
     .option('--light-angle <number>', 'Light source direction in degrees (0 = +x)', '-130')
@@ -86,8 +86,8 @@ export function registerBotanical(program: Command) {
     .option('--leaf-style <s>', 'shaded | veined | outline | solid', 'shaded')
     .option('--leaf-type <t>', 'ovate | lance | cordate | lobed | serrate | mixed', 'ovate')
     .option('--no-veins', 'Omit leaf veins')
-    .option('--leaf-size <number>', 'Leaf length in px', '26')
-    .option('--leaf-spacing <number>', 'Arc-length leaf spacing in px', '30')
+    .option('--leaf-size <number>', 'Leaf length in px (default: scales with the page)')
+    .option('--leaf-spacing <number>', 'Arc-length leaf spacing in px (default: scales with leaf size)')
     .option('--leaf-arrangement <a>', 'simple | pinnate | bipinnate | palmate | trifoliate', 'simple')
     .option('--leaflet-count <number>', 'Leaflets per compound leaf', '5')
     .option('--phyllotaxis <p>', 'alternate | opposite | whorled | spiral', 'alternate')
@@ -97,7 +97,7 @@ export function registerBotanical(program: Command) {
     .option('--no-flowers', 'Omit flowers')
     .option('--flower-type <t>', 'rose | daisy | bell | bud | mixed', 'rose')
     .option('--flower-prob <number>', 'Flower probability at stem tips (0-1)', '0.2')
-    .option('--flower-size <number>', 'Bloom size in px', '18')
+    .option('--flower-size <number>', 'Bloom size in px (default: scales with the page)')
     .option('--inflorescence <i>', 'none | raceme | umbel | spike | corymb', 'none')
     .option('--floret-count <number>', 'Florets per inflorescence', '8')
     .option('--thorns', 'Bear thorns along the stems')
@@ -137,12 +137,12 @@ export function registerBotanical(program: Command) {
         gravitropism: parseFloat(options.gravitropism),
         branchProb: parseFloat(options.branchProb),
         maxDepth: parseInt(options.maxDepth, 10),
-        maxLength: parseFloat(options.maxLength),
+        maxLength: options.maxLength !== undefined ? parseFloat(options.maxLength) : undefined,
         stepLength: parseFloat(options.stepLength),
         attractorCount: parseInt(options.attractorCount, 10),
         attractorRadius: parseFloat(options.attractorRadius),
         killRadius: parseFloat(options.killRadius),
-        stemWidth: parseFloat(options.stemWidth),
+        stemWidth: options.stemWidth !== undefined ? parseFloat(options.stemWidth) : undefined,
         taper: parseFloat(options.taper),
         stemFill: options.stemFill as BotanicalFill,
         lightAngle: parseFloat(options.lightAngle),
@@ -159,8 +159,8 @@ export function registerBotanical(program: Command) {
         leafStyle: options.leafStyle as LeafStyle,
         leafType: options.leafType as LeafType,
         veins: options.veins,
-        leafSize: parseFloat(options.leafSize),
-        leafSpacing: parseFloat(options.leafSpacing),
+        leafSize: options.leafSize !== undefined ? parseFloat(options.leafSize) : undefined,
+        leafSpacing: options.leafSpacing !== undefined ? parseFloat(options.leafSpacing) : undefined,
         leafArrangement: options.leafArrangement as LeafArrangement,
         leafletCount: parseInt(options.leafletCount, 10),
         phyllotaxis: options.phyllotaxis as Phyllotaxis,
@@ -170,7 +170,7 @@ export function registerBotanical(program: Command) {
         flowers: options.flowers,
         flowerType: options.flowerType as BotanicalFlower,
         flowerProb: parseFloat(options.flowerProb),
-        flowerSize: parseFloat(options.flowerSize),
+        flowerSize: options.flowerSize !== undefined ? parseFloat(options.flowerSize) : undefined,
         inflorescence: options.inflorescence as Inflorescence,
         floretCount: parseInt(options.floretCount, 10),
         thorns: options.thorns ?? false,

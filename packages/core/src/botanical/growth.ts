@@ -100,7 +100,11 @@ export function growStems(
       const ny = y + Math.sin(angle) * stepLength;
       if (!inBounds(nx, ny)) break;
       const cleared = Math.hypot(nx - startX, ny - startY) > clearDist;
-      if (grid && cleared && grid.hasNear(nx, ny, sepDist)) break;
+      // The proximity break keeps *free* growth evenly spaced. A guided stem is
+      // a designed line (a trellis column, a border edge, a master gesture) —
+      // stopping it because an earlier stem's side-branch wandered past would
+      // truncate the composition, so guided stems never break on proximity.
+      if (grid && cleared && !tip.guide && grid.hasNear(nx, ny, sepDist)) break;
 
       x = nx;
       y = ny;
@@ -109,7 +113,14 @@ export function growStems(
 
       // Thin growth out as it enters the held-clear region (notan negative
       // space). Guarded so the rng sequence is untouched when massing is off.
-      if (weightAt && cleared && rng() < (1 - weightAt(x, y)) * 0.5) break;
+      // The kill lands on side branches (which is what thins the canopy);
+      // free trunks only thin weakly and guided trunks never die — a hard
+      // per-step kill on the main gesture used to reduce a whole specimen to a
+      // stub whenever its composed path crossed the held-clear third.
+      if (weightAt && cleared) {
+        const killP = tip.guide ? 0 : tip.branch ? 0.5 : 0.15;
+        if (rng() < (1 - weightAt(x, y)) * killP) break;
+      }
 
       const effBranchProb = weightAt ? branchProb * weightAt(x, y) : branchProb;
       if (tip.depth < maxDepth && stack.length + stems.length < STEM_CAP && rng() < effBranchProb) {

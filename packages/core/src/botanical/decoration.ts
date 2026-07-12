@@ -33,9 +33,10 @@ export interface DecorParams {
   penPx: number;
   light: Point;
   shadeDensity: number;
-  /** Composition focal point — foliage and blooms swell and concentrate near
-   *  it (the visual "event"); null for free/colonization growth. */
-  focal: Point | null;
+  /** Composition focal points — foliage and blooms swell and concentrate near
+   *  them (the visual "events"): one for a specimen's gesture end, a few
+   *  deliberate clusters for a wreath, empty for free/colonization growth. */
+  focals: Point[];
   focalR: number;
   /** 0..1 overall foliage density — scales leaf clusters, spacing and blooms. */
   density: number;
@@ -104,11 +105,15 @@ export function decorate(
   rng: () => number,
   add: (lines: FlowLine[], sil: Point[][]) => void
 ): void {
-  // 0..1 nearness to the composition focal point (0 when there's no focal).
+  // 0..1 nearness to the closest composition focal point (0 when there's none).
   const nearFocal = (p: Point): number => {
-    if (!d.focal) return 0;
-    const dist = Math.hypot(p.x - d.focal.x, p.y - d.focal.y);
-    return smoothstep(1 - dist / d.focalR);
+    let best = 0;
+    for (const f of d.focals) {
+      const dist = Math.hypot(p.x - f.x, p.y - f.y);
+      const nf = smoothstep(1 - dist / d.focalR);
+      if (nf > best) best = nf;
+    }
+    return best;
   };
 
   // Foliage density (0..1) sets how packed the leaves are: low → spread out,
