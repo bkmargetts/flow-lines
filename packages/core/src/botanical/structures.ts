@@ -392,8 +392,14 @@ export function buildVessel(
     // where the form is too narrow to carry a line.
     const meridian = (psi: number, u0: number): void => {
       const f = Math.sin(psi);
+      // Meridians are drawn as broken hand-hatched runs, not one unbroken
+      // top-to-bottom rule: the pen lifts and resumes, more often on the inner
+      // (near-terminator) lines, so the shaded band reads as laid hatching
+      // instead of a printed comb. End height also varies per line.
+      const gapProb = 0.015 + (1 - f) * 0.035;
+      const yEnd = bottomY - penPx * (1 + jit() * 4);
       let run: Point[] = [];
-      for (let y = topY + H * u0; y <= bottomY - penPx; y += penPx) {
+      for (let y = topY + H * u0; y <= yEnd; y += penPx) {
         const u = (y - topY) / H;
         const hw = hwOf(u);
         if (hw < penPx * 1.6) {
@@ -403,6 +409,11 @@ export function buildVessel(
         }
         const jx = (jit() - 0.5) * penPx * 0.4;
         run.push({ x: cx + shadowSign * hw * f + jx, y });
+        if (run.length > 6 && jit() < gapProb) {
+          lines.push({ points: run, layer: 'stem' });
+          run = [];
+          y += penPx * (1.5 + jit() * 3);
+        }
       }
       if (run.length >= 2) lines.push({ points: run, layer: 'stem' });
     };

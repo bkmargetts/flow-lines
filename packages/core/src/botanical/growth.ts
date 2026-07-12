@@ -48,7 +48,7 @@ export function growStems(
   }
   const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false, branchMaxLen: r.branchMaxLen ?? Infinity, easeTurn: 0 }));
   const minBranchLen = stepLength * 6;
-  const EASE_STEPS = 5; // steps over which a new branch eases away from its parent
+  const EASE_STEPS = 8; // steps over which a new branch eases away from its parent
 
   const inBounds = (x: number, y: number) => x >= margin && x <= width - margin && y >= margin && y <= height - margin;
   const clearDist = spacing * 1.6;
@@ -128,10 +128,10 @@ export function growStems(
         // Skip stubby branches — they read as thorns, not growth.
         if (childMax >= minBranchLen) {
           // Asymmetric bias gives a more designed, less even branch pattern.
-          // A shallow fork angle (~18°–42°) so branches diverge gently and the
+          // A shallow fork angle (~15°–34°) so branches diverge gently and the
           // junction flows — a wide kink reads as a snapped twig, not growth.
           const dir = rng() < 0.62 ? 1 : -1;
-          const turn = dir * (0.32 + rng() * 0.42);
+          const turn = dir * (0.26 + rng() * 0.34);
           // Continuous taper: a branch starts near the parent's *local* width.
           const parentLocal = tip.half * (1 - 0.5 * (i / steps));
           stack.push({
@@ -151,8 +151,10 @@ export function growStems(
       }
     }
 
-    // Drop stubby branch fragments; keep all trunk/guide stems.
-    if (pts.length >= 2 && (!tip.branch || polylineLength(pts) >= minBranchLen * 0.6)) {
+    // Drop stubby branch fragments; keep all trunk/guide stems. The full
+    // minBranchLen floor (not a fraction of it) — surviving nubs read as
+    // thorn-stub noise scattered over the plant, not growth.
+    if (pts.length >= 2 && (!tip.branch || polylineLength(pts) >= minBranchLen)) {
       stems.push({ points: pts, baseHalf: tip.half, branch: tip.branch });
       if (grid) for (const q of toInsert) grid.add(q);
     }
@@ -271,7 +273,7 @@ function extractChains(
   // Terminal spurs shorter than this read as spiky noise on the network rather
   // than growth, so they're dropped — the single biggest legibility win for the
   // colonized 'fill' shapes (the heart was a thicket of stubs).
-  const minTerminal = stepLength * 3;
+  const minTerminal = stepLength * 5;
 
   const stems: Stem[] = [];
   for (let i = 0; i < nodes.length; i++) {

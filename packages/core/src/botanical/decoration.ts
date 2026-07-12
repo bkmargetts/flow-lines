@@ -247,6 +247,7 @@ export function decorate(
     const massWTip = d.weightAt ? d.weightAt(tip.x, tip.y) : 1;
     const flowerChance = Math.min(1, d.flowerProb * (0.6 + 0.8 * dens) * (1 + 2 * nfTip) * massWTip);
     const legacyTip = d.inflorescence === 'none' && d.fruitType === 'none';
+    let tipDressed = false;
     if (legacyTip) {
       if (d.flowers && rng() < flowerChance) {
         // A bloom cluster, larger and more numerous toward the focal point.
@@ -256,23 +257,36 @@ export function decorate(
           const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
           makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, bloomAdd, tipDir);
         }
+        tipDressed = true;
       } else if (d.tendrils && rng() < d.tendrilProb) {
         const t = makeTendril(tip, tipDir, (rng() < 0.5 ? 1 : -1) as 1 | -1, d.leafSize * (0.8 + rng()), rng);
         add([t], []);
+        tipDressed = true;
       }
     } else {
       // New tip path: an inflorescence and/or a fruit cluster.
       if (d.inflorescence !== 'none') {
         if (d.flowers && rng() < flowerChance) {
           makeInflorescence(d.inflorescence, tip, tipDir, d.flowerSize * (1.4 + 1.2 * nfTip), d, rng, bloomAdd);
+          tipDressed = true;
         }
       } else if (d.flowers && rng() < flowerChance) {
         makeFlower(tip, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, bloomAdd, tipDir);
+        tipDressed = true;
       }
       if (d.fruitType !== 'none' && rng() < Math.min(1, d.fruitProb * (0.6 + 0.8 * dens) * massWTip)) {
         const fr = makeFruit(tip, d.fruitType, d.flowerSize * 1.15 * (0.85 + 0.4 * nfTip), d.penPx, d.light, rng, bloomAdd);
         bloomAdd(fr.lines, fr.silhouette);
+        tipDressed = true;
       }
+    }
+    // Terminal finish: a cane that earned neither bloom, inflorescence, fruit
+    // nor tendril ends in a young terminal leaf — in real ink botany a growing
+    // tip always resolves into *something*; a naked line end reads as unfinished.
+    if (!tipDressed && d.leaves) {
+      const llen = d.leafSize * (0.55 + rng() * 0.3);
+      const leaf = makeLeaf(tip, tipDir + (rng() - 0.5) * 0.4, (rng() < 0.5 ? 1 : -1) as 1 | -1, llen, d, d.leafStyle, rng);
+      add(leaf.lines, leaf.silhouette);
     }
   }
 
@@ -679,7 +693,9 @@ function makeFlower(
   const rot = rng() * Math.PI * 2;
 
   if (t === 'rose') {
-    const petals = 5 + Math.floor(rng() * 2);
+    // The classic etching shorthand for a rose: a wound spiral heart, an inner
+    // row of cupped C-strokes hugging it, and a ring of broad unfurled lobes —
+    // instead of fat loops radiating from one point (which read as popcorn).
     // A silhouette-only central disc (no drawn line) so foliage or stem sitting
     // behind the bloom's centre is occluded instead of poking through the gaps
     // between petals. Added before the petals so it occludes earlier elements
@@ -690,19 +706,60 @@ function makeFlower(
       hub.push({ x: center.x + Math.cos(a) * size * 0.6, y: center.y + Math.sin(a) * size * 0.6 });
     }
     add([], [hub]);
-    // Each petal its own element, so the next overlapping petal occludes it.
+    // The heart: a spiral winding out from the centre, slightly squashed and
+    // gently dented so it reads as folded petals, not a compass coil.
+    const turns = 2.1 + rng() * 0.5;
+    const sq = 0.82 + rng() * 0.12;
+    const spiral: Point[] = [];
+    const steps = 44;
+    for (let i = 0; i <= steps; i++) {
+      const u = i / steps;
+      const a = rot + u * turns * 2 * Math.PI;
+      const r = size * 0.34 * Math.pow(u, 0.75) * (1 + 0.08 * Math.sin(a * 3 + rot));
+      spiral.push({ x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r * sq });
+    }
+    add([{ points: spiral, layer: 'flower' }], []);
+    // Inner row: cupped open arcs hugging the heart, each its own element.
+    const innerN = 3 + Math.floor(rng() * 2);
+    for (let k = 0; k < innerN; k++) {
+      const a0 = rot + (k / innerN) * 2 * Math.PI + (rng() - 0.5) * 0.4;
+      const span = 1.5 + rng() * 0.5;
+      const rr = size * (0.42 + rng() * 0.08);
+      const arc: Point[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const u = i / 12;
+        const a = a0 - span / 2 + u * span;
+        const r = rr * (1 + 0.22 * Math.sin(Math.PI * u));
+        arc.push({ x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r });
+      }
+      add([{ points: arc, layer: 'flower' }], []);
+    }
+    // Outer row: broad rounded lobes ringing the heart. The drawn stroke is the
+    // open lobe only (base → rounded top → base); the closed loop (lobe + base
+    // arc) is used as the occluding silhouette so petals layer over each other
+    // and over the foliage behind without an extra clutter line at the base.
+    const petals = 5 + Math.floor(rng() * 2);
+    const w = ((2 * Math.PI) / petals) * 1.25;
     for (let k = 0; k < petals; k++) {
-      const ang = rot + (k / petals) * 2 * Math.PI;
-      const pl = petalOutline(center, ang, size, size * 0.42, penPx);
-      add([pl], [pl.points]);
+      const ang = rot + (k / petals) * 2 * Math.PI + (rng() - 0.5) * 0.25;
+      const r0 = size * 0.38;
+      const r1 = size * (0.95 + rng() * 0.25);
+      const N = 14;
+      const lobe: Point[] = [];
+      for (let i = 0; i <= N; i++) {
+        const u = i / N;
+        const a = ang + (u - 0.5) * w;
+        const r = r0 + (r1 - r0) * Math.pow(Math.sin(Math.PI * u), 0.8);
+        lobe.push({ x: center.x + Math.cos(a) * r, y: center.y + Math.sin(a) * r });
+      }
+      const sil = lobe.slice();
+      for (let i = N; i >= 0; i--) {
+        const u = i / N;
+        const a = ang + (u - 0.5) * w;
+        sil.push({ x: center.x + Math.cos(a) * r0, y: center.y + Math.sin(a) * r0 });
+      }
+      add([{ points: lobe, layer: 'flower' }], [sil]);
     }
-    // A few short stamen ticks at the centre, on top of the petals.
-    const stamens: FlowLine[] = [];
-    for (let k = 0; k < 4; k++) {
-      const a = rot + rng() * Math.PI * 2;
-      stamens.push({ points: [{ x: center.x, y: center.y }, { x: center.x + Math.cos(a) * size * 0.22, y: center.y + Math.sin(a) * size * 0.22 }], layer: 'flower' });
-    }
-    add(stamens, []);
   } else if (t === 'daisy') {
     const petals = 11 + Math.floor(rng() * 5);
     for (let k = 0; k < petals; k++) {
@@ -890,27 +947,38 @@ function makeFruit(
     const big = type === 'grape';
     const count = big ? 9 + Math.floor(rng() * 10) : 3 + Math.floor(rng() * 4);
     const r = size * (big ? 0.36 : 0.42);
-    const rows = big ? Math.ceil(Math.sqrt(count)) : 2;
-    // Pack snugly so the berries kiss and overlap into a solid hanging bunch
-    // (widest at the shoulders, tapering to a point) rather than a loose bead
-    // ladder. Each berry is shaded as a sphere and added as its own element so
-    // the front ones occlude those behind. Tighter pitch + row spacing than a
-    // bounding grid; the per-berry rng draws (bx, by, radius) are unchanged in
-    // order and count so determinism holds.
-    const pitch = r * 1.12;
-    const rowPitch = pitch * 0.8;
-    let placed = 0;
-    for (let row = 0; row < rows && placed < count; row++) {
-      const inRow = big ? Math.max(1, rows - row) : Math.max(1, count - placed);
-      const rowW = (inRow - 1) * pitch;
-      // Stagger alternate rows like real bunches.
-      const stagger = row % 2 ? pitch * 0.5 : 0;
-      for (let c = 0; c < inRow && placed < count; c++) {
-        const bx = center.x + (c * pitch - rowW / 2) + stagger + (rng() - 0.5) * r * 0.25;
-        const by = center.y + row * rowPitch + (rng() - 0.5) * r * 0.2 + size * 0.4;
+    if (big) {
+      // A grape bunch: staggered rows tapering from wide shoulders to a single
+      // tip berry — the triangular silhouette that says "grapes". Berries kiss
+      // (pitch ~1.5r) instead of drowning each other: over-packed circles
+      // smear into an unreadable mass at plot scale.
+      let shoulders = 1;
+      while ((shoulders * (shoulders + 1)) / 2 < count) shoulders++;
+      const pitch = r * 1.5;
+      const rowPitch = r * 1.35;
+      let placed = 0;
+      for (let row = 0; row < shoulders && placed < count; row++) {
+        const inRow = Math.min(shoulders - row, count - placed);
+        const rowW = (inRow - 1) * pitch;
+        const stagger = row % 2 ? pitch * 0.3 : 0;
+        for (let c = 0; c < inRow && placed < count; c++) {
+          const bx = center.x + (c * pitch - rowW / 2) + stagger + (rng() - 0.5) * r * 0.3;
+          const by = center.y + size * 0.4 + row * rowPitch + (rng() - 0.5) * r * 0.25;
+          const berry = makeBerry({ x: bx, y: by }, r * (0.88 + rng() * 0.24), light, rng);
+          add(berry.lines, [berry.sil]);
+          placed++;
+        }
+      }
+    } else {
+      // A berry clump: one berry at the hang point, the rest packed around it
+      // on a golden-angle spiral — a rounded cluster, not a bead row.
+      for (let k = 0; k < count; k++) {
+        const a = k * 2.39996323 + rng() * 0.6;
+        const rr = k === 0 ? 0 : r * 1.15 * Math.sqrt(k) * (0.9 + rng() * 0.2);
+        const bx = center.x + Math.cos(a) * rr;
+        const by = center.y + size * 0.4 + Math.sin(a) * rr * 0.85;
         const berry = makeBerry({ x: bx, y: by }, r * (0.82 + rng() * 0.36), light, rng);
         add(berry.lines, [berry.sil]);
-        placed++;
       }
     }
     return { lines: [{ points: [center, { x: center.x, y: center.y + size * 0.4 }], layer: 'stem' }], silhouette: [] };
