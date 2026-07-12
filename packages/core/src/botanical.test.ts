@@ -297,9 +297,12 @@ describe('generateBotanical', () => {
   });
 
   it('compound (pinnate) leaves change the output and add leaf blades', () => {
+    // 7 leaflets so the compound multiplier clearly dominates the sparser
+    // node spacing compound arrangements use — at 5 the comparison is
+    // marginal and flips with unrelated rng-stream shifts.
     const common = { composition: 'specimen', mode: 'growth', density: 0.6, tendrils: false, flowers: false } as const;
     const simple = generateBotanical(baseOptions({ ...common, leafArrangement: 'simple' }));
-    const pinnate = generateBotanical(baseOptions({ ...common, leafArrangement: 'pinnate', leafletCount: 5 }));
+    const pinnate = generateBotanical(baseOptions({ ...common, leafArrangement: 'pinnate', leafletCount: 7 }));
     expect(pinnate.lines).not.toEqual(simple.lines);
     expect(layers(pinnate.lines, 'leaf').length).toBeGreaterThan(layers(simple.lines, 'leaf').length);
   });
