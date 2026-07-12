@@ -464,7 +464,7 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
     for (let id = 0; id < elements.length; id++) {
       const el = elements[id];
       for (const ln of el.lines) {
-        for (const run of clipHidden(ln.points, id, zbuf)) {
+        for (const run of clipHidden(ln.points, id, zbuf, penPx * 2.5)) {
           outLines.push({ ...ln, points: run });
           if (outLines.length >= LINE_CAP) break;
         }
@@ -520,7 +520,7 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
 }
 
 /** Split a polyline into the runs whose points are not hidden by nearer ones. */
-function clipHidden(points: Point[], z: number, zbuf: ZBuffer): Point[][] {
+function clipHidden(points: Point[], z: number, zbuf: ZBuffer, minLen = 0): Point[][] {
   const runs: Point[][] = [];
   let run: Point[] = [];
   for (const p of points) {
@@ -532,6 +532,13 @@ function clipHidden(points: Point[], z: number, zbuf: ZBuffer): Point[][] {
     }
   }
   if (run.length >= 2) runs.push(run);
+  // A stroke that only pokes out of cover for a couple of px reads as an
+  // orphaned, disconnected fleck — drop those slivers. Lines that were short
+  // to begin with (stipple ticks, stamen strokes) are kept whole.
+  if (minLen > 0) {
+    const srcLen = polylineLength(points);
+    if (srcLen > minLen) return runs.filter((r) => polylineLength(r) >= minLen);
+  }
   return runs;
 }
 

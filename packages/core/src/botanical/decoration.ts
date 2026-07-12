@@ -266,11 +266,28 @@ export function decorate(
     if (legacyTip) {
       if (d.flowers && rng() < flowerChance) {
         // A bloom cluster, larger and more numerous toward the focal point.
+        // Satellite blooms (b > 0) sit on a ring around the tip and each hangs
+        // on its own short bowed pedicel back to the tip — a jittered bloom
+        // with no connecting stroke reads as floating beside the plant, the
+        // most jarring "computer" tell in the whole drawing. Satellites close
+        // enough to overlap the cluster skip the pedicel (the overlap carries
+        // the attachment).
         const blooms = 1 + (rng() < 0.3 * dens + 0.4 * nfTip ? 1 : 0) + (rng() < 0.5 * nfTip ? 1 : 0);
         for (let b = 0; b < blooms; b++) {
-          const jx = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
-          const jy = b === 0 ? 0 : (rng() - 0.5) * d.flowerSize * 2.4;
-          makeFlower({ x: tip.x + jx, y: tip.y + jy }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, bloomAdd, tipDir);
+          let bx = tip.x;
+          let by = tip.y;
+          if (b > 0) {
+            const pa = rng() * Math.PI * 2;
+            const pr = d.flowerSize * (0.6 + rng() * 0.6);
+            bx = tip.x + Math.cos(pa) * pr;
+            by = tip.y + Math.sin(pa) * pr;
+            if (pr > d.flowerSize * 0.7) {
+              const mx = (tip.x + bx) / 2 + (rng() - 0.5) * pr * 0.4;
+              const my = (tip.y + by) / 2 + (rng() - 0.5) * pr * 0.4;
+              bloomAdd([{ points: smoothPolyline([tip, { x: mx, y: my }, { x: bx, y: by }], 1), layer: 'stem' }], []);
+            }
+          }
+          makeFlower({ x: bx, y: by }, d.flowerSize * (0.7 + rng() * 0.6) * (1 + 0.5 * nfTip), d.penPx, d.flowerType, d.light, rng, bloomAdd, tipDir);
         }
         tipDressed = true;
       } else if (d.tendrils && rng() < d.tendrilProb) {
@@ -986,17 +1003,28 @@ function makeFruit(
       }
     } else {
       // A berry clump: one berry at the hang point, the rest packed around it
-      // on a golden-angle spiral — a rounded cluster, not a bead row.
+      // on a golden-angle spiral — a rounded cluster, not a bead row. Vertical
+      // offsets fold to |sin| so every berry hangs at or below the hang point:
+      // a berry drifting *above* it sits beside the cane, visibly detached
+      // from the stalk that's supposed to carry the clump.
       for (let k = 0; k < count; k++) {
         const a = k * 2.39996323 + rng() * 0.6;
         const rr = k === 0 ? 0 : r * 1.15 * Math.sqrt(k) * (0.9 + rng() * 0.2);
         const bx = center.x + Math.cos(a) * rr;
-        const by = center.y + size * 0.4 + Math.sin(a) * rr * 0.85;
+        const by = center.y + size * 0.4 + Math.abs(Math.sin(a)) * rr * 0.8;
         const berry = makeBerry({ x: bx, y: by }, r * (0.82 + rng() * 0.36), light, rng);
         add(berry.lines, [berry.sil]);
       }
     }
-    return { lines: [{ points: [center, { x: center.x, y: center.y + size * 0.4 }], layer: 'stem' }], silhouette: [] };
+    // The hanging stalk: a gently bowed stroke from the cane to the bunch's
+    // shoulder centre — a straight one-segment tick gets lost among the
+    // berries and the bunch reads as floating.
+    const bow = (rng() - 0.5) * size * 0.25;
+    const stalk = smoothPolyline(
+      [center, { x: center.x + bow, y: center.y + size * 0.22 }, { x: center.x, y: center.y + size * 0.45 }],
+      1
+    );
+    return { lines: [{ points: stalk, layer: 'stem' }], silhouette: [] };
   }
   if (type === 'rosehip') {
     // An engraved hip, not a hollow ring: the rim breaks for a lit-side
