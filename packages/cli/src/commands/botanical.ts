@@ -2,34 +2,34 @@ import type { Command } from 'commander';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  generateVines,
+  generateBotanical,
   toSVG,
   type SVGOptions,
-  type VinesOptions,
-  type VineComposition,
-  type VineMode,
-  type VineSeeding,
+  type BotanicalOptions,
+  type BotanicalComposition,
+  type BotanicalMode,
+  type BotanicalSeeding,
   type FillShape,
-  type VineFill,
+  type BotanicalFill,
   type StemShade,
   type LeafType,
   type LeafStyle,
-  type VineFlower,
+  type BotanicalFlower,
   type LeafArrangement,
   type Phyllotaxis,
   type Inflorescence,
   type FruitType,
-  type VineSupport,
+  type BotanicalSupport,
   type StemTexture,
 } from '@flow-lines/core';
-import { VINE_PALETTES } from '../palettes.js';
+import { BOTANICAL_PALETTES } from '../palettes.js';
 import { loadGuidePathsFromSvg } from '../guide-paths.js';
 import { resolvePageFrame } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
-export function registerVines(program: Command) {
-  addSketchOptions(program.command('vines'))
-    .description('Grow procedural, plottable botanical-illustration vines')
+export function registerBotanical(program: Command) {
+  addSketchOptions(program.command('botanical'))
+    .description('Grow procedural, plottable botanical illustrations')
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '1000')
     .option(
@@ -44,7 +44,7 @@ export function registerVines(program: Command) {
     .option('-s, --seed <number>', 'Random seed for reproducibility')
     // composition & seeding
     .option('--composition <c>', 'specimen | free | wreath | border | bouquet | trellis | fill | guide', 'specimen')
-    .option('--guide-svg <file>', 'SVG file whose path outlines the vines grow along (with --composition guide)')
+    .option('--guide-svg <file>', 'SVG file whose path outlines the stems grow along (with --composition guide)')
     .option('--support <s>', 'Trellis support the climbers wrap: none | lattice | arch | obelisk', 'none')
     .option('--fill-shape <s>', 'circle | oval | heart | diamond | painted (with --composition fill)', 'heart')
     .option('--mode <m>', 'Growth model: growth | colonization', 'growth')
@@ -61,16 +61,16 @@ export function registerVines(program: Command) {
     .option('--gravitropism <number>', 'Upward growth bias (0-1)', '0.4')
     .option('--branch-prob <number>', 'Side-branch probability per step (0-0.2)', '0.05')
     .option('--max-depth <number>', 'Branching recursion depth', '5')
-    .option('--max-length <number>', 'Max vine length in px', '320')
+    .option('--max-length <number>', 'Max stem length in px', '320')
     .option('--step-length <number>', 'Growth step length in px', '6')
     // colonization
     .option('--attractor-count <number>', 'Space-colonization attractor points', '600')
     .option('--attractor-radius <number>', 'Attractor reach in px', '90')
     .option('--kill-radius <number>', 'Attractor consume distance in px', '16')
-    // vine body & shading
+    // stem body & shading
     .option('--stem-width <number>', 'Base stem width in px', '8')
     .option('--taper <number>', 'Tapering toward the tip (0-1)', '0.85')
-    .option('--vine-fill <f>', 'Stem rendering: shaded | solid | outline | highlight', 'shaded')
+    .option('--stem-fill <f>', 'Stem rendering: shaded | solid | outline | highlight', 'shaded')
     .option('--light-angle <number>', 'Light source direction in degrees (0 = +x)', '-130')
     .option('--shade-density <number>', 'Shadow hatching intensity (0-1)', '0.55')
     .option('--stem-shade <s>', 'Thick-stem tube shading: none | along | cross', 'along')
@@ -112,23 +112,23 @@ export function registerVines(program: Command) {
     .option('--background', 'Include background rectangle')
     .option('--background-color <color>', 'Background color', '#ffffff')
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
-    .option('-o, --output <file>', 'Output file path', 'vines.svg')
+    .option('-o, --output <file>', 'Output file path', 'botanical.svg')
     .action((options) => {
       const { width, height, marginPx, paperSvg, paperStrokeWidth } = resolvePageFrame(options);
 
-      const vineOptions: VinesOptions = {
+      const botanicalOptions: BotanicalOptions = {
         width,
         height,
         margin: marginPx,
         seed: options.seed ? parseInt(options.seed, 10) : undefined,
-        composition: options.composition as VineComposition,
+        composition: options.composition as BotanicalComposition,
         fillShape: options.fillShape as FillShape,
-        support: options.support as VineSupport,
+        support: options.support as BotanicalSupport,
         guidePaths: options.guideSvg ? loadGuidePathsFromSvg(options.guideSvg, width, height, marginPx) : undefined,
-        mode: options.mode as VineMode,
-        seeding: options.seeding as VineSeeding,
+        mode: options.mode as BotanicalMode,
+        seeding: options.seeding as BotanicalSeeding,
         seedCount: parseInt(options.seedCount, 10),
-        vessel: options.vessel as VinesOptions['vessel'],
+        vessel: options.vessel as BotanicalOptions['vessel'],
         groundLine: options.groundLine ?? false,
         negativeSpace: parseFloat(options.negativeSpace),
         tonalMassing: parseFloat(options.tonalMassing),
@@ -144,7 +144,7 @@ export function registerVines(program: Command) {
         killRadius: parseFloat(options.killRadius),
         stemWidth: parseFloat(options.stemWidth),
         taper: parseFloat(options.taper),
-        vineFill: options.vineFill as VineFill,
+        stemFill: options.stemFill as BotanicalFill,
         lightAngle: parseFloat(options.lightAngle),
         shadeDensity: parseFloat(options.shadeDensity),
         stemShade: options.stemShade as StemShade,
@@ -168,7 +168,7 @@ export function registerVines(program: Command) {
         tendrils: options.tendrils,
         tendrilProb: parseFloat(options.tendrilProb),
         flowers: options.flowers,
-        flowerType: options.flowerType as VineFlower,
+        flowerType: options.flowerType as BotanicalFlower,
         flowerProb: parseFloat(options.flowerProb),
         flowerSize: parseFloat(options.flowerSize),
         inflorescence: options.inflorescence as Inflorescence,
@@ -182,15 +182,15 @@ export function registerVines(program: Command) {
         penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
       };
 
-      console.log('Growing vines...');
-      console.log(`  Size: ${width}x${height}, composition: ${vineOptions.composition}, mode: ${vineOptions.mode}`);
+      console.log('Growing botanicals...');
+      console.log(`  Size: ${width}x${height}, composition: ${botanicalOptions.composition}, mode: ${botanicalOptions.mode}`);
 
-      const result = generateVines(vineOptions);
+      const result = generateBotanical(botanicalOptions);
 
       console.log(`  Seed: ${result.seed}`);
       console.log(`  Generated ${result.lines.length} lines`);
 
-      const palette = VINE_PALETTES[options.palette] ?? VINE_PALETTES.ink;
+      const palette = BOTANICAL_PALETTES[options.palette] ?? BOTANICAL_PALETTES.ink;
       const svgOptions: SVGOptions = {
         strokeColor: palette.stem,
         strokeWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),

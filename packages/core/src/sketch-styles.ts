@@ -2,7 +2,7 @@
  * Shared "sketch" character for hand-drawn overdraw. A sketch redraws every line
  * a few times with low-frequency wobble; the style sets the character (how many
  * passes, the wobble wavelength / amplitude / per-stroke jitter) and `intensity`
- * (0..1) scales it. Used by the Vine and Planet generators so they share one
+ * (0..1) scales it. Used by the Botanical and Planet generators so they share one
  * vocabulary of hand-drawn looks.
  */
 export type SketchStyle = 'loose' | 'fine' | 'gestural' | 'scratchy';

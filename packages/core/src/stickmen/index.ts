@@ -3,7 +3,7 @@ import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { ellipse } from '../planet/geometry.js';
-import { ZBuffer } from '../vines/spatial.js';
+import { ZBuffer } from '../lib/spatial.js';
 import { placeFigures, fitFigures, type FacingMode } from './layout.js';
 import { buildFigure, type FigureBuild } from './figure.js';
 import { stampScene, splitVisible, type ZOffset } from './occlude.js';
@@ -26,7 +26,7 @@ const TAU = Math.PI * 2;
  * nearer head (limbs otherwise overlap freely). The look is the classic thin
  * stick figure: a circle head, single-pen curved (rounded) limbs that connect
  * to the spine. Single pen, tone is none — paper does
- * the work. Deterministic per seed. Mirrors the City / Vine / Planet
+ * the work. Deterministic per seed. Mirrors the City / Botanical / Planet
  * Generators: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
  */
 export interface StickmenOptions {

@@ -3,7 +3,7 @@ import type { LandscapeOptions } from '@flow-lines/core';
 // A few curated multi-pen palettes, duplicated here rather than imported from
 // the web app (the CLI must not depend on packages/web — the same convention
 // scripts/gallery.mjs follows by mirroring the web style presets as flags).
-export const VINE_PALETTES: Record<string, Record<string, string>> = {
+export const BOTANICAL_PALETTES: Record<string, Record<string, string>> = {
   ink: { stem: '#2a2a26', tendril: '#2a2a26', leaf: '#2a2a26', vein: '#2a2a26', flower: '#2a2a26', shadow: '#2a2a26' },
   botanical: { stem: '#5b4636', tendril: '#5b4636', leaf: '#3f6b3a', vein: '#34602f', flower: '#9c2b52', shadow: '#8a7a60' },
   rose: { stem: '#4a5d3a', tendril: '#4a5d3a', leaf: '#3f6b3a', vein: '#34602f', flower: '#c0306a', shadow: '#9aa07e' },

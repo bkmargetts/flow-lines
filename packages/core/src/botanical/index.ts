@@ -1,5 +1,5 @@
 /**
- * Vine generator — procedurally grown, plottable pen-and-ink vines aimed at a
+ * Botanical generator — procedurally grown, plottable pen-and-ink plants aimed at a
  * botanical-illustration look. Pure, ML-free, DOM-free, deterministic per seed.
  *
  * Two growth models, switchable:
@@ -29,16 +29,16 @@ import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { getSketchStyleConfig } from '../sketch-styles.js';
 import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
 import { smoothPolyline, pointInPolygon, clipPolylineToRect } from '../lib/polyline.js';
-import { FillShape, Root, Stem, VineComposition, VineMode, VineSeeding, VinesOptions, VineVessel } from './types.js';
-import { LINE_CAP, ProximityGrid, ZBuffer, polylineLength, smoothstep } from './spatial.js';
+import { FillShape, Root, Stem, BotanicalComposition, BotanicalMode, BotanicalSeeding, BotanicalOptions, BotanicalVessel } from './types.js';
+import { LINE_CAP, ProximityGrid, ZBuffer, polylineLength, smoothstep } from '../lib/spatial.js';
 import { colonize, growStems } from './growth.js';
 import { VESSEL_SPECS, buildGround, buildStem, buildSupport, buildVessel } from './structures.js';
 import { decorate, makeThorns } from './decoration.js';
 
 export type {
-  VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade,
-  VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence,
-  FruitType, VineSupport, StemTexture,
+  BotanicalOptions, BotanicalMode, BotanicalSeeding, BotanicalFill, LeafStyle, BotanicalComposition, LeafType, StemShade,
+  BotanicalFlower, FillShape, SketchStyle, BotanicalVessel, LeafArrangement, Phyllotaxis, Inflorescence,
+  FruitType, BotanicalSupport, StemTexture,
 } from './types.js';
 
 /** A drawable element: its marks and a closed silhouette for occlusion. Draw
@@ -93,7 +93,7 @@ function castShadows(
   return lines;
 }
 
-export function generateVines(options: VinesOptions): FlowLinesResult {
+export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
   const {
     width,
     height,
@@ -118,7 +118,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     stemWidth = 8,
     penWidth = 1,
     taper = 0.85,
-    vineFill = 'shaded',
+    stemFill = 'shaded',
     avoidOverlap = true,
     lightAngle = -135,
     shadeDensity = 0.5,
@@ -206,7 +206,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
 
   // A drawn vessel the arrangement rises out of (bouquet/specimen): the stems
   // are based at its mouth, and it occludes their lower ends.
-  const vesselSpec = vessel !== 'none' ? VESSEL_SPECS[vessel as Exclude<VineVessel, 'none'>] : undefined;
+  const vesselSpec = vessel !== 'none' ? VESSEL_SPECS[vessel as Exclude<BotanicalVessel, 'none'>] : undefined;
   const wantsVessel = !!vesselSpec && (composition === 'bouquet' || composition === 'specimen');
   let baseOverride: Point | undefined;
   let vesselBuilt: { lines: FlowLine[]; silhouette: Point[][] } | null = null;
@@ -281,7 +281,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   }
   // The vessel's cast shadow lies on the ground behind it (no silhouette, so the
   // vessel occludes the part beneath its foot) — this grounds the whole
-  // arrangement in space, which is what stops the vines reading as flat.
+  // arrangement in space, which is what stops the arrangement reading as flat.
   if (vesselShadow.length > 0) {
     const sl = applyHandDrawnStyle(
       { lines: vesselShadow, width, height, seed: seed + 911 },
@@ -290,8 +290,8 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
     add(sl, []);
   }
   if (vesselBuilt) {
-    // Run the vessel through the same hand-drawn wobble the vine centerlines
-    // get, so its outline and cross-contour hatching share the vines' line
+    // Run the vessel through the same hand-drawn wobble the stem centerlines
+    // get, so its outline and cross-contour hatching share the stems' line
     // quality instead of reading as a clean, pasted-in object.
     const wl = applyHandDrawnStyle(
       { lines: vesselBuilt.lines, width, height, seed: seed + 701 },
@@ -305,7 +305,7 @@ export function generateVines(options: VinesOptions): FlowLinesResult {
   // the rng sequence is otherwise byte-identical to a thornless render).
   wobbled.forEach((center, i) => {
     const st = rawStems[i];
-    const built = buildStem(center, st.baseHalf, { penPx, taper, vineFill, light, shadeDensity, stemShade, stemTexture, branch: st.branch });
+    const built = buildStem(center, st.baseHalf, { penPx, taper, stemFill, light, shadeDensity, stemShade, stemTexture, branch: st.branch });
     const thornLines = thorns ? makeThorns(center, st.baseHalf, thornProb, penPx, rng) : [];
     add([...built.lines, ...thornLines], built.silhouette);
   });
@@ -486,9 +486,9 @@ interface RootOpts {
   width: number;
   height: number;
   margin: number;
-  mode: VineMode;
-  composition: VineComposition;
-  seeding: VineSeeding;
+  mode: BotanicalMode;
+  composition: BotanicalComposition;
+  seeding: BotanicalSeeding;
   startPoints: Point[];
   seedCount: number;
   baseHalf: number;

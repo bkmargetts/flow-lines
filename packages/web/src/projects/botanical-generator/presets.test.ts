@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { VINE_PRESETS, getVinePreset, crossVinePresets, randomVineGenome } from './presets';
-import { VINE_PALETTES } from './palettes';
-import { defaultVineState } from './types';
+import { BOTANICAL_PRESETS, getBotanicalPreset, crossBotanicalPresets, randomBotanicalGenome } from './presets';
+import { BOTANICAL_PALETTES } from './palettes';
+import { defaultBotanicalState } from './types';
 
-const PALETTE_IDS = new Set(VINE_PALETTES.map((p) => p.id));
-const STATE_KEYS = new Set(Object.keys(defaultVineState));
+const PALETTE_IDS = new Set(BOTANICAL_PALETTES.map((p) => p.id));
+const STATE_KEYS = new Set(Object.keys(defaultBotanicalState));
 
 /** Deterministic 0..1 PRNG so the variety assertions don't flake. */
 function mulberry32(seed: number): () => number {
@@ -18,15 +18,15 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-describe('vine presets', () => {
+describe('botanical presets', () => {
   it('every preset has a unique id and a known label', () => {
-    const ids = VINE_PRESETS.map((p) => p.id);
+    const ids = BOTANICAL_PRESETS.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const p of VINE_PRESETS) expect(p.label.length).toBeGreaterThan(0);
+    for (const p of BOTANICAL_PRESETS) expect(p.label.length).toBeGreaterThan(0);
   });
 
-  it('every preset only sets valid VineState keys and a known palette', () => {
-    for (const p of VINE_PRESETS) {
+  it('every preset only sets valid BotanicalState keys and a known palette', () => {
+    for (const p of BOTANICAL_PRESETS) {
       for (const k of Object.keys(p.state)) {
         expect(STATE_KEYS.has(k)).toBe(true);
       }
@@ -34,15 +34,15 @@ describe('vine presets', () => {
     }
   });
 
-  it('getVinePreset resolves ids and returns undefined for unknown', () => {
-    expect(getVinePreset('wild-rose')).toBeDefined();
-    expect(getVinePreset('not-a-species')).toBeUndefined();
+  it('getBotanicalPreset resolves ids and returns undefined for unknown', () => {
+    expect(getBotanicalPreset('wild-rose')).toBeDefined();
+    expect(getBotanicalPreset('not-a-species')).toBeUndefined();
   });
 
-  it('crossVinePresets keeps the first parent habit and only sets defined keys', () => {
-    const a = getVinePreset('wild-rose')!;
-    const b = getVinePreset('grapevine')!;
-    const genome = crossVinePresets(a, b, () => 0.99); // always take parent A
+  it('crossBotanicalPresets keeps the first parent habit and only sets defined keys', () => {
+    const a = getBotanicalPreset('wild-rose')!;
+    const b = getBotanicalPreset('grapevine')!;
+    const genome = crossBotanicalPresets(a, b, () => 0.99); // always take parent A
     // Habit fields come from A.
     expect(genome.composition).toBe(a.state.composition);
     // No key is set to undefined (would corrupt the merged state).
@@ -52,20 +52,20 @@ describe('vine presets', () => {
     }
   });
 
-  it('crossVinePresets can pull traits from the second parent', () => {
-    const a = getVinePreset('wild-rose')!;
-    const b = getVinePreset('grapevine')!;
-    const genome = crossVinePresets(a, b, () => 0.0); // always take parent B
+  it('crossBotanicalPresets can pull traits from the second parent', () => {
+    const a = getBotanicalPreset('wild-rose')!;
+    const b = getBotanicalPreset('grapevine')!;
+    const genome = crossBotanicalPresets(a, b, () => 0.0); // always take parent B
     // Grapevine bears grapes; the hybrid should inherit that fruit trait.
     expect(genome.fruitType).toBe(b.state.fruitType ?? a.state.fruitType);
   });
 
-  it('randomVineGenome rolls a variety of palettes and vessel types', () => {
+  it('randomBotanicalGenome rolls a variety of palettes and vessel types', () => {
     const rnd = mulberry32(12345);
     const palettes = new Set<string>();
     const vessels = new Set<string>();
     for (let i = 0; i < 300; i++) {
-      const g = randomVineGenome(rnd);
+      const g = randomBotanicalGenome(rnd);
       // Only valid state keys, ever.
       for (const k of Object.keys(g)) expect(STATE_KEYS.has(k)).toBe(true);
       if (g.palette) palettes.add(g.palette);

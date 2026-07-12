@@ -1,19 +1,19 @@
 /**
- * Species presets: coherent bundles of vine settings that evoke a recognizable
+ * Species presets: coherent bundles of botanical settings that evoke a recognizable
  * plant. Selecting one batches its values into the module state (the Lenia
  * pattern); sliders still fine-tune from there. Each is a partial state — only
  * the fields that define the species' character are set.
  */
-import type { VineState } from './types';
-import { VINE_PALETTES } from './palettes';
+import type { BotanicalState } from './types';
+import { BOTANICAL_PALETTES } from './palettes';
 
-export interface VinePreset {
+export interface BotanicalPreset {
   id: string;
   label: string;
-  state: Partial<VineState>;
+  state: Partial<BotanicalState>;
 }
 
-export const VINE_PRESETS: VinePreset[] = [
+export const BOTANICAL_PRESETS: BotanicalPreset[] = [
   {
     id: 'wild-rose',
     label: 'Wild rose',
@@ -156,8 +156,8 @@ export const VINE_PRESETS: VinePreset[] = [
   },
 ];
 
-export function getVinePreset(id: string): VinePreset | undefined {
-  return VINE_PRESETS.find((p) => p.id === id);
+export function getBotanicalPreset(id: string): BotanicalPreset | undefined {
+  return BOTANICAL_PRESETS.find((p) => p.id === id);
 }
 
 /**
@@ -170,14 +170,14 @@ export function getVinePreset(id: string): VinePreset | undefined {
  * tasteful and dialled down further when the foliage or flowering is already
  * busy, so the page never overcrowds. The breeder behind the "surprise" button.
  */
-export function crossVinePresets(a: VinePreset, b: VinePreset, rnd: () => number): Partial<VineState> {
-  const out: Partial<VineState> = { ...a.state };
-  const maybe = <K extends keyof VineState>(k: K) => {
+export function crossBotanicalPresets(a: BotanicalPreset, b: BotanicalPreset, rnd: () => number): Partial<BotanicalState> {
+  const out: Partial<BotanicalState> = { ...a.state };
+  const maybe = <K extends keyof BotanicalState>(k: K) => {
     const v = b.state[k];
     if (v !== undefined && rnd() < 0.5) (out as Record<string, unknown>)[k] = v;
   };
   // Light, always-compatible traits mix freely.
-  (['leafType', 'leafStyle', 'phyllotaxis', 'flowerType', 'palette'] as (keyof VineState)[]).forEach(maybe);
+  (['leafType', 'leafStyle', 'phyllotaxis', 'flowerType', 'palette'] as (keyof BotanicalState)[]).forEach(maybe);
 
   // At most one of parent B's showy features crosses over.
   const showy: (() => void)[] = [];
@@ -213,23 +213,23 @@ export function crossVinePresets(a: VinePreset, b: VinePreset, rnd: () => number
 }
 
 /** Every drawn vessel the arrangement can stand in. */
-const RANDOM_VESSELS: VineState['vessel'][] = ['vase', 'urn', 'amphora', 'bud-vase', 'pot', 'jar', 'mason-jar', 'bowl'];
+const RANDOM_VESSELS: BotanicalState['vessel'][] = ['vase', 'urn', 'amphora', 'bud-vase', 'pot', 'jar', 'mason-jar', 'bowl'];
 
 /**
  * A fully random — but still coherent — genome for the "surprise" button. It
- * crosses two species (crossVinePresets) and then rolls the *page* elements the
+ * crosses two species (crossBotanicalPresets) and then rolls the *page* elements the
  * cross can't reach: the ink palette (any curated set), and, for arrangements
  * that stand on a surface, a random vessel + ground line. So every press varies
  * the pot, the colours and the stem count, not just the foliage.
  */
-export function randomVineGenome(rnd: () => number): Partial<VineState> {
+export function randomBotanicalGenome(rnd: () => number): Partial<BotanicalState> {
   const pick = <T>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)];
-  const a = pick(VINE_PRESETS);
-  const b = pick(VINE_PRESETS);
-  const genome: Partial<VineState> = a.id === b.id ? { ...a.state } : crossVinePresets(a, b, rnd);
+  const a = pick(BOTANICAL_PRESETS);
+  const b = pick(BOTANICAL_PRESETS);
+  const genome: Partial<BotanicalState> = a.id === b.id ? { ...a.state } : crossBotanicalPresets(a, b, rnd);
 
   // Colour: any curated palette, for real variety beyond the two parents'.
-  genome.palette = pick(VINE_PALETTES).id;
+  genome.palette = pick(BOTANICAL_PALETTES).id;
 
   // Vessel + ground: only compositions that actually render a container get one
   // (a random type, or none); everything else stays free-standing.

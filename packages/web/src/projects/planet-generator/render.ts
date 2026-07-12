@@ -8,7 +8,7 @@ import { getPlanetPalette } from './palettes';
  * convert to px at the page density; friendly 0..1 knobs (ocean, mare) map to
  * the core's raw noise thresholds. Hatch spacing and pen width are pre-divided
  * by zoom so they land back at the true size after the zoom transform, exactly
- * as the Vine Generator does. Multi-ink via `layerColors`.
+ * as the Botanical Generator does. Multi-ink via `layerColors`.
  */
 export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
@@ -116,7 +116,7 @@ export function renderPlanet(state: PlanetState, env: RenderEnv): LayerOutput {
 
   const result = generatePlanet(options);
 
-  // Zoom: scale the whole plate about the page centre, like the Vine Generator.
+  // Zoom: scale the whole plate about the page centre, like the Botanical Generator.
   const lines =
     zoom === 1
       ? result.lines

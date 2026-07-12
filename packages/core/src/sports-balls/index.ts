@@ -2,7 +2,7 @@ import type { FlowLine, FlowLinesResult } from '../flow-lines.js';
 import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
-import { ZBuffer } from '../vines/spatial.js';
+import { ZBuffer } from '../lib/spatial.js';
 import { compileRegion, type StickmenRegion } from '../stickmen/region.js';
 import { splitVisible, type ZOffset } from '../stickmen/occlude.js';
 import { placeBalls, type BallType } from './layout.js';

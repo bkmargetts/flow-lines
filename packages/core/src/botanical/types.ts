@@ -1,17 +1,17 @@
 import { Point } from '../flow-lines.js';
 import { type SketchStyle } from '../sketch-styles.js';
 
-export type VineMode = 'growth' | 'colonization';
-export type VineSeeding = 'painted' | 'scatter' | 'edges' | 'point';
-export type VineComposition = 'specimen' | 'free' | 'wreath' | 'border' | 'bouquet' | 'trellis' | 'fill' | 'guide';
+export type BotanicalMode = 'growth' | 'colonization';
+export type BotanicalSeeding = 'painted' | 'scatter' | 'edges' | 'point';
+export type BotanicalComposition = 'specimen' | 'free' | 'wreath' | 'border' | 'bouquet' | 'trellis' | 'fill' | 'guide';
 /** A drawn support the climbers wrap (trellis composition). */
-export type VineSupport = 'none' | 'lattice' | 'arch' | 'obelisk';
+export type BotanicalSupport = 'none' | 'lattice' | 'arch' | 'obelisk';
 /** A drawn container the arrangement rises out of (bouquet/specimen). */
-export type VineVessel = 'none' | 'vase' | 'pot' | 'jar' | 'urn' | 'amphora' | 'bud-vase' | 'mason-jar' | 'bowl';
+export type BotanicalVessel = 'none' | 'vase' | 'pot' | 'jar' | 'urn' | 'amphora' | 'bud-vase' | 'mason-jar' | 'bowl';
 /** Region a `fill` composition grows into. */
 export type FillShape = 'circle' | 'oval' | 'heart' | 'diamond' | 'painted';
-/** How a vine body is inked. */
-export type VineFill = 'shaded' | 'solid' | 'outline' | 'highlight';
+/** How a stem body is inked. */
+export type BotanicalFill = 'shaded' | 'solid' | 'outline' | 'highlight';
 /** How a leaf is inked. */
 export type LeafStyle = 'shaded' | 'veined' | 'outline' | 'solid';
 export type LeafType = 'ovate' | 'lance' | 'cordate' | 'lobed' | 'serrate' | 'mixed';
@@ -20,7 +20,7 @@ export type StemShade = 'none' | 'along' | 'cross';
 /** Surface texture drawn on thick (woody) stems. */
 export type StemTexture = 'none' | 'bark';
 /** Flower species. */
-export type VineFlower = 'rose' | 'daisy' | 'bell' | 'bud' | 'mixed';
+export type BotanicalFlower = 'rose' | 'daisy' | 'bell' | 'bud' | 'mixed';
 /** Character of the hand-sketched overdraw (shared with the Planet Generator). */
 export type { SketchStyle };
 /** How leaflets are arranged into a single (possibly compound) leaf. */
@@ -32,17 +32,17 @@ export type Inflorescence = 'none' | 'raceme' | 'umbel' | 'spike' | 'corymb';
 /** A fruiting body borne on the stems. */
 export type FruitType = 'none' | 'berry' | 'grape' | 'rosehip' | 'pod' | 'catkin';
 
-export interface VinesOptions {
+export interface BotanicalOptions {
   width: number;
   height: number;
   margin?: number;
   seed?: number;
-  mode?: VineMode;
+  mode?: BotanicalMode;
   /** Page arrangement: a designed single specimen, or free growth from roots. */
-  composition?: VineComposition;
+  composition?: BotanicalComposition;
   /** Shape a `fill` composition grows into. */
   fillShape?: FillShape;
-  seeding?: VineSeeding;
+  seeding?: BotanicalSeeding;
   startPoints?: Point[];
   seedCount?: number;
 
@@ -51,9 +51,9 @@ export interface VinesOptions {
    *  pixel coordinates accepted; callers pass page-pixel points. */
   guidePaths?: Point[][];
   /** A drawn support the climbers wrap, for the 'trellis' composition. */
-  support?: VineSupport;
+  support?: BotanicalSupport;
   /** A drawn container the stems rise out of (bouquet/specimen); 'none' off. */
-  vessel?: VineVessel;
+  vessel?: BotanicalVessel;
   /** Draw a hand-drawn ground line under the arrangement. */
   groundLine?: boolean;
   /** 0..1 deliberate negative space: hold one region of the page clear and
@@ -82,11 +82,11 @@ export interface VinesOptions {
   attractorRadius?: number;
   killRadius?: number;
 
-  // — vine body —
+  // — stem body —
   stemWidth?: number;
   penWidth?: number;
   taper?: number;
-  vineFill?: VineFill;
+  stemFill?: BotanicalFill;
   avoidOverlap?: boolean;
   spacing?: number;
 
@@ -129,7 +129,7 @@ export interface VinesOptions {
   tendrils?: boolean;
   tendrilProb?: number;
   flowers?: boolean;
-  flowerType?: VineFlower;
+  flowerType?: BotanicalFlower;
   flowerProb?: number;
   flowerSize?: number;
   /** Multi-flower structure at a stem tip; 'none' = single bloom (default). */

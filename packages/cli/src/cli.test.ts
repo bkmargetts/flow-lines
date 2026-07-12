@@ -24,11 +24,11 @@ describe('CLI', () => {
     expect(svg).toContain('</svg>');
   });
 
-  it('exposes the vine generator and renders a multi-pen botanical SVG', async () => {
-    const { generateVines, toSVG } = await import('@flow-lines/core');
-    expect(generateVines).toBeDefined();
+  it('exposes the botanical generator and renders a multi-pen botanical SVG', async () => {
+    const { generateBotanical, toSVG } = await import('@flow-lines/core');
+    expect(generateBotanical).toBeDefined();
 
-    const result = generateVines({
+    const result = generateBotanical({
       width: 444,
       height: 630,
       seed: 42,

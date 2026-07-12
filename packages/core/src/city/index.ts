@@ -29,7 +29,7 @@ export type { BuildingStyle, CityStyle } from './styles.js';
  *
  * Everything is single-pen stroked polylines, deterministic per seed — bold
  * is repeated offset passes, tone is spacing. Buildings only: no ground, sky
- * or streets; paper does that work. Mirrors the Landscape / Planet / Vine
+ * or streets; paper does that work. Mirrors the Landscape / Planet / Botanical
  * Generators: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
  */
 

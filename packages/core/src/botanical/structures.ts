@@ -1,15 +1,15 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { makeRandom } from '../lib/rng.js';
 import { offsetPolyline, trimPolyline } from '../lib/polyline.js';
-import { StemShade, StemTexture, VineFill, VineSupport, VineVessel } from './types.js';
-import { densify, normalsOf, outlineFromEdges, smoothstep } from './spatial.js';
+import { StemShade, StemTexture, BotanicalFill, BotanicalSupport, BotanicalVessel } from './types.js';
+import { densify, normalsOf, outlineFromEdges, smoothstep } from '../lib/spatial.js';
 
 // ——— stem rendering (rounded tube) ———
 
 export interface StemRenderOpts {
   penPx: number;
   taper: number;
-  vineFill: VineFill;
+  stemFill: BotanicalFill;
   light: Point;
   shadeDensity: number;
   stemShade: StemShade;
@@ -48,8 +48,8 @@ export function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts):
   }
 
   // Non-shaded modes keep the old filled/outline ribbon.
-  if (o.vineFill !== 'shaded') {
-    return { lines: ribbon(samples, normals, w, penPx, 'stem', o.vineFill), silhouette: [poly] };
+  if (o.stemFill !== 'shaded') {
+    return { lines: ribbon(samples, normals, w, penPx, 'stem', o.stemFill), silhouette: [poly] };
   }
 
   const lines: FlowLine[] = [];
@@ -180,8 +180,8 @@ export function buildGround(width: number, height: number, margin: number, baseY
 
 /** A drawn garden support the trellis climbers wrap: a diamond lattice, a round
  *  arch, or a tapering obelisk. Returned as stem-layer lines, drawn behind the
- *  vines so they read as climbing it. */
-export function buildSupport(support: VineSupport, width: number, height: number, margin: number): FlowLine[] {
+ *  stems so they read as climbing it. */
+export function buildSupport(support: BotanicalSupport, width: number, height: number, margin: number): FlowLine[] {
   if (support === 'none') return [];
   const lines: FlowLine[] = [];
   const x0 = margin * 1.6;
@@ -269,7 +269,7 @@ function sampleProfile(prof: [number, number][], u: number): number {
  *  fraction of the mouth reference]) plus per-type height/width factors so each
  *  keeps its proportions (a bowl is wide and low, an amphora tall and narrow). */
 export interface VesselSpec { profile: [number, number][]; h: number; w: number; }
-export const VESSEL_SPECS: Record<Exclude<VineVessel, 'none'>, VesselSpec> = {
+export const VESSEL_SPECS: Record<Exclude<BotanicalVessel, 'none'>, VesselSpec> = {
   vase: { h: 1.0, w: 1.0, profile: [[0, 0.92], [0.06, 0.96], [0.12, 0.76], [0.24, 0.8], [0.44, 1.14], [0.62, 1.24], [0.82, 1.0], [0.94, 0.76], [1, 0.7]] },
   urn: { h: 1.12, w: 0.95, profile: [[0, 0.96], [0.035, 1.06], [0.085, 0.84], [0.17, 0.72], [0.28, 0.88], [0.44, 1.2], [0.59, 1.36], [0.73, 1.22], [0.86, 0.9], [0.93, 0.6], [0.965, 0.68], [1, 0.58]] },
   amphora: { h: 1.18, w: 0.9, profile: [[0, 0.62], [0.05, 0.74], [0.12, 0.6], [0.2, 0.66], [0.4, 0.98], [0.57, 1.04], [0.73, 0.82], [0.86, 0.5], [0.93, 0.3], [0.965, 0.22], [0.985, 0.32], [1, 0.26]] },
@@ -296,7 +296,7 @@ function ellipseArc(cx: number, cy: number, rx: number, ry: number, a0: number, 
  *  bare highlight on the lit side, graded cross-contour hatching into a
  *  cross-hatched core shadow, a reflected-light sliver at the shadow edge — plus
  *  a contact + cast shadow on the ground. Everything is cross-contour, directional
- *  hatching keyed to the same `light` as the vines, held in a light value key,
+ *  hatching keyed to the same `light` as the stems, held in a light value key,
  *  and the caller wobbles it through the same hand-drawn pass + sketch overdraw,
  *  so it reads as the same hand and grounds the arrangement instead of flattening
  *  it. The silhouette occludes the stem bases; the cast shadow is returned
@@ -306,7 +306,7 @@ export function buildVessel(
   topY: number,
   bottomY: number,
   mouthHalf: number,
-  type: VineVessel,
+  type: BotanicalVessel,
   light: Point,
   penPx: number,
   shadeDensity: number,
@@ -381,7 +381,7 @@ export function buildVessel(
   // instead of a stack of flat horizontal bands. Packed from just inside the
   // terminator toward the silhouette, leaving a reflected-light sliver bare at the
   // edge and the whole lit hemisphere clean. (Vessel uses its own seeded jitter,
-  // independent of the vine rng.)
+  // independent of the generator rng.)
   if (shadeDensity > 0.01) {
     const shadowSign = light.x <= 0 ? 1 : -1; // light from the left → shade right
     const jit = makeRandom((seed ^ 0x9e3779b9) >>> 0);
@@ -468,7 +468,7 @@ export function ribbon(
   w: number[],
   penPx: number,
   layer: string,
-  mode: VineFill
+  mode: BotanicalFill
 ): FlowLine[] {
   const n = samples.length;
   let maxHalf = 0;

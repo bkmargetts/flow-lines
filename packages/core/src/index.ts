@@ -109,9 +109,9 @@ export type { HandDrawnOptions } from './hand-drawn.js';
 export { applySketch } from './sketch.js';
 export type { SketchOptions } from './sketch.js';
 
-// Vine generator (organic procedural vines)
-export { generateVines } from './vines/index.js';
-export type { VinesOptions, VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from './vines/index.js';
+// Botanical generator (organic procedural plants)
+export { generateBotanical } from './botanical/index.js';
+export type { BotanicalOptions, BotanicalMode, BotanicalSeeding, BotanicalFill, LeafStyle, BotanicalComposition, LeafType, StemShade, BotanicalFlower, FillShape, SketchStyle, BotanicalVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, BotanicalSupport, StemTexture } from './botanical/index.js';
 
 // Planet generator (procedural pen-and-ink planets)
 export { generatePlanet } from './planet/index.js';

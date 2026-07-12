@@ -29,7 +29,7 @@ pnpm monorepo:
   `src/lib/` (`rng.ts` — the repo-standard LCG + `randomSeed`/`subSeed`;
   `polyline.ts` — trim/offset/smooth/clip/point-in-polygon; `math.ts`) and
   are **not** exported from the package barrel. The big generators are
-  directories, one concern per file (`vines/`, `pen-ink/`, `conway/`,
+  directories, one concern per file (`botanical/`, `pen-ink/`, `conway/`,
   `landscape/`, `planet/`), each with an `index.ts` the flat `src/index.ts`
   barrel re-exports — the public API is the barrel, never deep paths.
 - **`packages/cli`** — `flow-lines image -i photo.jpg -o out.svg` plus

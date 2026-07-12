@@ -1,7 +1,7 @@
 import { Point } from '../flow-lines.js';
 import { SimplexNoise } from '../noise.js';
 import { Root, Stem } from './types.js';
-import { ProximityGrid, STEM_CAP, polylineLength, steer } from './spatial.js';
+import { ProximityGrid, STEM_CAP, polylineLength, steer } from '../lib/spatial.js';
 
 // ——— growth model: recursive tip-growth ———
 

@@ -1,7 +1,7 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { smoothPolyline } from '../lib/polyline.js';
-import { FruitType, Inflorescence, LeafArrangement, LeafStyle, LeafType, Phyllotaxis, VineFlower } from './types.js';
-import { densify, normalsOf, outlineFromEdges, polylineLength, smoothstep } from './spatial.js';
+import { FruitType, Inflorescence, LeafArrangement, LeafStyle, LeafType, Phyllotaxis, BotanicalFlower } from './types.js';
+import { densify, normalsOf, outlineFromEdges, polylineLength, smoothstep } from '../lib/spatial.js';
 import { ribbon } from './structures.js';
 
 // ——— decorations ———
@@ -21,7 +21,7 @@ export interface DecorParams {
   tendrils: boolean;
   tendrilProb: number;
   flowers: boolean;
-  flowerType: VineFlower;
+  flowerType: BotanicalFlower;
   flowerProb: number;
   flowerSize: number;
   inflorescence: Inflorescence;
@@ -574,7 +574,7 @@ function makeTendril(base: Point, stemDir: number, side: 1 | -1, size: number, r
   return { points: smoothPolyline(pts, 2), layer: 'tendril' };
 }
 
-const FLOWER_TYPES: VineFlower[] = ['rose', 'daisy', 'bell', 'bud'];
+const FLOWER_TYPES: BotanicalFlower[] = ['rose', 'daisy', 'bell', 'bud'];
 
 /** A petal as an outline loop (no fill) — botanical line-work to match leaves. */
 function petalOutline(center: Point, ang: number, len: number, half: number, penPx: number): FlowLine {
@@ -664,13 +664,13 @@ function makeFlower(
   center: Point,
   size: number,
   penPx: number,
-  type: VineFlower,
+  type: BotanicalFlower,
   light: Point,
   rng: () => number,
   add: (lines: FlowLine[], sil: Point[][]) => void,
   dir?: number
 ): void {
-  const t: VineFlower = type === 'mixed' ? FLOWER_TYPES[Math.floor(rng() * FLOWER_TYPES.length)] : type;
+  const t: BotanicalFlower = type === 'mixed' ? FLOWER_TYPES[Math.floor(rng() * FLOWER_TYPES.length)] : type;
   const rot = rng() * Math.PI * 2;
 
   if (t === 'rose') {
@@ -825,7 +825,7 @@ function makeInflorescence(
     const at = ax[idx];
     const maturity = 1 - t; // base most open, tip still in bud
     const fsize = size * (0.55 + 0.5 * maturity);
-    const ftype: VineFlower = maturity > 0.5 ? d.flowerType : 'bud';
+    const ftype: BotanicalFlower = maturity > 0.5 ? d.flowerType : 'bud';
     if (type === 'raceme') {
       const ped = size * 0.7;
       const fx = at.x + px * (k % 2 ? 1 : -1) * ped * 0.4 + dx * ped * 0.3;

@@ -1,5 +1,5 @@
 import type { Point } from '../flow-lines.js';
-import { ZBuffer, densify } from '../vines/spatial.js';
+import { ZBuffer, densify } from '../lib/spatial.js';
 import type { FigureBuild } from './figure.js';
 
 /**

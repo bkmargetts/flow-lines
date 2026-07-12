@@ -11,7 +11,7 @@ import { generateReactionDiffusion } from './reaction-diffusion.js';
 import { generateLenia } from './lenia.js';
 import { generatePhysarum } from './physarum.js';
 import { generateComplexFlow, type ComplexFlowOptions } from './complex-flow.js';
-import { generateVines } from './vines/index.js';
+import { generateBotanical } from './botanical/index.js';
 import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape/index.js';
 import { generateCity } from './city/index.js';
@@ -42,7 +42,7 @@ import type { GrayscaleImage } from './image.js';
  *     UPDATE_GOLDENS=1 pnpm --filter @flow-lines/core test
  *
  * but ONLY after re-rendering the galleries (`node scripts/gallery.mjs`,
- * `vines-gallery.mjs`, `planet-gallery.mjs`) and eyeball-diffing them against
+ * `botanical-gallery.mjs`, `planet-gallery.mjs`) and eyeball-diffing them against
  * the previous output — the hashes are the guardrail, the album is the judge.
  *
  * Hashes are sha256 over JSON.stringify of the result. V8's float printing is
@@ -132,7 +132,7 @@ for (const seed of SEEDS) {
   CASES[`lenia/orbium/${seed}`] = () => generateLenia({ width: 300, height: 400, seed });
   CASES[`physarum/network/${seed}`] = () => generatePhysarum({ width: 300, height: 400, seed });
   CASES[`complex-flow/${seed}`] = () => generateComplexFlow({ ...complexBase, seed });
-  CASES[`vines/default/${seed}`] = () => generateVines({ width: 300, height: 400, seed });
+  CASES[`botanical/default/${seed}`] = () => generateBotanical({ width: 300, height: 400, seed });
   CASES[`planet/terrestrial/${seed}`] = () =>
     generatePlanet({ width: 300, height: 400, margin: 20, seed });
   CASES[`landscape/default/${seed}`] = () =>
@@ -171,8 +171,8 @@ CASES['lenia/cells/42'] = () =>
   generateLenia({ width: 300, height: 400, seed: 42, preset: 'cells' });
 CASES['physarum/veins/42'] = () =>
   generatePhysarum({ width: 300, height: 400, seed: 42, preset: 'veins' });
-CASES['vines/wreath/42'] = () =>
-  generateVines({ width: 300, height: 400, seed: 42, composition: 'wreath' });
+CASES['botanical/wreath/42'] = () =>
+  generateBotanical({ width: 300, height: 400, seed: 42, composition: 'wreath' });
 CASES['stickmen/energetic/42'] = () =>
   generateStickmen({ width: 300, height: 400, margin: 20, seed: 42, poseEnergy: 1, count: 90 });
 CASES['stickmen/region-ellipse/42'] = () =>

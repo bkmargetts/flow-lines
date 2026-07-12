@@ -53,14 +53,14 @@ const IMAGE_PRESETS = {
   sumie: ['--style', 'sumie'],
 };
 
-// Vine species mirror scripts/vines-gallery.mjs (a representative subset).
-const VINE_SPECIES = {
+// Botanical species mirror scripts/botanical-gallery.mjs (a representative subset).
+const BOTANICAL_SPECIES = {
   'wild-rose': ['--leaf-type', 'serrate', '--leaf-arrangement', 'pinnate', '--leaflet-count', '5', '--thorns', '--thorn-prob', '0.18', '--flower-type', 'rose', '--flower-prob', '0.4', '--density', '0.55', '--stem-width', '8', '--palette', 'rose'],
   fern: ['--leaf-type', 'lance', '--leaf-style', 'veined', '--leaf-arrangement', 'bipinnate', '--leaflet-count', '9', '--no-flowers', '--no-tendrils', '--density', '0.5', '--leaf-size', '16', '--leaf-spacing', '18', '--stem-width', '5', '--palette', 'botanical'],
   grapevine: ['--leaf-type', 'lobed', '--fruit-type', 'grape', '--fruit-prob', '0.4', '--no-flowers', '--tendril-prob', '0.28', '--density', '0.55', '--stem-width', '8', '--palette', 'autumn'],
   oak: ['--leaf-type', 'lobed', '--phyllotaxis', 'spiral', '--fruit-type', 'catkin', '--fruit-prob', '0.25', '--no-flowers', '--density', '0.55', '--leaf-size', '16', '--stem-width', '12', '--stem-texture', 'bark', '--palette', 'botanical'],
 };
-const VINE_COMPOSITIONS = {
+const BOTANICAL_COMPOSITIONS = {
   specimen: ['--composition', 'specimen'],
   'specimen+jar': ['--composition', 'specimen', '--vessel', 'jar', '--ground-line'],
   wreath: ['--composition', 'wreath', '--seed-count', '8'],
@@ -117,11 +117,11 @@ CASES['image/classic/boats'] = [
 for (const style of CONWAY_STYLES) {
   CASES[`conway/${style}`] = ['conway', ...SIZE, ...SEED, '--style', style];
 }
-for (const [species, flags] of Object.entries(VINE_SPECIES)) {
-  CASES[`vines/${species}`] = ['vines', ...SIZE, ...SEED, ...flags];
+for (const [species, flags] of Object.entries(BOTANICAL_SPECIES)) {
+  CASES[`botanical/${species}`] = ['botanical', ...SIZE, ...SEED, ...flags];
 }
-for (const [comp, flags] of Object.entries(VINE_COMPOSITIONS)) {
-  CASES[`vines/wild-rose/${comp}`] = ['vines', ...SIZE, ...SEED, ...VINE_SPECIES['wild-rose'], ...flags];
+for (const [comp, flags] of Object.entries(BOTANICAL_COMPOSITIONS)) {
+  CASES[`botanical/wild-rose/${comp}`] = ['botanical', ...SIZE, ...SEED, ...BOTANICAL_SPECIES['wild-rose'], ...flags];
 }
 for (const [preset, flags] of Object.entries(PLANET_PRESETS)) {
   CASES[`planet/${preset}`] = ['planet', '--width', '420', '--height', '420', ...SEED, ...flags];
@@ -130,7 +130,7 @@ for (const scene of LANDSCAPE_SCENES) {
   CASES[`landscape/${scene}`] = ['landscape', ...SIZE, ...SEED, '--scene', scene];
 }
 // Paper-size page path (the block repeated across commands) + hand-drawn wobble.
-CASES['vines/paper-a5'] = ['vines', ...SEED, '--paper', 'a5', ...VINE_SPECIES.fern];
+CASES['botanical/paper-a5'] = ['botanical', ...SEED, '--paper', 'a5', ...BOTANICAL_SPECIES.fern];
 CASES['landscape/paper-a5'] = ['landscape', ...SEED, '--paper', 'a5', '--scene', 'rolling-hills'];
 CASES['planet/paper-a5'] = ['planet', ...SEED, '--paper', 'a5', '--type', 'moon', '--craters'];
 CASES['conway/paper-a5'] = ['conway', ...SEED, '--paper', 'a5'];

@@ -11,7 +11,7 @@ import {
  * pass over the finished output (after any generator-level sketch options,
  * which keep their own `--sketch*` flags where they exist) applied right
  * before the SVG is written. The `--hand-sketch*` names stay clear of the
- * module-level `--sketch`/`--sketch-style` on vines/planet/landscape.
+ * module-level `--sketch`/`--sketch-style` on botanical/planet/landscape.
  */
 export function addSketchOptions(cmd: Command): Command {
   return cmd

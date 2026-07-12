@@ -4,25 +4,25 @@ import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
 import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
-import type { VineState } from './types';
-import { VINE_PALETTES, CUSTOM_PALETTE } from './palettes';
-import { VINE_PRESETS, getVinePreset, randomVineGenome } from './presets';
+import type { BotanicalState } from './types';
+import { BOTANICAL_PALETTES, CUSTOM_PALETTE } from './palettes';
+import { BOTANICAL_PRESETS, getBotanicalPreset, randomBotanicalGenome } from './presets';
 
-/** Sidebar controls for the Vine Generator module. */
-export function VineGeneratorControls({ state, update }: ControlsProps<VineState>) {
+/** Sidebar controls for the Botanical Generator module. */
+export function BotanicalGeneratorControls({ state, update }: ControlsProps<BotanicalState>) {
   // The paint tool seeds roots (seeding=painted) or defines the fill region
   // (composition=fill, shape=painted).
   const painting = state.seeding === 'painted' || (state.composition === 'fill' && state.fillShape === 'painted') || state.composition === 'guide';
 
   const selectSpecies = (id: string) => {
-    const preset = getVinePreset(id);
+    const preset = getBotanicalPreset(id);
     update({ species: id, ...(preset ? preset.state : {}) });
   };
   const surprise = () => {
     // A coherent random genome: a species cross plus randomised page elements
     // (palette, vessel, ground, stem count) so every press varies everything,
     // not just the foliage.
-    update({ species: 'custom', ...randomVineGenome(Math.random), seed: randomSeed() });
+    update({ species: 'custom', ...randomBotanicalGenome(Math.random), seed: randomSeed() });
   };
 
   return (
@@ -32,7 +32,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       <div className="control-group">
         <div className="seed-input">
           <select value={state.species} onChange={(e) => selectSpecies(e.target.value)} style={{ flex: 1 }}>
-            {VINE_PRESETS.map((p) => (
+            {BOTANICAL_PRESETS.map((p) => (
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
             <option value="custom">Custom…</option>
@@ -50,7 +50,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         <label className="label-text">Composition</label>
         <select
           value={state.composition}
-          onChange={(e) => update({ composition: e.target.value as VineState['composition'] })}
+          onChange={(e) => update({ composition: e.target.value as BotanicalState['composition'] })}
         >
           <option value="specimen">Specimen (designed sprig)</option>
           <option value="wreath">Wreath / garland</option>
@@ -65,19 +65,19 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           {state.composition === 'specimen'
             ? 'One designed specimen: a master gesture sweeping to a focal point, with white space.'
             : state.composition === 'fill'
-              ? 'Vines colonise and fill the chosen shape.'
+              ? 'Growth colonises and fills the chosen shape.'
               : state.composition === 'guide'
-                ? 'Draw a line on the canvas and the vine grows along it — a letter, a shape, a flourish.'
+                ? 'Draw a line on the canvas and the plant grows along it — a letter, a shape, a flourish.'
                 : state.composition === 'free'
                   ? 'Grow freely from the roots below.'
-                  : 'A composed arrangement of vines.'}
+                  : 'A composed botanical arrangement.'}
         </p>
       </div>
 
       {state.composition === 'trellis' && (
         <div className="control-group">
           <label className="label-text">Support</label>
-          <select value={state.support} onChange={(e) => update({ support: e.target.value as VineState['support'] })}>
+          <select value={state.support} onChange={(e) => update({ support: e.target.value as BotanicalState['support'] })}>
             <option value="none">None</option>
             <option value="lattice">Lattice panel</option>
             <option value="arch">Arch</option>
@@ -90,7 +90,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       {(state.composition === 'bouquet' || state.composition === 'specimen') && (
         <div className="control-group">
           <label className="label-text">Vessel</label>
-          <select value={state.vessel} onChange={(e) => update({ vessel: e.target.value as VineState['vessel'] })}>
+          <select value={state.vessel} onChange={(e) => update({ vessel: e.target.value as BotanicalState['vessel'] })}>
             <option value="none">None</option>
             <option value="vase">Vase</option>
             <option value="urn">Urn</option>
@@ -159,7 +159,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       {state.composition === 'fill' && (
         <div className="control-group">
           <label className="label-text">Shape</label>
-          <select value={state.fillShape} onChange={(e) => update({ fillShape: e.target.value as VineState['fillShape'] })}>
+          <select value={state.fillShape} onChange={(e) => update({ fillShape: e.target.value as BotanicalState['fillShape'] })}>
             <option value="heart">Heart</option>
             <option value="circle">Circle</option>
             <option value="oval">Oval</option>
@@ -192,7 +192,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </div>
         <p className="paint-hint">
           {state.mode === 'growth'
-            ? 'Stems meander and branch upward — the classic climbing vine.'
+            ? 'Stems meander and branch upward — the classic climbing habit.'
             : 'Branches grow to fill the page — a space-filling ivy/venation network.'}
         </p>
       </div>
@@ -201,7 +201,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         <label className="label-text">Roots from</label>
         <select
           value={state.seeding}
-          onChange={(e) => update({ seeding: e.target.value as VineState['seeding'] })}
+          onChange={(e) => update({ seeding: e.target.value as BotanicalState['seeding'] })}
         >
           <option value="scatter">Random scatter</option>
           <option value="edges">Frame edges (climbing)</option>
@@ -233,10 +233,10 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
             </div>
             <p className="paint-hint">
               {state.drawMode
-                ? 'Click or drag on the canvas to place vine roots.'
+                ? 'Click or drag on the canvas to place roots.'
                 : state.maskPath.length > 0
                   ? `${state.maskPath.length} roots placed.`
-                  : 'Paint where the vines should sprout from.'}
+                  : 'Paint where the stems should sprout from.'}
             </p>
           </div>
         </div>
@@ -265,7 +265,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
 
       <div className="control-group">
         <label className="label-text">Season</label>
-        <select value={state.season} onChange={(e) => update({ season: e.target.value as VineState['season'] })}>
+        <select value={state.season} onChange={(e) => update({ season: e.target.value as BotanicalState['season'] })}>
           <option value="spring">Spring</option>
           <option value="summer">Summer</option>
           <option value="autumn">Autumn</option>
@@ -298,10 +298,10 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         </label>
       </div>
 
-      <h3 className="section-title">Vine body</h3>
+      <h3 className="section-title">Stem body</h3>
 
       <Slider
-        label="Vine Width"
+        label="Stem Width"
         value={state.stemWidthMm}
         min={0.3}
         max={8}
@@ -312,7 +312,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
 
       <div className="control-group">
         <label className="label-text">Fill</label>
-        <select value={state.vineFill} onChange={(e) => update({ vineFill: e.target.value as VineState['vineFill'] })}>
+        <select value={state.stemFill} onChange={(e) => update({ stemFill: e.target.value as BotanicalState['stemFill'] })}>
           <option value="shaded">Shaded tube (botanical)</option>
           <option value="solid">Solid</option>
           <option value="outline">Hollow outline</option>
@@ -324,7 +324,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         <>
           <div className="control-group">
             <label className="label-text">Leaf style</label>
-            <select value={state.leafStyle} onChange={(e) => update({ leafStyle: e.target.value as VineState['leafStyle'] })}>
+            <select value={state.leafStyle} onChange={(e) => update({ leafStyle: e.target.value as BotanicalState['leafStyle'] })}>
               <option value="shaded">Shaded (veins + form)</option>
               <option value="veined">Outline + veins</option>
               <option value="outline">Outline only</option>
@@ -333,7 +333,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           </div>
           <div className="control-group">
             <label className="label-text">Leaf type</label>
-            <select value={state.leafType} onChange={(e) => update({ leafType: e.target.value as VineState['leafType'] })}>
+            <select value={state.leafType} onChange={(e) => update({ leafType: e.target.value as BotanicalState['leafType'] })}>
               <option value="ovate">Ovate</option>
               <option value="lance">Lance</option>
               <option value="cordate">Cordate (heart)</option>
@@ -344,7 +344,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           </div>
           <div className="control-group">
             <label className="label-text">Leaf arrangement</label>
-            <select value={state.leafArrangement} onChange={(e) => update({ leafArrangement: e.target.value as VineState['leafArrangement'] })}>
+            <select value={state.leafArrangement} onChange={(e) => update({ leafArrangement: e.target.value as BotanicalState['leafArrangement'] })}>
               <option value="simple">Simple (one blade)</option>
               <option value="pinnate">Pinnate (leaflets on a rachis)</option>
               <option value="bipinnate">Bipinnate (fern frond)</option>
@@ -364,7 +364,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           )}
           <div className="control-group">
             <label className="label-text">Phyllotaxis</label>
-            <select value={state.phyllotaxis} onChange={(e) => update({ phyllotaxis: e.target.value as VineState['phyllotaxis'] })}>
+            <select value={state.phyllotaxis} onChange={(e) => update({ phyllotaxis: e.target.value as BotanicalState['phyllotaxis'] })}>
               <option value="alternate">Alternate</option>
               <option value="opposite">Opposite (pairs)</option>
               <option value="whorled">Whorled (ring)</option>
@@ -392,7 +392,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
         <>
           <div className="control-group">
             <label className="label-text">Flower type</label>
-            <select value={state.flowerType} onChange={(e) => update({ flowerType: e.target.value as VineState['flowerType'] })}>
+            <select value={state.flowerType} onChange={(e) => update({ flowerType: e.target.value as BotanicalState['flowerType'] })}>
               <option value="rose">Rose (5-petal)</option>
               <option value="daisy">Daisy (composite)</option>
               <option value="bell">Bell</option>
@@ -402,7 +402,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           </div>
           <div className="control-group">
             <label className="label-text">Inflorescence</label>
-            <select value={state.inflorescence} onChange={(e) => update({ inflorescence: e.target.value as VineState['inflorescence'] })}>
+            <select value={state.inflorescence} onChange={(e) => update({ inflorescence: e.target.value as BotanicalState['inflorescence'] })}>
               <option value="none">Single bloom</option>
               <option value="raceme">Raceme (hanging spike)</option>
               <option value="umbel">Umbel (radiating)</option>
@@ -425,7 +425,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
 
       <div className="control-group">
         <label className="label-text">Fruit</label>
-        <select value={state.fruitType} onChange={(e) => update({ fruitType: e.target.value as VineState['fruitType'] })}>
+        <select value={state.fruitType} onChange={(e) => update({ fruitType: e.target.value as BotanicalState['fruitType'] })}>
           <option value="none">None</option>
           <option value="berry">Berries</option>
           <option value="grape">Grapes</option>
@@ -480,7 +480,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
 
       <div className="control-group">
         <label className="label-text">Tube shading</label>
-        <select value={state.stemShade} onChange={(e) => update({ stemShade: e.target.value as VineState['stemShade'] })}>
+        <select value={state.stemShade} onChange={(e) => update({ stemShade: e.target.value as BotanicalState['stemShade'] })}>
           <option value="along">Along the stem</option>
           <option value="cross">Cross-hatch</option>
           <option value="none">None</option>
@@ -489,7 +489,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
 
       <div className="control-group">
         <label className="label-text">Stem texture</label>
-        <select value={state.stemTexture} onChange={(e) => update({ stemTexture: e.target.value as VineState['stemTexture'] })}>
+        <select value={state.stemTexture} onChange={(e) => update({ stemTexture: e.target.value as BotanicalState['stemTexture'] })}>
           <option value="none">Smooth</option>
           <option value="bark">Bark (woody)</option>
         </select>
@@ -537,7 +537,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           <input type="checkbox" checked={state.avoidOverlap} onChange={(e) => update({ avoidOverlap: e.target.checked })} />
           Avoid overlap (growth)
         </label>
-        <p className="paint-hint">Vines stop short of geometry they'd grow into.</p>
+        <p className="paint-hint">Stems stop short of geometry they'd grow into.</p>
       </div>
       <Slider
         label="Sketchiness"
@@ -551,7 +551,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       {state.sketch > 0 && (
         <div className="control-group">
           <label className="label-text">Sketch style</label>
-          <select value={state.sketchStyle} onChange={(e) => update({ sketchStyle: e.target.value as VineState['sketchStyle'] })}>
+          <select value={state.sketchStyle} onChange={(e) => update({ sketchStyle: e.target.value as BotanicalState['sketchStyle'] })}>
             <option value="loose">Loose</option>
             <option value="fine">Fine</option>
             <option value="gestural">Gestural</option>
@@ -565,7 +565,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
       <div className="control-group">
         <label className="label-text">Palette</label>
         <select value={state.palette} onChange={(e) => update({ palette: e.target.value })}>
-          {VINE_PALETTES.map((p) => (
+          {BOTANICAL_PALETTES.map((p) => (
             <option key={p.id} value={p.id}>{p.label}</option>
           ))}
           <option value={CUSTOM_PALETTE}>Custom…</option>
@@ -614,7 +614,7 @@ export function VineGeneratorControls({ state, update }: ControlsProps<VineState
           <Slider label="Kill Radius" value={state.killRadiusMm} min={1} max={20} step={0.5} onChange={(v) => update({ killRadiusMm: v })} format={(v) => `${v}mm`} />
         </AdvGroup>
 
-        <AdvGroup title="Vine taper">
+        <AdvGroup title="Stem taper">
           <Slider label="Taper" value={state.taper} min={0} max={1} step={0.05} onChange={(v) => update({ taper: v })} format={(v) => v.toFixed(2)} />
         </AdvGroup>
 

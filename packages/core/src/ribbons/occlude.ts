@@ -1,6 +1,6 @@
 import type { Point } from '../flow-lines.js';
 import { pointInPolygon } from '../lib/polyline.js';
-import { outlineFromEdges } from '../vines/spatial.js';
+import { outlineFromEdges } from '../lib/spatial.js';
 import { circularDelta, sampleAt, type Strand } from './warp.js';
 import type { Crossing } from './crossings.js';
 import type { BandProfile, Mark } from './band.js';
