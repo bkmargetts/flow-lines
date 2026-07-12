@@ -128,6 +128,10 @@ export type { CityOptions, CityLightSide, BuildingStyle, CityStyle } from './cit
 export { generateStickmen, starRegion, heartRegion, diamondRegion, blobRegion } from './stickmen/index.js';
 export type { StickmenOptions, FacingMode, PoseMode, StickmenRegion } from './stickmen/index.js';
 
+// Sports balls (a pile of footballs / tennis balls / … as projected spheres)
+export { generateSportsBalls } from './sports-balls/index.js';
+export type { SportsBallsOptions, BallType, SportsBallsRegion } from './sports-balls/index.js';
+
 // Ribbon weave / knotwork (interlaced bands, tangle → Celtic lattice)
 export { generateRibbonWeave } from './ribbons/index.js';
 export type { RibbonWeaveOptions, RibbonEdgeMode, RibbonStyle } from './ribbons/index.js';

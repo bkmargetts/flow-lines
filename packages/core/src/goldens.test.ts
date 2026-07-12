@@ -16,6 +16,7 @@ import { generatePlanet } from './planet/index.js';
 import { generateLandscape } from './landscape/index.js';
 import { generateCity } from './city/index.js';
 import { generateStickmen } from './stickmen/index.js';
+import { generateSportsBalls } from './sports-balls/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateGesture } from './gesture/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
@@ -140,6 +141,8 @@ for (const seed of SEEDS) {
     generateCity({ width: 300, height: 400, margin: 20, seed });
   CASES[`stickmen/default/${seed}`] = () =>
     generateStickmen({ width: 300, height: 400, margin: 20, seed });
+  CASES[`sports-balls/default/${seed}`] = () =>
+    generateSportsBalls({ width: 300, height: 400, margin: 20, seed });
   CASES[`ribbons/default/${seed}`] = () =>
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
   CASES[`gesture/default/${seed}`] = () =>
@@ -183,6 +186,31 @@ CASES['stickmen/region-ellipse/42'] = () =>
   });
 CASES['stickmen/library/42'] = () =>
   generateStickmen({ width: 300, height: 400, margin: 20, seed: 42, count: 80, poseMode: 'library' });
+CASES['sports-balls/shaded/42'] = () =>
+  generateSportsBalls({ width: 300, height: 400, margin: 20, seed: 42, shading: 0.7 });
+CASES['sports-balls/soccer-only/42'] = () =>
+  generateSportsBalls({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    count: 20,
+    ballScale: 80,
+    minSeparation: 60,
+    mix: { soccer: 1 },
+  });
+CASES['sports-balls/no-shadows/42'] = () =>
+  generateSportsBalls({ width: 300, height: 400, margin: 20, seed: 42, castShadows: 0 });
+CASES['sports-balls/region-ellipse/42'] = () =>
+  generateSportsBalls({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    count: 50,
+    minSeparation: 14,
+    region: { kind: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.35, ry: 0.3 },
+  });
 CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
 CASES['planet/ringed/42'] = () =>

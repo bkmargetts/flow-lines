@@ -50,6 +50,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   physarum: { preset: 'veins' },
   'city-generator': { style: 'mixed' },
   stickmen: { poseEnergy: 1 },
+  'sports-balls': { shading: 0.7 },
   'ribbon-weave': { order: 0.1 },
   gesture: { preset: 'kline' },
   classic: { style: 'dashes' },
