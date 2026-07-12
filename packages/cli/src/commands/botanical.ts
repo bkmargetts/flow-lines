@@ -47,6 +47,7 @@ export function registerBotanical(program: Command) {
     .option('--guide-svg <file>', 'SVG file whose path outlines the stems grow along (with --composition guide)')
     .option('--support <s>', 'Trellis support the climbers wrap: none | lattice | arch | obelisk', 'none')
     .option('--fill-shape <s>', 'circle | oval | heart | diamond | painted (with --composition fill)', 'heart')
+    .option('--no-fill-outline', 'Skip the broken outline around the fill region')
     .option('--mode <m>', 'Growth model: growth | colonization', 'growth')
     .option('--seeding <s>', 'Root placement: scatter | edges | point | painted', 'scatter')
     .option('--seed-count <number>', 'Number of roots', '6')
@@ -123,6 +124,7 @@ export function registerBotanical(program: Command) {
         seed: options.seed ? parseInt(options.seed, 10) : undefined,
         composition: options.composition as BotanicalComposition,
         fillShape: options.fillShape as FillShape,
+        fillOutline: options.fillOutline,
         support: options.support as BotanicalSupport,
         guidePaths: options.guideSvg ? loadGuidePathsFromSvg(options.guideSvg, width, height, marginPx) : undefined,
         mode: options.mode as BotanicalMode,

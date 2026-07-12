@@ -42,6 +42,9 @@ export interface BotanicalOptions {
   composition?: BotanicalComposition;
   /** Shape a `fill` composition grows into. */
   fillShape?: FillShape;
+  /** Ink the fill region's rim as a light broken outline so the shape reads
+   *  even before the foliage does (default on for `fill`). */
+  fillOutline?: boolean;
   seeding?: BotanicalSeeding;
   startPoints?: Point[];
   seedCount?: number;

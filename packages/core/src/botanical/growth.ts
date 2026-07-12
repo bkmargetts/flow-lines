@@ -182,7 +182,8 @@ export function colonize(
   baseHalf: number,
   penPx: number,
   maxLength: number,
-  region?: (x: number, y: number) => boolean
+  region?: (x: number, y: number) => boolean,
+  boundary?: Point[][]
 ): Stem[] {
   const { width, height, margin, stepLength } = p;
   const attractorCount = Math.min(p.attractorCount, 1500);
@@ -199,6 +200,22 @@ export function colonize(
     const y = margin + rng() * (height - 2 * margin);
     if (region && !region(x, y)) continue;
     attractors.push({ x, y, alive: true });
+  }
+  // Extra attractors banked along the region's rim: uniform scatter alone
+  // leaves the boundary under-served, so growth rounds the shape off into a
+  // blob — the rim is exactly where the silhouette is decided.
+  if (region && boundary && boundary.length > 0) {
+    const rim = boundary.flat();
+    if (rim.length > 0) {
+      const jitterR = p.killRadius * 2;
+      const extra = Math.min(500, Math.round(attractorCount * 0.5));
+      for (let i = 0; i < extra; i++) {
+        const p0 = rim[Math.floor(rng() * rim.length)];
+        const x = p0.x + (rng() - 0.5) * jitterR;
+        const y = p0.y + (rng() - 0.5) * jitterR;
+        if (region(x, y)) attractors.push({ x, y, alive: true });
+      }
+    }
   }
 
   interface Node { x: number; y: number; parent: number; }

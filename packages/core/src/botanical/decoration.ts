@@ -47,6 +47,9 @@ export interface DecorParams {
    *  field (the shadow side hatches heavier); 0 leaves hatching untouched so
    *  non-massed renders (incl. notan-only) stay byte-identical. */
   shadeMass: number;
+  /** Inside-test of a `fill` composition's region: decorations whose reach
+   *  would land outside are skipped so they don't fuzz the shape's silhouette. */
+  insideRegion?: (x: number, y: number) => boolean;
 }
 
 /** The golden angle (≈137.5°), the divergence of spiral phyllotaxis. */
@@ -114,6 +117,14 @@ export function decorate(
       if (nf > best) best = nf;
     }
     return best;
+  };
+
+  // Would a blade inserted at (x,y) with this stem direction and side keep its
+  // reach inside the fill region? (Always true when there's no region.)
+  const fits = (x: number, y: number, stemDir: number, side: 1 | -1, reach: number): boolean => {
+    if (!d.insideRegion) return true;
+    const a = stemDir + side * (Math.PI / 3);
+    return d.insideRegion(x + Math.cos(a) * reach, y + Math.sin(a) * reach);
   };
 
   // Foliage density (0..1) sets how packed the leaves are: low → spread out,
@@ -193,7 +204,9 @@ export function decorate(
           const cluster = 1 + (rng() < dens * massW ? 1 : 0) + (rng() < (dens - 0.4 + 0.6 * nf) * massW ? 1 : 0);
           for (let c = 0; c < cluster; c++) {
             const s: 1 | -1 = c === 0 ? side : ((rng() < 0.5 ? 1 : -1) as 1 | -1);
-            const leaf = makeLeaf(pts[i], dir + jit, s, d.leafSize * sizeScale * (0.8 + rng() * 0.5), d, effStyle, rng);
+            const llen = d.leafSize * sizeScale * (0.8 + rng() * 0.5);
+            if (!fits(pts[i].x, pts[i].y, dir + jit, s, llen * 0.75)) continue;
+            const leaf = makeLeaf(pts[i], dir + jit, s, llen, d, effStyle, rng);
             add(leaf.lines, leaf.silhouette);
           }
         } else if (present) {
@@ -205,9 +218,11 @@ export function decorate(
             const ldir = dir + ins.angOff + jit;
             if (compound) {
               const clen = d.leafSize * sizeScale * 2.2 * ins.fore * (0.85 + rng() * 0.3);
+              if (!fits(pts[i].x, pts[i].y, ldir, ins.side, clen * 0.6)) continue;
               makeCompoundLeaf(pts[i], ldir, ins.side, clen, d, effStyle, rng, add, 0);
             } else {
               const llen = d.leafSize * sizeScale * ins.fore * (0.8 + rng() * 0.5);
+              if (!fits(pts[i].x, pts[i].y, ldir, ins.side, llen * 0.75)) continue;
               const leaf = makeLeaf(pts[i], ldir, ins.side, llen, d, effStyle, rng);
               add(leaf.lines, leaf.silhouette);
             }
