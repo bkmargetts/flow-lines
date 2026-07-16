@@ -9,7 +9,7 @@ export interface PageFrame {
 }
 
 /**
- * Resolve the output frame shared verbatim by the conway/vines/planet/
+ * Resolve the output frame shared verbatim by the conway/botanical/planet/
  * landscape commands: with --paper, page metrics in px at the requested
  * resolution plus physical-mm SVG dimensions and a pen width in px; without
  * it, the raw pixel flags.

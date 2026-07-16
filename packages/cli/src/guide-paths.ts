@@ -5,7 +5,7 @@ import type { Point } from '@flow-lines/core';
  * Flatten the `d` attributes of every <path> (and <polyline>) in an SVG file
  * into polylines, then fit them into the page's margin box. Supports the common
  * absolute/relative commands (M L H V C S Q T Z); curves are subdivided. This
- * lets `flow-lines vines --composition guide --guide-svg shape.svg` grow vines
+ * lets `flow-lines botanical --composition guide --guide-svg shape.svg` grow stems
  * along any traced outline or letterform.
  */
 export function loadGuidePathsFromSvg(file: string, width: number, height: number, margin: number): Point[][] {

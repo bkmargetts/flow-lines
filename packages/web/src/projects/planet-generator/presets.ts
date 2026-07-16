@@ -1,7 +1,7 @@
 import type { PlanetState } from './types';
 
 /**
- * Planet-type presets: a starting point per world kind, like the Vine
+ * Planet-type presets: a starting point per world kind, like the Botanical
  * Generator's species. Each is a partial `PlanetState` merged over the current
  * state, so tweaks made afterwards survive. The 🎲 genome below crosses a fresh
  * type with randomised, type-appropriate toggles.

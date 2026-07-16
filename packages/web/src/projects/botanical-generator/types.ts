@@ -1,32 +1,32 @@
 import { type Point } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
-import type { VineMode, VineSeeding, VineFill, LeafStyle, VineComposition, LeafType, StemShade, VineFlower, FillShape, SketchStyle, VineVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, VineSupport, StemTexture } from '@flow-lines/core';
+import type { BotanicalMode, BotanicalSeeding, BotanicalFill, LeafStyle, BotanicalComposition, LeafType, StemShade, BotanicalFlower, FillShape, SketchStyle, BotanicalVessel, LeafArrangement, Phyllotaxis, Inflorescence, FruitType, BotanicalSupport, StemTexture } from '@flow-lines/core';
 
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 
 /**
- * Vine Generator settings. Lengths are in millimetres (converted to px at the
+ * Botanical Generator settings. Lengths are in millimetres (converted to px at the
  * page density on render); curl/gravitropism/probabilities are unitless 0..1.
  * The page frame lives in the shared FrameContext, not here.
  *
  * Painting reuses the canvas's generic duck-typed interface (`drawMode` +
  * `maskPath`, the same the grating/noise-texture modules use): when seeding is
- * 'painted', the drawn points become vine roots.
+ * 'painted', the drawn points become roots.
  */
-export interface VineState {
+export interface BotanicalState {
   /** Selected species preset id, or 'custom'. */
   species: string;
-  mode: VineMode;
-  composition: VineComposition;
+  mode: BotanicalMode;
+  composition: BotanicalComposition;
   fillShape: FillShape;
-  seeding: VineSeeding;
+  seeding: BotanicalSeeding;
   seedCount: number;
 
   // page composition
   /** A drawn container the stems rise out of (bouquet/specimen). */
-  vessel: VineVessel;
+  vessel: BotanicalVessel;
   /** A drawn support the climbers wrap (trellis composition). */
-  support: VineSupport;
+  support: BotanicalSupport;
   /** Draw a hand-drawn ground line under the arrangement. */
   groundLine: boolean;
   /** 0..1 deliberate negative space (notan): hold a region clear, swell the mass. */
@@ -53,10 +53,10 @@ export interface VineState {
   attractorRadiusMm: number;
   killRadiusMm: number;
 
-  // vine body
+  // stem body
   stemWidthMm: number;
   taper: number;
-  vineFill: VineFill;
+  stemFill: BotanicalFill;
   avoidOverlap: boolean;
 
   // form shading & depth
@@ -94,7 +94,7 @@ export interface VineState {
   tendrils: boolean;
   tendrilProb: number;
   flowers: boolean;
-  flowerType: VineFlower;
+  flowerType: BotanicalFlower;
   flowerProb: number;
   flowerSizeMm: number;
   /** Multi-flower structure at the stem tips; 'none' = single bloom. */
@@ -126,7 +126,7 @@ export interface VineState {
   maskPath: Point[];
 }
 
-export const defaultVineState: VineState = {
+export const defaultBotanicalState: BotanicalState = {
   species: 'wild-rose',
   mode: 'growth',
   composition: 'specimen',
@@ -155,7 +155,7 @@ export const defaultVineState: VineState = {
 
   stemWidthMm: 4,
   taper: 0.85,
-  vineFill: 'shaded',
+  stemFill: 'shaded',
   avoidOverlap: true,
 
   lightAngle: -130,

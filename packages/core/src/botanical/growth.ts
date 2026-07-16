@@ -1,7 +1,7 @@
 import { Point } from '../flow-lines.js';
 import { SimplexNoise } from '../noise.js';
 import { Root, Stem } from './types.js';
-import { ProximityGrid, STEM_CAP, polylineLength, steer } from './spatial.js';
+import { ProximityGrid, STEM_CAP, polylineLength, steer } from '../lib/spatial.js';
 
 // ——— growth model: recursive tip-growth ———
 
@@ -48,7 +48,7 @@ export function growStems(
   }
   const stack: Tip[] = roots.map((r) => ({ x: r.x, y: r.y, angle: r.angle, depth: 0, maxLength: r.maxLength, half: r.half, guide: r.guide, gi: 1, branch: false, branchMaxLen: r.branchMaxLen ?? Infinity, easeTurn: 0 }));
   const minBranchLen = stepLength * 6;
-  const EASE_STEPS = 5; // steps over which a new branch eases away from its parent
+  const EASE_STEPS = 8; // steps over which a new branch eases away from its parent
 
   const inBounds = (x: number, y: number) => x >= margin && x <= width - margin && y >= margin && y <= height - margin;
   const clearDist = spacing * 1.6;
@@ -100,7 +100,11 @@ export function growStems(
       const ny = y + Math.sin(angle) * stepLength;
       if (!inBounds(nx, ny)) break;
       const cleared = Math.hypot(nx - startX, ny - startY) > clearDist;
-      if (grid && cleared && grid.hasNear(nx, ny, sepDist)) break;
+      // The proximity break keeps *free* growth evenly spaced. A guided stem is
+      // a designed line (a trellis column, a border edge, a master gesture) —
+      // stopping it because an earlier stem's side-branch wandered past would
+      // truncate the composition, so guided stems never break on proximity.
+      if (grid && cleared && !tip.guide && grid.hasNear(nx, ny, sepDist)) break;
 
       x = nx;
       y = ny;
@@ -109,7 +113,14 @@ export function growStems(
 
       // Thin growth out as it enters the held-clear region (notan negative
       // space). Guarded so the rng sequence is untouched when massing is off.
-      if (weightAt && cleared && rng() < (1 - weightAt(x, y)) * 0.5) break;
+      // The kill lands on side branches (which is what thins the canopy);
+      // free trunks only thin weakly and guided trunks never die — a hard
+      // per-step kill on the main gesture used to reduce a whole specimen to a
+      // stub whenever its composed path crossed the held-clear third.
+      if (weightAt && cleared) {
+        const killP = tip.guide ? 0 : tip.branch ? 0.5 : 0.15;
+        if (rng() < (1 - weightAt(x, y)) * killP) break;
+      }
 
       const effBranchProb = weightAt ? branchProb * weightAt(x, y) : branchProb;
       if (tip.depth < maxDepth && stack.length + stems.length < STEM_CAP && rng() < effBranchProb) {
@@ -117,10 +128,10 @@ export function growStems(
         // Skip stubby branches — they read as thorns, not growth.
         if (childMax >= minBranchLen) {
           // Asymmetric bias gives a more designed, less even branch pattern.
-          // A shallow fork angle (~18°–42°) so branches diverge gently and the
+          // A shallow fork angle (~15°–34°) so branches diverge gently and the
           // junction flows — a wide kink reads as a snapped twig, not growth.
           const dir = rng() < 0.62 ? 1 : -1;
-          const turn = dir * (0.32 + rng() * 0.42);
+          const turn = dir * (0.26 + rng() * 0.34);
           // Continuous taper: a branch starts near the parent's *local* width.
           const parentLocal = tip.half * (1 - 0.5 * (i / steps));
           stack.push({
@@ -140,8 +151,10 @@ export function growStems(
       }
     }
 
-    // Drop stubby branch fragments; keep all trunk/guide stems.
-    if (pts.length >= 2 && (!tip.branch || polylineLength(pts) >= minBranchLen * 0.6)) {
+    // Drop stubby branch fragments; keep all trunk/guide stems. The full
+    // minBranchLen floor (not a fraction of it) — surviving nubs read as
+    // thorn-stub noise scattered over the plant, not growth.
+    if (pts.length >= 2 && (!tip.branch || polylineLength(pts) >= minBranchLen)) {
       stems.push({ points: pts, baseHalf: tip.half, branch: tip.branch });
       if (grid) for (const q of toInsert) grid.add(q);
     }
@@ -169,7 +182,8 @@ export function colonize(
   baseHalf: number,
   penPx: number,
   maxLength: number,
-  region?: (x: number, y: number) => boolean
+  region?: (x: number, y: number) => boolean,
+  boundary?: Point[][]
 ): Stem[] {
   const { width, height, margin, stepLength } = p;
   const attractorCount = Math.min(p.attractorCount, 1500);
@@ -186,6 +200,22 @@ export function colonize(
     const y = margin + rng() * (height - 2 * margin);
     if (region && !region(x, y)) continue;
     attractors.push({ x, y, alive: true });
+  }
+  // Extra attractors banked along the region's rim: uniform scatter alone
+  // leaves the boundary under-served, so growth rounds the shape off into a
+  // blob — the rim is exactly where the silhouette is decided.
+  if (region && boundary && boundary.length > 0) {
+    const rim = boundary.flat();
+    if (rim.length > 0) {
+      const jitterR = p.killRadius * 2;
+      const extra = Math.min(500, Math.round(attractorCount * 0.5));
+      for (let i = 0; i < extra; i++) {
+        const p0 = rim[Math.floor(rng() * rim.length)];
+        const x = p0.x + (rng() - 0.5) * jitterR;
+        const y = p0.y + (rng() - 0.5) * jitterR;
+        if (region(x, y)) attractors.push({ x, y, alive: true });
+      }
+    }
   }
 
   interface Node { x: number; y: number; parent: number; }
@@ -260,7 +290,7 @@ function extractChains(
   // Terminal spurs shorter than this read as spiky noise on the network rather
   // than growth, so they're dropped — the single biggest legibility win for the
   // colonized 'fill' shapes (the heart was a thicket of stubs).
-  const minTerminal = stepLength * 3;
+  const minTerminal = stepLength * 5;
 
   const stems: Stem[] = [];
   for (let i = 0; i < nodes.length; i++) {

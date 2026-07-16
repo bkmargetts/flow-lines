@@ -37,7 +37,7 @@ export type { TreeStyle } from './flora.js';
  *
  * Everything is single-pen stroked polylines, deterministic per seed — no fills,
  * no stroke-width tricks (bold = repeated offset passes). Mirrors the Planet /
- * Vine Generators: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
+ * Botanical Generators: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
  *
  * The geometric workhorse is `clipLineToPolygon`: inside-intervals of a line
  * against a region polygon (even-odd parity), the basis for every hatch family.

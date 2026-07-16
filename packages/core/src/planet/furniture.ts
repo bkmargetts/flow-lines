@@ -165,7 +165,7 @@ export function renderTitleCaption(scene: SceneCtx): void {
   }
 }
 
-/** Hand-drawn finish: a multi-pass sketch overdraw (shared with the Vine
+/** Hand-drawn finish: a multi-pass sketch overdraw (shared with the Botanical
  *  Generator) when `sketch` is set, otherwise a single low-frequency wobble. */
 export function applyFinish(scene: SceneCtx): FlowLine[] {
   const { o, seed, width, height, lines } = scene;

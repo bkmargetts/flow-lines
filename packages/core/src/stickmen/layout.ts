@@ -1,7 +1,7 @@
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { clamp } from '../lib/math.js';
 import { KX, KY, type Proj } from '../city/project.js';
-import { ProximityGrid } from '../vines/spatial.js';
+import { ProximityGrid } from '../lib/spatial.js';
 import type { SimplexNoise } from '../noise.js';
 import { POSE_DRAWS } from './poses.js';
 import { PROP_DRAWS } from './skeleton.js';

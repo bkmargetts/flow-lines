@@ -2,7 +2,7 @@ import type { FlowLine, Point } from '../flow-lines.js';
 import { ellipse } from '../planet/geometry.js';
 import { project, type Proj } from '../city/project.js';
 import { smoothPolyline } from '../lib/polyline.js';
-import { densify } from '../vines/spatial.js';
+import { densify } from '../lib/spatial.js';
 import { buildLocalSkeleton, resolveProportions, type Joint, type Vec3 } from './skeleton.js';
 import { resolvePose, type PoseMode } from './poses.js';
 

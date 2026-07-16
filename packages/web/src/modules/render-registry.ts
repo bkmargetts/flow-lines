@@ -1,6 +1,6 @@
 import type { LayerOutput, RenderEnv } from './types';
 import { renderFlowField } from '../projects/flow-field/render';
-import { renderVineGenerator } from '../projects/vine-generator/render';
+import { renderBotanicalGenerator } from '../projects/botanical-generator/render';
 import { renderPlanet } from '../projects/planet-generator/render';
 import { renderLandscape } from '../projects/landscape-generator/render';
 import { renderCity } from '../projects/city-generator/render';
@@ -44,7 +44,7 @@ const entry = <S,>(
 
 export const RENDERERS: Record<string, RenderEntry> = {
   'flow-field': entry(renderFlowField),
-  'vine-generator': entry(renderVineGenerator),
+  'botanical-generator': entry(renderBotanicalGenerator),
   'planet-generator': entry(renderPlanet),
   'landscape-generator': entry(renderLandscape),
   'city-generator': entry(renderCity),

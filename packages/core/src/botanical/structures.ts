@@ -1,15 +1,15 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { makeRandom } from '../lib/rng.js';
 import { offsetPolyline, trimPolyline } from '../lib/polyline.js';
-import { StemShade, StemTexture, VineFill, VineSupport, VineVessel } from './types.js';
-import { densify, normalsOf, outlineFromEdges, smoothstep } from './spatial.js';
+import { StemShade, StemTexture, BotanicalFill, BotanicalSupport, BotanicalVessel } from './types.js';
+import { densify, normalsOf, outlineFromEdges, smoothstep } from '../lib/spatial.js';
 
 // ——— stem rendering (rounded tube) ———
 
 export interface StemRenderOpts {
   penPx: number;
   taper: number;
-  vineFill: VineFill;
+  stemFill: BotanicalFill;
   light: Point;
   shadeDensity: number;
   stemShade: StemShade;
@@ -48,8 +48,8 @@ export function buildStem(center: Point[], baseHalf: number, o: StemRenderOpts):
   }
 
   // Non-shaded modes keep the old filled/outline ribbon.
-  if (o.vineFill !== 'shaded') {
-    return { lines: ribbon(samples, normals, w, penPx, 'stem', o.vineFill), silhouette: [poly] };
+  if (o.stemFill !== 'shaded') {
+    return { lines: ribbon(samples, normals, w, penPx, 'stem', o.stemFill), silhouette: [poly] };
   }
 
   const lines: FlowLine[] = [];
@@ -180,35 +180,59 @@ export function buildGround(width: number, height: number, margin: number, baseY
 
 /** A drawn garden support the trellis climbers wrap: a diamond lattice, a round
  *  arch, or a tapering obelisk. Returned as stem-layer lines, drawn behind the
- *  vines so they read as climbing it. */
-export function buildSupport(support: VineSupport, width: number, height: number, margin: number): FlowLine[] {
+ *  stems so they read as climbing it. */
+/** The support's panel frame — shared by the drawn furniture and the climb
+ *  paths so climbers land exactly on the built structure. A lattice is a
+ *  *garden panel* (inset, below head height), not an edge-to-edge tile. */
+export function supportFrame(support: BotanicalSupport, width: number, height: number, margin: number): { x0: number; x1: number; yTop: number; yBot: number } {
+  if (support === 'lattice') {
+    const x0 = margin + width * 0.06;
+    const x1 = width - margin - width * 0.06;
+    const yBot = height - margin * 1.4;
+    const yTop = margin + (height - 2 * margin) * 0.18;
+    return { x0, x1, yTop, yBot };
+  }
+  return { x0: margin * 1.6, x1: width - margin * 1.6, yTop: margin * 1.6, yBot: height - margin * 1.4 };
+}
+
+export function buildSupport(support: BotanicalSupport, width: number, height: number, margin: number, penPx = 1): FlowLine[] {
   if (support === 'none') return [];
   const lines: FlowLine[] = [];
-  const x0 = margin * 1.6;
-  const x1 = width - margin * 1.6;
-  const yTop = margin * 1.6;
-  const yBot = height - margin * 1.4;
+  const { x0, x1, yTop, yBot } = supportFrame(support, width, height, margin);
   if (support === 'lattice') {
-    const step = (x1 - x0) / 7;
-    const within = (p: Point) => p.y >= yTop && p.y <= yBot;
-    // Two diagonal families (slope ±1) crossing into diamonds, clipped to the
-    // panel; the offset `c` slides each diagonal across the frame.
-    for (let d = -14; d <= 14; d++) {
+    // A bounded garden panel: doubled posts and rails carry the structure,
+    // diamond diagonals clipped inside. Coarser diamonds than before — a fine
+    // full-page grid read as mechanical wallpaper behind the plants.
+    const step = (x1 - x0) / 5;
+    const iy0 = yTop;
+    const iy1 = yBot;
+    const within = (p: Point) => p.y >= iy0 && p.y <= iy1 && p.x >= x0 && p.x <= x1;
+    const span = Math.max(x1 - x0, iy1 - iy0);
+    for (let d = -Math.ceil(span / step) - 1; d <= Math.ceil(span / step) + 1; d++) {
       const c = d * step;
       const a: Point[] = [];
       const b: Point[] = [];
-      for (let s = 0; s <= 1.0001; s += 0.05) {
+      for (let s = 0; s <= 1.0001; s += 0.04) {
         const px = x0 + (x1 - x0) * s;
-        a.push({ x: px, y: yTop + (px - x0) + c });
-        b.push({ x: px, y: yBot - (px - x0) - c });
+        a.push({ x: px, y: iy0 + (px - x0) + c });
+        b.push({ x: px, y: iy1 - (px - x0) - c });
       }
       const ca = a.filter(within);
       const cb = b.filter(within);
       if (ca.length >= 2) lines.push({ points: ca, layer: 'stem' });
       if (cb.length >= 2) lines.push({ points: cb, layer: 'stem' });
     }
-    // A frame.
-    lines.push({ points: [{ x: x0, y: yTop }, { x: x1, y: yTop }, { x: x1, y: yBot }, { x: x0, y: yBot }, { x: x0, y: yTop }], layer: 'stem' });
+    // Doubled posts and rails (a drawn thickness, single pen) + post caps.
+    const t = Math.max(3, penPx * 3);
+    for (const x of [x0, x1]) {
+      lines.push({ points: [{ x: x - t / 2, y: yBot }, { x: x - t / 2, y: yTop - t * 1.2 }], layer: 'stem' });
+      lines.push({ points: [{ x: x + t / 2, y: yBot }, { x: x + t / 2, y: yTop - t * 1.2 }], layer: 'stem' });
+      lines.push({ points: [{ x: x - t * 1.1, y: yTop - t * 1.2 }, { x: x + t * 1.1, y: yTop - t * 1.2 }], layer: 'stem' });
+    }
+    for (const y of [yTop, yBot]) {
+      lines.push({ points: [{ x: x0, y: y - t / 2 }, { x: x1, y: y - t / 2 }], layer: 'stem' });
+      lines.push({ points: [{ x: x0, y: y + t / 2 }, { x: x1, y: y + t / 2 }], layer: 'stem' });
+    }
     return lines;
   }
   if (support === 'arch') {
@@ -252,6 +276,102 @@ export function buildSupport(support: VineSupport, width: number, height: number
   return lines;
 }
 
+/** Guide polylines that climb *along* a support's actual members — a zigzag
+ *  staircase up the lattice diagonals, up-and-over the arch, up the obelisk
+ *  legs — so trellis growth reads as trained onto the structure instead of
+ *  floating in front of it. Points are dense enough for the guide-steering to
+ *  track each turn. */
+export function supportClimbPaths(
+  support: BotanicalSupport,
+  width: number,
+  height: number,
+  margin: number,
+  n: number,
+  rng: () => number
+): Point[][] {
+  const { x0, x1, yTop, yBot } = supportFrame(support, width, height, margin);
+  const paths: Point[][] = [];
+  const cx = width / 2;
+
+  if (support === 'lattice') {
+    const step = (x1 - x0) / 5;
+    for (let k = 0; k < n; k++) {
+      let x = x0 + ((k + 0.5 + (rng() - 0.5) * 0.4) / n) * (x1 - x0);
+      let y = yBot;
+      const pts: Point[] = [{ x, y: Math.min(height - margin * 1.1, yBot + step * 0.4) }, { x, y }];
+      // Climb diagonal by diagonal, flipping direction at each crossing (with
+      // an occasional run of two) and bouncing off the posts.
+      let dir: 1 | -1 = rng() < 0.5 ? 1 : -1;
+      while (y > yTop + step * 0.4) {
+        const seg = Math.min(step, y - yTop);
+        if (x + dir * seg > x1 - step * 0.25 || x + dir * seg < x0 + step * 0.25) dir = -dir as 1 | -1;
+        const nx = x + dir * seg;
+        const ny = y - seg;
+        for (let s = 1; s <= 4; s++) pts.push({ x: x + ((nx - x) * s) / 4, y: y + ((ny - y) * s) / 4 });
+        x = nx;
+        y = ny;
+        if (rng() < 0.7) dir = -dir as 1 | -1;
+      }
+      paths.push(pts);
+    }
+    return paths;
+  }
+
+  if (support === 'arch') {
+    const r = (x1 - x0) / 2;
+    const archTop = yTop + r;
+    for (let k = 0; k < n; k++) {
+      const u = n === 1 ? 0 : k / (n - 1);
+      if (u <= 0.34 || u >= 0.66) {
+        // Outer climbers ride an upright, then curl along the crown toward the
+        // apex — the classic climbing-rose-over-an-arch silhouette.
+        const left = u <= 0.34;
+        const px = left ? x0 : x1;
+        const pts: Point[] = [{ x: px, y: yBot }];
+        for (let s = 1; s <= 6; s++) pts.push({ x: px, y: yBot + (archTop - yBot) * (s / 6) });
+        const sweep = (0.25 + rng() * 0.2) * Math.PI; // how far over the crown
+        for (let s = 1; s <= 8; s++) {
+          const a = left ? Math.PI - sweep * (s / 8) : sweep * (s / 8);
+          pts.push({ x: cx + Math.cos(a) * r, y: archTop - Math.sin(a) * r });
+        }
+        paths.push(pts);
+      } else {
+        // Inner climbers rise through the opening and stop under the crown.
+        const px = x0 + u * (x1 - x0);
+        const crownY = archTop - Math.sqrt(Math.max(0, r * r - (px - cx) * (px - cx)));
+        const top = crownY + (yBot - crownY) * (0.06 + rng() * 0.1);
+        const pts: Point[] = [];
+        for (let s = 0; s <= 8; s++) {
+          const t = s / 8;
+          pts.push({ x: px + Math.sin(t * Math.PI * 2 + k) * width * 0.02, y: yBot + (top - yBot) * t });
+        }
+        paths.push(pts);
+      }
+    }
+    return paths;
+  }
+
+  if (support === 'obelisk') {
+    const halfBot = (x1 - x0) / 2;
+    const halfTop = halfBot * 0.12;
+    const legX = [-1, 1, -0.5, 0.5];
+    for (let k = 0; k < n; k++) {
+      const f = legX[k % 4];
+      const bx = cx + f * halfBot;
+      const tx = cx + (f === -1 ? -halfTop : f === 1 ? halfTop : 0);
+      const pts: Point[] = [];
+      for (let s = 0; s <= 8; s++) {
+        const t = s / 8;
+        pts.push({ x: bx + (tx - bx) * t, y: yBot + (yTop - yBot) * t });
+      }
+      paths.push(pts);
+    }
+    return paths;
+  }
+
+  return paths;
+}
+
 /** Half-width fraction along a vessel profile (top=0 → base=1), smoothstep
  *  interpolated between control points. */
 function sampleProfile(prof: [number, number][], u: number): number {
@@ -269,7 +389,7 @@ function sampleProfile(prof: [number, number][], u: number): number {
  *  fraction of the mouth reference]) plus per-type height/width factors so each
  *  keeps its proportions (a bowl is wide and low, an amphora tall and narrow). */
 export interface VesselSpec { profile: [number, number][]; h: number; w: number; }
-export const VESSEL_SPECS: Record<Exclude<VineVessel, 'none'>, VesselSpec> = {
+export const VESSEL_SPECS: Record<Exclude<BotanicalVessel, 'none'>, VesselSpec> = {
   vase: { h: 1.0, w: 1.0, profile: [[0, 0.92], [0.06, 0.96], [0.12, 0.76], [0.24, 0.8], [0.44, 1.14], [0.62, 1.24], [0.82, 1.0], [0.94, 0.76], [1, 0.7]] },
   urn: { h: 1.12, w: 0.95, profile: [[0, 0.96], [0.035, 1.06], [0.085, 0.84], [0.17, 0.72], [0.28, 0.88], [0.44, 1.2], [0.59, 1.36], [0.73, 1.22], [0.86, 0.9], [0.93, 0.6], [0.965, 0.68], [1, 0.58]] },
   amphora: { h: 1.18, w: 0.9, profile: [[0, 0.62], [0.05, 0.74], [0.12, 0.6], [0.2, 0.66], [0.4, 0.98], [0.57, 1.04], [0.73, 0.82], [0.86, 0.5], [0.93, 0.3], [0.965, 0.22], [0.985, 0.32], [1, 0.26]] },
@@ -296,7 +416,7 @@ function ellipseArc(cx: number, cy: number, rx: number, ry: number, a0: number, 
  *  bare highlight on the lit side, graded cross-contour hatching into a
  *  cross-hatched core shadow, a reflected-light sliver at the shadow edge — plus
  *  a contact + cast shadow on the ground. Everything is cross-contour, directional
- *  hatching keyed to the same `light` as the vines, held in a light value key,
+ *  hatching keyed to the same `light` as the stems, held in a light value key,
  *  and the caller wobbles it through the same hand-drawn pass + sketch overdraw,
  *  so it reads as the same hand and grounds the arrangement instead of flattening
  *  it. The silhouette occludes the stem bases; the cast shadow is returned
@@ -306,7 +426,7 @@ export function buildVessel(
   topY: number,
   bottomY: number,
   mouthHalf: number,
-  type: VineVessel,
+  type: BotanicalVessel,
   light: Point,
   penPx: number,
   shadeDensity: number,
@@ -381,7 +501,7 @@ export function buildVessel(
   // instead of a stack of flat horizontal bands. Packed from just inside the
   // terminator toward the silhouette, leaving a reflected-light sliver bare at the
   // edge and the whole lit hemisphere clean. (Vessel uses its own seeded jitter,
-  // independent of the vine rng.)
+  // independent of the generator rng.)
   if (shadeDensity > 0.01) {
     const shadowSign = light.x <= 0 ? 1 : -1; // light from the left → shade right
     const jit = makeRandom((seed ^ 0x9e3779b9) >>> 0);
@@ -392,8 +512,14 @@ export function buildVessel(
     // where the form is too narrow to carry a line.
     const meridian = (psi: number, u0: number): void => {
       const f = Math.sin(psi);
+      // Meridians are drawn as broken hand-hatched runs, not one unbroken
+      // top-to-bottom rule: the pen lifts and resumes, more often on the inner
+      // (near-terminator) lines, so the shaded band reads as laid hatching
+      // instead of a printed comb. End height also varies per line.
+      const gapProb = 0.015 + (1 - f) * 0.035;
+      const yEnd = bottomY - penPx * (1 + jit() * 4);
       let run: Point[] = [];
-      for (let y = topY + H * u0; y <= bottomY - penPx; y += penPx) {
+      for (let y = topY + H * u0; y <= yEnd; y += penPx) {
         const u = (y - topY) / H;
         const hw = hwOf(u);
         if (hw < penPx * 1.6) {
@@ -403,6 +529,11 @@ export function buildVessel(
         }
         const jx = (jit() - 0.5) * penPx * 0.4;
         run.push({ x: cx + shadowSign * hw * f + jx, y });
+        if (run.length > 6 && jit() < gapProb) {
+          lines.push({ points: run, layer: 'stem' });
+          run = [];
+          y += penPx * (1.5 + jit() * 3);
+        }
       }
       if (run.length >= 2) lines.push({ points: run, layer: 'stem' });
     };
@@ -468,7 +599,7 @@ export function ribbon(
   w: number[],
   penPx: number,
   layer: string,
-  mode: VineFill
+  mode: BotanicalFill
 ): FlowLine[] {
   const n = samples.length;
   let maxHalf = 0;

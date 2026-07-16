@@ -1,13 +1,13 @@
 // Render the Planet Generator across every type preset, engraved-plate option,
 // composition layout and surface-relief mark into one HTML contact sheet — the
-// eyeball-regression suite, the counterpart to scripts/vines-gallery.mjs.
+// eyeball-regression suite, the counterpart to scripts/botanical-gallery.mjs.
 //
 //   pnpm build                          # build the CLI first
 //   node scripts/planet-gallery.mjs [outputDir]
 //
 // Drives the `flow-lines planet` CLI, so it doubles as a CLI smoke test. Option
 // sets are mirrored from the web app's presets
-// (packages/web/.../planet-generator/presets.ts), the same convention the vine
+// (packages/web/.../planet-generator/presets.ts), the same convention the botanical
 // gallery uses for its species flag arrays.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';

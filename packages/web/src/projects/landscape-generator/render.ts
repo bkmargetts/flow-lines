@@ -8,7 +8,7 @@ import { getLandscapePalette } from './palettes';
  * convert to px at the page density; fractions (horizon, sun position, water
  * share) map straight across. Spacings, pen width, wobble and every px size are
  * pre-divided by zoom so they land back at the true size after the zoom
- * transform, exactly as the Planet / Vine Generators do. Multi-ink via
+ * transform, exactly as the Planet / Botanical Generators do. Multi-ink via
  * `layerColors`.
  */
 export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOutput {

@@ -1,7 +1,7 @@
-import { generateVines, type VinesOptions } from '@flow-lines/core';
+import { generateBotanical, type BotanicalOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
-import type { VineState, Season } from './types';
-import { getVinePalette } from './palettes';
+import type { BotanicalState, Season } from './types';
+import { getBotanicalPalette } from './palettes';
 
 /** Per-season target multipliers on the foliage knobs (palette is untouched).
  *  Blended from neutral (1) by `seasonStrength`. Winter rides the strength
@@ -16,13 +16,13 @@ const SEASON_FACTORS: Record<Season, { density: number; leafSize: number; flower
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
 /**
- * Pure render for the Vine Generator: state + page → lines. mm settings convert
+ * Pure render for the Botanical Generator: state + page → lines. mm settings convert
  * to px at the page density; painted points (already in page px from the
  * canvas) seed the roots. Shared finishing (border, density, hold-off) is the
  * compositor's job. Multi-ink: `layerColors` maps the leaf/flower pen layers to
  * their own inks, with the stem colour as the fallback.
  */
-export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutput {
+export function renderBotanicalGenerator(state: BotanicalState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
   const mm = page.pxPerMm;
   const zoom = Math.max(0.2, state.zoom);
@@ -34,7 +34,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
   const seasonLeafSize = state.leafSizeMm * lerp(1, sf.leafSize, t);
   const seasonFlowerProb = state.flowerProb * lerp(1, sf.flowerProb, t);
 
-  const options: VinesOptions = {
+  const options: BotanicalOptions = {
     width: page.widthPx,
     height: page.heightPx,
     margin: marginPx,
@@ -71,7 +71,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     // transform below the on-page fill spacing lands back at the real pen.
     penWidth: (state.penWidthMm * mm) / zoom,
     taper: state.taper,
-    vineFill: state.vineFill,
+    stemFill: state.stemFill,
     avoidOverlap: state.avoidOverlap,
 
     lightAngle: state.lightAngle,
@@ -113,7 +113,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
     wobble: state.wobbleMm * mm,
   };
 
-  const result = generateVines(options);
+  const result = generateBotanical(options);
 
   // Zoom: scale the whole plot about the page centre. >1 magnifies (and the
   // sheet crops to it); <1 shrinks it within the page. The pen width was
@@ -131,7 +131,7 @@ export function renderVineGenerator(state: VineState, env: RenderEnv): LayerOutp
 
   // A curated palette maps each pen layer to its own ink; 'custom' uses the
   // per-element colour pickers.
-  const pal = getVinePalette(state.palette);
+  const pal = getBotanicalPalette(state.palette);
   const layerColors = pal
     ? { stem: pal.stem, tendril: pal.stem, leaf: pal.leaf, vein: pal.vein, flower: pal.flower, shadow: pal.shadow }
     : { stem: state.strokeColor, tendril: state.strokeColor, leaf: state.leafColor, vein: state.leafColor, flower: state.flowerColor, shadow: state.strokeColor };

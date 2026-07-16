@@ -24,7 +24,7 @@ import type { PlanetOptions } from './types.js';
  * thicken into the shadow), confident traced contours for coastlines / band
  * edges / crater rims, stipple texture, and optional rings, craters, a
  * starfield and a companion moon. Everything is single-pen stroked polylines,
- * deterministic per seed — no fills, no stroke-width tricks. Mirrors the Vine
+ * deterministic per seed — no fills, no stroke-width tricks. Mirrors the Botanical
  * Generator: heavy algorithm here in core, a thin web/CLI wrapper feeds it.
  *
  * One concern per file: `context.ts` holds the scene/body state every renderer

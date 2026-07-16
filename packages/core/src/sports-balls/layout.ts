@@ -1,6 +1,6 @@
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { clamp, lerp } from '../lib/math.js';
-import { ProximityGrid } from '../vines/spatial.js';
+import { ProximityGrid } from '../lib/spatial.js';
 import type { SimplexNoise } from '../noise.js';
 import type { PageRegion } from '../stickmen/region.js';
 

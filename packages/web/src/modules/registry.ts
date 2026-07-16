@@ -4,7 +4,7 @@ import { gratingTexture } from '../textures/grating';
 import { blankTexture } from '../textures/blank';
 import { imageInkModule } from '../projects/image-ink';
 import { flowFieldModule } from '../projects/flow-field';
-import { vineGeneratorModule } from '../projects/vine-generator';
+import { botanicalGeneratorModule } from '../projects/botanical-generator';
 import { planetGeneratorModule } from '../projects/planet-generator';
 import { landscapeGeneratorModule } from '../projects/landscape-generator';
 import { cityGeneratorModule } from '../projects/city-generator';
@@ -33,7 +33,7 @@ import { colorFieldModule } from '../projects/color-field';
 export const MODULES: Module<any>[] = [
   imageInkModule,
   flowFieldModule,
-  vineGeneratorModule,
+  botanicalGeneratorModule,
   planetGeneratorModule,
   landscapeGeneratorModule,
   cityGeneratorModule,

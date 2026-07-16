@@ -1,11 +1,11 @@
-// Render every vine species across every composition and build an HTML contact
-// sheet — the eyeball-regression suite for the Vine Generator, the counterpart
+// Render every botanical species across every composition and build an HTML contact
+// sheet — the eyeball-regression suite for the Botanical Generator, the counterpart
 // to scripts/gallery.mjs for the image pipeline.
 //
-//   node scripts/vines-gallery.mjs [outputDir]
+//   node scripts/botanical-gallery.mjs [outputDir]
 //
 // Requires the CLI to be built (`pnpm build`). Species are mirrored from the web
-// app's presets (packages/web/.../vine-generator/presets.ts) as flag arrays —
+// app's presets (packages/web/.../botanical-generator/presets.ts) as flag arrays —
 // the same convention scripts/gallery.mjs uses for the image style presets.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(import.meta.url), '..', '..');
 const cli = join(root, 'packages', 'cli', 'dist', 'cli.js');
-const outputDir = resolve(process.argv[2] ?? join(root, 'vines-gallery'));
+const outputDir = resolve(process.argv[2] ?? join(root, 'botanical-gallery'));
 
 // Species character (mirrors presets.ts: leaf/flower/density/palette).
 const SPECIES = {
@@ -55,7 +55,7 @@ for (const [species, speciesFlags] of Object.entries(SPECIES)) {
   for (const [comp, compFlags] of Object.entries(COMPOSITIONS)) {
     const out = `${species}-${comp}.svg`;
     const args = [
-      cli, 'vines',
+      cli, 'botanical',
       '-o', join(outputDir, out),
       '--seed', '42',
       '--width', '700',
@@ -80,7 +80,7 @@ const vesselRow = { species: 'vessels (wild rose bouquet)', renders: [] };
 for (const v of VESSELS) {
   const out = `vessel-${v}.svg`;
   const args = [
-    cli, 'vines',
+    cli, 'botanical',
     '-o', join(outputDir, out),
     '--seed', '42', '--width', '700', '--height', '900', '--background',
     '--composition', 'bouquet', '--vessel', v, '--ground-line', '--cast-shadow', '0.4',
@@ -94,7 +94,7 @@ for (const v of VESSELS) {
 cells.push(vesselRow);
 
 const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Vine Generator gallery</title>
+<html><head><meta charset="utf-8"><title>Botanical Generator gallery</title>
 <style>
   body { font-family: system-ui, sans-serif; background: #f4f1ea; margin: 24px; }
   h2 { margin: 32px 0 8px; text-transform: capitalize; }
@@ -103,7 +103,7 @@ const html = `<!doctype html>
   figure img { width: 240px; display: block; }
   figcaption { font-size: 12px; color: #555; padding-top: 6px; text-align: center; }
 </style></head><body>
-<h1>Vine Generator gallery</h1>
+<h1>Botanical Generator gallery</h1>
 <p>Seed 42, 700×900. Species (rows) × compositions (columns).</p>
 ${cells
   .map(
