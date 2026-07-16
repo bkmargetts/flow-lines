@@ -8,7 +8,7 @@
   "sports-balls/default": "d9a92cc0cbc3f1bc0cde069fad3448040a5b5e42ac0f529de10d97d130dc1df5",
   "ribbon-weave/default": "da8426f172312ce811bd3a28280b0298fd55b83d692c70a1177576fbf7192185",
   "gesture/default": "f9af9860f9ddd349338d25b359dac4c4f5a6040a36242dc4630b020aa342a6ce",
-  "machine-codex/default": "63be70de7a66d8add6c286810fef48e24e08a70a7779f8c311f9525c1a62760c",
+  "machine/default": "e394694f6a05fd4e22ac3d70111b166b11f384657955dade22fe556a216928a8",
   "conway/default": "1d11a16b84a4a7d8b118ee9b2255b410ab4b28d84f596d51673bce74134df717",
   "complex-flow/default": "67d06e1b2c69dc5dcc6718b5355f34a3f72f35802ea3fcfccb51a65d3641ba4a",
   "reaction-diffusion/default": "8a95f05b8a1966246ca2dc5a7e44d0a782da6b1d3a0352f0e5b71c16aaec15ae",
@@ -26,7 +26,7 @@
   "sports-balls/0.7": "6b96f0564cd026b35e05dd9d3c888560000f8085a4002bfea14da1ab04bea481",
   "ribbon-weave/0.1": "b666386ea801954c6e15fb21171b9557f19829d393f0fdc86a2ca6aadd276c45",
   "gesture/kline": "d1a2ab0a8efd43cfcdb618b6492fda7843e6597558753e5f73a63c62a13328b4",
-  "machine-codex/patent": "2369471fcd5fb1b53e94f80acfa6b183c6cc99bf41e333cb785f08bfbf6c3bb1",
+  "machine/0": "31b6a9a4b3a0049ad4c83b59431b6a8acf71dda9a93fb4b0e3a56ce803d1f186",
   "classic/dashes": "6ffdcd9f6b81611a850c85900ffe1bf2b2812163abf565ba5be62fdd62d098e2",
   "composite/stack": "4fb6aacb292e5701f718d13c0876b60095dc9e7a08d853d50a37470801cbb4c1",
   "composite/sketch": "c7acc810c060e767fa08bb837794d355b65214d69aca3522b80519803670c045"

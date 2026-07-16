@@ -1,7 +1,7 @@
 import type { Point } from '../flow-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { circle } from './geometry.js';
-import type { CodexCtx } from './context.js';
+import type { MachineCtx } from './context.js';
 import type { Beam, Machine } from './types.js';
 
 /**
@@ -26,7 +26,7 @@ function beamRect(b: Beam): Point[] {
   ];
 }
 
-export function renderFrame(ctx: CodexCtx, machine: Machine): Point[][] {
+export function renderFrame(ctx: MachineCtx, machine: Machine): Point[][] {
   const { o, lines } = ctx;
   const rng = makeRandom(subSeed(ctx.seed, 7));
   const silhouettes: Point[][] = [];

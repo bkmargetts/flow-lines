@@ -53,7 +53,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   'sports-balls': { shading: 0.7 },
   'ribbon-weave': { order: 0.1 },
   gesture: { preset: 'kline' },
-  'machine-codex': { style: 'patent' },
+  machine: { connectivity: 0 },
   classic: { style: 'dashes' },
 };
 for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {

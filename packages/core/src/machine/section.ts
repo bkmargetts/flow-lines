@@ -2,7 +2,7 @@ import type { FlowLine, Point } from '../flow-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { densify } from '../lib/spatial.js';
 import { TAU, arc } from './geometry.js';
-import type { CodexCtx } from './context.js';
+import type { MachineCtx } from './context.js';
 import type { Gear, Machine } from './types.js';
 import { outerR, rootR } from './synth.js';
 
@@ -28,43 +28,54 @@ function inSector(a: number, a0: number, a1: number): boolean {
   return s <= w;
 }
 
-export function pickBite(ctx: CodexCtx, machine: Machine): Bite | null {
+/** Up to `o.cutaways` bites, each on a distinct big wheel in a distinct
+ *  cluster — at page scale a few cutaways read as intent, not accident. */
+export function pickBites(ctx: MachineCtx, machine: Machine): Bite[] {
   const { o } = ctx;
-  if (!o.cutaway) return null;
+  const want = Math.max(0, Math.min(3, Math.round(o.cutaways)));
+  if (want === 0) return [];
   const rng = makeRandom(subSeed(ctx.seed, 33));
-  const eligible = machine.gears.filter(
-    (g) =>
-      g.teeth >= 20 &&
-      !g.coaxialWith &&
-      // No compound pinion, pulley or drum stacked on this shaft: the bite
-      // face must be the topmost thing at its centre.
-      !machine.gears.some((h) => h.coaxialWith === g.id) &&
-      !machine.pulleys.some((p) => Math.abs(p.cx - g.cx) < 1e-6 && Math.abs(p.cy - g.cy) < 1e-6) &&
-      !machine.drums.some((d) => Math.abs(d.cx - g.cx) < 1e-6 && Math.abs(d.cy - g.cy) < 1e-6)
-  );
-  if (eligible.length === 0) return null;
-  const gear = eligible.reduce((a, b) => (b.teeth > a.teeth ? b : a));
+  const eligible = machine.gears
+    .filter(
+      (g) =>
+        g.teeth >= 20 &&
+        !g.coaxialWith &&
+        // No compound pinion, pulley or drum stacked on this shaft: the bite
+        // face must be the topmost thing at its centre.
+        !machine.gears.some((h) => h.coaxialWith === g.id) &&
+        !machine.pulleys.some((p) => Math.abs(p.cx - g.cx) < 1e-6 && Math.abs(p.cy - g.cy) < 1e-6) &&
+        !machine.drums.some((d) => Math.abs(d.cx - g.cx) < 1e-6 && Math.abs(d.cy - g.cy) < 1e-6)
+    )
+    .sort((a, b) => b.teeth - a.teeth);
+  const bites: Bite[] = [];
+  const usedClusters = new Set<number>();
+  for (const gear of eligible) {
+    if (bites.length >= want) break;
+    if (usedClusters.has(gear.cluster)) continue;
 
-  // Contact directions to keep clear of (meshes with children and parent).
-  const avoid: number[] = [];
-  for (const h of machine.gears) {
-    if (h.parent === gear.id && h.meshAngle !== undefined) avoid.push(h.meshAngle);
+    // Contact directions to keep clear of (meshes with children and parent).
+    const avoid: number[] = [];
+    for (const h of machine.gears) {
+      if (h.parent === gear.id && h.meshAngle !== undefined) avoid.push(h.meshAngle);
+    }
+    if (gear.parent !== undefined && gear.meshAngle !== undefined) {
+      avoid.push(gear.meshAngle + Math.PI);
+    }
+    for (let attempt = 0; attempt < 24; attempt++) {
+      const a0 = rng() * TAU;
+      const width = 0.5 + rng() * 0.3;
+      const a1 = a0 + width;
+      const clear = avoid.every((a) => {
+        const margin = 0.55;
+        return !inSector(a, a0 - margin, a1 + margin);
+      });
+      if (!clear) continue;
+      bites.push({ gearId: gear.id, a0, a1, rIn: rootR(gear) - 2.2 * gear.module });
+      usedClusters.add(gear.cluster);
+      break;
+    }
   }
-  if (gear.parent !== undefined && gear.meshAngle !== undefined) {
-    avoid.push(gear.meshAngle + Math.PI);
-  }
-  for (let attempt = 0; attempt < 24; attempt++) {
-    const a0 = rng() * TAU;
-    const width = 0.5 + rng() * 0.3;
-    const a1 = a0 + width;
-    const clear = avoid.every((a) => {
-      const margin = 0.55;
-      return !inSector(a, a0 - margin, a1 + margin);
-    });
-    if (!clear) continue;
-    return { gearId: gear.id, a0, a1, rIn: rootR(gear) - 2.2 * gear.module };
-  }
-  return null;
+  return bites;
 }
 
 /** Remove everything the bite carved away: line runs whose points fall in
@@ -91,7 +102,7 @@ export function clipGearBite(lines: FlowLine[], g: Gear, bite: Bite): FlowLine[]
 }
 
 /** Draw the cut face: bold radial cuts + bite floor arc, 45° section hatch. */
-export function renderCutFace(ctx: CodexCtx, g: Gear, bite: Bite): void {
+export function renderCutFace(ctx: MachineCtx, g: Gear, bite: Bite): void {
   const { o, lines } = ctx;
   const ro = outerR(g);
   const rr = rootR(g);

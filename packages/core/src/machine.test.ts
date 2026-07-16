@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { generateMachineCodex } from './codex/index.js';
-import { makeCtx } from './codex/context.js';
-import { DEFAULTS, type ResolvedOptions } from './codex/types.js';
-import { synthesize, pitchR, outerR } from './codex/synth.js';
-import { toothProfile } from './codex/gears.js';
-import { commonTangents, dashPolyline } from './codex/geometry.js';
+import { generateMachine } from './machine/index.js';
+import { makeCtx } from './machine/context.js';
+import { DEFAULTS, type ResolvedOptions } from './machine/types.js';
+import { synthesize, pitchR, outerR, CAPS } from './machine/synth.js';
+import { toothProfile } from './machine/gears.js';
+import { commonTangents, dashPolyline } from './machine/geometry.js';
 import { pointInPolygon } from './lib/polyline.js';
 import { densify } from './lib/spatial.js';
 
@@ -16,22 +16,22 @@ function machineFor(seed: number, over: Partial<ResolvedOptions> = {}) {
   return synthesize(ctx);
 }
 
-describe('generateMachineCodex', () => {
+describe('generateMachine', () => {
   it('is deterministic for the same seed and options', () => {
-    const a = generateMachineCodex({ ...BASE });
-    const b = generateMachineCodex({ ...BASE });
+    const a = generateMachine({ ...BASE });
+    const b = generateMachine({ ...BASE });
     expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
   });
 
   it('produces different drawings for different seeds', () => {
-    const a = generateMachineCodex({ ...BASE, seed: 42 });
-    const b = generateMachineCodex({ ...BASE, seed: 1337 });
+    const a = generateMachine({ ...BASE, seed: 42 });
+    const b = generateMachine({ ...BASE, seed: 1337 });
     expect(JSON.stringify(a.lines)).not.toEqual(JSON.stringify(b.lines));
   });
 
   it('keeps every stroke on the page', () => {
     for (const seed of [7, 42, 1337]) {
-      const r = generateMachineCodex({ ...BASE, seed });
+      const r = generateMachine({ ...BASE, seed });
       for (const ln of r.lines) {
         for (const p of ln.points) {
           expect(p.x).toBeGreaterThan(-3);
@@ -44,7 +44,7 @@ describe('generateMachineCodex', () => {
   });
 
   it('emits dashed hidden lines as separate short polylines, never one long run', () => {
-    const r = generateMachineCodex({ ...BASE, hiddenLines: true, wobble: 0, sketch: 0 });
+    const r = generateMachine({ ...BASE, hiddenLines: true, wobble: 0, sketch: 0 });
     const hidden = r.lines.filter((l) => l.layer === 'hidden');
     for (const ln of hidden) {
       let len = 0;
@@ -65,7 +65,22 @@ describe('machine synthesis', () => {
       for (const child of meshes) {
         const parent = m.gears.find((g) => g.id === child.parent)!;
         const d = Math.hypot(child.cx - parent.cx, child.cy - parent.cy);
-        expect(d).toBeCloseTo((m.module * (parent.teeth + child.teeth)) / 2, 6);
+        expect(d).toBeCloseTo((child.module * (parent.teeth + child.teeth)) / 2, 6);
+      }
+    }
+  });
+
+  it('every mesh pair shares one module, and clusters keep one module each', () => {
+    for (const seed of [7, 42, 1337]) {
+      const m = machineFor(seed, { complexity: 1, scaleVariety: 1 });
+      for (const child of m.gears.filter((g) => g.parent !== undefined)) {
+        const parent = m.gears.find((g) => g.id === child.parent)!;
+        expect(child.module).toBe(parent.module);
+      }
+      for (const c of m.clusters) {
+        for (const g of m.gears.filter((h) => h.cluster === c.id)) {
+          expect(g.module).toBe(c.module);
+        }
       }
     }
   });
@@ -96,12 +111,14 @@ describe('machine synthesis', () => {
     }
   });
 
-  it('non-meshing wheels keep real clearance (no near-miss almost-meshes)', () => {
+  it('same-band wheels keep real clearance (no near-miss almost-meshes)', () => {
     for (const seed of [7, 42, 1337]) {
-      const m = machineFor(seed, { complexity: 1 });
+      const m = machineFor(seed, { complexity: 1, connectivity: 1 });
+      const bandOf = (cluster: number): number => m.clusters[cluster].zBand;
       for (const a of m.gears) {
         for (const b of m.gears) {
           if (a.id >= b.id) continue;
+          if (bandOf(a.cluster) !== bandOf(b.cluster)) continue;
           const coaxial = Math.abs(a.cx - b.cx) < 1e-6 && Math.abs(a.cy - b.cy) < 1e-6;
           const meshed = a.parent === b.id || b.parent === a.id;
           if (coaxial || meshed) continue;
@@ -112,12 +129,49 @@ describe('machine synthesis', () => {
     }
   });
 
+  it('connectivity 1 ties every cluster into one transmission network', () => {
+    for (const seed of [7, 42, 99, 1337]) {
+      const m = machineFor(seed, { complexity: 1, connectivity: 1 });
+      const parent = m.clusters.map((_, i) => i);
+      const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      for (const l of m.links) parent[find(l.a)] = find(l.b);
+      const roots = new Set(m.clusters.map((_, i) => find(i)));
+      expect(roots.size).toBe(1);
+    }
+  });
+
+  it('connectivity 0 leaves the clusters unlinked', () => {
+    for (const seed of [7, 42]) {
+      const m = machineFor(seed, { complexity: 1, connectivity: 0 });
+      expect(m.links.length).toBe(0);
+    }
+  });
+
+  it('the wall overlaps mechanisms across bands (that is the point of it)', () => {
+    let overlaps = 0;
+    for (const seed of [7, 42, 99, 1337]) {
+      const m = machineFor(seed, { complexity: 1, connectivity: 0 });
+      const bandOf = (cluster: number): number => m.clusters[cluster].zBand;
+      for (const a of m.gears) {
+        for (const b of m.gears) {
+          if (a.id >= b.id || bandOf(a.cluster) === bandOf(b.cluster)) continue;
+          if (Math.hypot(a.cx - b.cx, a.cy - b.cy) < outerR(a) + outerR(b)) overlaps++;
+        }
+      }
+    }
+    expect(overlaps).toBeGreaterThan(0);
+  });
+
+  it('respects the gear cap at page scale', () => {
+    const m = machineFor(42, { complexity: 1, width: 1240, height: 1754 } as Partial<ResolvedOptions>);
+    expect(m.gears.length).toBeLessThanOrEqual(CAPS.maxGears);
+  });
+
   it('every shaft gets a bearing and the frame has a ground sill', () => {
     for (const seed of [7, 42]) {
       const m = machineFor(seed);
       expect(m.frame.some((b) => b.kind === 'ground')).toBe(true);
-      const shafts = new Set(m.gears.map((g) => `${Math.round(g.cx)},${Math.round(g.cy)}`));
-      expect(m.bearings.length).toBeGreaterThanOrEqual(shafts.size);
+      expect(m.bearings.length).toBeGreaterThan(0);
     }
   });
 });

@@ -140,9 +140,9 @@ export type { RibbonWeaveOptions, RibbonEdgeMode, RibbonStyle } from './ribbons/
 export { generateGesture } from './gesture/index.js';
 export type { GestureOptions, GesturePreset } from './gesture/index.js';
 
-// Impossible machine codex (da Vinci-style contraptions as codex/patent plates)
-export { generateMachineCodex } from './codex/index.js';
-export type { MachineCodexOptions } from './codex/index.js';
+// Machine (page-sized, hugely complex generative machines)
+export { generateMachine } from './machine/index.js';
+export type { MachineOptions } from './machine/index.js';
 
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';

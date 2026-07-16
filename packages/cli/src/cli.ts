@@ -9,7 +9,7 @@ import { registerBotanical } from './commands/botanical.js';
 import { registerPlanet } from './commands/planet.js';
 import { registerLandscape } from './commands/landscape.js';
 import { registerGesture } from './commands/gesture.js';
-import { registerCodex } from './commands/codex.js';
+import { registerMachine } from './commands/machine.js';
 
 const program = new Command();
 
@@ -28,6 +28,6 @@ registerBotanical(program);
 registerPlanet(program);
 registerLandscape(program);
 registerGesture(program);
-registerCodex(program);
+registerMachine(program);
 
 program.parse();

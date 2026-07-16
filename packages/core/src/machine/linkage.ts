@@ -1,6 +1,6 @@
 import type { Point } from '../flow-lines.js';
 import { circle, dot } from './geometry.js';
-import type { CodexCtx } from './context.js';
+import type { MachineCtx } from './context.js';
 import type { Linkage, Machine } from './types.js';
 
 /**
@@ -11,7 +11,7 @@ import type { Linkage, Machine } from './types.js';
 
 /** Double-line bar between two joints; returns its quad for the silhouette. */
 function bar(
-  ctx: CodexCtx,
+  ctx: MachineCtx,
   a: Point,
   b: Point,
   halfA: number,
@@ -37,7 +37,7 @@ function bar(
   return quad;
 }
 
-export function renderLinkage(ctx: CodexCtx, machine: Machine, link: Linkage): Point[][] {
+export function renderLinkage(ctx: MachineCtx, machine: Machine, link: Linkage): Point[][] {
   const { lines } = ctx;
   const m = machine.module;
   const silhouettes: Point[][] = [];

@@ -1,7 +1,7 @@
 import type { Point } from '../flow-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { TAU, circle, radialOffset } from './geometry.js';
-import { type CodexCtx } from './context.js';
+import { type MachineCtx } from './context.js';
 import type { Gear } from './types.js';
 import { outerR, pitchR, rootR } from './synth.js';
 
@@ -49,7 +49,7 @@ export function toothProfile(g: Gear): Point[] {
   return pts;
 }
 
-export function renderGear(ctx: CodexCtx, g: Gear): Point[][] {
+export function renderGear(ctx: MachineCtx, g: Gear): Point[][] {
   const { o, lines, shadowAngle } = ctx;
   const rng = makeRandom(subSeed(ctx.seed, 100 + g.id));
   const rp = pitchR(g);
@@ -58,12 +58,12 @@ export function renderGear(ctx: CodexCtx, g: Gear): Point[][] {
   const big = g.teeth >= 16;
 
   // Outer profile, bold via repeated radial offsets (2 extra passes on big
-  // wheels, 1 on pinions).
+  // wheels, 1 on pinions, 3 on flywheels — they read heavy).
   const profile = toothProfile(g);
   lines.push({ points: profile, layer: 'part' });
   // Bold emphasis passes on a separate layer so hidden-line re-emission only
   // dashes the base profile once.
-  const passes = big ? 2 : 1;
+  const passes = g.variant === 'flywheel' ? 3 : big ? 2 : 1;
   for (let p = 1; p <= passes; p++) {
     lines.push({
       points: radialOffset(profile, g.cx, g.cy, -o.penWidth * 0.45 * p),
@@ -74,6 +74,10 @@ export function renderGear(ctx: CodexCtx, g: Gear): Point[][] {
   // Rim ring just inside the root circle (big wheels only — pinions are solid).
   const rimR = big ? rr - 1.4 * m : 0;
   if (big) lines.push({ points: circle(g.cx, g.cy, rimR), layer: 'part' });
+  // Flywheels carry a second, deeper rim — the heavy cast section.
+  if (g.variant === 'flywheel' && rimR > m * 2) {
+    lines.push({ points: circle(g.cx, g.cy, rimR - m * 0.85), layer: 'part' });
+  }
 
   // Hub + axle, with a keyway notch that rotates with the wheel's phase.
   const hubR = Math.max(m * 1.15, rp * 0.14);
@@ -98,11 +102,13 @@ export function renderGear(ctx: CodexCtx, g: Gear): Point[][] {
     layer: 'part',
   });
 
-  // Spokes: 4–6 double-line spokes from hub to rim (big wheels only).
+  // Spokes: 4–6 double-line spokes from hub to rim (big wheels only); the
+  // 'sspoke' variant bows each spoke into the curved-cast S look.
   if (big && rimR > hubR * 1.6) {
     const nsp = 4 + Math.floor(rng() * 3);
     const half = m * 0.32;
     const spokeStart = g.phase + rng() * TAU;
+    const bow = g.variant === 'sspoke' ? (rimR - hubR) * 0.16 : 0;
     for (let j = 0; j < nsp; j++) {
       const sa = spokeStart + (j * TAU) / nsp;
       const dx = Math.cos(sa);
@@ -110,22 +116,106 @@ export function renderGear(ctx: CodexCtx, g: Gear): Point[][] {
       const px = -dy;
       const py = dx;
       for (const s of [1, -1]) {
+        if (bow > 0) {
+          const pts: Point[] = [];
+          const steps = 8;
+          for (let t = 0; t <= steps; t++) {
+            const f = t / steps;
+            const r = hubR + 0.5 + (rimR - hubR - 1) * f;
+            const sway = Math.sin(f * Math.PI) * bow;
+            pts.push({
+              x: g.cx + dx * r + px * (half * s + sway),
+              y: g.cy + dy * r + py * (half * s + sway),
+            });
+          }
+          lines.push({ points: pts, layer: 'part' });
+        } else {
+          lines.push({
+            points: [
+              { x: g.cx + dx * (hubR + 0.5) + px * half * s, y: g.cy + dy * (hubR + 0.5) + py * half * s },
+              { x: g.cx + dx * (rimR - 0.5) + px * half * s, y: g.cy + dy * (rimR - 0.5) + py * half * s },
+            ],
+            layer: 'part',
+          });
+        }
+      }
+    }
+    // Rim bolt circles between spokes on the curved-cast look.
+    if (g.variant === 'sspoke') {
+      for (let j = 0; j < nsp; j++) {
+        const ba = spokeStart + ((j + 0.5) * TAU) / nsp;
         lines.push({
-          points: [
-            { x: g.cx + dx * (hubR + 0.5) + px * half * s, y: g.cy + dy * (hubR + 0.5) + py * half * s },
-            { x: g.cx + dx * (rimR - 0.5) + px * half * s, y: g.cy + dy * (rimR - 0.5) + py * half * s },
-          ],
+          points: circle(g.cx + Math.cos(ba) * (rimR - m * 0.7), g.cy + Math.sin(ba) * (rimR - m * 0.7), m * 0.22),
           layer: 'part',
         });
       }
     }
   }
 
+  // Ratchet: a sawtooth ring just inside the rim, with a pawl resting on it.
+  if (g.variant === 'ratchet' && big && rimR > hubR * 2) {
+    const rt = rimR - m * 0.3;
+    const rIn = rt - m * 0.8;
+    const nTeeth = Math.max(16, Math.round(g.teeth * 0.9));
+    const saw: Point[] = [];
+    for (let t = 0; t < nTeeth; t++) {
+      const a = g.phase + (t * TAU) / nTeeth;
+      const a2 = g.phase + ((t + 0.72) * TAU) / nTeeth;
+      saw.push({ x: g.cx + Math.cos(a) * rt, y: g.cy + Math.sin(a) * rt });
+      saw.push({ x: g.cx + Math.cos(a2) * rIn, y: g.cy + Math.sin(a2) * rIn });
+    }
+    saw.push({ x: saw[0].x, y: saw[0].y });
+    lines.push({ points: saw, layer: 'part' });
+    // Pawl: a short bar from a pivot above the ring down onto a tooth tip.
+    const pa = -Math.PI / 2 + 0.35;
+    const tip = { x: g.cx + Math.cos(pa) * rt, y: g.cy + Math.sin(pa) * rt };
+    const pivot = { x: g.cx + Math.cos(pa - 0.34) * (rt + m * 1.9), y: g.cy + Math.sin(pa - 0.34) * (rt + m * 1.9) };
+    const bdx = tip.x - pivot.x;
+    const bdy = tip.y - pivot.y;
+    const bl = Math.hypot(bdx, bdy) || 1;
+    const bpx = (-bdy / bl) * m * 0.28;
+    const bpy = (bdx / bl) * m * 0.28;
+    lines.push({
+      points: [
+        { x: pivot.x + bpx, y: pivot.y + bpy },
+        { x: tip.x + bpx * 0.4, y: tip.y + bpy * 0.4 },
+        { x: tip.x - bpx * 0.4, y: tip.y - bpy * 0.4 },
+        { x: pivot.x - bpx, y: pivot.y - bpy },
+        { x: pivot.x + bpx, y: pivot.y + bpy },
+      ],
+      layer: 'part',
+    });
+    lines.push({ points: circle(pivot.x, pivot.y, m * 0.34), layer: 'part' });
+  }
+
+  // Crank handle: a double-line arm off the hub with a grip knob.
+  if (g.variant === 'crank') {
+    const ca = g.phase + 0.9;
+    const cdx = Math.cos(ca);
+    const cdy = Math.sin(ca);
+    const cpx = -cdy;
+    const cpy = cdx;
+    const armLen = Math.max(hubR * 2.4, m * 3.2);
+    const half = m * 0.26;
+    for (const s of [1, -1]) {
+      lines.push({
+        points: [
+          { x: g.cx + cdx * axleR + cpx * half * s, y: g.cy + cdy * axleR + cpy * half * s },
+          { x: g.cx + cdx * armLen + cpx * half * s, y: g.cy + cdy * armLen + cpy * half * s },
+        ],
+        layer: 'part',
+      });
+    }
+    lines.push({ points: circle(g.cx + cdx * armLen, g.cy + cdy * armLen, m * 0.55), layer: 'part' });
+    lines.push({ points: circle(g.cx + cdx * armLen, g.cy + cdy * armLen, m * 0.24), layer: 'part' });
+  }
+
   // Shadow-side tone: straight parallel hatch clipped to the face annulus
   // (rim ring on big wheels, the whole solid face on pinions), only on the
   // shadow half — the way etchers shade a turned wheel, not concentric arcs.
   if (o.shading > 0.05) {
-    const step = Math.max(1.6, o.hatchSpacing) / Math.max(0.35, o.shading);
+    const heavy = g.variant === 'flywheel' ? 0.7 : 1;
+    const step = (Math.max(1.6, o.hatchSpacing) / Math.max(0.35, o.shading)) * heavy;
     const rIn = big ? rimR : hubR;
     const start = big ? -rr * 0.1 : step * 0.6;
     annulusHatch(ctx, g.cx, g.cy, rIn, rr, shadowAngle, step, start);
@@ -138,7 +228,7 @@ export function renderGear(ctx: CodexCtx, g: Gear): Point[][] {
  *  `angle`, starting `from` px down-shadow of the centre (negative reaches a
  *  little into the lit half so the tone fades in rather than switching on). */
 function annulusHatch(
-  ctx: CodexCtx,
+  ctx: MachineCtx,
   cx: number,
   cy: number,
   rIn: number,

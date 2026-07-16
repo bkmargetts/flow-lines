@@ -1,7 +1,7 @@
 import type { Point } from '../flow-lines.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { arc, circle, radialOffset } from './geometry.js';
-import type { CodexCtx } from './context.js';
+import type { MachineCtx } from './context.js';
 import type { Drum, Machine, Rope, Spring, Weight } from './types.js';
 
 /**
@@ -10,7 +10,7 @@ import type { Drum, Machine, Rope, Spring, Weight } from './types.js';
  * twist ticks; the weight carries 45° tone hatch clipped to its silhouette.
  */
 
-export function renderDrum(ctx: CodexCtx, machine: Machine, d: Drum): Point[][] {
+export function renderDrum(ctx: MachineCtx, machine: Machine, d: Drum): Point[][] {
   const { lines } = ctx;
   const outer = circle(d.cx, d.cy, d.r);
   lines.push({ points: outer, layer: 'part' });
@@ -21,7 +21,7 @@ export function renderDrum(ctx: CodexCtx, machine: Machine, d: Drum): Point[][] 
   return [outer];
 }
 
-export function renderRope(ctx: CodexCtx, machine: Machine, rope: Rope): Point[][] {
+export function renderRope(ctx: MachineCtx, machine: Machine, rope: Rope): Point[][] {
   const { lines } = ctx;
   const m = machine.module;
   const drum = machine.drums.find((d) => d.id === rope.drumId);
@@ -72,7 +72,7 @@ export function renderRope(ctx: CodexCtx, machine: Machine, rope: Rope): Point[]
   return [];
 }
 
-export function renderWeight(ctx: CodexCtx, machine: Machine, w: Weight): Point[][] {
+export function renderWeight(ctx: MachineCtx, machine: Machine, w: Weight): Point[][] {
   const { o, lines } = ctx;
   const m = machine.module;
   const ringR = m * 0.5;
@@ -120,7 +120,7 @@ export function renderWeight(ctx: CodexCtx, machine: Machine, w: Weight): Point[
   return [poly];
 }
 
-export function renderSpring(ctx: CodexCtx, machine: Machine, s: Spring): Point[][] {
+export function renderSpring(ctx: MachineCtx, machine: Machine, s: Spring): Point[][] {
   const { lines } = ctx;
   const m = machine.module;
   const dx = s.b.x - s.a.x;

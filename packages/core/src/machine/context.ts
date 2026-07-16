@@ -4,7 +4,7 @@ import type { ResolvedOptions } from './types.js';
 /** Everything shared by the whole plate: resolved options, the page frame,
  *  the region the machine may occupy (layout carves marginalia and inset
  *  territory out of the page), and the one output line list. */
-export interface CodexCtx {
+export interface MachineCtx {
   o: ResolvedOptions;
   seed: number;
   width: number;
@@ -17,7 +17,7 @@ export interface CodexCtx {
   lines: FlowLine[];
 }
 
-export function makeCtx(o: ResolvedOptions, seed: number): CodexCtx {
+export function makeCtx(o: ResolvedOptions, seed: number): MachineCtx {
   const { width, height, margin } = o;
   return {
     o,

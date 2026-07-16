@@ -12,7 +12,7 @@ import { stickmenModule } from '../projects/stickmen';
 import { sportsBallsModule } from '../projects/sports-balls';
 import { ribbonWeaveModule } from '../projects/ribbon-weave';
 import { gestureModule } from '../projects/gesture';
-import { machineCodexModule } from '../projects/machine-codex';
+import { machineModule } from '../projects/machine';
 import { conwayModule } from '../projects/conway';
 import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
@@ -42,7 +42,7 @@ export const MODULES: Module<any>[] = [
   sportsBallsModule,
   ribbonWeaveModule,
   gestureModule,
-  machineCodexModule,
+  machineModule,
   conwayModule,
   complexFlowModule,
   reactionDiffusionModule,

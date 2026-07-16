@@ -1,5 +1,5 @@
 import type { Point } from '../flow-lines.js';
-import type { CodexCtx } from './context.js';
+import type { MachineCtx } from './context.js';
 import type { Bearing } from './types.js';
 
 /**
@@ -9,7 +9,7 @@ import type { Bearing } from './types.js';
  * axle. Drawn at frame depth so the wheel occludes it: the support peeks out
  * from behind the wheel, which is exactly how the old machine plates read.
  */
-export function renderBearing(ctx: CodexCtx, b: Bearing): Point[][] {
+export function renderBearing(ctx: MachineCtx, b: Bearing): Point[][] {
   const { lines } = ctx;
   const dir: Point =
     b.dir === 'down' ? { x: 0, y: 1 } : b.dir === 'left' ? { x: -1, y: 0 } : { x: 1, y: 0 };

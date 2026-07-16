@@ -1,6 +1,6 @@
 import type { FlowLine, Point } from '../flow-lines.js';
 import { randomSeed } from '../lib/rng.js';
-import { DEFAULTS, type MachineCodexOptions, type ResolvedOptions } from './types.js';
+import { DEFAULTS, type MachineOptions, type ResolvedOptions } from './types.js';
 import { makeCtx } from './context.js';
 import { synthesize } from './synth.js';
 import { renderGear } from './gears.js';
@@ -9,31 +9,29 @@ import { renderBearing } from './shafts.js';
 import { renderBelt, renderPulley } from './belts.js';
 import { renderLinkage } from './linkage.js';
 import { renderDrum, renderRope, renderSpring, renderWeight } from './rigging.js';
-import { clipGearBite, pickBite, renderCutFace } from './section.js';
-import { renderAnnotations } from './drafting.js';
-import { composeLayout, renderInsets } from './layout.js';
-import { renderMarginalia } from './marginalia.js';
+import { clipGearBite, pickBites, renderCutFace } from './section.js';
 import { composeWithOcclusion, type PartRender } from './occlude.js';
-import { applyFinish, fitMachineToMargin, renderPlateFurniture } from './furniture.js';
+import { applyFinish, fitMachineToMargin } from './furniture.js';
 
 /**
- * Impossible Machine Codex — procedural da Vinci-style contraptions as
- * plottable pen-and-ink: a meshing gear train grown as a tree (exact pitch
- * tangency, tooth phases aligned), belts on true common tangents, pose-solved
- * linkages, rope-and-weight drives, all held in a timber frame and composed
- * on a codex/patent plate with drafting furniture and marginalia. Everything
- * is single-pen stroked polylines, deterministic per seed — bold lines are
- * repeated offset passes, never stroke-width.
+ * Machine — page-sized, hugely complex generative machines as plottable
+ * pen-and-ink: clusters of meshing gear trains grown across the whole sheet
+ * (exact pitch tangency, tooth phases aligned), tied into one transmission
+ * network by belts, ropes and cross-cluster meshes — or left as an
+ * overlapping engine-room wall (`connectivity`). Everything is single-pen
+ * stroked polylines, deterministic per seed — bold lines are repeated offset
+ * passes, never stroke-width.
  *
  * One concern per file: `synth.ts` grows the part graph (and never draws),
- * the part renderers (`gears.ts`, …) turn parts into lines, `furniture.ts`
- * holds the plate finish/fit. Mirrors the Planet/Botanical generator shape:
- * heavy algorithm here in core, thin web/CLI wrappers feed it.
+ * `network.ts` ties the clusters together, the part renderers (`gears.ts`, …)
+ * turn parts into lines, `occlude.ts` composes them in depth order. Mirrors
+ * the Planet/Botanical generator shape: heavy algorithm here in core, thin
+ * web/CLI wrappers feed it.
  */
 
-export type { MachineCodexOptions } from './types.js';
+export type { MachineOptions } from './types.js';
 
-export function generateMachineCodex(options: MachineCodexOptions): {
+export function generateMachine(options: MachineOptions): {
   lines: FlowLine[];
   width: number;
   height: number;
@@ -41,10 +39,6 @@ export function generateMachineCodex(options: MachineCodexOptions): {
   const o: ResolvedOptions = { ...DEFAULTS, ...options };
   const seed = options.seed ?? randomSeed();
   const ctx = makeCtx(o, seed);
-
-  // Layout first: the machine grows inside the region the page grants it.
-  const layout = composeLayout(ctx);
-  ctx.region = layout.region;
 
   const machine = synthesize(ctx);
 
@@ -61,13 +55,14 @@ export function generateMachineCodex(options: MachineCodexOptions): {
     parts.push({ z, lines: acc, silhouettes });
   };
 
-  const bite = pickBite(ctx, machine);
+  const bites = pickBites(ctx, machine);
   capture(0, () => renderFrame(ctx, machine));
   for (const b of machine.bearings) capture(0, () => renderBearing(ctx, b));
   for (const g of machine.gears) {
     capture(g.z, () => {
       const silhouettes = renderGear(ctx, g);
-      if (bite && bite.gearId === g.id) {
+      const bite = bites.find((bt) => bt.gearId === g.id);
+      if (bite) {
         const clipped = clipGearBite(ctx.lines, g, bite);
         ctx.lines.length = 0;
         for (const l of clipped) ctx.lines.push(l);
@@ -92,13 +87,7 @@ export function generateMachineCodex(options: MachineCodexOptions): {
   for (const w of machine.weights) capture(w.z, () => renderWeight(ctx, machine, w));
   for (const s of machine.springs) capture(s.z, () => renderSpring(ctx, machine, s));
 
-  composeWithOcclusion(ctx, parts);
-
-  // Drafting goes over the drawing, never occluded; then the page dressing.
-  const letters = renderAnnotations(ctx, machine);
-  renderInsets(ctx, machine, layout, letters.length);
-  renderMarginalia(ctx, layout.textBlocks);
-  renderPlateFurniture(ctx);
+  composeWithOcclusion(ctx, parts, machine);
 
   let finished = applyFinish(ctx);
   finished = fitMachineToMargin(ctx, finished);

@@ -1,6 +1,6 @@
 import type { Point } from '../flow-lines.js';
 import { TAU, arc, circle, commonTangents } from './geometry.js';
-import type { CodexCtx } from './context.js';
+import type { MachineCtx } from './context.js';
 import type { Belt, Machine, Pulley } from './types.js';
 
 /**
@@ -10,7 +10,7 @@ import type { Belt, Machine, Pulley } from './types.js';
  * drawn as single-line runs with little cross ticks (leather lacing).
  */
 
-export function renderPulley(ctx: CodexCtx, p: Pulley, standalone: boolean): Point[][] {
+export function renderPulley(ctx: MachineCtx, p: Pulley, standalone: boolean): Point[][] {
   const { lines } = ctx;
   const m = Math.max(2, p.r * 0.22);
   const outer = circle(p.cx, p.cy, p.r);
@@ -35,7 +35,7 @@ function wrapArc(cx: number, cy: number, r: number, a0: number, a1: number, thro
   return arc(cx, cy, r, s1, s0 + TAU);
 }
 
-export function renderBelt(ctx: CodexCtx, machine: Machine, belt: Belt): Point[][] {
+export function renderBelt(ctx: MachineCtx, machine: Machine, belt: Belt): Point[][] {
   const { lines } = ctx;
   const A = machine.pulleys.find((p) => p.id === belt.a);
   const B = machine.pulleys.find((p) => p.id === belt.b);
