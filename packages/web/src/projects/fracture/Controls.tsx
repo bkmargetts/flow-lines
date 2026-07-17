@@ -1,4 +1,5 @@
 import { FRACTURE_PRESETS, type FracturePreset } from '@flow-lines/core';
+import { randomSeed } from '../../lib/random';
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
@@ -13,6 +14,33 @@ const PRESET_LABELS: Record<FracturePreset, string> = {
   crazing: 'Crazing (fine net)',
   shatter: 'Shatter (from the edges)',
 };
+
+/**
+ * Roll a whole new fracture. Every knob lands inside its slider's range but
+ * biased off the extremes so a roll never comes out unreadable; the pen/ink
+ * aesthetic prefs (colors, pen width, multi-ink) and the preset label are left
+ * alone. Exported for the genome test.
+ */
+export function randomFractureGenome(rng: () => number): Partial<FractureState> {
+  return {
+    generations: 1 + Math.floor(rng() * 4),
+    crackDensity: Number((0.15 + rng() * 0.8).toFixed(2)),
+    straightness: Number((0.2 + rng() * 0.75).toFixed(2)),
+    // Isotropic mud most rolls; sometimes a directional crazing grain.
+    anisotropy: rng() < 0.55 ? 0 : Number((0.2 + rng() * 0.6).toFixed(2)),
+    anisotropyAngleDeg: 5 * Math.round(rng() * 36),
+    stressScale: Number((0.15 + rng() * 0.45).toFixed(2)),
+    jitter: Number((0.1 + rng() * 0.75).toFixed(2)),
+    arrestThreshold: Number((rng() * 0.5).toFixed(2)),
+    edgeNucleation: rng() < 0.7 ? 0 : Number((0.3 + rng() * 0.6).toFixed(2)),
+    plateHatch: rng() < 0.65,
+    hatchCoverage: Number((0.15 + rng() * 0.65).toFixed(2)),
+    hatchAngleDeg: Math.round(-70 + rng() * 140),
+    edgeCurl: Number((rng() * 0.9).toFixed(2)),
+    boldPasses: 1 + Math.floor(rng() * 5),
+    wobble: Number((0.2 + rng() * 1.3).toFixed(1)),
+  };
+}
 
 /** Sidebar controls for the Fracture module. */
 export function FractureControls({ state, update }: ControlsProps<FractureState>) {
@@ -36,8 +64,23 @@ export function FractureControls({ state, update }: ControlsProps<FractureState>
     });
   };
 
+  const surprise = () => update({ ...randomFractureGenome(Math.random), seed: randomSeed() });
+
   return (
     <div className="controls">
+      <div className="control-group">
+        <button
+          type="button"
+          className="secondary"
+          onClick={surprise}
+          title="Randomize everything"
+          style={{ width: '100%' }}
+        >
+          🎲 Randomize everything
+        </button>
+        <p className="paint-hint">One roll for a whole new fracture — or tune anything below.</p>
+      </div>
+
       <h3 className="section-title">Render</h3>
 
       <PresetPicker
