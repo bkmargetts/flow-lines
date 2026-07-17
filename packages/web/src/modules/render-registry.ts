@@ -8,6 +8,7 @@ import { renderStickmen } from '../projects/stickmen/render';
 import { renderSportsBalls } from '../projects/sports-balls/render';
 import { renderRibbonWeave } from '../projects/ribbon-weave/render';
 import { renderGesture } from '../projects/gesture/render';
+import { renderMachine } from '../projects/machine/render';
 import { renderConway } from '../projects/conway/render';
 import { renderComplexFlow } from '../projects/complex-flow/render';
 import { renderReactionDiffusion } from '../projects/reaction-diffusion/render';
@@ -52,6 +53,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   'sports-balls': entry(renderSportsBalls),
   'ribbon-weave': entry(renderRibbonWeave),
   gesture: entry(renderGesture),
+  machine: entry(renderMachine),
   conway: entry(renderConway),
   'complex-flow': entry(renderComplexFlow),
   'reaction-diffusion': entry(renderReactionDiffusion),

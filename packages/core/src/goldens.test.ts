@@ -19,6 +19,7 @@ import { generateStickmen } from './stickmen/index.js';
 import { generateSportsBalls } from './sports-balls/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateGesture } from './gesture/index.js';
+import { generateMachine } from './machine/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
 import { imageToPenInk, resolvePenInkStyle } from './pen-ink/index.js';
 import { toSVG } from './svg.js';
@@ -243,6 +244,28 @@ CASES['gesture/hartung/42'] = () =>
   generateGesture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'hartung' });
 CASES['gesture/tangle/42'] = () =>
   generateGesture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'tangle' });
+CASES['machine/default/42'] = () =>
+  generateMachine({ width: 300, height: 400, margin: 20, seed: 42 });
+CASES['machine/mega/7'] = () =>
+  generateMachine({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 7,
+    complexity: 1,
+    connectivity: 1,
+    sketch: 0,
+    wobble: 0.2,
+  });
+CASES['machine/wall/99'] = () =>
+  generateMachine({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 99,
+    complexity: 1,
+    connectivity: 0,
+  });
 // Rings and craters need coverage of their own: with defaults the ringed case
 // above renders identically to the gas giant (rings/bands are off).
 CASES['planet/ringed-rings/42'] = () =>
