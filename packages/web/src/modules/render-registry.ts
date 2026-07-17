@@ -14,6 +14,7 @@ import { renderComplexFlow } from '../projects/complex-flow/render';
 import { renderReactionDiffusion } from '../projects/reaction-diffusion/render';
 import { renderLenia } from '../projects/lenia/render';
 import { renderPhysarum } from '../projects/physarum/render';
+import { renderFracture } from '../projects/fracture/render';
 import { renderNoiseTexture } from '../projects/noise-texture/render';
 import { renderColorField } from '../projects/color-field/render';
 import { renderClassicTexture } from '../textures/classic/render';
@@ -59,6 +60,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   'reaction-diffusion': entry(renderReactionDiffusion),
   lenia: entry(renderLenia),
   physarum: entry(renderPhysarum),
+  fracture: entry(renderFracture),
   'noise-texture': entry(renderNoiseTexture),
   'color-field': entry(renderColorField),
   classic: entry(renderClassicTexture, true),

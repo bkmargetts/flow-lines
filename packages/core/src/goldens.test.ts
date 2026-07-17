@@ -10,6 +10,7 @@ import { generateConwayExposure } from './conway/index.js';
 import { generateReactionDiffusion } from './reaction-diffusion.js';
 import { generateLenia } from './lenia.js';
 import { generatePhysarum } from './physarum.js';
+import { generateFracture } from './fracture/index.js';
 import { generateComplexFlow, type ComplexFlowOptions } from './complex-flow.js';
 import { generateBotanical } from './botanical/index.js';
 import { generatePlanet } from './planet/index.js';
@@ -132,6 +133,8 @@ for (const seed of SEEDS) {
     generateReactionDiffusion({ width: 300, height: 400, seed });
   CASES[`lenia/orbium/${seed}`] = () => generateLenia({ width: 300, height: 400, seed });
   CASES[`physarum/network/${seed}`] = () => generatePhysarum({ width: 300, height: 400, seed });
+  CASES[`fracture/mud/${seed}`] = () =>
+    generateFracture({ width: 300, height: 400, margin: 20, seed });
   CASES[`complex-flow/${seed}`] = () => generateComplexFlow({ ...complexBase, seed });
   CASES[`botanical/default/${seed}`] = () => generateBotanical({ width: 300, height: 400, seed });
   CASES[`planet/terrestrial/${seed}`] = () =>
@@ -172,6 +175,10 @@ CASES['lenia/cells/42'] = () =>
   generateLenia({ width: 300, height: 400, seed: 42, preset: 'cells' });
 CASES['physarum/veins/42'] = () =>
   generatePhysarum({ width: 300, height: 400, seed: 42, preset: 'veins' });
+CASES['fracture/crazing/42'] = () =>
+  generateFracture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'crazing' });
+CASES['fracture/shatter/42'] = () =>
+  generateFracture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'shatter' });
 CASES['botanical/wreath/42'] = () =>
   generateBotanical({ width: 300, height: 400, seed: 42, composition: 'wreath' });
 CASES['stickmen/energetic/42'] = () =>
