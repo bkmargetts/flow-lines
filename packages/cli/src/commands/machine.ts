@@ -1,12 +1,10 @@
 import type { Command } from 'commander';
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { generateMachine, toSVG, type MachineOptions, type SVGOptions } from '@flow-lines/core';
-import { resolvePageFrame } from '../page.js';
+import { generateMachine, type MachineOptions, type SVGOptions } from '@flow-lines/core';
+import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerMachine(program: Command) {
-  addSketchOptions(program.command('machine'))
+  addTileOptions(addSketchOptions(program.command('machine')))
     .description('Generate page-sized, hugely complex generative machines — meshing gear trains, belts, ropes and weights')
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '1000')
@@ -40,7 +38,8 @@ export function registerMachine(program: Command) {
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
     .option('-o, --output <file>', 'Output file path', 'machine.svg')
     .action((options) => {
-      const { width, height, marginPx, paperSvg, paperStrokeWidth } = resolvePageFrame(options);
+      const frame = resolvePageFrame(options);
+      const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
       // Size flags are px at the base render density; scale with --resolution
       // so a machine looks the same at any px-per-mm.
       const scale = sketchScale(options);
@@ -81,12 +80,11 @@ export function registerMachine(program: Command) {
         ...paperSvg,
       };
 
-      const svg = toSVG(
+      writePlotOutput(
         applySketchFromFlags({ ...result, seed: machineOptions.seed ?? 0 }, options, scale),
+        frame,
+        options,
         svgOptions
       );
-      const outputPath = resolve(process.cwd(), options.output);
-      writeFileSync(outputPath, svg, 'utf-8');
-      console.log(`\nSaved to: ${outputPath}`);
     });
 }

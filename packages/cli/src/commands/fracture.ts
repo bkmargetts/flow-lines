@@ -1,19 +1,15 @@
 import type { Command } from 'commander';
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   generateFracture,
-  toSVG,
-  toSVGLayers,
   type FractureOptions,
   type FracturePreset,
   type SVGOptions,
 } from '@flow-lines/core';
-import { resolvePageFrame } from '../page.js';
+import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerFracture(program: Command) {
-  addSketchOptions(program.command('fracture'))
+  addTileOptions(addSketchOptions(program.command('fracture')))
     .description(
       'Render an emergent crack-propagation network (mud cracks, glaze crazing): ' +
         'cracks nucleate at stress maxima, meet earlier cracks at right angles, ' +
@@ -21,10 +17,7 @@ export function registerFracture(program: Command) {
     )
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '800')
-    .option(
-      '--paper <size>',
-      'Plot to a physical sheet (a6,a5,a4,a3,letter,legal,tabloid); overrides --width/--height and exports the SVG in mm'
-    )
+    .option('--paper <size>', PAPER_SPEC_HELP)
     .option('--orientation <o>', 'Paper orientation: portrait or landscape', 'portrait')
     .option('--margin-mm <number>', 'Clear paper border in mm (with --paper)', '10')
     .option('--pen-width-mm <number>', 'Plotted pen width in mm (with --paper)', '0.3')
@@ -61,7 +54,8 @@ export function registerFracture(program: Command) {
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
     .option('-o, --output <file>', 'Output file path', 'fracture.svg')
     .action((options) => {
-      const { width, height, marginPx, paperSvg, paperStrokeWidth } = resolvePageFrame(options);
+      const frame = resolvePageFrame(options);
+      const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
 
       const fractureOptions: FractureOptions = {
         width,
@@ -111,20 +105,6 @@ export function registerFracture(program: Command) {
         ...paperSvg,
       };
 
-      if (options.splitLayers) {
-        // Strip a trailing .svg so layers land as <base>.<layer>.svg
-        const base = resolve(process.cwd(), options.output.replace(/\.svg$/i, ''));
-        const layers = toSVGLayers(result, svgOptions);
-        for (const { layer, svg } of layers) {
-          const layerPath = `${base}.${layer}.svg`;
-          writeFileSync(layerPath, svg, 'utf-8');
-          console.log(`  Saved layer '${layer}' to: ${layerPath}`);
-        }
-      } else {
-        const svg = toSVG(result, svgOptions);
-        const outputPath = resolve(process.cwd(), options.output);
-        writeFileSync(outputPath, svg, 'utf-8');
-        console.log(`\nSaved to: ${outputPath}`);
-      }
+      writePlotOutput(result, frame, options, svgOptions);
     });
 }

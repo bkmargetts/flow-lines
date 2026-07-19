@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect, useLayoutEffect, useMemo } from 'react';
-import type { Point } from '@flow-lines/core';
+import type { Point, TilingLayout } from '@flow-lines/core';
 
 interface FocusMarker {
   x: number;
@@ -20,6 +20,8 @@ interface PreviewProps {
   onSetFocus?: (point: Point) => void;
   /** Paper colour shown behind the (transparent) drawing — preview only. */
   background?: string;
+  /** Multi-sheet split layout drawn over the artwork (never plotted). */
+  tileGrid?: TilingLayout | null;
 }
 
 export function Preview({
@@ -34,6 +36,7 @@ export function Preview({
   focusMarkers = [],
   onSetFocus,
   background,
+  tileGrid = null,
 }: PreviewProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -363,6 +366,47 @@ export function Preview({
     </svg>
   ) : null;
 
+  // Sheet-split overlay: each tile's printed extent (faint, includes glue
+  // flaps) plus its owned region's cut lines (dashed) in artwork coordinates.
+  const tileOverlay = tileGrid && !tileGrid.single ? (
+    <svg
+      className="tile-overlay"
+      viewBox={`0 0 ${width} ${height}`}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: displayWidth,
+        height: displayHeight,
+        pointerEvents: 'none',
+      }}
+    >
+      {tileGrid.tiles.map((t) => (
+        <g key={`${t.row}-${t.col}`}>
+          <rect
+            x={t.sourceRect.x}
+            y={t.sourceRect.y}
+            width={t.sourceRect.width}
+            height={t.sourceRect.height}
+            fill="none"
+            stroke="rgba(90, 140, 255, 0.35)"
+            strokeWidth={1}
+          />
+          <rect
+            x={t.trimRect.x}
+            y={t.trimRect.y}
+            width={t.trimRect.width}
+            height={t.trimRect.height}
+            fill="none"
+            stroke="rgba(233, 69, 96, 0.55)"
+            strokeWidth={1}
+            strokeDasharray="6 4"
+          />
+        </g>
+      ))}
+    </svg>
+  ) : null;
+
   // Cursor hint: crosshair while painting/picking focus, otherwise a grab hand
   // for drag-pan.
   const cursor = paintMode || focusSelectMode ? 'crosshair' : 'grab';
@@ -405,6 +449,7 @@ export function Preview({
           )}
           {paintDotsOverlay}
           {focusOverlay}
+          {tileOverlay}
         </div>
       </div>
     </div>

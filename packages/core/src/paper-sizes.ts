@@ -32,9 +32,14 @@ export const PAPER_SIZES: PaperSize[] = [
   { id: 'a5', name: 'A5', widthMm: 148, heightMm: 210 },
   { id: 'a4', name: 'A4', widthMm: 210, heightMm: 297 },
   { id: 'a3', name: 'A3', widthMm: 297, heightMm: 420 },
+  { id: 'a2', name: 'A2', widthMm: 420, heightMm: 594 },
+  { id: 'a1', name: 'A1', widthMm: 594, heightMm: 841 },
+  { id: 'a0', name: 'A0', widthMm: 841, heightMm: 1189 },
+  { id: '2a0', name: '2A0', widthMm: 1189, heightMm: 1682 },
   { id: 'letter', name: 'US Letter', widthMm: 215.9, heightMm: 279.4 },
   { id: 'legal', name: 'US Legal', widthMm: 215.9, heightMm: 355.6 },
   { id: 'tabloid', name: 'Tabloid', widthMm: 279.4, heightMm: 431.8 },
+  { id: 'arch-d', name: 'Arch D', widthMm: 609.6, heightMm: 914.4 },
 ];
 
 const PAPER_BY_ID: Record<string, PaperSize> = Object.fromEntries(
@@ -45,6 +50,39 @@ export function getPaperSize(id: string): PaperSize {
   const size = PAPER_BY_ID[id];
   if (!size) throw new Error(`Unknown paper size: ${id}`);
   return size;
+}
+
+/** Id carried by paper sizes produced from a custom "WxH" spec. */
+export const CUSTOM_PAPER_ID = 'custom';
+
+/** Sanity bounds for custom sheets, in mm (10mm .. 3m per edge). */
+const CUSTOM_MM_MIN = 10;
+const CUSTOM_MM_MAX = 3000;
+
+const clampMm = (v: number): number =>
+  Math.min(CUSTOM_MM_MAX, Math.max(CUSTOM_MM_MIN, v));
+
+/**
+ * Resolve a paper spec: a table id ('a4'), a raw 'WxH' in millimetres
+ * ('1200x900'), or the prefixed form 'custom:1200x900' (what the web frame
+ * stores). Custom dims are kept exactly as given (orientation still swaps
+ * W/H downstream) and clamped to 10–3000mm per edge. Throws on anything
+ * else — same contract as getPaperSize.
+ */
+export function resolvePaperSize(spec: string): PaperSize {
+  const s = spec.trim().toLowerCase().replace(/^custom:/, '');
+  const m = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(s);
+  if (m) {
+    const widthMm = clampMm(parseFloat(m[1]));
+    const heightMm = clampMm(parseFloat(m[2]));
+    return {
+      id: CUSTOM_PAPER_ID,
+      name: `Custom ${widthMm}×${heightMm}mm`,
+      widthMm,
+      heightMm,
+    };
+  }
+  return getPaperSize(s);
 }
 
 /** Sheet dimensions in mm for the given orientation (landscape swaps W/H). */

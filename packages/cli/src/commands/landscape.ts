@@ -1,13 +1,11 @@
 import type { Command } from 'commander';
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { generateLandscape, toSVG, type LandscapeOptions, type SVGOptions } from '@flow-lines/core';
+import { generateLandscape, type LandscapeOptions, type SVGOptions } from '@flow-lines/core';
 import { LANDSCAPE_PALETTES, LANDSCAPE_SCENES } from '../palettes.js';
-import { resolvePageFrame } from '../page.js';
+import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerLandscape(program: Command) {
-  addSketchOptions(program.command('landscape'))
+  addTileOptions(addSketchOptions(program.command('landscape')))
     .description('Generate procedural, plottable pen-and-ink landscapes')
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '630')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '720')
@@ -85,7 +83,8 @@ export function registerLandscape(program: Command) {
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
     .option('-o, --output <file>', 'Output file path', 'landscape.svg')
     .action((options) => {
-      const { width, height, marginPx, paperSvg, paperStrokeWidth } = resolvePageFrame(options);
+      const frame = resolvePageFrame(options);
+      const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
 
       // A --scene preset seeds the defaults; explicit flags still override it.
       const scene = options.scene ? LANDSCAPE_SCENES[String(options.scene)] : undefined;
@@ -166,9 +165,6 @@ export function registerLandscape(program: Command) {
         ...paperSvg,
       };
 
-      const svg = toSVG(applySketchFromFlags(result, options, sketchScale(options)), svgOptions);
-      const outputPath = resolve(process.cwd(), options.output);
-      writeFileSync(outputPath, svg, 'utf-8');
-      console.log(`\nSaved to: ${outputPath}`);
+      writePlotOutput(applySketchFromFlags(result, options, sketchScale(options)), frame, options, svgOptions);
     });
 }

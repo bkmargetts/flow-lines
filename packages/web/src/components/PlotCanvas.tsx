@@ -1,6 +1,7 @@
 import type { Point } from '@flow-lines/core';
 import { Preview } from './Preview';
 import { useFrame } from '../FrameContext';
+import { useTileLayout } from '../lib/use-tile-layout';
 import { useComposite, useCompositeBusy, useLayerStore } from '../LayerStore';
 import { useInstanceApi } from '../projects/image-ink/instance-store';
 import type { ImageInkLayerState } from '../projects/image-ink/types';
@@ -30,6 +31,7 @@ export function PlotCanvas() {
   const { layers, selectedId, updateState } = useLayerStore();
   const comp = useComposite();
   const compositing = useCompositeBusy();
+  const { layout: tileGrid } = useTileLayout();
 
   const selected = layers.find((l) => l.instanceId === selectedId);
   const isInk = selected?.moduleId === 'image-ink';
@@ -104,6 +106,7 @@ export function PlotCanvas() {
           focusMarkers={focusMarkers}
           onSetFocus={onSetFocus}
           background={frame.paperTone}
+          tileGrid={tileGrid}
         />
       )}
     </>

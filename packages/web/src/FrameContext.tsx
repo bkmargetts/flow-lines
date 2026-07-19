@@ -56,6 +56,23 @@ export interface FrameSettings {
   sketchBreaks: number;
   /** Seed for the sketch pass, independent of every layer's own seed. */
   sketchSeed: number;
+
+  // ---- Split across multiple sheets (export/preview only — never re-renders art) ----
+  /** Off → one sheet, exactly as before. On → export slices the plot across tiles. */
+  tileEnabled: boolean;
+  /** Paper spec for each tile sheet ('a4' or 'custom:WxH'). */
+  tileSheet: string;
+  tileOrientation: Orientation;
+  /**
+   * true → each tile keeps `marginMm` of clear paper inside its own sheet
+   * (trimmed when assembling; safe for plotters that can't reach the paper
+   * edge). false → raw edge-to-edge slices, margin only around the whole.
+   */
+  tilePerSheetMargin: boolean;
+  /** Glue-flap overlap in mm — adjacent sheets repeat this much artwork. */
+  tileOverlapMm: number;
+  /** Trim ticks at the sheet edges on their own 'tile-marks' pen layer. */
+  tileMarks: boolean;
 }
 
 export const defaultFrame: FrameSettings = {
@@ -77,6 +94,12 @@ export const defaultFrame: FrameSettings = {
   sketchOvershoot: 0.35,
   sketchBreaks: 0.25,
   sketchSeed: 42,
+  tileEnabled: false,
+  tileSheet: 'a4',
+  tileOrientation: 'portrait',
+  tilePerSheetMargin: true,
+  tileOverlapMm: 0,
+  tileMarks: false,
 };
 
 interface FrameContextValue {

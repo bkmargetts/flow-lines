@@ -7,8 +7,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getPaperSize, pageMetrics } from '@flow-lines/core';
+import { resolvePaperSize, pageMetrics } from '@flow-lines/core';
 import { useFrame } from './FrameContext';
+import { pageLongEdgeCapPx } from './lib/page-cap';
 import { getModule } from './modules/registry';
 import type { LayerOutput, LiveModule, RenderEnv, StateUpdate } from './modules/types';
 import { composite, type CompositeResult } from './lib/composite';
@@ -287,7 +288,13 @@ export function useLayerStore(): LayerStoreValue {
 export function usePage() {
   const { frame } = useFrame();
   return useMemo(
-    () => pageMetrics(getPaperSize(frame.paper), frame.orientation, frame.resolution),
+    () =>
+      pageMetrics(
+        resolvePaperSize(frame.paper),
+        frame.orientation,
+        frame.resolution,
+        pageLongEdgeCapPx()
+      ),
     [frame.paper, frame.orientation, frame.resolution]
   );
 }
