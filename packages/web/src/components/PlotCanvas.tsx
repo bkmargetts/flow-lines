@@ -1,8 +1,10 @@
 import type { Point } from '@flow-lines/core';
+import { useMemo } from 'react';
 import { Preview } from './Preview';
 import { useFrame } from '../FrameContext';
-import { useTileLayout } from '../lib/use-tile-layout';
-import { useComposite, useCompositeBusy, useLayerStore } from '../LayerStore';
+import { tilingOptionsFromFrame, useTileLayout } from '../lib/use-tile-layout';
+import { buildSheetsPreview } from '../lib/tile-preview';
+import { useComposite, useCompositeBusy, useLayerStore, usePage } from '../LayerStore';
 import { useInstanceApi } from '../projects/image-ink/instance-store';
 import type { ImageInkLayerState } from '../projects/image-ink/types';
 
@@ -31,7 +33,24 @@ export function PlotCanvas() {
   const { layers, selectedId, updateState } = useLayerStore();
   const comp = useComposite();
   const compositing = useCompositeBusy();
+  const page = usePage();
   const { layout: tileGrid } = useTileLayout();
+
+  // Split preview: the sheets themselves, each with its clear per-page
+  // margin, artwork continuing across the printable areas — what the export
+  // zip will actually contain. Null when splitting is off (or its settings
+  // are degenerate), which falls back to the continuous single-sheet view.
+  const sheetsPreview = useMemo(() => {
+    if (!frame.tileEnabled || !tileGrid || comp.result.lines.length === 0) return null;
+    return buildSheetsPreview(
+      comp.result,
+      page,
+      tileGrid,
+      tilingOptionsFromFrame(frame),
+      comp.svgOptions,
+      frame.paperTone
+    );
+  }, [frame, tileGrid, comp, page]);
 
   const selected = layers.find((l) => l.instanceId === selectedId);
   const isInk = selected?.moduleId === 'image-ink';
@@ -95,18 +114,22 @@ export function PlotCanvas() {
         </div>
       ) : (
         <Preview
-          svgContent={comp.previewSvg}
-          width={comp.width}
-          height={comp.height}
-          paintMode={paintMode}
-          paintedPoints={maskPath}
-          showDots={paintMode || maskPath.length > 0}
+          svgContent={sheetsPreview ? sheetsPreview.svg : comp.previewSvg}
+          width={sheetsPreview ? sheetsPreview.width : comp.width}
+          height={sheetsPreview ? sheetsPreview.height : comp.height}
+          // Canvas interactions map taps to single-sheet artwork coordinates,
+          // which don't exist in the sheets layout — toggle the split off to
+          // paint or pick focus points.
+          paintMode={sheetsPreview ? false : paintMode}
+          paintedPoints={sheetsPreview ? [] : maskPath}
+          showDots={!sheetsPreview && (paintMode || maskPath.length > 0)}
           onPaint={onPaint}
-          focusSelectMode={focusSelectMode}
-          focusMarkers={focusMarkers}
+          focusSelectMode={sheetsPreview ? false : focusSelectMode}
+          focusMarkers={sheetsPreview ? [] : focusMarkers}
           onSetFocus={onSetFocus}
-          background={frame.paperTone}
-          tileGrid={tileGrid}
+          // The sheets draw their own paper; the stage shows through the
+          // gutters between pages.
+          background={sheetsPreview ? undefined : frame.paperTone}
         />
       )}
     </>
