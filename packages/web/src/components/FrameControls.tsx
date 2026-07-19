@@ -176,6 +176,31 @@ export function FrameControls() {
             Trim marks
             <InfoTip text="Short ticks on the margin line wherever two sheets meet, on their own 'tile-marks' pen layer — cut along them and glue any overlap flap behind the neighbouring sheet. Held clear of the paper edge so the pen never runs off. Needs a per-sheet margin (with sheets edge-to-edge there is nothing to cut)." />
           </label>
+          {frame.tileMarks && (
+            <>
+              <label>
+                Mark offset{" "}
+                <EditableValue
+                  value={frame.tileMarkOffsetMm}
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  onChange={(v) => updateFrame({ tileMarkOffsetMm: v })}
+                >
+                  {frame.tileMarkOffsetMm}mm
+                </EditableValue>
+                <InfoTip text="Pulls each tick back from the margin line by this gap, toward the paper edge. 0 ends the tick exactly on the line. The paper-edge safety clearance always wins — if the margin is too crowded the ticks shorten and eventually drop." />
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                step="0.5"
+                value={frame.tileMarkOffsetMm}
+                onChange={(e) => updateFrame({ tileMarkOffsetMm: parseFloat(e.target.value) })}
+              />
+            </>
+          )}
         </div>
       )}
 

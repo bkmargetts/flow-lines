@@ -290,6 +290,46 @@ describe('sliceResultIntoTiles', () => {
     }
   });
 
+  it('a mark offset pulls every tick back from its margin line by exactly that gap', () => {
+    const opts = baseOpts({ registrationMarks: true, markOffsetMm: 2 });
+    const layout = computeTiling(a0, opts);
+    const marked = sliceResultIntoTiles(makeResult(), a0, layout, opts);
+    const marginPx = 10 * a0.pxPerMm;
+    const offsetPx = 2 * a0.pxPerMm;
+    const eps = 1e-6;
+    let ticks = 0;
+    for (const s of marked) {
+      const { widthPx: w, heightPx: h } = s.tile;
+      for (const line of s.result.lines) {
+        if (line.layer !== TILE_MARKS_LAYER) continue;
+        ticks++;
+        // Each tick lies ON its cut line; the offset acts along the line:
+        // its deepest point stops exactly offsetPx short of the margin
+        // corner (i.e. marginPx − offsetPx into the perpendicular band).
+        const [a, b] = line.points;
+        const vertical = a.x === b.x;
+        const depth = Math.max(
+          ...line.points.map((p) => (vertical ? Math.min(p.y, h - p.y) : Math.min(p.x, w - p.x)))
+        );
+        expect(depth).toBeCloseTo(marginPx - offsetPx, 6);
+      }
+    }
+    expect(ticks).toBeGreaterThan(0);
+  });
+
+  it('an offset that eats the safe margin band drops the marks entirely', () => {
+    const opts = baseOpts({ registrationMarks: true, markOffsetMm: 9 });
+    const marked = sliceResultIntoTiles(
+      makeResult(),
+      a0,
+      computeTiling(a0, opts),
+      opts
+    );
+    for (const s of marked) {
+      expect(s.result.lines.some((l) => l.layer === TILE_MARKS_LAYER)).toBe(false);
+    }
+  });
+
   it('draws no marks when sheets have no margin (nothing to cut)', () => {
     const opts = baseOpts({ registrationMarks: true, perSheetMargin: false });
     const marked = sliceResultIntoTiles(

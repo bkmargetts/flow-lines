@@ -12,6 +12,7 @@ export function tilingOptionsFromFrame(frame: FrameSettings): TilingOptions {
     perSheetMargin: frame.tilePerSheetMargin,
     overlapMm: frame.tileOverlapMm,
     registrationMarks: frame.tileMarks,
+    markOffsetMm: frame.tileMarkOffsetMm,
   };
 }
 

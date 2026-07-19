@@ -86,6 +86,7 @@ export interface TileFlagValues {
   tileMargin: boolean;
   tileOverlap: string;
   tileMarks?: boolean;
+  tileMarkOffset: string;
 }
 
 /** Register the shared multi-sheet tiling flags on a command. */
@@ -108,6 +109,11 @@ export function addTileOptions(cmd: Command): Command {
     .option(
       '--tile-marks',
       'Trim ticks on the margin line of each edge that meets a neighbouring sheet, held clear of the paper edge, on their own tile-marks pen layer (needs the per-sheet margin)'
+    )
+    .option(
+      '--tile-mark-offset <mm>',
+      'Gap between each trim tick and the margin line it marks (0 = tick ends on the line)',
+      '0'
     );
 }
 
@@ -152,6 +158,7 @@ export function writePlotOutput(
     perSheetMargin: options.tileMargin,
     overlapMm: parseFloat(options.tileOverlap),
     registrationMarks: options.tileMarks ?? false,
+    markOffsetMm: parseFloat(options.tileMarkOffset),
   };
   const layout = computeTiling(frame.page, tilingOptions);
   const tiles = sliceResultIntoTiles(result, frame.page, layout, tilingOptions);

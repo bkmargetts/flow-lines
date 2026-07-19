@@ -47,6 +47,14 @@ export interface TilingOptions {
   registrationMarks?: boolean;
   /** Length of each trim tick, in mm. */
   markLengthMm?: number;
+  /**
+   * Gap between each tick and the margin line it marks, in mm (default 0 —
+   * the tick ends exactly on the line). The offset pushes ticks back toward
+   * the paper edge; the plotter-safety clearance still holds, so a crowded
+   * margin shortens and eventually drops the ticks rather than letting them
+   * near the edge.
+   */
+  markOffsetMm?: number;
 }
 
 export interface TileSpec {
@@ -211,15 +219,18 @@ function tileMarks(
   layout: { rows: number; cols: number },
   marginPx: number,
   lengthMm: number,
+  offsetPx: number,
   pxPerMm: number
 ): FlowLine[] {
   if (marginPx <= 0) return [];
   // Along-line tick span within the perpendicular margin band: end on the
-  // margin corner, start clear of the paper edge. Degenerate margins (inset
-  // eats the whole band) draw nothing rather than something unsafe.
+  // margin corner (pulled back by any configured offset), start clear of the
+  // paper edge. Degenerate combinations (offset or inset eats the whole
+  // band) draw nothing rather than something unsafe.
   const edgeClearance = Math.max(1.5 * pxPerMm, 0.2 * marginPx);
-  const start = Math.max(edgeClearance, marginPx - lengthMm * pxPerMm);
-  if (marginPx - start < 0.75 * pxPerMm) return [];
+  const end = marginPx - offsetPx;
+  const start = Math.max(edgeClearance, end - lengthMm * pxPerMm);
+  if (end - start < 0.75 * pxPerMm) return [];
   const w = tile.widthPx;
   const h = tile.heightPx;
   const seg = (x0: number, y0: number, x1: number, y1: number): Point[] => [
@@ -233,8 +244,8 @@ function tileMarks(
     ...(tile.col > 0 ? [marginPx] : []),
     ...(tile.col < layout.cols - 1 ? [w - marginPx] : []),
   ]) {
-    ticks.push(seg(x, start, x, marginPx));
-    ticks.push(seg(x, h - marginPx, x, h - start));
+    ticks.push(seg(x, start, x, end));
+    ticks.push(seg(x, h - end, x, h - start));
   }
   // Horizontal cut lines (top/bottom margin lines), ticks in the left and
   // right margin bands.
@@ -242,8 +253,8 @@ function tileMarks(
     ...(tile.row > 0 ? [marginPx] : []),
     ...(tile.row < layout.rows - 1 ? [h - marginPx] : []),
   ]) {
-    ticks.push(seg(start, y, marginPx, y));
-    ticks.push(seg(w - marginPx, y, w - start, y));
+    ticks.push(seg(start, y, end, y));
+    ticks.push(seg(w - end, y, w - start, y));
   }
   return ticks.map((points) => ({ points, pen: 'fine', layer: TILE_MARKS_LAYER }));
 }
@@ -277,7 +288,14 @@ export function sliceResultIntoTiles(
     if (opts.registrationMarks) {
       const marginPx = opts.perSheetMargin ? opts.marginMm * art.pxPerMm : 0;
       lines.push(
-        ...tileMarks(tile, layout, marginPx, opts.markLengthMm ?? 5, art.pxPerMm)
+        ...tileMarks(
+          tile,
+          layout,
+          marginPx,
+          opts.markLengthMm ?? 5,
+          Math.max(0, opts.markOffsetMm ?? 0) * art.pxPerMm,
+          art.pxPerMm
+        )
       );
     }
     return {

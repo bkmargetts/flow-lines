@@ -73,6 +73,8 @@ export interface FrameSettings {
   tileOverlapMm: number;
   /** Trim ticks at the sheet edges on their own 'tile-marks' pen layer. */
   tileMarks: boolean;
+  /** Gap between each trim tick and the margin line it marks, in mm. */
+  tileMarkOffsetMm: number;
 }
 
 export const defaultFrame: FrameSettings = {
@@ -100,6 +102,7 @@ export const defaultFrame: FrameSettings = {
   tilePerSheetMargin: true,
   tileOverlapMm: 0,
   tileMarks: false,
+  tileMarkOffsetMm: 0,
 };
 
 interface FrameContextValue {
