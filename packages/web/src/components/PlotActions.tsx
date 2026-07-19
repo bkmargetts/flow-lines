@@ -1,8 +1,8 @@
-import { toSVG, sliceResultIntoTiles, tileLabel, TILE_MARKS_LAYER, type SVGOptions } from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
 import { useComposite, useCompositeBusy, usePage } from '../LayerStore';
 import { compositeLayers } from '../lib/composite';
 import { downloadSvgText, triggerDownload } from '../lib/download';
+import { sheetsZipEntries } from '../lib/tile-export';
 import { tilingOptionsFromFrame, useTileLayout } from '../lib/use-tile-layout';
 import { zipStore } from '../lib/zip';
 
@@ -41,30 +41,15 @@ export function PlotActions() {
 
   const downloadSheets = () => {
     if (!tileLayout) return;
-    const opts = tilingOptionsFromFrame(frame);
-    const tiles = sliceResultIntoTiles(comp.result, page, tileLayout, opts);
-    const zip = zipStore(
-      tiles.map((t) => {
-        const svgOptions: SVGOptions = {
-          ...comp.svgOptions,
-          physicalWidth: t.physicalWidth,
-          physicalHeight: t.physicalHeight,
-          ...(opts.registrationMarks
-            ? {
-                layerColors: {
-                  ...comp.svgOptions.layerColors,
-                  [TILE_MARKS_LAYER]: comp.svgOptions.strokeColor ?? '#111111',
-                },
-              }
-            : {}),
-        };
-        return {
-          name: `flow-lines-${tileLabel(t.tile)}.svg`,
-          text: toSVG(t.result, svgOptions),
-        };
-      })
+    const entries = sheetsZipEntries(
+      comp.result,
+      page,
+      tileLayout,
+      tilingOptionsFromFrame(frame),
+      comp.svgOptions,
+      comp.hasLayers
     );
-    triggerDownload(zip, 'flow-lines-sheets.zip');
+    triggerDownload(zipStore(entries), 'flow-lines-sheets.zip');
   };
 
   return (
@@ -87,7 +72,7 @@ export function PlotActions() {
           className="secondary"
           disabled={!hasContent || !tileLayout}
           onClick={downloadSheets}
-          title="One SVG per physical sheet, zipped — trim and assemble into the full drawing"
+          title="One SVG per physical sheet, zipped — trim and assemble into the full drawing. With multiple pen layers: one folder per sheet, one registered SVG per pen inside"
         >
           Download sheets (.zip)
         </button>
