@@ -41,6 +41,17 @@ export type { LeniaOptions, LeniaPreset, LeniaSeedPattern, RingKernel } from './
 export { generatePhysarum, stepPhysarum, PHYSARUM_PRESETS } from './physarum.js';
 export type { PhysarumOptions, PhysarumPreset, PhysarumAgents, PhysarumStepParams } from './physarum.js';
 
+// Fracture — crack-propagation networks (mud cracks, glaze crazing)
+export { generateFracture, simulateFracture, FRACTURE_PRESETS } from './fracture/index.js';
+export type {
+  FractureOptions,
+  FracturePreset,
+  FractureSimParams,
+  FractureCrack,
+  FractureJunction,
+  FractureSimResult,
+} from './fracture/index.js';
+
 // Complex-valued rational-function flow field (Savva-style poles & zeros)
 export { generateComplexFlow } from './complex-flow.js';
 export type {

@@ -18,6 +18,7 @@ import { complexFlowModule } from '../projects/complex-flow';
 import { reactionDiffusionModule } from '../projects/reaction-diffusion';
 import { leniaModule } from '../projects/lenia';
 import { physarumModule } from '../projects/physarum';
+import { fractureModule } from '../projects/fracture';
 import { noiseTextureModule } from '../projects/noise-texture';
 import { colorFieldModule } from '../projects/color-field';
 
@@ -48,6 +49,7 @@ export const MODULES: Module<any>[] = [
   reactionDiffusionModule,
   leniaModule,
   physarumModule,
+  fractureModule,
   noiseTextureModule,
   colorFieldModule,
   classicTexture,

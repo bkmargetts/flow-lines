@@ -10,6 +10,7 @@ import { registerPlanet } from './commands/planet.js';
 import { registerLandscape } from './commands/landscape.js';
 import { registerGesture } from './commands/gesture.js';
 import { registerMachine } from './commands/machine.js';
+import { registerFracture } from './commands/fracture.js';
 
 const program = new Command();
 
@@ -29,5 +30,6 @@ registerPlanet(program);
 registerLandscape(program);
 registerGesture(program);
 registerMachine(program);
+registerFracture(program);
 
 program.parse();
