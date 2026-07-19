@@ -4,6 +4,7 @@ import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { PresetPicker } from '../../components/controls/PresetPicker';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
 import type { ControlsProps } from '../../modules/types';
@@ -68,18 +69,7 @@ export function FractureControls({ state, update }: ControlsProps<FractureState>
 
   return (
     <div className="controls">
-      <div className="control-group">
-        <button
-          type="button"
-          className="secondary"
-          onClick={surprise}
-          title="Randomize everything"
-          style={{ width: '100%' }}
-        >
-          🎲 Randomize everything
-        </button>
-        <p className="paint-hint">One roll for a whole new fracture — or tune anything below.</p>
-      </div>
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new fracture — or tune anything below." />
 
       <h3 className="section-title">Render</h3>
 

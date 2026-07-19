@@ -1,6 +1,7 @@
 import type { RibbonEdgeMode, RibbonStyle } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { Slider } from '../../components/controls/Slider';
 import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
@@ -22,12 +23,7 @@ export function RibbonWeaveControls({ state, update }: ControlsProps<RibbonWeave
     <div className="controls">
       <h3 className="section-title">Ribbon Weave</h3>
 
-      <div className="control-group">
-        <button type="button" className="secondary" onClick={surprise} title="Randomize everything" style={{ width: '100%' }}>
-          🎲 Randomize everything
-        </button>
-        <p className="paint-hint">One roll for a whole new weave — or tune anything below.</p>
-      </div>
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new weave — or tune anything below." />
 
       <div className="control-group">
         <div className="seed-input">

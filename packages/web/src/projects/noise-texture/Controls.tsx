@@ -1,6 +1,9 @@
 import { InfoTip } from '../../components/InfoTip';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { Slider } from '../../components/controls/Slider';
 import { GratingFields } from '../../textures/grating/GratingFields';
+import { randomGratingGenome } from '../../textures/grating/shared';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { NoiseTextureState } from './types';
 
@@ -10,6 +13,7 @@ export function NoiseTextureControls({ state, update }: ControlsProps<NoiseTextu
   const updateState = update;
   const clearMaskPath = () => update({ maskPath: [] });
   const toggleDrawMode = () => update({ drawMode: !state.drawMode });
+  const surprise = () => update({ ...randomGratingGenome(Math.random), seed: randomSeed() });
 
   const bandControls = (
     <div className="control-group">
@@ -37,6 +41,8 @@ export function NoiseTextureControls({ state, update }: ControlsProps<NoiseTextu
 
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a fresh grating — inks and masks stay your choice." />
+
       <GratingFields params={state} update={updateState} bandControls={bandControls} />
 
       <h3 className="section-title">Style</h3>

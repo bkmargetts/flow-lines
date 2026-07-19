@@ -1,5 +1,6 @@
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { Slider } from '../../components/controls/Slider';
 import { Toggle } from '../../components/controls/Toggle';
 import { randomSeed } from '../../lib/random';
@@ -20,6 +21,8 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
 
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new scene — or tune anything below." />
+
       <h3 className="section-title">Scene</h3>
 
       <div className="control-group">
@@ -29,9 +32,6 @@ export function LandscapeGeneratorControls({ state, update }: ControlsProps<Land
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </select>
-          <button type="button" className="secondary" onClick={surprise} title="Surprise me">
-            🎲
-          </button>
         </div>
         <p className="paint-hint">Pick a scene, then tune anything below.</p>
       </div>

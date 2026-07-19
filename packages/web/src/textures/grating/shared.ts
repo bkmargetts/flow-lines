@@ -64,6 +64,27 @@ export const defaultGratingParams: GratingParams = {
   maskHeightPct: 0.6,
 };
 
+/** Roll a fresh grating — spacing, angle, drift, noise and hand qualities all
+ *  land inside their slider ranges, biased off the extremes. The palette/ink
+ *  prefs and the entire mask block are left alone (the 'band' mask needs a
+ *  user-drawn path, so rolling maskMode could blank the layer). Serves both
+ *  the Noise Texture project and the grating background texture. Exported for
+ *  the genome test. */
+export function randomGratingGenome(rng: () => number): Partial<GratingParams> {
+  return {
+    spacingMm: Number((1 + 0.1 * Math.floor(rng() * 41)).toFixed(1)),
+    angleDeg: 5 * Math.floor(rng() * 37),
+    lineLengthPct: (50 + 5 * Math.floor(rng() * 11)) / 100,
+    phaseDriftAcrossMm: Number((0.1 * Math.floor(rng() * 41)).toFixed(1)),
+    phaseDriftAlongMm: Number((0.1 * Math.floor(rng() * 31)).toFixed(1)),
+    phaseNoiseAmpMm: Number((0.1 * Math.floor(rng() * 26)).toFixed(1)),
+    phaseNoiseScale: Number((0.002 + 0.001 * Math.floor(rng() * 29)).toFixed(3)),
+    edgeSmoothMm: rng() < 0.6 ? 0 : 5 + Math.floor(rng() * 21),
+    jitterMm: Number((0.05 * Math.floor(rng() * 11)).toFixed(2)),
+    wobbleAmpMm: Number((0.1 * Math.floor(rng() * 16)).toFixed(1)),
+  };
+}
+
 /**
  * Parametric clip shapes (strips / rect / ellipse) in canvas px. The drawn-line
  * 'band' mask needs a user-drawn path, so the caller supplies that separately.

@@ -3,8 +3,10 @@ import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { PresetPicker } from '../../components/controls/PresetPicker';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { RDState } from './types';
 
@@ -19,6 +21,42 @@ const PRESET_LABELS: Record<RDPreset, string> = {
   worms: 'Worms (filaments)',
 };
 
+const RD_STYLES: RDState['style'][] = ['contour', 'hatch', 'dual'];
+const RD_SEED_LAYOUTS: RDState['seedLayout'][] = ['scatter', 'center', 'grid'];
+
+/** Roll a whole new reaction. Most of the raw feed/kill plane is a dead
+ *  (blank or uniform) field, so the roll anchors on the preset table — a
+ *  random pattern regime plus a tiny f/k jitter so repeat rolls of the same
+ *  preset still differ — then rolls the render treatment freely. Steps and
+ *  grid resolution stay below their slider maxima (sim cost is grid²·steps).
+ *  The art-style master switch, U/V diffusion and the pen/ink prefs are left
+ *  alone. Exported for the genome test. */
+export function randomRDGenome(rng: () => number): Partial<RDState> {
+  const presets = Object.keys(RD_PRESETS) as RDPreset[];
+  const preset = presets[Math.floor(rng() * presets.length)];
+  const { f, k } = RD_PRESETS[preset];
+  const jitter = () => (rng() - 0.5) * 0.003;
+  return {
+    preset,
+    feed: Number(Math.min(0.09, Math.max(0.01, f + jitter())).toFixed(4)),
+    kill: Number(Math.min(0.07, Math.max(0.03, k + jitter())).toFixed(4)),
+    style: RD_STYLES[Math.floor(rng() * RD_STYLES.length)],
+    contourLevels: 3 + Math.floor(rng() * 8),
+    fillThreshold: Number((0.2 + 0.02 * Math.floor(rng() * 21)).toFixed(2)),
+    steps: 2000 + 250 * Math.floor(rng() * 13),
+    gridCols: 100 + 2 * Math.floor(rng() * 51),
+    seedLayout: RD_SEED_LAYOUTS[Math.floor(rng() * RD_SEED_LAYOUTS.length)],
+    seedSpots: 3 + Math.floor(rng() * 22),
+    blurSigma: Number((0.6 + 0.1 * Math.floor(rng() * 15)).toFixed(1)),
+    wobble: Number((0.2 + rng() * 1.8).toFixed(1)),
+    hatchAngle: Math.round(-90 + rng() * 180),
+    crossHatchAmount: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    hatchJitter: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    valueBands: rng() < 0.25 ? 0 : 3 + Math.floor(rng() * 5),
+    vignette: Number((0.05 * Math.floor(rng() * 15)).toFixed(2)),
+  };
+}
+
 /** Sidebar controls for the Reaction–Diffusion module. */
 export function RDControls({ state, update }: ControlsProps<RDState>) {
   const updateState = update;
@@ -29,8 +67,12 @@ export function RDControls({ state, update }: ControlsProps<RDState>) {
     updateState({ preset, feed: f, kill: k });
   };
 
+  const surprise = () => update({ ...randomRDGenome(Math.random), seed: randomSeed() });
+
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new reaction — or tune anything below." />
+
       <h3 className="section-title">Render</h3>
 
       <PresetPicker

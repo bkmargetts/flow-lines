@@ -169,3 +169,38 @@ export const CITY_PRESETS: CityPreset[] = [
 export function getCityPreset(id: string): CityPreset | undefined {
   return CITY_PRESETS.find((p) => p.id === id);
 }
+
+const CITY_STYLES: CityState['style'][] = [
+  'towers',
+  'greek-villa',
+  'old-town',
+  'brownstone',
+  'brutalist',
+  'mixed',
+];
+
+/** Roll a whole new city — style, layout, buildings, windows and shading all
+ *  land inside their slider ranges, biased off the extremes. The preset label,
+ *  zoom/framing, sketch treatment and the pen/ink prefs are left alone. */
+export function randomCityGenome(rng: () => number): Partial<CityState> {
+  return {
+    style: CITY_STYLES[Math.floor(rng() * CITY_STYLES.length)],
+    order: Number((0.05 + rng() * 0.9).toFixed(2)),
+    density: Number((0.45 + rng() * 0.55).toFixed(2)),
+    downtown: Number(rng().toFixed(2)),
+    blockCols: 3 + Math.floor(rng() * 8),
+    blockRows: 3 + Math.floor(rng() * 8),
+    lotSizeMm: Number((8 + 0.5 * Math.floor(rng() * 25)).toFixed(1)),
+    streetMm: Number((2 + 0.5 * Math.floor(rng() * 17)).toFixed(1)),
+    heightMm: 14 + Math.floor(rng() * 47),
+    heightVariance: Number((0.2 + rng() * 0.8).toFixed(2)),
+    storeyMm: Number((2 + rng() * 3).toFixed(1)),
+    tiers: Number(rng().toFixed(2)),
+    lean: Number((rng() * 0.9).toFixed(2)),
+    windows: Number((0.15 + rng() * 0.8).toFixed(2)),
+    windowMm: Number((1.5 + rng() * 2.5).toFixed(1)),
+    shadeStrength: Number((0.2 + rng() * 0.7).toFixed(2)),
+    hatchSpacingMm: Number((0.7 + rng() * 1.8).toFixed(1)),
+    lightSide: rng() < 0.5 ? 'left' : 'right',
+  };
+}

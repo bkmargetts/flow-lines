@@ -3,8 +3,10 @@ import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { PresetPicker } from '../../components/controls/PresetPicker';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { PhysarumState } from './types';
 
@@ -20,6 +22,53 @@ const LAYOUT_LABELS: Record<PhysarumState['startLayout'], string> = {
   center: 'Centre (single colony)',
   ring: 'Ring (collapsing)',
 };
+
+const PHYSARUM_STYLES: PhysarumState['style'][] = ['paths', 'contour', 'hatch', 'dual'];
+
+/** Roll a whole new colony. The behaviour anchors on the preset table (a
+ *  random behaviour's sensing and trail chemistry, exactly as selectPreset
+ *  sets it — free-rolled chemistry mostly dissolves into fog), then the run
+ *  length, grid and render treatment roll freely. The agent count derives
+ *  from the rolled grid at the preset's density so the colony always fits its
+ *  arena, and the traced-path fraction caps at 30% (every trail of 30k agents
+ *  is a monster plot). The art-style master switch and the pen/ink prefs are
+ *  left alone. Exported for the genome test. */
+export function randomPhysarumGenome(rng: () => number): Partial<PhysarumState> {
+  const presets = Object.keys(PHYSARUM_PRESETS) as PhysarumPreset[];
+  const preset = presets[Math.floor(rng() * presets.length)];
+  const p = PHYSARUM_PRESETS[preset];
+  const gridCols = 100 + 4 * Math.floor(rng() * 31);
+  return {
+    preset,
+    sensorAngleDeg: p.sensorAngleDeg,
+    sensorDistance: p.sensorDistance,
+    rotationAngleDeg: p.rotationAngleDeg,
+    stepSize: p.stepSize,
+    depositAmount: p.depositAmount,
+    decay: p.decay,
+    diffuseRate: p.diffuseRate,
+    startLayout: p.startLayout,
+    gridCols,
+    agentCount: Math.min(
+      30000,
+      Math.max(500, 500 * Math.round((p.agentDensity * gridCols * gridCols) / 500))
+    ),
+    steps: 200 + 25 * Math.floor(rng() * 25),
+    style: PHYSARUM_STYLES[Math.floor(rng() * PHYSARUM_STYLES.length)],
+    pathFraction: (2 + Math.floor(rng() * 29)) / 100,
+    sampleEvery: 1 + Math.floor(rng() * 4),
+    minPathLength: 4 + Math.floor(rng() * 17),
+    contourLevels: 3 + Math.floor(rng() * 8),
+    fillThreshold: Number((0.2 + 0.02 * Math.floor(rng() * 21)).toFixed(2)),
+    blurSigma: Number((0.6 + 0.1 * Math.floor(rng() * 15)).toFixed(1)),
+    wobble: Number((0.2 + rng() * 1.8).toFixed(1)),
+    hatchAngle: Math.round(-90 + rng() * 180),
+    crossHatchAmount: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    hatchJitter: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    valueBands: rng() < 0.25 ? 0 : 3 + Math.floor(rng() * 5),
+    vignette: Number((0.05 * Math.floor(rng() * 15)).toFixed(2)),
+  };
+}
 
 /** Sidebar controls for the Physarum module. */
 export function PhysarumControls({ state, update }: ControlsProps<PhysarumState>) {
@@ -44,8 +93,12 @@ export function PhysarumControls({ state, update }: ControlsProps<PhysarumState>
     });
   };
 
+  const surprise = () => update({ ...randomPhysarumGenome(Math.random), seed: randomSeed() });
+
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new colony — or tune anything below." />
+
       <h3 className="section-title">Render</h3>
 
       <PresetPicker

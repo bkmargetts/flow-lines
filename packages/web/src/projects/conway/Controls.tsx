@@ -1,17 +1,63 @@
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { ConwayState } from './types';
+
+const CONWAY_STYLES: ConwayState['style'][] = [
+  'marks',
+  'contour',
+  'streaks',
+  'slipstream',
+  'embers',
+];
+
+/** Roll a whole new exposure — style, run length, fade tiers and the art
+ *  treatment all land inside their slider ranges, biased off the extremes.
+ *  Cell size floors at 1.4mm (a 1mm grid over 1000+ generations is a
+ *  multi-second cliff) and the three fade thresholds roll in disjoint
+ *  sub-ranges so faint < medium < solid always holds. The art-style master
+ *  switches and the pen/ink prefs are left alone. Exported for the genome
+ *  test. */
+export function randomConwayGenome(rng: () => number): Partial<ConwayState> {
+  return {
+    style: CONWAY_STYLES[Math.floor(rng() * CONWAY_STYLES.length)],
+    seedCount: 1 + Math.floor(rng() * rng() * 8),
+    generations: 200 + 20 * Math.floor(rng() * 41),
+    decay: Number((0.82 + rng() * 0.15).toFixed(2)),
+    cellSize: Number((1.4 + rng() * 1.6).toFixed(1)),
+    gamma: Number((0.3 + rng() * 0.6).toFixed(2)),
+    faintThreshold: Number((0.06 + 0.02 * Math.floor(rng() * 8)).toFixed(2)),
+    mediumThreshold: Number((0.26 + 0.02 * Math.floor(rng() * 13)).toFixed(2)),
+    solidThreshold: Number((0.56 + 0.02 * Math.floor(rng() * 15)).toFixed(2)),
+    residueMaxCells: 2 + Math.floor(rng() * 13),
+    wobble: Number((0.2 + rng() * 1.8).toFixed(1)),
+    haloMm: Number((0.4 + rng() * 2.1).toFixed(1)),
+    contourLevels: 3 + Math.floor(rng() * 7),
+    slipstreamSpacing: Number((0.6 + 0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    stippleDensity: 3 + Math.floor(rng() * 10),
+    hatchAngle: Math.round(-90 + rng() * 180),
+    crossHatchAmount: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    hatchJitter: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    valueBands: rng() < 0.25 ? 0 : 3 + Math.floor(rng() * 4),
+    offCenter: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    vignette: Number((0.05 * Math.floor(rng() * 15)).toFixed(2)),
+  };
+}
 
 /** Sidebar controls for the Conway Long Exposure module. */
 export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
   const updateState = update;
+  const surprise = () => update({ ...randomConwayGenome(Math.random), seed: randomSeed() });
 
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new exposure — or tune anything below." />
+
       <h3 className="section-title">Render</h3>
 
       <div className="control-group">

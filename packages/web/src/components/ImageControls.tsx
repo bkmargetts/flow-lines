@@ -11,6 +11,7 @@ import {
 } from '../projects/image-ink/types';
 import { ColorField } from './ColorField';
 import { AdvancedSection, AdvGroup } from './controls/AdvancedSection';
+import { RandomiseButton } from './controls/RandomiseButton';
 import { Slider } from './controls/Slider';
 
 interface ImageControlsProps {
@@ -205,21 +206,18 @@ export function ImageControls({
           ))}
       </div>
 
-      <div className="button-group">
-        {downloadSVG && (
+      <RandomiseButton
+        onClick={randomizeSeed}
+        hint="One roll for a fresh interpretation — your photo, subject and focus points stay put."
+      />
+
+      {downloadSVG && (
+        <div className="button-group">
           <button type="button" className="primary" onClick={downloadSVG} disabled={!imageName}>
             Download SVG
           </button>
-        )}
-        <button
-          type="button"
-          className="secondary"
-          onClick={randomizeSeed}
-          title="New random variation"
-        >
-          🎲
-        </button>
-      </div>
+        </div>
+      )}
 
       {hasLayers && downloadLayers && (
         <div className="button-group">

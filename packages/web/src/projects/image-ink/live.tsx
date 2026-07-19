@@ -30,6 +30,7 @@ import {
   scheduleML,
 } from './ml-scheduler';
 import { setInstanceApi, clearInstanceApi, type ImageInkApi } from './instance-store';
+import { randomImageInkGenome } from './genome';
 
 /** Tight-memory devices get smaller working rasters. */
 const IS_MOBILE =
@@ -140,29 +141,14 @@ export function useImageInkInstance(args: LiveInstanceArgs<ImageInkLayerState>):
   );
 
   const randomizeSeed = useCallback(() => {
-    const seed = randomSeed();
     // Surprise me: a new seed barely changes the look, so the dice also
-    // rolls the artistic levers within tasteful ranges
-    const r = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
-    const pick = <T,>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
-
+    // rolls the artistic levers (the genome) within tasteful ranges
     update(() => ({
       preset: '',
       settings: {
         ...args.state.settings,
-        seed,
-        hatchAngle: Math.round(r(-90, 90) / 5) * 5,
-        wobble: Math.round(r(0.3, 2.2) * 10) / 10,
-        layers: pick([2, 2, 3, 3, 4]),
-        minSpacing: Math.round(r(2, 3.5) * 10) / 10,
-        maxSpacing: Math.round(r(10, 22)),
-        toneGamma: Math.round(r(1.1, 1.9) * 20) / 20,
-        textureStrokes: Math.round(r(0.2, 1) * 20) / 20,
-        textureStyle: pick(['ticks', 'ticks', 'ticks', 'stipple', 'scribble']),
-        crossContour: Math.random() < 0.2,
-        skyStipple: Math.random() < 0.3,
-        maxStrokeLength: pick([0, 0, 40, 60, 80]),
-        detailEmphasis: Math.round(r(0.2, 0.5) * 20) / 20,
+        ...randomImageInkGenome(Math.random),
+        seed: randomSeed(),
       },
     }));
     // `update` is a functional setter, so reading args.state.settings here is

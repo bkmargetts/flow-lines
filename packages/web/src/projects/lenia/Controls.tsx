@@ -3,8 +3,10 @@ import { InfoTip } from '../../components/InfoTip';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { PresetPicker } from '../../components/controls/PresetPicker';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { LeniaState } from './types';
 
@@ -14,6 +16,47 @@ const PRESET_LABELS: Record<LeniaPreset, string> = {
   rings: 'Rings (target waves)',
   pulse: 'Pulse (symmetric)',
 };
+
+const LENIA_STYLES: LeniaState['style'][] = ['contour', 'hatch', 'dual'];
+
+/** Roll a whole new specimen. Lenia's viable μ/σ/kernel space is razor-thin
+ *  (Orbium dies outside a hair's width), so the roll anchors on the preset
+ *  table — the full rule bundle exactly as selectPreset sets it, never
+ *  jittered — then rolls the run length and render treatment freely. Steps
+ *  and grid resolution stay below their slider maxima (sim cost is
+ *  grid²·R²·steps), and seed spots cap at 6 so the roll is valid for either
+ *  seed pattern. The art-style master switch and the pen/ink prefs are left
+ *  alone. Exported for the genome test. */
+export function randomLeniaGenome(rng: () => number): Partial<LeniaState> {
+  const presets = Object.keys(LENIA_PRESETS) as LeniaPreset[];
+  const preset = presets[Math.floor(rng() * presets.length)];
+  const p = LENIA_PRESETS[preset];
+  return {
+    preset,
+    kernelRadius: p.R,
+    mu: p.mu,
+    sigma: p.sigma,
+    timeRes: p.T,
+    beta: p.beta,
+    seedPattern: p.seedPattern,
+    longExposure: p.longExposure,
+    steps: 160 + 20 * Math.floor(rng() * 18),
+    gridCols: 84 + 2 * Math.floor(rng() * 34),
+    seedSpots: 1 + Math.floor(rng() * 6),
+    decay: Number((0.92 + 0.002 * Math.floor(rng() * 39)).toFixed(3)),
+    gamma: Number((0.35 + 0.05 * Math.floor(rng() * 13)).toFixed(2)),
+    style: LENIA_STYLES[Math.floor(rng() * LENIA_STYLES.length)],
+    contourLevels: 3 + Math.floor(rng() * 8),
+    fillThreshold: Number((0.2 + 0.02 * Math.floor(rng() * 21)).toFixed(2)),
+    blurSigma: Number((0.6 + 0.1 * Math.floor(rng() * 15)).toFixed(1)),
+    wobble: Number((0.2 + rng() * 1.8).toFixed(1)),
+    hatchAngle: Math.round(-90 + rng() * 180),
+    crossHatchAmount: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    hatchJitter: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    valueBands: rng() < 0.25 ? 0 : 3 + Math.floor(rng() * 5),
+    vignette: Number((0.05 * Math.floor(rng() * 15)).toFixed(2)),
+  };
+}
 
 /** Sidebar controls for the Lenia module. */
 export function LeniaControls({ state, update }: ControlsProps<LeniaState>) {
@@ -35,8 +78,12 @@ export function LeniaControls({ state, update }: ControlsProps<LeniaState>) {
     });
   };
 
+  const surprise = () => update({ ...randomLeniaGenome(Math.random), seed: randomSeed() });
+
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new specimen — or tune anything below." />
+
       <h3 className="section-title">Render</h3>
 
       <PresetPicker
