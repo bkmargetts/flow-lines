@@ -110,6 +110,14 @@ export interface LandscapeOptions {
   trees?: number; // count of foliage clumps
   treeStyle?: TreeStyle; // round canopies / conifers / low scrub / mixed
   birds?: number; // count of gull marks
+  /**
+   * (0,1] shrink applied to frame-proportional feature sizes (tree size and
+   * cluster spread). Sheets larger than the tuning anchor pass
+   * `anchorPx / usableW` so trees keep their physical size while the census
+   * grows; 1 (the default) keeps the historical frame-proportional sizing.
+   * Values outside (0,1] are clamped.
+   */
+  featureScale?: number;
 
   // Rocks / islands
   rocks?: number;
@@ -165,6 +173,7 @@ const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 
   trees: 0,
   treeStyle: 'mixed',
   birds: 0,
+  featureScale: 1,
   rocks: 0,
   rockMaxSize: 46,
   rockHatchSpacing: 4,
@@ -823,7 +832,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
 
   // —— Trees / foliage clumps along the nearest land crest ——————————————
   if (o.trees > 0) {
-    const hulls = drawTrees(detail, { crest: treeCrest, count: Math.round(o.trees), usableW, style: o.treeStyle, lightX, rng, weight: focusAccept });
+    const featureScale = o.featureScale > 0 ? Math.min(1, o.featureScale) : 1;
+    const hulls = drawTrees(detail, { crest: treeCrest, count: Math.round(o.trees), usableW, style: o.treeStyle, lightX, featureScale, rng, weight: focusAccept });
     // Erase the land/water hatch behind each canopy — a tree drawn over live
     // shading reads as a translucent ghost.
     for (const hull of hulls) lines = occludeBehind(lines, inflatePoly(hull, 1.2));

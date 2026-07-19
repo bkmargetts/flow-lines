@@ -3,6 +3,7 @@ import {
   type ConwayExposureOptions,
 } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetAreaFactor } from '../../lib/sheet-scale';
 import type { ConwayState } from './types';
 
 /**
@@ -18,7 +19,10 @@ export function renderConway(state: ConwayState, env: RenderEnv): LayerOutput {
     height: page.heightPx,
     margin: marginPx,
     seed: state.seed,
-    seedCount: state.seedCount,
+    // More detonations on big sheets: the grid is physical (cellSize in mm),
+    // so one R-pentomino blast on A0 would sit alone in the middle of a 4×
+    // sheet. Exactly state.seedCount at A4 and below.
+    seedCount: Math.max(1, Math.round(state.seedCount * sheetAreaFactor(page))),
     cellSize: state.cellSize * page.pxPerMm,
     generations: state.generations,
     decay: state.decay,

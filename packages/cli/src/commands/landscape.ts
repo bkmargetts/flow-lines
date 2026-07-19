@@ -41,7 +41,7 @@ export function registerLandscape(program: Command) {
     .option('--water-dash <number>', 'Mean water dash length in px', '36')
     .option('--water-gap <number>', 'Mean water dash gap in px', '10')
     // ridges (count/amp/freq/persistence/angle have no default: --scene fills them)
-    .option('--ridge-count <number>', 'Receding ridge silhouettes (land scenes; default 3)')
+    .option('--ridge-count <number>', 'Receding ridge silhouettes (land scenes; count at A4, scales with sheet edge; default 3)')
     .option('--ridge-amp <number>', 'Front-ridge amplitude in px (default 34)')
     .option('--ridge-freq <number>', 'Ridge noise frequency (default 2.4)')
     .option('--ridge-octaves <number>', 'Ridge noise octaves', '4')
@@ -53,7 +53,7 @@ export function registerLandscape(program: Command) {
     .option('--ridge-sharpness <number>', 'Rolling swell → peaked, skewed summits 0..1 (default 0.3)')
     .option('--atmosphere <number>', 'Depth haze: far ridges lighter, hatch fades to mist 0..1 (default 0.4)')
     // compositional depth
-    .option('--headlands <number>', 'Overlapping receding headlands on water (default per --scene)')
+    .option('--headlands <number>', 'Overlapping receding headlands on water (count at A4; scales with sheet area; default per --scene)')
     .option('--foreground <number>', 'Dark foreground landform size 0..1 (default 0)')
     .option('--foreground-side <s>', 'Foreground landform side: left | right (default per --scene)')
     .option('--focus <number>', 'Focal hierarchy: darks/detail gather at a focal point 0..1 (default 0.35)')
@@ -65,11 +65,11 @@ export function registerLandscape(program: Command) {
     .option('--taper <number>', 'Stroke-end taper / break / jitter 0..1', '0.5')
     // detail marks
     .option('--clouds <number>', 'Carved-cloud coverage 0..1 (default 0)')
-    .option('--trees <number>', 'Foliage clumps on the nearest crest (default 0)')
+    .option('--trees <number>', 'Foliage clumps on the nearest crest (count at A4; scales with sheet area; default 0)')
     .option('--tree-style <s>', 'Tree vocabulary: mixed | round | conifer | scrub (default mixed)')
-    .option('--birds <number>', 'Gull marks in the sky (default 0)')
+    .option('--birds <number>', 'Gull marks in the sky (count at A4; scales with sheet area; default 0)')
     // rocks
-    .option('--rocks <number>', 'Small rocks / islands (default 0, or per --scene)')
+    .option('--rocks <number>', 'Small rocks / islands (count at A4; scales with sheet area; default 0, or per --scene)')
     .option('--rock-max-size <number>', 'Max rock size in px', '46')
     .option('--rock-spacing <number>', 'Rock hatch spacing in px', '4')
     // ink / finishing
@@ -89,6 +89,15 @@ export function registerLandscape(program: Command) {
       // A --scene preset seeds the defaults; explicit flags still override it.
       const scene = options.scene ? LANDSCAPE_SCENES[String(options.scene)] : undefined;
       const num = (flag: string, fallback: number): number => (options[flag] !== undefined ? parseFloat(options[flag]) : fallback);
+
+      // With --paper, sheets larger than A4 carry a bigger census at the same
+      // physical feature scale: count flags are tuned at A4 and scale with
+      // sheet area (ridges by its square root — they stack vertically), and
+      // featureScale pins the frame-proportional tree size to the largest
+      // previously-possible short edge (297mm — A3). Without --paper (and at
+      // every historical size) both factors are exactly 1.
+      const sheetArea = frame.page ? Math.max(1, (frame.page.widthMm * frame.page.heightMm) / (210 * 297)) : 1;
+      const featureScale = frame.page ? Math.min(1, (297 * frame.page.pxPerMm) / Math.max(1, width - 2 * marginPx)) : 1;
 
       const landscapeOptions: LandscapeOptions = {
         width,
@@ -115,7 +124,7 @@ export function registerLandscape(program: Command) {
         waterHatchSpacing: num('waterSpacing', 6),
         waterDash: num('waterDash', 36),
         waterGap: num('waterGap', 10),
-        ridgeCount: Math.round(num('ridgeCount', scene?.ridgeCount ?? 3)),
+        ridgeCount: Math.round(num('ridgeCount', scene?.ridgeCount ?? 3) * Math.sqrt(sheetArea)),
         ridgeAmp: num('ridgeAmp', scene?.ridgeAmp ?? 34),
         ridgeFreq: num('ridgeFreq', scene?.ridgeFreq ?? 2.4),
         ridgeOctaves: Math.round(num('ridgeOctaves', 4)),
@@ -126,7 +135,7 @@ export function registerLandscape(program: Command) {
         formFollow: scene ? (scene.formFollow ?? true) && options.formFollow : options.formFollow,
         ridgeSharpness: num('ridgeSharpness', scene?.ridgeSharpness ?? 0.3),
         atmosphere: num('atmosphere', scene?.atmosphere ?? 0.4),
-        headlands: Math.round(num('headlands', scene?.headlands ?? 0)),
+        headlands: Math.round(num('headlands', scene?.headlands ?? 0) * sheetArea),
         foreground: num('foreground', scene?.foreground ?? 0),
         foregroundSide: (options.foregroundSide ?? scene?.foregroundSide ?? 'left') as LandscapeOptions['foregroundSide'],
         focus: num('focus', scene?.focus ?? 0.35),
@@ -136,10 +145,11 @@ export function registerLandscape(program: Command) {
         hatchPatchiness: num('patchiness', 0.5),
         taper: num('taper', 0.5),
         clouds: num('clouds', scene?.clouds ?? 0),
-        trees: Math.round(num('trees', scene?.trees ?? 0)),
+        trees: Math.round(num('trees', scene?.trees ?? 0) * sheetArea),
         treeStyle: (options.treeStyle ?? scene?.treeStyle ?? 'mixed') as LandscapeOptions['treeStyle'],
-        birds: Math.round(num('birds', scene?.birds ?? 0)),
-        rocks: Math.round(num('rocks', scene?.rocks ?? 0)),
+        birds: Math.round(num('birds', scene?.birds ?? 0) * sheetArea),
+        featureScale,
+        rocks: Math.round(num('rocks', scene?.rocks ?? 0) * sheetArea),
         rockMaxSize: num('rockMaxSize', 46),
         rockHatchSpacing: num('rockSpacing', 4),
         penWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),

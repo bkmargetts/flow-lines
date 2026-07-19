@@ -54,11 +54,20 @@ export function registerConway(program: Command) {
       const frame = resolvePageFrame(options);
       const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
 
+      // More detonations on big sheets (mirrors the web app's sheetAreaFactor):
+      // physical-area growth vs the A4 anchor, floored at 1 so A4-and-smaller
+      // sheets keep the single centred blast exactly. Pixel-frame renders
+      // (no --paper) have no physical size, so they stay at the default.
+      const sheetFactor = frame.page
+        ? Math.max(1, (frame.page.widthMm * frame.page.heightMm) / (210 * 297))
+        : 1;
+
       const conwayOptions: ConwayExposureOptions = {
         width,
         height,
         margin: marginPx,
         seed: options.seed ? parseInt(options.seed, 10) : undefined,
+        seedCount: Math.max(1, Math.round(sheetFactor)),
         cellSize: options.cellSize ? parseFloat(options.cellSize) : undefined,
         generations: parseInt(options.generations, 10),
         decay: parseFloat(options.decay),

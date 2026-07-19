@@ -1,5 +1,5 @@
 import { commonTangents } from './geometry.js';
-import { CAPS, Z_BAND_STRIDE, allCircles, circlesInBand, hubR, maxZAt, pitchR, segClear, type IdGen } from './synth.js';
+import { Z_BAND_STRIDE, allCircles, capsFor, circlesInBand, hubR, maxZAt, pitchR, segClear, type IdGen } from './synth.js';
 import type { MachineCtx } from './context.js';
 import type { Circle, Gear, Machine } from './types.js';
 
@@ -75,6 +75,7 @@ function obstacles(machine: Machine, strict: boolean, bandA: number, bandB: numb
 
 export function linkClusters(ctx: MachineCtx, machine: Machine, rng: () => number, ids: IdGen): void {
   const { o } = ctx;
+  const caps = capsFor(o.sheetFactor);
   const n = machine.clusters.length;
   if (n < 2 || o.connectivity <= 0.02) return;
 
@@ -106,7 +107,7 @@ export function linkClusters(ctx: MachineCtx, machine: Machine, rng: () => numbe
   }
 
   for (const edge of attempts) {
-    if (machine.belts.length >= CAPS.belts && machine.ropes.length >= CAPS.ropes) break;
+    if (machine.belts.length >= caps.belts && machine.ropes.length >= caps.ropes) break;
     const ca = machine.clusters[edge.a];
     const cb = machine.clusters[edge.b];
     const wa = wheelToward(machine, edge.a, cb.cx, cb.cy);
@@ -120,7 +121,7 @@ export function linkClusters(ctx: MachineCtx, machine: Machine, rng: () => numbe
     // Mostly-vertical edges become a rope drop: drum on the upper shaft,
     // idler pulley on the lower — the clock-drive motif stretched into a
     // transmission.
-    if (vertical && machine.ropes.length < CAPS.ropes) {
+    if (vertical && machine.ropes.length < caps.ropes) {
       const upper = wa.cy < wb.cy ? wa : wb;
       const lower = wa.cy < wb.cy ? wb : wa;
       const mUp = upper.module;
@@ -157,7 +158,7 @@ export function linkClusters(ctx: MachineCtx, machine: Machine, rng: () => numbe
     }
 
     // Belt between coaxial pulleys on the mutually-nearest wheels.
-    if (machine.belts.length >= CAPS.belts) continue;
+    if (machine.belts.length >= caps.belts) continue;
     let rA = Math.max(wa.module * 1.6, pitchR(wa) * 0.45);
     let rB = Math.max(wb.module * 1.4, pitchR(wb) * 0.35);
     let d = Math.hypot(dx, dy);
@@ -209,7 +210,7 @@ export function linkClusters(ctx: MachineCtx, machine: Machine, rng: () => numbe
     // Final rung: straight rope between shaft-mounted idlers at top z —
     // endpoint clearance is all it needs, and at connectivity 1 (one band,
     // strict clearance everywhere) the geometry always cooperates.
-    if (machine.ropes.length < CAPS.ropes) {
+    if (machine.ropes.length < caps.ropes) {
       const ir1 = wa.module * 1.15;
       const ir2 = wb.module * 1.15;
       if (d > ir1 + ir2 + Math.max(wa.module, wb.module)) {

@@ -82,6 +82,14 @@ export function registerGesture(program: Command) {
             : undefined,
         wobble: parseFloat(options.wobble),
         optimize: options.optimize,
+        // With --paper, anchor mark sizes at the largest previously-possible
+        // short edge (A3, 297mm) and grow counts with the sheet's physical
+        // area — more same-sized gestures, not an enlargement; both no-ops at
+        // A4-and-below. Raw px mode: legacy behaviour, untouched.
+        refMinDim: frame.page ? 297 * frame.page.pxPerMm : undefined,
+        sheetFactor: frame.page
+          ? Math.max(1, (frame.page.widthMm * frame.page.heightMm) / (210 * 297))
+          : undefined,
       };
 
       console.log('Rendering gestural ink abstraction...');

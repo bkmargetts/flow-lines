@@ -106,6 +106,14 @@ export interface ComposeOptions {
   balance: number;
   negativeSpace: number;
   passSpacing: number;
+  /**
+   * Optional cap (px) on the dimension mark sizes derive from (stroke
+   * lengths, knot radii, bundle pitch, anchor jitter). On sheets whose min
+   * work dimension exceeds it, marks keep their tuned physical size while
+   * placement still spans the real work rect — more gestures, not bigger
+   * ones. Unset = min work dimension exactly as before.
+   */
+  refMinDim?: number;
 }
 
 interface Candidate {
@@ -133,6 +141,9 @@ export function compose(o: ComposeOptions, rng: () => number, noise: SimplexNois
   const workW = Math.max(1, x1 - x0);
   const workH = Math.max(1, y1 - y0);
   const minDim = Math.min(workW, workH);
+  // Mark sizes (lengths, radii, jitter) anchor at refMinDim on oversized
+  // sheets; placement, balance, and the ink budget keep the real dimensions.
+  const sizingDim = Math.min(minDim, o.refMinDim ?? Infinity);
   const center = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
   const budget = o.coverage * workW * workH;
 
@@ -178,8 +189,8 @@ export function compose(o: ComposeOptions, rng: () => number, noise: SimplexNois
     thetaDom = diagSign * (20 * DEG + 50 * DEG * jitterDraw);
   }
   const anchor = {
-    x: x0 + workW * (rng() < 0.5 ? 1 / 3 : 2 / 3) + (rng() - 0.5) * 0.08 * minDim,
-    y: y0 + workH * (rng() < 0.5 ? 1 / 3 : 2 / 3) + (rng() - 0.5) * 0.08 * minDim,
+    x: x0 + workW * (rng() < 0.5 ? 1 / 3 : 2 / 3) + (rng() - 0.5) * 0.08 * sizingDim,
+    y: y0 + workH * (rng() < 0.5 ? 1 / 3 : 2 / 3) + (rng() - 0.5) * 0.08 * sizingDim,
   };
 
   // --- primaries ------------------------------------------------------------
@@ -193,7 +204,7 @@ export function compose(o: ComposeOptions, rng: () => number, noise: SimplexNois
     const signU = rng();
     const energyU = rng();
     const reverseU = rng();
-    const length = lerp(o.arch.lengthFrac[0], o.arch.lengthFrac[1], lengthU) * minDim * lengthScale;
+    const length = lerp(o.arch.lengthFrac[0], o.arch.lengthFrac[1], lengthU) * sizingDim * lengthScale;
     const sweep = lerp(o.arch.sweep[0], o.arch.sweep[1], sweepU) * (signU < 0.5 ? -1 : 1);
     const energy = clamp01(o.energy * (0.85 + 0.3 * energyU));
     // The S-reversal never applies to a near-closed enso.
@@ -259,6 +270,7 @@ export function compose(o: ComposeOptions, rng: () => number, noise: SimplexNois
 
     let best: Candidate | null = null;
     let bestScore = -Infinity;
+    // Balance is a whole-sheet property, so the lean stays on the real dims.
     const targetLean = 0.2 * o.balance * minDim;
     for (const c of candidates) {
       const contain = containment(c.spine.points);
@@ -298,13 +310,13 @@ export function compose(o: ComposeOptions, rng: () => number, noise: SimplexNois
   const knots: PlacedKnot[] = [];
   for (let i = 0; i < o.knotCount; i++) {
     const big = o.arch.knots[1] === 1 && o.arch.gestures[1] <= 2; // tangle's dominant knot
-    const radius = (big ? lerp(0.1, 0.16, rng()) : lerp(0.03, 0.06, rng())) * minDim;
+    const radius = (big ? lerp(0.1, 0.16, rng()) : lerp(0.03, 0.06, rng())) * sizingDim;
     // The dominant knot sits where the first primary passes (sweep through
     // it); lesser knots take a free thirds point.
     const base = big && gestures.length > 0 ? spineCentroid(gestures[0].spine.points) : anchor;
     const knotCenter = {
-      x: base.x + (rng() - 0.5) * 0.1 * minDim,
-      y: base.y + (rng() - 0.5) * 0.1 * minDim,
+      x: base.x + (rng() - 0.5) * 0.1 * sizingDim,
+      y: base.y + (rng() - 0.5) * 0.1 * sizingDim,
     };
     const heading = rng() * TAU;
     const mass = Math.PI * radius * radius * 0.35;
@@ -322,15 +334,15 @@ export function compose(o: ComposeOptions, rng: () => number, noise: SimplexNois
       x: x0 + workW * (anchor.x > center.x ? 1 / 3 : 2 / 3),
       y: y0 + workH * (anchor.y > center.y ? 1 / 3 : 2 / 3),
     };
-    const pitch = 0.05 * minDim;
+    const pitch = 0.05 * sizingDim;
     const nx = -Math.sin(thetaDom);
     const ny = Math.cos(thetaDom);
     // The whole bundle curves the same way — parallel sweeps of one wrist.
     const bundleSign = rng() < 0.5 ? -1 : 1;
     for (let i = 0; i < o.whipCount; i++) {
       const lateral = (i - (o.whipCount - 1) / 2) * pitch * (1 + 0.3 * (rng() - 0.5));
-      const along = (rng() - 0.5) * 0.25 * minDim; // staggered starts, not a comb
-      const length = lerp(0.4, 0.85, rng()) * minDim;
+      const along = (rng() - 0.5) * 0.25 * sizingDim; // staggered starts, not a comb
+      const length = lerp(0.4, 0.85, rng()) * sizingDim;
       const sweep = lerp(0.1, 0.6, rng()) * bundleSign;
       const energy = clamp01(o.energy * (0.9 + 0.4 * rng()));
       const track = 400 + i * 3.77;
@@ -370,10 +382,10 @@ export function compose(o: ComposeOptions, rng: () => number, noise: SimplexNois
       if (!source) break;
       const exit = spineExit(source.spine);
       const start = {
-        x: exit.point.x + (startU1 - 0.5) * 0.1 * minDim,
-        y: exit.point.y + (startU2 - 0.5) * 0.1 * minDim,
+        x: exit.point.x + (startU1 - 0.5) * 0.1 * sizingDim,
+        y: exit.point.y + (startU2 - 0.5) * 0.1 * sizingDim,
       };
-      const length = lerp(0.2, 0.45, lengthU) * minDim;
+      const length = lerp(0.2, 0.45, lengthU) * sizingDim;
       const sweep = lerp(0.8, 2, sweepU) * (signU < 0.5 ? -1 : 1);
       const energy = clamp01(o.energy * (0.9 + 0.4 * energyU));
       const spine = makeSpine(

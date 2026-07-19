@@ -29,6 +29,11 @@ export interface MachineOptions {
   frameDensity?: number;
   /** Section-cutaway wedges bitten from big wheels (0–3). */
   cutaways?: number;
+  /** Physical-area growth vs the A4 tuning anchor (sheet area / A4 area),
+   *  clamped to ≥1. Scales the part-count ceilings so big sheets fill with
+   *  more mechanisms at the same physical gear size; 1 (the default) keeps
+   *  the A4-tuned caps exactly. */
+  sheetFactor?: number;
   /** Re-emit occluded part edges as dashed hidden lines. */
   hiddenLines?: boolean;
   /** Base hatch spacing in px (rim shading, section hatch, weight tone). */
@@ -51,6 +56,7 @@ export const DEFAULTS = {
   mechanisms: 0.7,
   frameDensity: 0.7,
   cutaways: 2,
+  sheetFactor: 1,
   hiddenLines: true,
   hatchSpacing: 3.2,
   shading: 0.6,

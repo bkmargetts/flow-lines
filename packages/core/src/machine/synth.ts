@@ -21,8 +21,24 @@ import type { Bearing, Circle, Cluster, Gear, Machine } from './types.js';
  *  stay disjoint and the occlusion pass can tell "same band" from "behind". */
 export const Z_BAND_STRIDE = 8;
 
-/** Global part caps (area-scaled gear cap computed in synthesize). */
+/** Global part caps at the A4 tuning anchor (area-scaled gear cap computed
+ *  in synthesize). */
 export const CAPS = { clusters: 12, belts: 16, ropes: 8, linkages: 6, springs: 4, maxGears: 96 };
+
+/** Part caps scaled by the sheet-area factor: bigger sheets earn more
+ *  mechanisms at the same physical gear size. At factor 1 every value equals
+ *  the CAPS constant exactly, so A4-and-smaller output is untouched. */
+export function capsFor(sheetFactor: number): typeof CAPS {
+  const f = Number.isFinite(sheetFactor) ? Math.max(1, sheetFactor) : 1;
+  return {
+    clusters: Math.round(CAPS.clusters * f),
+    belts: Math.round(CAPS.belts * f),
+    ropes: Math.round(CAPS.ropes * f),
+    linkages: Math.round(CAPS.linkages * f),
+    springs: Math.round(CAPS.springs * f),
+    maxGears: Math.round(CAPS.maxGears * f),
+  };
+}
 
 /** Pitch radius of a gear. */
 export function pitchR(g: { teeth: number; module: number }): number {
@@ -123,7 +139,8 @@ function growCluster(
   rng: () => number,
   o: MachineCtx['o'],
   ids: IdGen,
-  maxGears: number
+  maxGears: number,
+  caps: typeof CAPS
 ): void {
   const module = cluster.module;
   const zBase = 1 + cluster.zBand * Z_BAND_STRIDE;
@@ -200,7 +217,7 @@ function growCluster(
   // Intra-cluster belt run: a small pulley coaxial with a wheel, driving a
   // standalone pulley through true common tangents (crossed — the
   // figure-eight — some of the time).
-  if (machine.belts.length < CAPS.belts && rng() < 0.3 + 0.55 * o.mechanisms) {
+  if (machine.belts.length < caps.belts && rng() < 0.3 + 0.55 * o.mechanisms) {
     const beltWheels = machine.gears.filter((g) => g.cluster === cluster.id && g.teeth >= 16 && !g.coaxialWith);
     if (beltWheels.length > 0) {
       const wheel = beltWheels[Math.floor(rng() * beltWheels.length)];
@@ -247,7 +264,7 @@ function growCluster(
 
   // Crank + rocker (4-bar), pose-solved so the pose is *consistent* even
   // though the machine as a whole is impossible.
-  if (machine.linkages.length < CAPS.linkages && rng() < 0.2 + 0.5 * o.mechanisms) {
+  if (machine.linkages.length < caps.linkages && rng() < 0.2 + 0.5 * o.mechanisms) {
     const linkWheels = machine.gears.filter((g) => g.cluster === cluster.id && g.teeth >= 16 && !g.coaxialWith);
     if (linkWheels.length > 0) {
       const wheel = linkWheels.reduce((a, b) =>
@@ -313,10 +330,14 @@ export function synthesize(ctx: MachineCtx): Machine {
   const baseModule = Math.max(4, (2 * o.gearSize) / 26);
   machine.module = baseModule;
 
-  const maxGears = Math.min(CAPS.maxGears, Math.round(area / Math.pow(24 * baseModule, 2) * 10) + 8);
+  // Part caps grow with the physical sheet (`sheetFactor`, 1 at A4): the
+  // area-driven formulas below are already area-proportional, but A4 is
+  // cap-bound, so without this a big sheet gets the same ≤96 gears spread thin.
+  const caps = capsFor(o.sheetFactor);
+  const maxGears = Math.min(caps.maxGears, Math.round(area / Math.pow(24 * baseModule, 2) * 10) + 8);
   const nClusters = Math.max(
     1,
-    Math.min(CAPS.clusters, 1 + Math.round((o.complexity * area) / Math.pow(3.8 * o.gearSize, 2)))
+    Math.min(caps.clusters, 1 + Math.round((o.complexity * area) / Math.pow(3.8 * o.gearSize, 2)))
   );
   const nBands = 1 + Math.round((1 - o.connectivity) * 2);
 
@@ -494,7 +515,7 @@ export function synthesize(ctx: MachineCtx): Machine {
       const ny = (y - cluster.cy) / reach;
       return nx * nx + ny * ny <= 1;
     };
-    growCluster(machine, cluster, seedGear, budget, rng, o, ids, maxGears);
+    growCluster(machine, cluster, seedGear, budget, rng, o, ids, maxGears, caps);
   }
 
   // Transmission network: tie the clusters together (belts, rope drops) —
@@ -513,7 +534,7 @@ export function synthesize(ctx: MachineCtx): Machine {
       const link = machine.linkages.find((l) =>
         machine.gears.some((g) => g.id === l.gearId && g.cluster === cluster.id)
       );
-      if (link && machine.springs.length < CAPS.springs && rng() < 0.45) {
+      if (link && machine.springs.length < caps.springs && rng() < 0.45) {
         const side = link.joint.x > cluster.cx ? 1 : -1;
         const anchor = { x: link.joint.x + side * cluster.module * 3, y: groundY - ground.w / 2 };
         machine.springs.push({
@@ -525,7 +546,7 @@ export function synthesize(ctx: MachineCtx): Machine {
         });
         continue;
       }
-      if (machine.ropes.length >= CAPS.ropes) continue;
+      if (machine.ropes.length >= caps.ropes) continue;
       const module = cluster.module;
       const drumWheels = machine.gears.filter(
         (g) =>

@@ -56,6 +56,14 @@ export function registerMachine(program: Command) {
         mechanisms: parseFloat(options.mechanisms),
         frameDensity: parseFloat(options.frameDensity),
         cutaways: parseInt(options.cutaways, 10),
+        // Part-count ceilings grow with the physical sheet (mirrors the web
+        // app's sheetAreaFactor): area vs the A4 anchor, floored at 1 so
+        // A4-and-smaller keeps the tuned caps; pixel frames (no --paper)
+        // have no physical size and stay at the default. Spread conditionally
+        // so an explicit undefined never clobbers the core default.
+        ...(frame.page
+          ? { sheetFactor: Math.max(1, (frame.page.widthMm * frame.page.heightMm) / (210 * 297)) }
+          : {}),
         hiddenLines: options.hiddenLines,
         hatchSpacing: parseFloat(options.hatchSpacing) * scale,
         shading: parseFloat(options.shading),

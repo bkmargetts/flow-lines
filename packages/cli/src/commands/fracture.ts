@@ -82,6 +82,11 @@ export function registerFracture(program: Command) {
         edgeCurl: options.edgeCurl ? parseFloat(options.edgeCurl) : undefined,
         wobble: options.wobble ? parseFloat(options.wobble) : undefined,
         optimize: options.optimize,
+        // With --paper, anchor feature sizes at the largest previously-possible
+        // short edge (A3, 297mm) so bigger sheets grow more plates at the same
+        // physical crack scale; a no-op at A4-and-below. Raw px mode: legacy
+        // behaviour, untouched.
+        refMinDim: frame.page ? 297 * frame.page.pxPerMm : undefined,
       };
 
       console.log('Rendering fracture network...');
