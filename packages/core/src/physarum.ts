@@ -156,11 +156,14 @@ export const PHYSARUM_PRESETS: Record<
 // Keep the synchronous, main-thread run well bounded (this renders inside a
 // React useMemo, like Conway/RD/Lenia). Per-step cost is agents (sense+move) plus
 // cells (diffuse+decay); cap each product.
-const MAX_COLS = 240;
+// Ceilings sized so an A0 sheet's 2×-grown grid (and its 4× agents) run at
+// full steps; defaults at existing sizes sit far below the old limits, so
+// raising these changes nothing there.
+const MAX_COLS = 408;
 const MAX_STEPS = 1200;
-const MAX_AGENTS = 60000;
-const AGENT_STEP_BUDGET = 4e7;
-const FIELD_STEP_BUDGET = 4.5e8;
+const MAX_AGENTS = 200000;
+const AGENT_STEP_BUDGET = 1.6e8;
+const FIELD_STEP_BUDGET = 1.8e9;
 
 /** A seeded rule-of-thirds intersection, lerped out from centre by `bias`. */
 function thirdsOrigin(

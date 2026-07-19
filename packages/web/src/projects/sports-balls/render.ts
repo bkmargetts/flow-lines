@@ -9,6 +9,7 @@ import {
   type SportsBallsRegion,
 } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetAreaFactor } from '../../lib/sheet-scale';
 import type { SportsBallsState } from './types';
 import { clipLinesToRect } from '../stickmen/clip';
 
@@ -61,7 +62,9 @@ export function renderSportsBalls(state: SportsBallsState, env: RenderEnv): Laye
     margin: marginPx,
     seed: state.seed,
 
-    count: Math.round(state.count),
+    // Crowd density holds on big sheets: more balls at the same physical
+    // size (×1 at A4 and below — goldens untouched).
+    count: Math.round(state.count * sheetAreaFactor(page)),
     clustering: state.clustering,
     minSeparation: state.spacingMm * mm,
     region: compileShape(state, page.widthPx - 2 * marginPx, page.heightPx - 2 * marginPx),

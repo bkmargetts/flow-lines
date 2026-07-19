@@ -143,7 +143,10 @@ export const RD_PRESETS: Record<RDPreset, { f: number; k: number }> = {
 
 // Keep the synchronous, main-thread run well bounded (this renders inside a
 // React useMemo, like Conway). Cost ≈ cols·rows·steps cell-updates.
-const MAX_COLS = 250;
+// Sized so an A0 sheet's 2×-grown grid runs its full step count; the A4
+// default uses ~1.8e8 cell-steps, far under the old 4.5e8, so raising these
+// changes nothing at existing sizes.
+const MAX_COLS = 384;
 const MAX_STEPS = 6000;
 const STEP_BUDGET = 4.5e8;
 

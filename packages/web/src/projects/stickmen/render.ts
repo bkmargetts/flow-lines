@@ -8,6 +8,7 @@ import {
   type StickmenRegion,
 } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetAreaFactor } from '../../lib/sheet-scale';
 import type { StickmenState } from './types';
 import { clipLinesToRect } from './clip';
 
@@ -55,7 +56,9 @@ export function renderStickmen(state: StickmenState, env: RenderEnv): LayerOutpu
     margin: marginPx,
     seed: state.seed,
 
-    count: Math.round(state.count),
+    // Crowd density holds on big sheets: more figures at the same physical
+    // size (×1 at A4 and below — goldens untouched).
+    count: Math.round(state.count * sheetAreaFactor(page)),
     spread: state.spread,
     clustering: state.clustering,
     minSeparation: state.minSeparationMm * mm,

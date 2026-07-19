@@ -4,6 +4,7 @@ import {
   type FlowLinesOptions,
 } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetAreaFactor } from '../../lib/sheet-scale';
 import type { FlowState } from './types';
 
 /**
@@ -23,7 +24,13 @@ export function renderFlowField(state: FlowState, env: RenderEnv): LayerOutput {
   const flowOptions: FlowLinesOptions = {
     width: page.widthPx,
     height: page.heightPx,
-    lineCount: usePaintedPoints ? state.paintedPoints.length : state.lineCount,
+    // Scatter density holds on big sheets: the seed count grows with the
+    // sheet's physical area (×1 at A4 and below — goldens untouched).
+    // Painted seeds are explicit intent and dense-fill already fills at a
+    // physical spacing, so only the random scatter scales.
+    lineCount: usePaintedPoints
+      ? state.paintedPoints.length
+      : Math.round(state.lineCount * sheetAreaFactor(page)),
     seed: state.seed,
     stepLength: state.stepLength,
     maxSteps: state.maxSteps,

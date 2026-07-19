@@ -183,10 +183,13 @@ export const ORBIUM: number[][] = [
 // Keep the synchronous, main-thread run well bounded (this renders inside a
 // React useMemo, like Conway/RD). Lenia's per-cell cost is the kernel tap
 // count (≈ πR²), so the budget counts convolution multiply-adds, not steps.
-const MAX_COLS = 180;
+const MAX_COLS = 192;
 const MAX_STEPS = 900;
 const MAX_RADIUS = 18;
-const TAP_BUDGET = 2e9;
+// Sized so an A0 sheet's 2×-grown grid still gets its full step count; the
+// default A4 run uses ~1.94e9 taps, safely under the old 2e9 ceiling, so
+// raising it changes nothing at existing sizes.
+const TAP_BUDGET = 8e9;
 
 /** A seeded rule-of-thirds intersection, lerped out from centre by `bias`. */
 function thirdsOrigin(

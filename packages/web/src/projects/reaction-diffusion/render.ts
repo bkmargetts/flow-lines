@@ -3,6 +3,7 @@ import {
   type ReactionDiffusionOptions,
 } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetGridFactor } from '../../lib/sheet-scale';
 import type { RDState } from './types';
 
 /**
@@ -17,6 +18,11 @@ export function renderReactionDiffusion(
   env: RenderEnv,
 ): LayerOutput {
   const { page, marginPx } = env;
+  // Grow the sim grid with the sheet so the pattern's cell size stays near
+  // physical instead of stretching. A4 is the anchor (factor exactly 1
+  // there); growth caps at 2× cols (4× area) to bound sim cost. Seeds scale
+  // with the grid area gained so spot density holds.
+  const sheetK = sheetGridFactor(page);
   const options: ReactionDiffusionOptions = {
     width: page.widthPx,
     height: page.heightPx,
@@ -24,14 +30,14 @@ export function renderReactionDiffusion(
     margin: marginPx,
     seed: state.seed,
     // Simulation params are grid-space — never multiplied by pxPerMm.
-    gridCols: state.gridCols,
+    gridCols: Math.round(state.gridCols * sheetK),
     preset: state.preset,
     feed: state.feed,
     kill: state.kill,
     steps: state.steps,
     du: state.du,
     dv: state.dv,
-    seedSpots: state.seedSpots,
+    seedSpots: Math.round(state.seedSpots * sheetK * sheetK),
     seedLayout: state.seedLayout,
     style: state.style,
     contourLevels: state.contourLevels,
