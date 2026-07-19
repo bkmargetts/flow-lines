@@ -9,7 +9,7 @@ import {
   sliceResultIntoTiles,
   tileLabel,
   TILE_MARKS_LAYER,
-  TILE_CROSSES_LAYER,
+  REGISTRATION_LAYER,
   type TilingOptions,
 } from './tiling.js';
 import type { FlowLinesResult, Point } from './flow-lines.js';
@@ -132,6 +132,38 @@ describe('computeTiling — grid math', () => {
     expect(() => computeTiling(a0, baseOpts({ overlapMm: 200 }))).toThrow(
       /overlap/i
     );
+  });
+
+  it('stitch assembly: windows advance at full sheet pitch, strips under margins dropped', () => {
+    const opts = baseOpts({ assembly: 'stitch' });
+    const layout = computeTiling(a0, opts);
+    // Full-sheet pitch: ceil(841/210)=5 cols, ceil(1189/297)=5 rows.
+    expect(layout.cols).toBe(5);
+    expect(layout.rows).toBe(5);
+    const marginMm = 10;
+    const k = a0.pxPerMm;
+    for (let c = 0; c + 1 < layout.cols; c++) {
+      const left = layout.tiles[c];
+      const right = layout.tiles[c + 1];
+      // Between adjacent windows exactly 2×margin of artwork is never
+      // printed — the strip that sits under the two abutting margins.
+      const gap = right.sourceRect.x - (left.sourceRect.x + left.sourceRect.width);
+      expect(gap).toBeCloseTo(2 * marginMm * k, 6);
+      // Ownership cells still butt exactly (mid-strip).
+      expect(left.trimRect.x + left.trimRect.width).toBe(right.trimRect.x);
+    }
+    // Overlap is inert in stitch mode: same grid, no flap sharing.
+    const withOverlap = computeTiling(a0, baseOpts({ assembly: 'stitch', overlapMm: 8 }));
+    expect(withOverlap.tiles.map((t) => t.sourceRect)).toEqual(
+      layout.tiles.map((t) => t.sourceRect)
+    );
+    expect(withOverlap.overlapPx).toBe(0);
+  });
+
+  it('stitch assembly with the margin off coincides with trim', () => {
+    const stitch = computeTiling(a0, baseOpts({ assembly: 'stitch', perSheetMargin: false }));
+    const trim = computeTiling(a0, baseOpts({ perSheetMargin: false }));
+    expect(stitch.tiles.map((t) => t.sourceRect)).toEqual(trim.tiles.map((t) => t.sourceRect));
   });
 
   it('labels tiles row-major, 1-based', () => {
@@ -340,7 +372,7 @@ describe('sliceResultIntoTiles', () => {
     const half = 1.5 * a0.pxPerMm;
     for (const s of sliced) {
       const { widthPx: w, heightPx: h } = s.tile;
-      const crosses = s.result.lines.filter((l) => l.layer === TILE_CROSSES_LAYER);
+      const crosses = s.result.lines.filter((l) => l.layer === REGISTRATION_LAYER);
       // 4 corners × 2 strokes per +.
       expect(crosses).toHaveLength(8);
       for (const line of crosses) {
@@ -363,7 +395,7 @@ describe('sliceResultIntoTiles', () => {
     // marks layer; ensure crosses don't leak in).
     const plain = sliceResultIntoTiles(makeResult(), a0, layout, baseOpts());
     for (const s of plain) {
-      expect(s.result.lines.some((l) => l.layer === TILE_CROSSES_LAYER)).toBe(false);
+      expect(s.result.lines.some((l) => l.layer === REGISTRATION_LAYER)).toBe(false);
     }
   });
 
@@ -379,7 +411,7 @@ describe('sliceResultIntoTiles', () => {
     const clearance = 1.5 * a0.pxPerMm;
     for (const s of slicedClamped) {
       for (const line of s.result.lines) {
-        if (line.layer !== TILE_CROSSES_LAYER) continue;
+        if (line.layer !== REGISTRATION_LAYER) continue;
         for (const p of line.points) {
           expect(Math.min(p.x, p.y, s.tile.widthPx - p.x, s.tile.heightPx - p.y)).toBeGreaterThanOrEqual(
             clearance - 1e-6
@@ -396,7 +428,20 @@ describe('sliceResultIntoTiles', () => {
       tooDeep
     );
     for (const s of slicedDeep) {
-      expect(s.result.lines.some((l) => l.layer === TILE_CROSSES_LAYER)).toBe(false);
+      expect(s.result.lines.some((l) => l.layer === REGISTRATION_LAYER)).toBe(false);
+    }
+  });
+
+  it('stitch assembly suppresses trim marks (nothing is cut) but keeps crosses', () => {
+    const opts = baseOpts({
+      assembly: 'stitch',
+      registrationMarks: true,
+      registrationCrosses: true,
+    });
+    const sliced = sliceResultIntoTiles(makeResult(), a0, computeTiling(a0, opts), opts);
+    for (const s of sliced) {
+      expect(s.result.lines.some((l) => l.layer === TILE_MARKS_LAYER)).toBe(false);
+      expect(s.result.lines.some((l) => l.layer === REGISTRATION_LAYER)).toBe(true);
     }
   });
 

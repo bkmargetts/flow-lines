@@ -2,7 +2,7 @@ import {
   sliceResultIntoTiles,
   toSVG,
   TILE_MARKS_LAYER,
-  TILE_CROSSES_LAYER,
+  REGISTRATION_LAYER,
   type FlowLinesResult,
   type PageMetrics,
   type SVGOptions,
@@ -38,7 +38,12 @@ export function buildSheetsPreview(
   const tiles = sliceResultIntoTiles(result, page, layout, opts);
   const tw = layout.tiles[0].widthPx;
   const th = layout.tiles[0].heightPx;
-  const gutter = layout.single ? 0 : Math.max(6, Math.round(Math.min(tw, th) * 0.04));
+  // Stitch assembly tapes whole sheets edge-to-edge, so the faithful preview
+  // has no gutter — the picture visibly continues across the white margins.
+  const gutter =
+    layout.single || opts.assembly === 'stitch'
+      ? 0
+      : Math.max(6, Math.round(Math.min(tw, th) * 0.04));
   const width = layout.cols * tw + (layout.cols - 1) * gutter;
   const height = layout.rows * th + (layout.rows - 1) * gutter;
   const tileSvgOptions: SVGOptions = {
@@ -52,7 +57,7 @@ export function buildSheetsPreview(
           layerColors: {
             ...svgOptions.layerColors,
             [TILE_MARKS_LAYER]: svgOptions.strokeColor ?? '#111111',
-            [TILE_CROSSES_LAYER]: svgOptions.strokeColor ?? '#111111',
+            [REGISTRATION_LAYER]: svgOptions.strokeColor ?? '#111111',
           },
         }
       : {}),

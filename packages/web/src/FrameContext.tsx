@@ -75,10 +75,18 @@ export interface FrameSettings {
   tileMarks: boolean;
   /** Gap between each trim tick and the margin line it marks, in mm. */
   tileMarkOffsetMm: number;
-  /** Corner registration crosses on their own 'tile-crosses' pen layer. */
-  tileCrosses: boolean;
+  /**
+   * How split sheets will be assembled: 'trim' = cut margins at the marks
+   * and butt sheets (seamless); 'stitch' = tape whole sheets edge-to-edge —
+   * the picture lines up because strips under the margins are dropped.
+   */
+  tileAssembly: 'trim' | 'stitch';
+
+  // ---- Corner registration crosses (their own 'register' pen layer) ----
+  /** Small + in each corner of the sheet (each sheet, when splitting). */
+  crossesEnabled: boolean;
   /** Distance from the paper edge to each cross's centre, in mm. */
-  tileCrossOffsetMm: number;
+  crossOffsetMm: number;
 }
 
 export const defaultFrame: FrameSettings = {
@@ -107,8 +115,9 @@ export const defaultFrame: FrameSettings = {
   tileOverlapMm: 0,
   tileMarks: false,
   tileMarkOffsetMm: 0,
-  tileCrosses: false,
-  tileCrossOffsetMm: 3,
+  tileAssembly: 'trim',
+  crossesEnabled: false,
+  crossOffsetMm: 3,
 };
 
 interface FrameContextValue {

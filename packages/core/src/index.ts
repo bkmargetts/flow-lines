@@ -107,8 +107,9 @@ export {
   computeTiling,
   sliceResultIntoTiles,
   tileLabel,
+  registrationCrosses,
   TILE_MARKS_LAYER,
-  TILE_CROSSES_LAYER,
+  REGISTRATION_LAYER,
 } from './tiling.js';
 export type {
   TilingOptions,

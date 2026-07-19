@@ -144,8 +144,34 @@ export function FrameControls() {
               onChange={(e) => updateFrame({ tilePerSheetMargin: e.target.checked })}
             />
             Margin on each sheet
-            <InfoTip text="On: every sheet keeps the page margin as clear paper around its slice — safe for plotters that can't reach the paper edge; trim the margins away when assembling. Off: sheets are raw edge-to-edge slices of the drawing, so the margin only remains around the assembled whole — fewer sheets, but the pen must plot right to the paper edge." />
+            <InfoTip text="On: every sheet keeps the page margin as clear paper around its slice — safe for plotters that can't reach the paper edge. Off: sheets are raw edge-to-edge slices of the drawing, so the margin only remains around the assembled whole — fewer sheets, but the pen must plot right to the paper edge." />
           </label>
+          {frame.tilePerSheetMargin && (
+            <>
+              <label>
+                Assembly
+                <InfoTip text="Trim & butt: the sheets carry the complete drawing; cut the margins off at the marks and butt them for a seamless whole. Stitch whole: tape full sheets edge-to-edge, margins and all — the picture lines up across the seams because the strips that fall under the margins are silently dropped from the drawing." />
+              </label>
+              <div className="segmented">
+                <button
+                  type="button"
+                  className={frame.tileAssembly === 'trim' ? 'active' : ''}
+                  onClick={() => updateFrame({ tileAssembly: 'trim' })}
+                >
+                  Trim &amp; butt
+                </button>
+                <button
+                  type="button"
+                  className={frame.tileAssembly === 'stitch' ? 'active' : ''}
+                  onClick={() => updateFrame({ tileAssembly: 'stitch' })}
+                >
+                  Stitch whole
+                </button>
+              </div>
+            </>
+          )}
+          {(!frame.tilePerSheetMargin || frame.tileAssembly === 'trim') && (
+          <>
           <label>
             Overlap{" "}
             <EditableValue
@@ -201,39 +227,7 @@ export function FrameControls() {
               />
             </>
           )}
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={frame.tileCrosses}
-              onChange={(e) => updateFrame({ tileCrosses: e.target.checked })}
-            />
-            Registration crosses
-            <InfoTip text="A small + in each corner of every sheet, on its own 'tile-crosses' pen layer — re-register the paper between pen swaps, or plot them in a light ink. They live entirely in the blank margin corner and drop out where they don't fit. Needs a per-sheet margin." />
-          </label>
-          {frame.tileCrosses && (
-            <>
-              <label>
-                Cross offset{" "}
-                <EditableValue
-                  value={frame.tileCrossOffsetMm}
-                  min={0}
-                  max={15}
-                  step={0.5}
-                  onChange={(v) => updateFrame({ tileCrossOffsetMm: v })}
-                >
-                  {frame.tileCrossOffsetMm}mm
-                </EditableValue>
-                <InfoTip text="Distance from the paper edge to each cross's centre. The plotter-safety clearance always wins, so a cross never sits closer to the edge than is safe to stroke." />
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="15"
-                step="0.5"
-                value={frame.tileCrossOffsetMm}
-                onChange={(e) => updateFrame({ tileCrossOffsetMm: parseFloat(e.target.value) })}
-              />
-            </>
+          </>
           )}
         </div>
       )}
@@ -293,6 +287,44 @@ export function FrameControls() {
             step="1"
             value={frame.borderCornerRadiusMm}
             onChange={(e) => updateFrame({ borderCornerRadiusMm: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.crossesEnabled}
+            onChange={(e) => updateFrame({ crossesEnabled: e.target.checked })}
+          />
+          Registration crosses
+          <InfoTip text="A small + in each corner of the sheet — every sheet, when splitting — on its own 'register' pen layer: re-register the paper between pen swaps, or plot them in a light ink. They live entirely in the blank margin corner and drop out where they don't fit, so they need a margin." />
+        </label>
+      </div>
+
+      {frame.crossesEnabled && (
+        <div className="control-group">
+          <label>
+            Cross offset{" "}
+            <EditableValue
+              value={frame.crossOffsetMm}
+              min={0}
+              max={15}
+              step={0.5}
+              onChange={(v) => updateFrame({ crossOffsetMm: v })}
+            >
+              {frame.crossOffsetMm}mm
+            </EditableValue>
+            <InfoTip text="Distance from the paper edge to each cross's centre. The plotter-safety clearance always wins, so a cross never sits closer to the edge than is safe to stroke." />
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="15"
+            step="0.5"
+            value={frame.crossOffsetMm}
+            onChange={(e) => updateFrame({ crossOffsetMm: parseFloat(e.target.value) })}
           />
         </div>
       )}

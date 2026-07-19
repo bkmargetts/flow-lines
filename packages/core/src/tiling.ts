@@ -56,8 +56,20 @@ export interface TilingOptions {
    */
   markOffsetMm?: number;
   /**
+   * How the sheets will be assembled (default 'trim').
+   * 'trim': the printable bands tile the artwork completely; margins are
+   * extra paper cut off at the marks, and the butted sheets reconstruct the
+   * drawing seamlessly. 'stitch': whole sheets are taped edge-to-edge with
+   * their margins intact; sheet windows advance at full sheet pitch, so the
+   * picture lines up across the seams because the strips that fall under
+   * the margins are silently dropped — the drawing continues under the
+   * blank margins. Overlap and trim marks are inert in stitch mode
+   * (nothing is cut); with the per-sheet margin off the two modes coincide.
+   */
+  assembly?: 'trim' | 'stitch';
+  /**
    * Small + crosses in every corner of every sheet, on their own
-   * 'tile-crosses' pen layer — re-register the paper between pen swaps, or
+   * 'register' pen layer — re-register the paper between pen swaps, or
    * plot them in a light ink. They live entirely in the blank margin corner
    * and are dropped when they don't fit.
    */
@@ -112,7 +124,7 @@ export interface TileResult {
 export const TILE_MARKS_LAYER = 'tile-marks';
 
 /** Pen layer carrying the corner registration crosses. */
-export const TILE_CROSSES_LAYER = 'tile-crosses';
+export const REGISTRATION_LAYER = 'register';
 
 /** Half-length of a registration cross arm, in mm (3mm crosses). */
 const CROSS_HALF_MM = 1.5;
@@ -130,22 +142,43 @@ interface AxisBand {
 
 /**
  * 1-D tile layout along one axis. All in mm: printable span per sheet `pw`,
- * overlap `o`, artwork extent `aw`. Tiles advance by the stride `pw − o` so
- * neighbours share exactly `o`; the assembly is centered so excess coverage
- * splits evenly between the two edge tiles.
+ * overlap `o`, per-sheet margin `m`, artwork extent `aw`.
+ *
+ * Trim assembly: tiles advance by the stride `pw − o` so the printable bands
+ * cover the artwork completely and neighbours share exactly `o`; margins are
+ * extra paper cut off on assembly. Stitch assembly: whole sheets are taped
+ * edge-to-edge, so windows advance at full sheet pitch `pw + 2m` — the 2·m
+ * strips between windows (and under the outer margins) are silently dropped,
+ * which is what makes the picture line up across the untrimmed seams. Both
+ * are centered so excess coverage splits evenly between the edge tiles.
  */
-function layoutAxis(aw: number, pw: number, o: number): AxisBand[] {
-  const stride = pw - o;
-  const count = aw > pw ? Math.max(1, Math.ceil((aw - o) / stride)) : 1;
-  const coverage = count * stride + o;
+function layoutAxis(
+  aw: number,
+  pw: number,
+  o: number,
+  m: number,
+  stitch: boolean
+): AxisBand[] {
+  const pitch = stitch ? pw + 2 * m : pw - o;
+  const count =
+    aw > pw ? Math.max(1, Math.ceil(stitch ? aw / pitch : (aw - o) / pitch)) : 1;
+  const coverage = stitch ? count * pitch : count * pitch + o;
   const origin = -(coverage - aw) / 2;
   const bands: AxisBand[] = [];
   for (let i = 0; i < count; i++) {
-    const raw0 = origin + i * stride;
+    const raw0 = origin + i * pitch + (stitch ? m : 0);
     const raw1 = raw0 + pw;
-    // Trim lines sit mid-overlap; the outermost edges trim at the artwork.
-    const trim0 = i === 0 ? 0 : origin + i * stride + o / 2;
-    const trim1 = i === count - 1 ? aw : origin + (i + 1) * stride + o / 2;
+    // Ownership boundaries: mid-overlap in trim mode (the cut line's shared
+    // artwork point); the sheet-cell edge (mid-hidden-strip) in stitch mode.
+    // The outermost edges own out to the artwork boundary.
+    const trim0 =
+      i === 0 ? 0 : stitch ? origin + i * pitch : origin + i * pitch + o / 2;
+    const trim1 =
+      i === count - 1
+        ? aw
+        : stitch
+          ? origin + (i + 1) * pitch
+          : origin + (i + 1) * pitch + o / 2;
     bands.push({
       raw0,
       src0: Math.max(0, raw0),
@@ -166,7 +199,9 @@ function layoutAxis(aw: number, pw: number, o: number): AxisBand[] {
 export function computeTiling(art: PageMetrics, opts: TilingOptions): TilingLayout {
   const { widthMm: sw, heightMm: sh } = orientedDimsMm(opts.sheet, opts.sheetOrientation);
   const margin = opts.perSheetMargin ? opts.marginMm : 0;
-  const o = Math.max(0, opts.overlapMm ?? 0);
+  const stitch = (opts.assembly ?? 'trim') === 'stitch' && margin > 0;
+  // No cutting in stitch mode → no flaps; overlap is inert there.
+  const o = stitch ? 0 : Math.max(0, opts.overlapMm ?? 0);
   const pw = sw - 2 * margin;
   const ph = sh - 2 * margin;
   if (pw <= 0 || ph <= 0) {
@@ -177,8 +212,8 @@ export function computeTiling(art: PageMetrics, opts: TilingOptions): TilingLayo
   }
   const k = art.pxPerMm;
   const marginPx = margin * k;
-  const colBands = layoutAxis(art.widthMm, pw, o);
-  const rowBands = layoutAxis(art.heightMm, ph, o);
+  const colBands = layoutAxis(art.widthMm, pw, o, margin, stitch);
+  const rowBands = layoutAxis(art.heightMm, ph, o, margin, stitch);
   const widthPx = Math.max(1, Math.round(sw * k));
   const heightPx = Math.max(1, Math.round(sh * k));
   const tiles: TileSpec[] = [];
@@ -279,14 +314,16 @@ function tileMarks(
 }
 
 /**
- * Registration crosses for one tile, in tile coordinates: a small + in each
- * corner, centred `offsetPx` from both paper edges (clamped away from the
- * edge by the plotter-safety clearance). Crosses must sit entirely inside
- * the blank margin corner — where they'd reach the artwork area they are
- * dropped, never drawn over the drawing.
+ * Registration crosses for a sheet: a small + in each corner, centred
+ * `offsetPx` from both paper edges (clamped away from the edge by the
+ * plotter-safety clearance), on the 'register' pen layer. Crosses must sit
+ * entirely inside the blank margin corner — where they'd reach the artwork
+ * area they are dropped, never drawn over the drawing. Used per tile when
+ * splitting and by the web compositor for the single un-split page.
  */
-function tileCrosses(
-  tile: TileSpec,
+export function registrationCrosses(
+  widthPx: number,
+  heightPx: number,
   marginPx: number,
   offsetPx: number,
   pxPerMm: number
@@ -297,8 +334,8 @@ function tileCrosses(
   // an explicit user position, so clamp only as far as pen safety demands.
   const c = Math.max(offsetPx, 1.5 * pxPerMm + half);
   if (c + half > marginPx) return [];
-  const w = tile.widthPx;
-  const h = tile.heightPx;
+  const w = widthPx;
+  const h = heightPx;
   const lines: FlowLine[] = [];
   for (const cx of [c, w - c]) {
     for (const cy of [c, h - c]) {
@@ -308,7 +345,7 @@ function tileCrosses(
           { x: cx + half, y: cy },
         ],
         pen: 'fine',
-        layer: TILE_CROSSES_LAYER,
+        layer: REGISTRATION_LAYER,
       });
       lines.push({
         points: [
@@ -316,7 +353,7 @@ function tileCrosses(
           { x: cx, y: cy + half },
         ],
         pen: 'fine',
-        layer: TILE_CROSSES_LAYER,
+        layer: REGISTRATION_LAYER,
       });
     }
   }
@@ -350,7 +387,8 @@ export function sliceResultIntoTiles(
       }
     }
     const marginPx = opts.perSheetMargin ? opts.marginMm * art.pxPerMm : 0;
-    if (opts.registrationMarks) {
+    // No cutting in stitch assembly → trim marks are inert there.
+    if (opts.registrationMarks && (opts.assembly ?? 'trim') !== 'stitch') {
       lines.push(
         ...tileMarks(
           tile,
@@ -364,8 +402,9 @@ export function sliceResultIntoTiles(
     }
     if (opts.registrationCrosses) {
       lines.push(
-        ...tileCrosses(
-          tile,
+        ...registrationCrosses(
+          tile.widthPx,
+          tile.heightPx,
           marginPx,
           Math.max(0, opts.crossOffsetMm ?? 3) * art.pxPerMm,
           art.pxPerMm

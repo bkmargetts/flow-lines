@@ -11,10 +11,11 @@ export function tilingOptionsFromFrame(frame: FrameSettings): TilingOptions {
     marginMm: frame.marginMm,
     perSheetMargin: frame.tilePerSheetMargin,
     overlapMm: frame.tileOverlapMm,
+    assembly: frame.tileAssembly,
     registrationMarks: frame.tileMarks,
     markOffsetMm: frame.tileMarkOffsetMm,
-    registrationCrosses: frame.tileCrosses,
-    crossOffsetMm: frame.tileCrossOffsetMm,
+    registrationCrosses: frame.crossesEnabled,
+    crossOffsetMm: frame.crossOffsetMm,
   };
 }
 

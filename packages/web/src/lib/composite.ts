@@ -13,6 +13,7 @@ import {
 import type { FrameSettings } from '../FrameContext';
 import { DEFAULT_PEN_WIDTH_MM, type LayerOutput, type RenderEnv } from '../modules/types';
 import { buildBorder } from './border';
+import { registrationCrosses, REGISTRATION_LAYER } from '@flow-lines/core';
 
 /**
  * The compositor's view of a module: just the render dispatch, structurally —
@@ -149,6 +150,26 @@ export function composite(
     for (const line of border) finalLines.push(line);
     layerColors.border = BORDER_COLOR;
     layerWidths.border = DEFAULT_PEN_WIDTH_MM * page.pxPerMm;
+  }
+
+  // Corner registration crosses on their own pen, for re-registering the
+  // paper between pen swaps. When splitting is on, the tiler draws per-sheet
+  // crosses instead — skipping them here keeps them from doubling up on the
+  // sliced sheets (the un-split master export goes without, which is fine:
+  // it isn't the artifact that gets plotted in that workflow).
+  if (frame.crossesEnabled && !frame.tileEnabled) {
+    const crosses = registrationCrosses(
+      width,
+      height,
+      frame.marginMm * page.pxPerMm,
+      Math.max(0, frame.crossOffsetMm) * page.pxPerMm,
+      page.pxPerMm
+    );
+    if (crosses.length) {
+      for (const line of crosses) finalLines.push(line);
+      layerColors[REGISTRATION_LAYER] = BORDER_COLOR;
+      layerWidths[REGISTRATION_LAYER] = DEFAULT_PEN_WIDTH_MM * page.pxPerMm;
+    }
   }
 
   // ---- 2.5 Global hand-sketch finish, then clip back to the sheet ----

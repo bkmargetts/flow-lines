@@ -7,8 +7,9 @@ import {
   computeTiling,
   sliceResultIntoTiles,
   tileLabel,
+  registrationCrosses,
   TILE_MARKS_LAYER,
-  TILE_CROSSES_LAYER,
+  REGISTRATION_LAYER,
   toSVG,
   toSVGLayers,
   type Orientation,
@@ -86,10 +87,11 @@ export interface TileFlagValues {
   /** commander's --no-tile-margin: defaults true. */
   tileMargin: boolean;
   tileOverlap: string;
+  tileAssembly: string;
   tileMarks?: boolean;
   tileMarkOffset: string;
-  tileCrosses?: boolean;
-  tileCrossOffset: string;
+  crosses?: boolean;
+  crossOffset: string;
 }
 
 /** Register the shared multi-sheet tiling flags on a command. */
@@ -119,11 +121,16 @@ export function addTileOptions(cmd: Command): Command {
       '0'
     )
     .option(
-      '--tile-crosses',
-      'Small registration crosses in every sheet corner on their own tile-crosses pen layer, for re-registering paper between pen swaps (needs the per-sheet margin)'
+      '--tile-assembly <mode>',
+      "How the sheets will be assembled: 'trim' (cut margins at the marks, butt sheets — seamless) or 'stitch' (tape whole sheets edge-to-edge; the picture lines up because strips under the margins are silently dropped)",
+      'trim'
     )
     .option(
-      '--tile-cross-offset <mm>',
+      '--crosses',
+      'Small registration crosses in every sheet corner on their own register pen layer, for re-registering paper between pen swaps — with or without --tile (needs --paper and a margin)'
+    )
+    .option(
+      '--cross-offset <mm>',
       "Distance from the paper edge to each registration cross's centre",
       '3'
     );
@@ -136,12 +143,37 @@ export function addTileOptions(cmd: Command): Command {
  * `<base>-r1c1.svg`… (with --split-layers: `<base>-r1c1.<layer>.svg`).
  */
 export function writePlotOutput(
-  result: FlowLinesResult,
+  inputResult: FlowLinesResult,
   frame: PageFrame,
   options: TileFlagValues & { splitLayers?: boolean; output: string },
-  svgOptions: SVGOptions
+  inputSvgOptions: SVGOptions
 ): void {
+  let result = inputResult;
+  let svgOptions = inputSvgOptions;
   if (!options.tile) {
+    // Page-level registration crosses on the single sheet (needs --paper for
+    // physical units and a margin to live in). Additive: absent the flag the
+    // output is byte-identical to the historical path.
+    if (options.crosses && frame.page && frame.marginMm !== undefined) {
+      const k = frame.page.pxPerMm;
+      const crossLines = registrationCrosses(
+        frame.page.widthPx,
+        frame.page.heightPx,
+        frame.marginMm * k,
+        Math.max(0, parseFloat(options.crossOffset)) * k,
+        k
+      );
+      if (crossLines.length > 0) {
+        result = { ...result, lines: [...result.lines, ...crossLines] };
+        svgOptions = {
+          ...svgOptions,
+          layerColors: {
+            ...svgOptions.layerColors,
+            [REGISTRATION_LAYER]: svgOptions.strokeColor ?? '#000000',
+          },
+        };
+      }
+    }
     if (options.splitLayers) {
       // Strip a trailing .svg so layers land as <base>.<layer>.svg
       const base = resolve(process.cwd(), options.output.replace(/\.svg$/i, ''));
@@ -169,10 +201,11 @@ export function writePlotOutput(
     marginMm: frame.marginMm,
     perSheetMargin: options.tileMargin,
     overlapMm: parseFloat(options.tileOverlap),
+    assembly: options.tileAssembly === 'stitch' ? 'stitch' : 'trim',
     registrationMarks: options.tileMarks ?? false,
     markOffsetMm: parseFloat(options.tileMarkOffset),
-    registrationCrosses: options.tileCrosses ?? false,
-    crossOffsetMm: parseFloat(options.tileCrossOffset),
+    registrationCrosses: options.crosses ?? false,
+    crossOffsetMm: parseFloat(options.crossOffset),
   };
   const layout = computeTiling(frame.page, tilingOptions);
   const tiles = sliceResultIntoTiles(result, frame.page, layout, tilingOptions);
@@ -190,7 +223,7 @@ export function writePlotOutput(
             layerColors: {
               ...svgOptions.layerColors,
               [TILE_MARKS_LAYER]: svgOptions.strokeColor ?? '#000000',
-              [TILE_CROSSES_LAYER]: svgOptions.strokeColor ?? '#000000',
+              [REGISTRATION_LAYER]: svgOptions.strokeColor ?? '#000000',
             },
           }
         : {}),
