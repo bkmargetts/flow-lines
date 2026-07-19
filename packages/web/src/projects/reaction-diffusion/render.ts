@@ -31,6 +31,9 @@ export function renderReactionDiffusion(
     seed: state.seed,
     // Simulation params are grid-space — never multiplied by pxPerMm.
     gridCols: Math.round(state.gridCols * sheetK),
+    // A bigger grid needs a proportionally bigger step budget or the sim
+    // never develops; ×1 at A4 and below, so existing output is untouched.
+    budgetScale: sheetK * sheetK,
     preset: state.preset,
     feed: state.feed,
     kill: state.kill,
