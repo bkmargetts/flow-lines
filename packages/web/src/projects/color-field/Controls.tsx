@@ -1,7 +1,9 @@
 import { InfoTip } from '../../components/InfoTip';
 import { ColorField, PalettePicker } from '../../components/ColorField';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps, Updater } from '../../modules/types';
 import type {
   AccentOrientation,
@@ -119,6 +121,33 @@ function AccentEditor({
   );
 }
 
+/** Roll a fresh gradient — line texture, gradient shape and weave all land
+ *  inside their slider ranges, biased off the extremes (spacing stays tight —
+ *  the module's look is dense striation — and the colour fan mostly stays off:
+ *  it's heavy at high ink counts). The inks/palette, accents and pen prefs
+ *  are left alone. Exported for the genome test. */
+export function randomColorFieldGenome(rng: () => number): Partial<ColorFieldState> {
+  return {
+    angleDeg: 5 * Math.floor(rng() * 37),
+    lineLengthPct: (60 + 5 * Math.floor(rng() * 9)) / 100,
+    spacingMm: Number((0.5 + 0.1 * Math.floor(rng() * 21)).toFixed(1)),
+    fill: (50 + 5 * Math.floor(rng() * 11)) / 100,
+    gradientMode: rng() < 0.5 ? 'linear' : 'radial',
+    gradientAngleDeg: 5 * Math.floor(rng() * 73),
+    focalXPct: (20 + Math.floor(rng() * 61)) / 100,
+    focalYPct: (20 + Math.floor(rng() * 61)) / 100,
+    gradientRadiusPct: (40 + 5 * Math.floor(rng() * 17)) / 100,
+    blend: Number((0.8 + 0.1 * Math.floor(rng() * 18)).toFixed(1)),
+    gradientNoiseAmpMm: Math.floor(rng() * 26),
+    gradientNoiseScale: Number((0.002 + 0.001 * Math.floor(rng() * 11)).toFixed(3)),
+    ditherScale: Number((0.02 + 0.005 * Math.floor(rng() * 13)).toFixed(3)),
+    crossHatch: rng() < 0.6 ? 1 : 2 + Math.floor(rng() * 2),
+    inkAngleSpreadDeg: rng() < 0.6 ? 0 : 5 * (2 + Math.floor(rng() * 7)),
+    jitterMm: Number((0.05 * Math.floor(rng() * 9)).toFixed(2)),
+    wobbleAmpMm: Number((0.1 * Math.floor(rng() * 21)).toFixed(1)),
+  };
+}
+
 /** Sidebar controls for the Colour Field module. */
 export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldState>) {
   const u: Updater<ColorFieldState> = update;
@@ -128,8 +157,12 @@ export function ColorFieldControls({ state, update }: ControlsProps<ColorFieldSt
     u((s) => ({ accents: s.accents.map((a, j) => (j === i ? { ...a, ...patch } : a)) }));
   const removeAccent = (i: number) => u((s) => ({ accents: s.accents.filter((_, j) => j !== i) }));
 
+  const surprise = () => u({ ...randomColorFieldGenome(Math.random), seed: randomSeed() });
+
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a fresh gradient — inks, accents and pen stay your choice." />
+
       <h3 className="section-title">Lines</h3>
       <Slider
         labelNode={labelWithTip('Spacing', 'Gap between adjacent lines, mm. Tighter packs the striations denser.')}

@@ -1,15 +1,38 @@
 import { ColorField } from '../../components/ColorField';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { FlowState } from './types';
+
+/** Roll a whole new field — every line/noise knob inside its slider range,
+ *  biased off the extremes (line count and spacing stay well clear of the
+ *  render-time cliffs at the dense end). Painted seed points and the pen/ink
+ *  prefs are left alone. Exported for the genome test. */
+export function randomFlowGenome(rng: () => number): Partial<FlowState> {
+  return {
+    denseFill: rng() < 0.35,
+    lineCount: 100 + 10 * Math.floor(rng() * 121),
+    lineSpacingMm: Number((1.5 + 0.5 * Math.floor(rng() * 10)).toFixed(1)),
+    stepLength: 1 + 0.5 * Math.floor(rng() * 11),
+    maxSteps: 100 + 50 * Math.floor(rng() * 15),
+    noiseScale: Number((0.002 + 0.001 * Math.floor(rng() * 11)).toFixed(3)),
+    octaves: 1 + Math.floor(rng() * 6),
+    persistence: Number((0.25 + rng() * 0.5).toFixed(2)),
+    lacunarity: Number((1.5 + rng() * 1.5).toFixed(1)),
+  };
+}
 
 /** Sidebar controls for the Flow Field module. */
 export function FlowFieldControls({ state, update }: ControlsProps<FlowState>) {
   const updateState = update;
+  const surprise = () => update({ ...randomFlowGenome(Math.random), seed: randomSeed() });
 
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new field — or tune anything below." />
+
       <div className="paint-section">
         <h3 className="section-title">Paint Mode</h3>
 

@@ -2,6 +2,7 @@ import type { FacingMode, PoseMode } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { InfoTip } from '../../components/InfoTip';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { Slider } from '../../components/controls/Slider';
 import { Toggle } from '../../components/controls/Toggle';
 import { SeedControl } from '../../components/controls/SeedControl';
@@ -40,7 +41,7 @@ const POSE_MODES: PoseMode[] = ['mixed', 'library', 'procedural'];
 /** Roll a whole fresh scene — every scene/figure/pose knob within its slider
  *  range. Limb roundness is biased to the rounded end so a surprise never
  *  lands ugly-angular; the pen/ink/zoom aesthetic prefs are left alone. */
-function randomStickmenGenome(rng: () => number): Partial<StickmenState> {
+export function randomStickmenGenome(rng: () => number): Partial<StickmenState> {
   // ~40% of rolls confine the crowd to a shape (never 'full' via this pick).
   const shaped = rng() < 0.4;
   const shape = SHAPES[1 + Math.floor(rng() * (SHAPES.length - 1))];
@@ -81,12 +82,7 @@ export function StickmenControls({ state, update }: ControlsProps<StickmenState>
     <div className="controls">
       <h3 className="section-title">Stick Men</h3>
 
-      <div className="control-group">
-        <button type="button" className="secondary" onClick={surprise} title="Randomize everything" style={{ width: '100%' }}>
-          🎲 Randomize everything
-        </button>
-        <p className="paint-hint">One roll for a whole new crowd — or tune anything below.</p>
-      </div>
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new crowd — or tune anything below." />
 
       <SeedControl seed={state.seed} onChange={(seed) => update({ seed })} title="New random crowd">
         <label className="label-text">

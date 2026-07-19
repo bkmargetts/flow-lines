@@ -1,5 +1,6 @@
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
 import { randomSeed } from '../../lib/random';
@@ -27,6 +28,8 @@ export function BotanicalGeneratorControls({ state, update }: ControlsProps<Bota
 
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll crosses a whole new plant and re-dresses the page — or tune anything below." />
+
       <h3 className="section-title">Species</h3>
 
       <div className="control-group">
@@ -37,9 +40,6 @@ export function BotanicalGeneratorControls({ state, update }: ControlsProps<Bota
             ))}
             <option value="custom">Custom…</option>
           </select>
-          <button type="button" className="secondary" onClick={surprise} title="Surprise me">
-            🎲
-          </button>
         </div>
         <p className="paint-hint">A starting plant — tweak anything below; sliders fine-tune from here.</p>
       </div>

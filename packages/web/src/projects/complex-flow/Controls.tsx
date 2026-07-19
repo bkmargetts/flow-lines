@@ -1,8 +1,10 @@
 import { InfoTip } from '../../components/InfoTip';
 import { PalettePicker } from '../../components/ColorField';
 import { AdvancedSection } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { ComplexFlowState } from './types';
 import type { SingularityLayout, SeedLayout, LayerBy } from '@flow-lines/core';
@@ -28,6 +30,32 @@ const LAYER_BY: { id: LayerBy; label: string }[] = [
   { id: 'angle', label: 'Flow angle' },
 ];
 
+/** Roll a whole new topology — singularity counts and arrangements, the
+ *  streamline seeding and integration knobs all land inside their slider
+ *  ranges, biased off the extremes (at least one zero so the field is never
+ *  constant; line count capped well below the render-time cliff). Hand-placed
+ *  singularities, the colour/pen block and the technical safety valves are
+ *  left alone. Exported for the genome test. */
+export function randomComplexFlowGenome(rng: () => number): Partial<ComplexFlowState> {
+  const pickLayout = () =>
+    SINGULARITY_LAYOUTS[Math.floor(rng() * SINGULARITY_LAYOUTS.length)].id;
+  return {
+    zeroCount: 1 + Math.floor(rng() * 6),
+    poleCount: Math.floor(rng() * 6),
+    zeroLayout: pickLayout(),
+    poleLayout: pickLayout(),
+    singularitySpread: Number((0.3 + 0.05 * Math.floor(rng() * 15)).toFixed(2)),
+    fieldRotationDeg: 5 * Math.floor(rng() * 73),
+    planeScale: Number((0.7 + 0.1 * Math.floor(rng() * 14)).toFixed(1)),
+    seedLayout: SEED_LAYOUTS[Math.floor(rng() * SEED_LAYOUTS.length)].id,
+    seedCount: 400 + 100 * Math.floor(rng() * 27),
+    stepsPerDir: 60 + 10 * Math.floor(rng() * 25),
+    stepLength: 1 + 0.5 * Math.floor(rng() * 7),
+    stepJitter: Number((0.05 * Math.floor(rng() * 17)).toFixed(2)),
+    wobble: rng() < 0.5 ? 0 : Number((0.3 + rng() * 1.2).toFixed(1)),
+  };
+}
+
 /** Sidebar controls for the Complex Flow module. */
 export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlowState>) {
   const updateState = update;
@@ -35,9 +63,12 @@ export function ComplexFlowControls({ state, update }: ControlsProps<ComplexFlow
   const clearSingularities = () => update({ manualZeros: [], manualPoles: [] });
 
   const manualCount = state.manualZeros.length + state.manualPoles.length;
+  const surprise = () => update({ ...randomComplexFlowGenome(Math.random), seed: randomSeed() });
 
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new topology — or tune anything below." />
+
       <h3 className="section-title">Field</h3>
 
       <Slider

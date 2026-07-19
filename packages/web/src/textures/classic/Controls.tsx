@@ -3,6 +3,7 @@ import { randomSeed } from '../../lib/random';
 import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
 import { ColorField } from '../../components/ColorField';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
 import type { ControlsProps } from '../../modules/types';
@@ -90,18 +91,7 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
         </select>
       </div>
 
-      <div className="control-group">
-        <button
-          type="button"
-          className="secondary"
-          onClick={surprise}
-          title="Randomize everything"
-          style={{ width: '100%' }}
-        >
-          🎲 Randomize everything
-        </button>
-        <p className="paint-hint">One roll for a fresh take on this style — or tune anything below.</p>
-      </div>
+      <RandomiseButton onClick={surprise} hint="One roll for a fresh take on this style — or tune anything below." />
 
       {(state.style === 'hatch' ||
         state.style === 'grid' ||

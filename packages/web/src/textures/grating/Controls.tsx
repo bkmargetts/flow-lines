@@ -1,11 +1,15 @@
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import { GratingFields } from './GratingFields';
-import type { GratingParams } from './shared';
+import { randomGratingGenome, type GratingParams } from './shared';
 
 /** Grating controls for the grating module's panel — the full generative set,
  * including drawing the band centreline on the canvas (the layer-stack canvas
  * wires the selected layer's `drawMode`/`maskPath` to the paint interaction). */
 export function GratingTextureControls({ state, update }: ControlsProps<GratingParams>) {
+  const surprise = () => update({ ...randomGratingGenome(Math.random), seed: randomSeed() });
+
   const bandControls = (
     <div className="control-group">
       <div className="paint-controls">
@@ -31,11 +35,14 @@ export function GratingTextureControls({ state, update }: ControlsProps<GratingP
   );
 
   return (
-    <GratingFields
-      params={state}
-      update={update}
-      maskModes={['none', 'strips', 'band', 'rect', 'ellipse']}
-      bandControls={bandControls}
-    />
+    <>
+      <RandomiseButton onClick={surprise} hint="One roll for a fresh grating — inks and masks stay your choice." />
+      <GratingFields
+        params={state}
+        update={update}
+        maskModes={['none', 'strips', 'band', 'rect', 'ellipse']}
+        bandControls={bandControls}
+      />
+    </>
   );
 }

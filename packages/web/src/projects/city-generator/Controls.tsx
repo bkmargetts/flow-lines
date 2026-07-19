@@ -1,11 +1,12 @@
 import type { CityStyle } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { Slider } from '../../components/controls/Slider';
 import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import type { CityState } from './types';
-import { CITY_PRESETS, getCityPreset } from './presets';
+import { CITY_PRESETS, getCityPreset, randomCityGenome } from './presets';
 
 const STYLE_LABELS: { id: CityStyle; label: string }[] = [
   { id: 'towers', label: 'Box towers' },
@@ -29,8 +30,12 @@ export function CityGeneratorControls({ state, update }: ControlsProps<CityState
   const towersFamily = state.style === 'towers' || state.style === 'mixed';
   const hasDowntown = towersFamily || state.style === 'brutalist';
 
+  const surprise = () => update({ ...randomCityGenome(Math.random), seed: randomSeed() });
+
   return (
     <div className="controls">
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new city — or tune anything below." />
+
       <h3 className="section-title">City</h3>
 
       <div className="control-group">

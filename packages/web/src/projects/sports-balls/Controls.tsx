@@ -2,6 +2,7 @@ import type { BallType } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { InfoTip } from '../../components/InfoTip';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { Slider } from '../../components/controls/Slider';
 import { Toggle } from '../../components/controls/Toggle';
 import { SeedControl } from '../../components/controls/SeedControl';
@@ -33,7 +34,7 @@ const SHAPES: RegionShape[] = ['full', 'ellipse', 'ring', 'diamond', 'star', 'he
 /** Roll a whole fresh pile — every scene/ball knob within its slider range.
  *  The ball mix is left alone (which sports are in play is a deliberate
  *  choice); the pen/ink aesthetic prefs too. */
-function randomSportsBallsGenome(rng: () => number): Partial<SportsBallsState> {
+export function randomSportsBallsGenome(rng: () => number): Partial<SportsBallsState> {
   // ~40% of rolls confine the pile to a shape (never 'full' via this pick).
   const shaped = rng() < 0.4;
   const shape = SHAPES[1 + Math.floor(rng() * (SHAPES.length - 1))];
@@ -71,12 +72,7 @@ export function SportsBallsControls({ state, update }: ControlsProps<SportsBalls
     <div className="controls">
       <h3 className="section-title">Sports Balls</h3>
 
-      <div className="control-group">
-        <button type="button" className="secondary" onClick={surprise} title="Randomize everything" style={{ width: '100%' }}>
-          🎲 Randomize everything
-        </button>
-        <p className="paint-hint">One roll for a whole new pile — or tune anything below.</p>
-      </div>
+      <RandomiseButton onClick={surprise} hint="One roll for a whole new pile — or tune anything below." />
 
       <SeedControl seed={state.seed} onChange={(seed) => update({ seed })} title="New random pile">
         <label className="label-text">
