@@ -233,7 +233,7 @@ describe('sliceResultIntoTiles', () => {
     expect(probe(bandX, midTrim.y)).toBe(2);
   });
 
-  it('adds registration ticks only when asked, on their own layer, inside the sheet', () => {
+  it('adds registration ticks only when asked, on their own layer', () => {
     const plain = sliceResultIntoTiles(
       makeResult(),
       a0,
@@ -243,26 +243,63 @@ describe('sliceResultIntoTiles', () => {
     for (const s of plain) {
       expect(s.result.lines.some((l) => l.layer === TILE_MARKS_LAYER)).toBe(false);
     }
+  });
+
+  it('marks sit on the margin lines of neighbour edges only, clear of the paper edge', () => {
     const opts = baseOpts({ registrationMarks: true, overlapMm: 5 });
+    const layout = computeTiling(a0, opts);
+    const marked = sliceResultIntoTiles(makeResult(), a0, layout, opts);
+    const marginPx = 10 * a0.pxPerMm;
+    const clearance = Math.max(1.5 * a0.pxPerMm, 0.2 * marginPx);
+    const eps = 1e-6;
+    for (const s of marked) {
+      const { row, col, widthPx: w, heightPx: h } = s.tile;
+      const ticks = s.result.lines.filter((l) => l.layer === TILE_MARKS_LAYER);
+      // Two ticks per cut line, one cut line per neighbouring edge.
+      const cutEdges =
+        (col > 0 ? 1 : 0) +
+        (col < layout.cols - 1 ? 1 : 0) +
+        (row > 0 ? 1 : 0) +
+        (row < layout.rows - 1 ? 1 : 0);
+      expect(ticks).toHaveLength(cutEdges * 2);
+      for (const tick of ticks) {
+        const [a, b] = tick.points;
+        // Each tick runs along a margin line: one coordinate pinned to
+        // marginPx (or its far-side mirror) on both points.
+        const onVertical =
+          a.x === b.x && (Math.abs(a.x - marginPx) < eps || Math.abs(a.x - (w - marginPx)) < eps);
+        const onHorizontal =
+          a.y === b.y && (Math.abs(a.y - marginPx) < eps || Math.abs(a.y - (h - marginPx)) < eps);
+        expect(onVertical || onHorizontal).toBe(true);
+        for (const p of tick.points) {
+          // Plotter safety: never within the clearance of any paper edge…
+          expect(p.x).toBeGreaterThanOrEqual(clearance - eps);
+          expect(p.x).toBeLessThanOrEqual(w - clearance + eps);
+          expect(p.y).toBeGreaterThanOrEqual(clearance - eps);
+          expect(p.y).toBeLessThanOrEqual(h - clearance + eps);
+          // …and never inside the artwork area (ticks live in the margin
+          // bands, ending exactly on the margin line).
+          const inMarginBand =
+            p.x <= marginPx + eps ||
+            p.x >= w - marginPx - eps ||
+            p.y <= marginPx + eps ||
+            p.y >= h - marginPx - eps;
+          expect(inMarginBand).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('draws no marks when sheets have no margin (nothing to cut)', () => {
+    const opts = baseOpts({ registrationMarks: true, perSheetMargin: false });
     const marked = sliceResultIntoTiles(
       makeResult(),
       a0,
       computeTiling(a0, opts),
       opts
     );
-    let ticks = 0;
     for (const s of marked) {
-      for (const line of s.result.lines) {
-        if (line.layer !== TILE_MARKS_LAYER) continue;
-        ticks++;
-        for (const p of line.points) {
-          expect(p.x).toBeGreaterThanOrEqual(0);
-          expect(p.x).toBeLessThanOrEqual(s.tile.widthPx);
-          expect(p.y).toBeGreaterThanOrEqual(0);
-          expect(p.y).toBeLessThanOrEqual(s.tile.heightPx);
-        }
-      }
+      expect(s.result.lines.some((l) => l.layer === TILE_MARKS_LAYER)).toBe(false);
     }
-    expect(ticks).toBeGreaterThan(0);
   });
 });

@@ -105,7 +105,10 @@ export function addTileOptions(cmd: Command): Command {
       'Glue-flap overlap in mm: adjacent sheets repeat this much artwork',
       '0'
     )
-    .option('--tile-marks', 'Add trim ticks at the sheet edges on their own tile-marks pen layer');
+    .option(
+      '--tile-marks',
+      'Trim ticks on the margin line of each edge that meets a neighbouring sheet, held clear of the paper edge, on their own tile-marks pen layer (needs the per-sheet margin)'
+    );
 }
 
 /**

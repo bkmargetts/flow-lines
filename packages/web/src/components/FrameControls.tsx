@@ -174,7 +174,7 @@ export function FrameControls() {
               onChange={(e) => updateFrame({ tileMarks: e.target.checked })}
             />
             Trim marks
-            <InfoTip text="Short ticks at the sheet edges where each cut line meets the paper, on their own 'tile-marks' pen layer — lay a ruler across the two ticks to trim. With a per-sheet margin they sit entirely in the clear border." />
+            <InfoTip text="Short ticks on the margin line wherever two sheets meet, on their own 'tile-marks' pen layer — cut along them and glue any overlap flap behind the neighbouring sheet. Held clear of the paper edge so the pen never runs off. Needs a per-sheet margin (with sheets edge-to-edge there is nothing to cut)." />
           </label>
         </div>
       )}

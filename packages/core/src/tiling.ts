@@ -7,11 +7,14 @@
  * exact slice of the same drawing.
  *
  * Assembly model: each tile prints its full source band (owned region plus
- * any glue-flap overlap). Trim lines sit at the midpoint of each shared
- * overlap band (with zero overlap they coincide with the butt joint); cutting
- * at the trim marks and butting — or gluing flaps behind neighbours —
- * reconstructs the artwork. The assembly is centered, so leftover sheet
- * coverage splits evenly instead of piling onto the last row/column.
+ * any glue-flap overlap). Every cut is made exactly on the margin line (the
+ * printable-band boundary): trim the margins off each edge that meets a
+ * neighbour, then butt the sheets — any glue-flap overlap is pasted BEHIND
+ * the neighbour's cut edge, never cut through. The trim marks sit on those
+ * margin lines. The assembly is centered, so leftover sheet coverage splits
+ * evenly instead of piling onto the last row/column. (`trimRect` still
+ * records mid-overlap content ownership — which sheet a given artwork point
+ * "belongs" to — used by slicing tests and previews, not by the scissors.)
  */
 
 import type {
@@ -195,56 +198,54 @@ export function tileLabel(tile: TileSpec): string {
 }
 
 /**
- * Trim ticks for one tile, in tile coordinates: where each trim line meets
- * the sheet boundary, a short tick runs from the sheet edge inward along the
- * trim line itself — lay a ruler across the two collinear ticks to cut. With
- * a per-sheet margin the ticks live entirely in the clear border; without
- * one they overlay the outermost sliver of artwork (the poster-tiling
- * convention). Ticks are clipped to the sheet, so a trim line riding the
- * sheet edge leaves no stray marks.
+ * Trim ticks for one tile, in tile coordinates. Every cut runs exactly along
+ * a margin line, so each edge that meets a neighbouring sheet gets a tick at
+ * both ends of its cut line, drawn along the line inside the blank margin
+ * band: the tick ends precisely on the margin-line corner (where the cut
+ * turns) and starts a safety inset short of the paper edge, so a plotter
+ * never strokes off the sheet. Outer edges of the assembly are never cut and
+ * get no marks; with the per-sheet margin off there is no cut at all.
  */
 function tileMarks(
   tile: TileSpec,
+  layout: { rows: number; cols: number },
+  marginPx: number,
   lengthMm: number,
   pxPerMm: number
 ): FlowLine[] {
-  const dx = tile.originX - tile.sourceRect.x;
-  const dy = tile.originY - tile.sourceRect.y;
-  const tx0 = tile.trimRect.x + dx;
-  const ty0 = tile.trimRect.y + dy;
-  const tx1 = tile.trimRect.x + tile.trimRect.width + dx;
-  const ty1 = tile.trimRect.y + tile.trimRect.height + dy;
-  const len = lengthMm * pxPerMm;
+  if (marginPx <= 0) return [];
+  // Along-line tick span within the perpendicular margin band: end on the
+  // margin corner, start clear of the paper edge. Degenerate margins (inset
+  // eats the whole band) draw nothing rather than something unsafe.
+  const edgeClearance = Math.max(1.5 * pxPerMm, 0.2 * marginPx);
+  const start = Math.max(edgeClearance, marginPx - lengthMm * pxPerMm);
+  if (marginPx - start < 0.75 * pxPerMm) return [];
   const w = tile.widthPx;
   const h = tile.heightPx;
   const seg = (x0: number, y0: number, x1: number, y1: number): Point[] => [
     { x: x0, y: y0 },
     { x: x1, y: y1 },
   ];
-  const ticks: Point[][] = [
-    // Vertical trim lines: ticks entering from the top and bottom sheet edges.
-    seg(tx0, 0, tx0, len),
-    seg(tx0, h - len, tx0, h),
-    seg(tx1, 0, tx1, len),
-    seg(tx1, h - len, tx1, h),
-    // Horizontal trim lines: ticks entering from the left and right sheet edges.
-    seg(0, ty0, len, ty0),
-    seg(w - len, ty0, w, ty0),
-    seg(0, ty1, len, ty1),
-    seg(w - len, ty1, w, ty1),
-  ];
-  const eps = 1e-6;
-  const lines: FlowLine[] = [];
-  for (const tick of ticks) {
-    // A trim line riding the sheet edge needs no mark (nothing to cut).
-    const [a, b] = tick;
-    if (a.x === b.x && (a.x < eps || a.x > w - eps)) continue;
-    if (a.y === b.y && (a.y < eps || a.y > h - eps)) continue;
-    for (const run of clipPolylineToRect(tick, 0, 0, w, h)) {
-      lines.push({ points: run, pen: 'fine', layer: TILE_MARKS_LAYER });
-    }
+  const ticks: Point[][] = [];
+  // Vertical cut lines (left/right margin lines), ticks in the top and
+  // bottom margin bands.
+  for (const x of [
+    ...(tile.col > 0 ? [marginPx] : []),
+    ...(tile.col < layout.cols - 1 ? [w - marginPx] : []),
+  ]) {
+    ticks.push(seg(x, start, x, marginPx));
+    ticks.push(seg(x, h - marginPx, x, h - start));
   }
-  return lines;
+  // Horizontal cut lines (top/bottom margin lines), ticks in the left and
+  // right margin bands.
+  for (const y of [
+    ...(tile.row > 0 ? [marginPx] : []),
+    ...(tile.row < layout.rows - 1 ? [h - marginPx] : []),
+  ]) {
+    ticks.push(seg(start, y, marginPx, y));
+    ticks.push(seg(w - marginPx, y, w - start, y));
+  }
+  return ticks.map((points) => ({ points, pen: 'fine', layer: TILE_MARKS_LAYER }));
 }
 
 /**
@@ -274,7 +275,10 @@ export function sliceResultIntoTiles(
       }
     }
     if (opts.registrationMarks) {
-      lines.push(...tileMarks(tile, opts.markLengthMm ?? 5, art.pxPerMm));
+      const marginPx = opts.perSheetMargin ? opts.marginMm * art.pxPerMm : 0;
+      lines.push(
+        ...tileMarks(tile, layout, marginPx, opts.markLengthMm ?? 5, art.pxPerMm)
+      );
     }
     return {
       tile,
