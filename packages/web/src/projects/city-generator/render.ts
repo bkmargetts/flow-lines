@@ -14,6 +14,14 @@ export function renderCity(state: CityState, env: RenderEnv): LayerOutput {
   const zoom = Math.max(0.2, state.zoom);
   const z = (px: number): number => px / zoom;
 
+  // A bigger sheet gets a bigger city, not an enlarged one: the block grid
+  // grows with the sheet's physical size (A4 portrait is the tuning anchor,
+  // so these factors are exactly 1 there) while lots, streets and building
+  // heights keep their mm values — the fit stays downscale-only, so marks
+  // never blow up.
+  const sheetCols = page.widthMm / 210;
+  const sheetRows = page.heightMm / 297;
+
   const options: CityOptions = {
     width: page.widthPx,
     height: page.heightPx,
@@ -23,8 +31,8 @@ export function renderCity(state: CityState, env: RenderEnv): LayerOutput {
     order: state.order,
     style: state.style,
 
-    blockCols: Math.round(state.blockCols),
-    blockRows: Math.round(state.blockRows),
+    blockCols: Math.max(1, Math.round(state.blockCols * sheetCols)),
+    blockRows: Math.max(1, Math.round(state.blockRows * sheetRows)),
     lotSize: z(state.lotSizeMm * mm),
     street: z(state.streetMm * mm),
     density: state.density,
