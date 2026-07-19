@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   PAPER_SIZES,
   BASE_PX_PER_MM,
+  CUSTOM_PAPER_ID,
   getPaperSize,
+  resolvePaperSize,
   orientedDimsMm,
   pageMetrics,
   contentRect,
@@ -30,6 +32,45 @@ describe('paper sizes', () => {
     expect(ids).toEqual(
       expect.arrayContaining(['a6', 'a5', 'a4', 'a3', 'letter', 'legal', 'tabloid'])
     );
+  });
+
+  it('exposes the large formats at ISO / Arch dimensions', () => {
+    expect(getPaperSize('a2')).toMatchObject({ widthMm: 420, heightMm: 594 });
+    expect(getPaperSize('a1')).toMatchObject({ widthMm: 594, heightMm: 841 });
+    expect(getPaperSize('a0')).toMatchObject({ widthMm: 841, heightMm: 1189 });
+    expect(getPaperSize('2a0')).toMatchObject({ widthMm: 1189, heightMm: 1682 });
+    expect(getPaperSize('arch-d')).toMatchObject({ widthMm: 609.6, heightMm: 914.4 });
+  });
+});
+
+describe('resolvePaperSize', () => {
+  it('resolves table ids, case-insensitively', () => {
+    expect(resolvePaperSize('a0')).toBe(getPaperSize('a0'));
+    expect(resolvePaperSize('A3')).toBe(getPaperSize('a3'));
+  });
+
+  it('parses a raw WxH millimetre spec', () => {
+    const p = resolvePaperSize('1200x900');
+    expect(p.id).toBe(CUSTOM_PAPER_ID);
+    expect(p.widthMm).toBe(1200);
+    expect(p.heightMm).toBe(900);
+  });
+
+  it('parses the custom: prefixed form and decimals', () => {
+    const p = resolvePaperSize('custom:450.5x600');
+    expect(p.id).toBe(CUSTOM_PAPER_ID);
+    expect(p.widthMm).toBe(450.5);
+    expect(p.heightMm).toBe(600);
+  });
+
+  it('clamps custom dimensions to sane bounds', () => {
+    expect(resolvePaperSize('5000x2')).toMatchObject({ widthMm: 3000, heightMm: 10 });
+  });
+
+  it('throws on malformed specs', () => {
+    expect(() => resolvePaperSize('nope')).toThrow();
+    expect(() => resolvePaperSize('12xx9')).toThrow();
+    expect(() => resolvePaperSize('x900')).toThrow();
   });
 });
 
@@ -65,6 +106,20 @@ describe('pageMetrics', () => {
     // A3 is physically wider than A4, so it carries more lines across despite
     // both being clamped to the same long-edge pixel budget.
     expect(linesAcross('a3')).toBeGreaterThan(linesAcross('a4'));
+  });
+
+  it('a 4096 long-edge cap never triggers for the pre-A2 sizes', () => {
+    // Regression guard: the web app caps pages at 4096px; the sizes that
+    // existed before the large formats must render at exactly the requested
+    // density (goldens depend on it).
+    const legacy = ['a6', 'a5', 'a4', 'a3', 'letter', 'legal', 'tabloid'];
+    for (const id of legacy) {
+      for (const pxPerMm of [2, 3, 4]) {
+        const m = pageMetrics(getPaperSize(id), 'portrait', pxPerMm, 4096);
+        expect(m.pxPerMm).toBe(pxPerMm);
+        expect(m.scale).toBeCloseTo(pxPerMm / BASE_PX_PER_MM);
+      }
+    }
   });
 });
 

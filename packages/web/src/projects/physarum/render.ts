@@ -1,5 +1,6 @@
 import { generatePhysarum, type PhysarumOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetGridFactor } from '../../lib/sheet-scale';
 import type { PhysarumState } from './types';
 
 /**
@@ -11,6 +12,12 @@ import type { PhysarumState } from './types';
  */
 export function renderPhysarum(state: PhysarumState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
+  // Grow the sim grid with the sheet so vein pitch stays near its physical
+  // size instead of stretching. A4 is the anchor (factor exactly 1 there);
+  // growth caps at 2× cols (4× area) to bound sim cost. Agents scale with
+  // the grid area actually gained so trail density — and vein weight —
+  // holds.
+  const sheetK = sheetGridFactor(page);
   const options: PhysarumOptions = {
     width: page.widthPx,
     height: page.heightPx,
@@ -18,9 +25,12 @@ export function renderPhysarum(state: PhysarumState, env: RenderEnv): LayerOutpu
     margin: marginPx,
     seed: state.seed,
     // Simulation params are grid-space — never multiplied by pxPerMm.
-    gridCols: state.gridCols,
+    gridCols: Math.round(state.gridCols * sheetK),
+    // A bigger grid needs a proportionally bigger step budget or the sim
+    // never develops; ×1 at A4 and below, so existing output is untouched.
+    budgetScale: sheetK * sheetK,
     preset: state.preset,
-    agentCount: state.agentCount,
+    agentCount: Math.round(state.agentCount * sheetK * sheetK),
     sensorAngleDeg: state.sensorAngleDeg,
     sensorDistance: state.sensorDistance,
     rotationAngleDeg: state.rotationAngleDeg,

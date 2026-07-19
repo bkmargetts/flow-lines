@@ -1,24 +1,24 @@
 import type { Command } from 'commander';
-import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   imageToPenInk,
   limitStrokeDensity,
-  toSVG,
   pageMetrics,
   contentRect,
-  getPaperSize,
+  resolvePaperSize,
   PEN_INK_STYLES,
   type Orientation,
+  type PageMetrics,
   type PaperFit,
   type PenInkOptions,
   type SVGOptions,
 } from '@flow-lines/core';
 import { loadImage, loadDirectionMap, loadLabelImage } from '../io.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
+import { addTileOptions, writePlotOutput, PAPER_SPEC_HELP, type PageFrame } from '../page.js';
 
 export function registerImage(program: Command) {
-  addSketchOptions(program.command('image'))
+  addTileOptions(addSketchOptions(program.command('image')))
     .description('Render an image as pen-and-ink style hatching for plotting')
     .requiredOption('-i, --input <file>', 'Input image (PNG or JPEG)')
     .option(
@@ -27,10 +27,7 @@ export function registerImage(program: Command) {
     )
     .option('-w, --width <number>', 'Output width in pixels', '800')
     .option('-h, --height <number>', 'Output height in pixels (default: match image aspect)')
-    .option(
-      '--paper <size>',
-      'Plot to a physical sheet (a6,a5,a4,a3,letter,legal,tabloid); overrides --width/--height and exports the SVG in mm'
-    )
+    .option('--paper <size>', PAPER_SPEC_HELP)
     .option('--orientation <o>', 'Paper orientation: portrait or landscape', 'portrait')
     .option('--fit <mode>', 'How the photo sits on the sheet: fit (letterbox) or fill (crop)', 'fit')
     .option('--margin-mm <number>', 'Clear paper border in mm (with --paper)', '10')
@@ -168,13 +165,15 @@ export function registerImage(program: Command) {
       let paperFraming: Pick<PenInkOptions, 'scale' | 'page'> = {};
       let paperSvg: Pick<SVGOptions, 'physicalWidth' | 'physicalHeight'> = {};
       let paperStrokeWidth: number | undefined;
+      let pageMetricsForTiling: PageMetrics | undefined;
 
       if (options.paper) {
         const page = pageMetrics(
-          getPaperSize(String(options.paper).toLowerCase()),
+          resolvePaperSize(String(options.paper)),
           options.orientation as Orientation,
           parseFloat(options.resolution)
         );
+        pageMetricsForTiling = page;
         const marginPx = parseFloat(options.marginMm) * page.pxPerMm;
         const rect = contentRect(
           page.widthPx,
@@ -376,10 +375,20 @@ export function registerImage(program: Command) {
         );
       }
 
-      const svg = toSVG(applySketchFromFlags(result, options, sketchScale(options)), svgOptions);
-      const outputPath = resolve(process.cwd(), options.output);
-
-      writeFileSync(outputPath, svg, 'utf-8');
-      console.log(`\nSaved to: ${outputPath}`);
+      const frame: PageFrame = {
+        width: result.width,
+        height: result.height,
+        marginPx: 0,
+        paperSvg,
+        paperStrokeWidth,
+        page: pageMetricsForTiling,
+        marginMm: options.paper ? parseFloat(options.marginMm) : undefined,
+      };
+      writePlotOutput(
+        applySketchFromFlags(result, options, sketchScale(options)),
+        frame,
+        options,
+        svgOptions
+      );
     });
 }

@@ -47,6 +47,16 @@ export interface FractureOptions {
   margin?: number;
   /** Seed: controls the stress field, nucleation, tip wander, hatch angles */
   seed?: number;
+  /**
+   * Reference min dimension in px — clamps the dimension all feature sizes
+   * derive from (plate relief radius, stress/wander scale, step, hatch
+   * spacing) so cracks and hatch keep their tuned physical size on sheets
+   * larger than the tuning anchor; nucleation counts still ride the real
+   * page, so bigger sheets grow more plates instead of bigger ones. Callers
+   * pass 297mm × pxPerMm (the largest previously-possible short edge); unset
+   * or ≥ the page's min dimension is a no-op.
+   */
+  refMinDim?: number;
   /** Named look preset (default 'mud') */
   preset?: FracturePreset;
 
@@ -161,10 +171,13 @@ export function generateFracture(options: FractureOptions): FlowLinesResult {
   const empty = (): FlowLinesResult => ({ lines: [], width, height, seed });
   if (innerW < 16 || innerH < 16) return empty();
   const minDim = Math.min(innerW, innerH);
+  // Feature sizes anchor at refMinDim on oversized sheets (identity wherever
+  // minDim is smaller); extents/counts keep the real dimensions.
+  const sizingDim = Math.min(minDim, options.refMinDim ?? Infinity);
 
-  const step = clamp(minDim / 220, 2, 5);
+  const step = clamp(sizingDim / 220, 2, 5);
   const captureRadius = Math.max(step * 1.5, options.captureRadius ?? step * 3);
-  const hatchSpacing = Math.max(1.5, options.hatchSpacing ?? minDim / 90);
+  const hatchSpacing = Math.max(1.5, options.hatchSpacing ?? sizingDim / 90);
 
   const simParams: FractureSimParams = {
     x0,
@@ -182,6 +195,7 @@ export function generateFracture(options: FractureOptions): FlowLinesResult {
     captureRadius,
     edgeNucleation,
     step,
+    refMinDim: options.refMinDim,
   };
 
   const random = makeRandom(seed);
@@ -245,7 +259,7 @@ export function generateFracture(options: FractureOptions): FlowLinesResult {
 
   // Facet-hatch the plates between the cracks.
   if (plateHatch && (hatchCoverage > 0 || edgeCurl > 0)) {
-    const cellPx = clamp(minDim / 160, 1, 3);
+    const cellPx = clamp(sizingDim / 160, 1, 3);
     const raster = buildPlateRaster(sim.cracks, x0, y0, x1, y1, cellPx);
     if (raster) {
       const segs = hatchPlates(raster, {

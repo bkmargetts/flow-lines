@@ -1,9 +1,6 @@
 import type { Command } from 'commander';
-import { writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   generateBotanical,
-  toSVG,
   type SVGOptions,
   type BotanicalOptions,
   type BotanicalComposition,
@@ -24,18 +21,15 @@ import {
 } from '@flow-lines/core';
 import { BOTANICAL_PALETTES } from '../palettes.js';
 import { loadGuidePathsFromSvg } from '../guide-paths.js';
-import { resolvePageFrame } from '../page.js';
+import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerBotanical(program: Command) {
-  addSketchOptions(program.command('botanical'))
+  addTileOptions(addSketchOptions(program.command('botanical')))
     .description('Grow procedural, plottable botanical illustrations')
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '1000')
-    .option(
-      '--paper <size>',
-      'Plot to a physical sheet (a6,a5,a4,a3,letter,legal,tabloid); overrides --width/--height and exports the SVG in mm'
-    )
+    .option('--paper <size>', PAPER_SPEC_HELP)
     .option('--orientation <o>', 'Paper orientation: portrait or landscape', 'portrait')
     .option('--margin-mm <number>', 'Clear paper border in mm (with --paper)', '12')
     .option('--pen-width-mm <number>', 'Plotted pen width in mm (with --paper)', '0.3')
@@ -115,7 +109,8 @@ export function registerBotanical(program: Command) {
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
     .option('-o, --output <file>', 'Output file path', 'botanical.svg')
     .action((options) => {
-      const { width, height, marginPx, paperSvg, paperStrokeWidth } = resolvePageFrame(options);
+      const frame = resolvePageFrame(options);
+      const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
 
       const botanicalOptions: BotanicalOptions = {
         width,
@@ -203,9 +198,6 @@ export function registerBotanical(program: Command) {
         ...paperSvg,
       };
 
-      const svg = toSVG(applySketchFromFlags(result, options, sketchScale(options)), svgOptions);
-      const outputPath = resolve(process.cwd(), options.output);
-      writeFileSync(outputPath, svg, 'utf-8');
-      console.log(`\nSaved to: ${outputPath}`);
+      writePlotOutput(applySketchFromFlags(result, options, sketchScale(options)), frame, options, svgOptions);
     });
 }

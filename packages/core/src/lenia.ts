@@ -55,6 +55,14 @@ export interface LeniaOptions {
   // ---- Simulation ----
   /** Simulation grid width in cells; rows derive from the page aspect (default 120) */
   gridCols?: number;
+  /**
+   * Multiplier on the convolution tap budget (default 1, floored at 1).
+   * A physically larger sheet runs a proportionally larger grid; without
+   * more budget the step count collapses and the sim never develops. Only
+   * large-format callers pass it — the base budget itself never changes, so
+   * every existing configuration keeps its exact output.
+   */
+  budgetScale?: number;
   /** Named rule/seed preset (default 'orbium') */
   preset?: LeniaPreset;
   /** Kernel radius in cells (override of the preset's R) */
@@ -183,9 +191,13 @@ export const ORBIUM: number[][] = [
 // Keep the synchronous, main-thread run well bounded (this renders inside a
 // React useMemo, like Conway/RD). Lenia's per-cell cost is the kernel tap
 // count (≈ πR²), so the budget counts convolution multiply-adds, not steps.
-const MAX_COLS = 180;
+const MAX_COLS = 192;
 const MAX_STEPS = 900;
 const MAX_RADIUS = 18;
+// The budget binds at common configurations (it is what keeps the default
+// run fast), so its value is part of the drawing — never change it. Callers
+// rendering a physically larger sheet pass `budgetScale` instead, buying a
+// bigger grid its full step count without touching anyone else's output.
 const TAP_BUDGET = 2e9;
 
 /** A seeded rule-of-thirds intersection, lerped out from centre by `bias`. */
@@ -600,7 +612,8 @@ export function generateLenia(options: LeniaOptions): FlowLinesResult {
   // Bound the synchronous run: cap steps, then trim by the convolution budget.
   let steps = clamp(Math.round(options.steps ?? 280), 0, MAX_STEPS);
   const perStep = cols * rows * kernel.taps;
-  if (perStep * steps > TAP_BUDGET) steps = Math.max(1, Math.floor(TAP_BUDGET / perStep));
+  const tapBudget = TAP_BUDGET * Math.max(1, options.budgetScale ?? 1);
+  if (perStep * steps > tapBudget) steps = Math.max(1, Math.floor(tapBudget / perStep));
 
   const random = makeRandom(seed);
   const sim = simulateLenia(

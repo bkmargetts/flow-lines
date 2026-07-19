@@ -1,5 +1,11 @@
-import type { PaperFit, SketchStyle } from '@flow-lines/core';
+import {
+  PAPER_SIZES,
+  type Orientation,
+  type PaperFit,
+  type SketchStyle,
+} from '@flow-lines/core';
 import { useFrame } from '../FrameContext';
+import { useTileLayout } from '../lib/use-tile-layout';
 import { InfoTip } from './InfoTip';
 import { ColorField } from './ColorField';
 import { EditableValue } from './EditableValue';
@@ -24,6 +30,14 @@ const PAPER_TONES: Array<{ id: string; label: string }> = [
  */
 export function FrameControls() {
   const { frame, updateFrame } = useFrame();
+  const { layout: tileLayout, error: tileError } = useTileLayout();
+  const tileSummary =
+    tileError ??
+    (tileLayout
+      ? tileLayout.single
+        ? 'Fits on 1 sheet'
+        : `${tileLayout.rows} × ${tileLayout.cols} sheets (${tileLayout.tiles.length})`
+      : null);
   return (
     <div className="frame-controls">
       <h3 className="section-title">Page</h3>
@@ -82,6 +96,146 @@ export function FrameControls() {
         <label className="checkbox-label">
           <input
             type="checkbox"
+            checked={frame.tileEnabled}
+            onChange={(e) => updateFrame({ tileEnabled: e.target.checked })}
+          />
+          Split across sheets
+          <InfoTip text="Plot a big drawing on paper your plotter can actually hold: the sheet above stays the artwork's true size, and export slices it across a grid of smaller sheets to trim and assemble. The drawing itself is untouched — each sheet is an exact slice of the same plot. Use 'Download sheets' to get one SVG per sheet." />
+        </label>
+        {frame.tileEnabled && tileSummary && (
+          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{tileSummary}</div>
+        )}
+      </div>
+
+      {frame.tileEnabled && (
+        <div className="control-group">
+          <label>Sheet size</label>
+          <select
+            value={frame.tileSheet}
+            onChange={(e) => updateFrame({ tileSheet: e.target.value })}
+          >
+            {PAPER_SIZES.map((size) => (
+              <option key={size.id} value={size.id}>
+                {size.name} ({size.widthMm}×{size.heightMm}mm)
+              </option>
+            ))}
+          </select>
+          <label>Sheet orientation</label>
+          <div className="segmented">
+            <button
+              type="button"
+              className={frame.tileOrientation === 'portrait' ? 'active' : ''}
+              onClick={() => updateFrame({ tileOrientation: 'portrait' as Orientation })}
+            >
+              Portrait
+            </button>
+            <button
+              type="button"
+              className={frame.tileOrientation === 'landscape' ? 'active' : ''}
+              onClick={() => updateFrame({ tileOrientation: 'landscape' as Orientation })}
+            >
+              Landscape
+            </button>
+          </div>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={frame.tilePerSheetMargin}
+              onChange={(e) => updateFrame({ tilePerSheetMargin: e.target.checked })}
+            />
+            Margin on each sheet
+            <InfoTip text="On: every sheet keeps the page margin as clear paper around its slice — safe for plotters that can't reach the paper edge. Off: sheets are raw edge-to-edge slices of the drawing, so the margin only remains around the assembled whole — fewer sheets, but the pen must plot right to the paper edge." />
+          </label>
+          {frame.tilePerSheetMargin && (
+            <>
+              <label>
+                Assembly
+                <InfoTip text="Trim & butt: the sheets carry the complete drawing; cut the margins off at the marks and butt them for a seamless whole. Stitch whole: tape full sheets edge-to-edge, margins and all — the picture lines up across the seams because the strips that fall under the margins are silently dropped from the drawing." />
+              </label>
+              <div className="segmented">
+                <button
+                  type="button"
+                  className={frame.tileAssembly === 'trim' ? 'active' : ''}
+                  onClick={() => updateFrame({ tileAssembly: 'trim' })}
+                >
+                  Trim &amp; butt
+                </button>
+                <button
+                  type="button"
+                  className={frame.tileAssembly === 'stitch' ? 'active' : ''}
+                  onClick={() => updateFrame({ tileAssembly: 'stitch' })}
+                >
+                  Stitch whole
+                </button>
+              </div>
+            </>
+          )}
+          {(!frame.tilePerSheetMargin || frame.tileAssembly === 'trim') && (
+          <>
+          <label>
+            Overlap{" "}
+            <EditableValue
+              value={frame.tileOverlapMm}
+              min={0}
+              max={20}
+              step={1}
+              onChange={(v) => updateFrame({ tileOverlapMm: v })}
+            >
+              {frame.tileOverlapMm}mm
+            </EditableValue>
+            <InfoTip text="Adjacent sheets repeat this much artwork along their shared edge, as a glue flap: cut one sheet on the trim line and paste its neighbour's flap behind it. 0 means sheets butt-join exactly." />
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="20"
+            step="1"
+            value={frame.tileOverlapMm}
+            onChange={(e) => updateFrame({ tileOverlapMm: parseInt(e.target.value, 10) })}
+          />
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={frame.tileMarks}
+              onChange={(e) => updateFrame({ tileMarks: e.target.checked })}
+            />
+            Trim marks
+            <InfoTip text="Short ticks on the margin line wherever two sheets meet, on their own 'tile-marks' pen layer — cut along them and glue any overlap flap behind the neighbouring sheet. Held clear of the paper edge so the pen never runs off. Needs a per-sheet margin (with sheets edge-to-edge there is nothing to cut)." />
+          </label>
+          {frame.tileMarks && (
+            <>
+              <label>
+                Mark offset{" "}
+                <EditableValue
+                  value={frame.tileMarkOffsetMm}
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  onChange={(v) => updateFrame({ tileMarkOffsetMm: v })}
+                >
+                  {frame.tileMarkOffsetMm}mm
+                </EditableValue>
+                <InfoTip text="Pulls each tick back from the margin line by this gap, toward the paper edge. 0 ends the tick exactly on the line. The paper-edge safety clearance always wins — if the margin is too crowded the ticks shorten and eventually drop." />
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                step="0.5"
+                value={frame.tileMarkOffsetMm}
+                onChange={(e) => updateFrame({ tileMarkOffsetMm: parseFloat(e.target.value) })}
+              />
+            </>
+          )}
+          </>
+          )}
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
             checked={frame.borderEnabled}
             onChange={(e) => updateFrame({ borderEnabled: e.target.checked })}
           />
@@ -133,6 +287,44 @@ export function FrameControls() {
             step="1"
             value={frame.borderCornerRadiusMm}
             onChange={(e) => updateFrame({ borderCornerRadiusMm: parseInt(e.target.value, 10) })}
+          />
+        </div>
+      )}
+
+      <div className="control-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={frame.crossesEnabled}
+            onChange={(e) => updateFrame({ crossesEnabled: e.target.checked })}
+          />
+          Registration crosses
+          <InfoTip text="A small + in each corner of the sheet — every sheet, when splitting — on its own 'register' pen layer: re-register the paper between pen swaps, or plot them in a light ink. They live entirely in the blank margin corner and drop out where they don't fit, so they need a margin." />
+        </label>
+      </div>
+
+      {frame.crossesEnabled && (
+        <div className="control-group">
+          <label>
+            Cross offset{" "}
+            <EditableValue
+              value={frame.crossOffsetMm}
+              min={0}
+              max={15}
+              step={0.5}
+              onChange={(v) => updateFrame({ crossOffsetMm: v })}
+            >
+              {frame.crossOffsetMm}mm
+            </EditableValue>
+            <InfoTip text="Distance from the paper edge to each cross's centre. The plotter-safety clearance always wins, so a cross never sits closer to the edge than is safe to stroke." />
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="15"
+            step="0.5"
+            value={frame.crossOffsetMm}
+            onChange={(e) => updateFrame({ crossOffsetMm: parseFloat(e.target.value) })}
           />
         </div>
       )}

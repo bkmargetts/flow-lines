@@ -1,5 +1,6 @@
 import { generateMachine, type MachineOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetAreaFactor } from '../../lib/sheet-scale';
 import type { MachineState } from './types';
 
 /** Pure render for the Machine: state + page → lines. mm settings convert to
@@ -21,6 +22,9 @@ export function renderMachine(state: MachineState, env: RenderEnv): LayerOutput 
     mechanisms: state.mechanisms,
     frameDensity: state.frameDensity,
     cutaways: Math.max(0, Math.min(3, Math.round(state.cutaways))),
+    // Part-count ceilings grow with the physical sheet, so an A0 fills with
+    // more mechanisms at the same gear size (exactly 1 at A4 and below).
+    sheetFactor: sheetAreaFactor(page),
     hiddenLines: state.hiddenLines,
 
     hatchSpacing: Math.max(0.5, state.hatchMm * mm),

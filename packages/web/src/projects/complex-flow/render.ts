@@ -6,6 +6,7 @@ import {
 } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
 import { buildPaletteLayerColors } from '../../lib/palette';
+import { sheetAreaFactor } from '../../lib/sheet-scale';
 import type { ComplexFlowState } from './types';
 
 /**
@@ -17,6 +18,14 @@ import type { ComplexFlowState } from './types';
  */
 export function renderComplexFlow(state: ComplexFlowState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
+  // The composition — a few big swirls spanning the sheet — IS this module's
+  // identity, so the plane map stays page-relative and the swirls grow with
+  // the paper. What must not thin out is the ink: streamline count and each
+  // streamline's step count both ride the sheet's linear growth, so total
+  // ink length rides the area and an A0 field carries the same stroke
+  // coverage an A4 gets, with arcs long enough to traverse the grown swirls
+  // (×1 at A4 and below, goldens untouched).
+  const linF = Math.sqrt(sheetAreaFactor(page));
 
   const options: ComplexFlowOptions = {
     width: page.widthPx,
@@ -32,8 +41,8 @@ export function renderComplexFlow(state: ComplexFlowState, env: RenderEnv): Laye
     manualZerosPx: state.manualZeros,
     manualPolesPx: state.manualPoles,
     seedLayout: state.seedLayout,
-    seedCount: state.seedCount,
-    stepsPerDir: state.stepsPerDir,
+    seedCount: Math.round(state.seedCount * linF),
+    stepsPerDir: Math.round(state.stepsPerDir * linF),
     stepLength: state.stepLength,
     stepJitter: state.stepJitter,
     wobble: state.wobble,

@@ -20,6 +20,8 @@ export interface TreeParams {
   usableW: number;
   style: TreeStyle;
   lightX: number; // -1 | 1 — shade arcs go on the away side
+  /** (0,1] shrink for the frame-proportional tree size / cluster spread (1 = historical sizing). */
+  featureScale?: number;
   rng: () => number;
   /** Optional 0..1 acceptance weight — cluster centres retry toward high spots. */
   weight?: (x: number, y: number) => number;
@@ -145,6 +147,10 @@ function drawScrub(out: FlowLine[], t: TreeInstance, rng: () => number): Point[]
 export function drawTrees(out: FlowLine[], p: TreeParams): Point[][] {
   const hulls: Point[][] = [];
   if (p.count <= 0) return hulls;
+  // Tree size and cluster spread are proportional to the frame width; on
+  // oversized sheets the caller shrinks them back to physical size (×1 on
+  // every historical size — bit-identical).
+  const fs = p.featureScale ?? 1;
   const x0 = p.crest[0].x;
   const x1 = p.crest[p.crest.length - 1].x;
   let yMin = Infinity;
@@ -169,11 +175,11 @@ export function drawTrees(out: FlowLine[], p: TreeParams): Point[][] {
   const trees: TreeInstance[] = [];
   for (let i = 0; i < p.count; i++) {
     const cl = clusters[Math.floor(p.rng() * clusters.length)];
-    const x = Math.min(x1 - 4, Math.max(x0 + 4, cl.x + gauss(p.rng) * p.usableW * 0.055));
+    const x = Math.min(x1 - 4, Math.max(x0 + 4, cl.x + gauss(p.rng) * p.usableW * fs * 0.055));
     const baseY = sampleProfileY(p.crest, x);
     // Lower on the page = nearer = larger.
     const depth = yMax > yMin ? clamp01((baseY - yMin) / (yMax - yMin)) : 0.5;
-    const s = p.usableW * (0.02 + 0.014 * p.rng()) * lerp(0.72, 1.25, depth);
+    const s = p.usableW * fs * (0.02 + 0.014 * p.rng()) * lerp(0.72, 1.25, depth);
     trees.push({ x, baseY, s, kind: cl.kind });
   }
   // Far to near: each nearer canopy hull erases the tree lines behind it

@@ -57,6 +57,13 @@ export interface ReactionDiffusionOptions {
   // ---- Simulation ----
   /** Simulation grid width in cells; rows derive from the page aspect (default 180) */
   gridCols?: number;
+  /**
+   * Multiplier on the step budget (default 1, floored at 1). A physically
+   * larger sheet runs a bigger grid; without more budget the step count
+   * collapses. Only large-format callers pass it — the base budget never
+   * changes, so existing configurations keep their output.
+   */
+  budgetScale?: number;
   /** Named feed/kill preset (default 'coral') */
   preset?: RDPreset;
   /** Feed rate f override; when set, ignores the preset's f */
@@ -142,8 +149,11 @@ export const RD_PRESETS: Record<RDPreset, { f: number; k: number }> = {
 };
 
 // Keep the synchronous, main-thread run well bounded (this renders inside a
-// React useMemo, like Conway). Cost ≈ cols·rows·steps cell-updates.
-const MAX_COLS = 250;
+// React useMemo, like Conway). Cost ≈ cols·rows·steps cell-updates. The grid
+// ceiling admits an A0 sheet's 2×-grown grid; the step budget can bind at
+// existing configurations (it is part of their drawing), so its base value
+// never changes — large-format callers pass `budgetScale` instead.
+const MAX_COLS = 384;
 const MAX_STEPS = 6000;
 const STEP_BUDGET = 4.5e8;
 
@@ -453,7 +463,8 @@ export function generateReactionDiffusion(options: ReactionDiffusionOptions): Fl
   // Bound the synchronous run: cap steps, then trim further if the grid is big.
   let steps = clamp(Math.round(options.steps ?? 4000), 0, MAX_STEPS);
   const cellCount = cols * rows;
-  if (cellCount * steps > STEP_BUDGET) steps = Math.floor(STEP_BUDGET / cellCount);
+  const stepBudget = STEP_BUDGET * Math.max(1, options.budgetScale ?? 1);
+  if (cellCount * steps > stepBudget) steps = Math.floor(stepBudget / cellCount);
 
   const random = makeRandom(seed);
   const sim = simulateRD(

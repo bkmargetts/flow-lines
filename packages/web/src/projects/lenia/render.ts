@@ -1,5 +1,6 @@
 import { generateLenia, type LeniaOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetGridFactor } from '../../lib/sheet-scale';
 import type { LeniaState } from './types';
 
 /**
@@ -11,6 +12,13 @@ import type { LeniaState } from './types';
  */
 export function renderLenia(state: LeniaState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
+  // Grow the sim grid with the sheet so cells — and creatures — stay near
+  // their physical size instead of stretching to fill it. A4 is the anchor
+  // (factor exactly 1 there, so smaller sheets and the goldens are
+  // untouched); growth caps at 2× cols (4× area) because convolution cost
+  // rises with the cell count. Populations scale with the grid area actually
+  // gained so creature density holds.
+  const sheetK = sheetGridFactor(page);
   const options: LeniaOptions = {
     width: page.widthPx,
     height: page.heightPx,
@@ -18,7 +26,10 @@ export function renderLenia(state: LeniaState, env: RenderEnv): LayerOutput {
     margin: marginPx,
     seed: state.seed,
     // Simulation params are grid-space — never multiplied by pxPerMm.
-    gridCols: state.gridCols,
+    gridCols: Math.round(state.gridCols * sheetK),
+    // A bigger grid needs a proportionally bigger step budget or the sim
+    // never develops; ×1 at A4 and below, so existing output is untouched.
+    budgetScale: sheetK * sheetK,
     preset: state.preset,
     kernelRadius: state.kernelRadius,
     mu: state.mu,
@@ -26,7 +37,7 @@ export function renderLenia(state: LeniaState, env: RenderEnv): LayerOutput {
     timeRes: state.timeRes,
     beta: state.beta,
     seedPattern: state.seedPattern,
-    seedSpots: state.seedSpots,
+    seedSpots: Math.round(state.seedSpots * sheetK * sheetK),
     steps: state.steps,
     longExposure: state.longExposure,
     decay: state.decay,

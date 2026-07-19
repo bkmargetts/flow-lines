@@ -87,7 +87,9 @@ export type { PenInkOptions, FocusOptions, PenInkStyle } from './pen-ink/index.j
 export {
   PAPER_SIZES,
   BASE_PX_PER_MM,
+  CUSTOM_PAPER_ID,
   getPaperSize,
+  resolvePaperSize,
   orientedDimsMm,
   pageMetrics,
   contentRect,
@@ -99,6 +101,22 @@ export type {
   PageMetrics,
   Rect,
 } from './paper-sizes.js';
+
+// Multi-sheet tiling (split one plot across a grid of smaller sheets)
+export {
+  computeTiling,
+  sliceResultIntoTiles,
+  tileLabel,
+  registrationCrosses,
+  TILE_MARKS_LAYER,
+  REGISTRATION_LAYER,
+} from './tiling.js';
+export type {
+  TilingOptions,
+  TileSpec,
+  TilingLayout,
+  TileResult,
+} from './tiling.js';
 
 // Semantic region labels
 export {

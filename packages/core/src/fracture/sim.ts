@@ -50,6 +50,14 @@ export interface FractureSimParams {
   edgeNucleation: number;
   /** Growth step length, px. */
   step: number;
+  /**
+   * Optional cap (px) on the dimension used for feature sizing (stress-noise
+   * scale, wander scale, relief radius). On sheets whose min dimension exceeds
+   * it, plates keep their tuned physical size while nucleation counts — which
+   * ride the real w/h — grow to fill the extra area. Unset = min frame
+   * dimension exactly as before.
+   */
+  refMinDim?: number;
 }
 
 export interface FractureCrack {
@@ -74,8 +82,12 @@ export interface FractureSimResult {
   junctions: FractureJunction[];
 }
 
-// Runaway guards, far above any sensible parameterisation.
-const MAX_CRACKS = 1200;
+// Runaway guards, far above any sensible parameterisation. MAX_CRACKS is
+// sized so an A0-class sheet — where feature sizes are clamped by `refMinDim`
+// and counts grow ~16× with the area — still fits its full hierarchy; at
+// previously-possible sizes counts stay in the low hundreds, far below either
+// value, so raising it changes nothing there.
+const MAX_CRACKS = 8000;
 const MAX_STEPS_PER_TIP = 4000;
 
 interface StoredSegment {
@@ -226,10 +238,13 @@ export function simulateFracture(
   const h = y1 - y0;
   if (w <= 4 || h <= 4) return { cracks: [], junctions: [] };
   const minDim = Math.min(w, h);
+  // Feature sizes (stress scale, wander scale, relief radius) anchor at
+  // `refMinDim` on oversized sheets; counts and budgets keep the real dims.
+  const sizingDim = Math.min(minDim, p.refMinDim ?? Infinity);
   const diag = Math.hypot(w, h);
   const step = p.step;
 
-  const stressF = 1 / Math.max(1e-6, p.stressScale * minDim);
+  const stressF = 1 / Math.max(1e-6, p.stressScale * sizingDim);
   const stress = (x: number, y: number): number =>
     0.5 + 0.5 * stressNoise.fbm(x * stressF, y * stressF, 4);
 
@@ -239,7 +254,7 @@ export function simulateFracture(
   // independent straight cracks + perpendicular capture is what closes the
   // network into polygonal plates. The noise only adds a weak, large-scale
   // wander so long cracks curve organically instead of ruling themselves.
-  const wanderF = 1 / Math.max(1e-6, 0.35 * minDim);
+  const wanderF = 1 / Math.max(1e-6, 0.35 * sizingDim);
   const wanderAt = (x: number, y: number): number =>
     orientNoise.noise2D(x * wanderF, y * wanderF) * 0.5;
 
@@ -262,9 +277,11 @@ export function simulateFracture(
   const segCount: number[] = [];
 
   // Base relief radius: how much sheet a gen-0 crack "drains". crackDensity
-  // 0..1 sweeps roughly 1/2..1/10th of the min dimension — primaries stay few
-  // enough to read as the big committed spans; generations do the subdividing.
-  const R0 = minDim / (2 + 10 * clamp(p.crackDensity, 0, 1));
+  // 0..1 sweeps roughly 1/2..1/10th of the (sizing) min dimension — primaries
+  // stay few enough to read as the big committed spans; generations do the
+  // subdividing. On oversized sheets the radius holds physical, so the
+  // nucleation grid (real w/h ÷ Rg) simply yields more plates.
+  const R0 = sizingDim / (2 + 10 * clamp(p.crackDensity, 0, 1));
 
   const inFrame = (x: number, y: number): boolean => x >= x0 && x <= x1 && y >= y0 && y <= y1;
 

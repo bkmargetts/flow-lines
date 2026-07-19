@@ -32,6 +32,10 @@ export function renderFracture(state: FractureState, env: RenderEnv): LayerOutpu
     hatchAngleDeg: state.hatchAngleDeg,
     edgeCurl: state.edgeCurl,
     wobble: state.wobble,
+    // Anchor feature sizes at the largest previously-possible short edge
+    // (A3, 297mm) so bigger sheets grow MORE plates at the same physical
+    // crack/hatch scale; a no-op at A4-and-below (goldens untouched).
+    refMinDim: 297 * page.pxPerMm,
   };
 
   const result = generateFracture(options);

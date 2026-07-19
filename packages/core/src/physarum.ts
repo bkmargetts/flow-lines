@@ -49,6 +49,13 @@ export interface PhysarumOptions {
   // ---- Simulation ----
   /** Simulation grid width in cells; rows derive from the page aspect (default 200) */
   gridCols?: number;
+  /**
+   * Multiplier on the step budgets (default 1, floored at 1). A physically
+   * larger sheet runs a bigger grid and more agents; without more budget the
+   * step count collapses. Only large-format callers pass it — the base
+   * budgets never change, so existing configurations keep their output.
+   */
+  budgetScale?: number;
   /** Named behaviour preset (default 'network') */
   preset?: PhysarumPreset;
   /** Number of agents (override of the preset's density-derived count) */
@@ -156,9 +163,13 @@ export const PHYSARUM_PRESETS: Record<
 // Keep the synchronous, main-thread run well bounded (this renders inside a
 // React useMemo, like Conway/RD/Lenia). Per-step cost is agents (sense+move) plus
 // cells (diffuse+decay); cap each product.
-const MAX_COLS = 240;
+// Grid/agent ceilings sized so an A0 sheet's 2×-grown grid (and its 4×
+// agents) fit; the step budgets can bind at existing configurations (they
+// are what keeps runs fast), so their base values never change — large-
+// format callers pass `budgetScale` instead.
+const MAX_COLS = 408;
 const MAX_STEPS = 1200;
-const MAX_AGENTS = 60000;
+const MAX_AGENTS = 200000;
 const AGENT_STEP_BUDGET = 4e7;
 const FIELD_STEP_BUDGET = 4.5e8;
 
@@ -559,9 +570,12 @@ export function generatePhysarum(options: PhysarumOptions): FlowLinesResult {
 
   // Bound the synchronous run: cap steps, then trim by both budgets.
   let steps = clamp(Math.round(options.steps ?? 400), 0, MAX_STEPS);
-  if (agentCount * steps > AGENT_STEP_BUDGET) steps = Math.max(1, Math.floor(AGENT_STEP_BUDGET / agentCount));
+  const budgetK = Math.max(1, options.budgetScale ?? 1);
+  if (agentCount * steps > AGENT_STEP_BUDGET * budgetK)
+    steps = Math.max(1, Math.floor((AGENT_STEP_BUDGET * budgetK) / agentCount));
   const cellCount = cols * rows;
-  if (cellCount * steps > FIELD_STEP_BUDGET) steps = Math.max(1, Math.floor(FIELD_STEP_BUDGET / cellCount));
+  if (cellCount * steps > FIELD_STEP_BUDGET * budgetK)
+    steps = Math.max(1, Math.floor((FIELD_STEP_BUDGET * budgetK) / cellCount));
 
   // Trail density: how many of the agents have their trajectory traced. A good
   // contour network wants many agents, but every traced trail adds ink, so this

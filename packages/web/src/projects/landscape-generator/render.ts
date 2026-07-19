@@ -1,5 +1,6 @@
 import { generateLandscape, type LandscapeOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
+import { sheetAreaFactor } from '../../lib/sheet-scale';
 import type { LandscapeState } from './types';
 import { getLandscapePalette } from './palettes';
 
@@ -18,6 +19,15 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
   const z = (px: number): number => px / zoom;
   const usableW = page.widthPx - 2 * marginPx;
   const usableH = page.heightPx - 2 * marginPx;
+
+  // Bigger sheets carry a bigger census at the same physical feature scale:
+  // area-census counts (trees, rocks, birds, headlands) scale with sheet area,
+  // ridges by its square root (they stack vertically — per-edge, not
+  // per-area), and featureScale pins the frame-proportional tree size to the
+  // largest previously-possible short edge (297mm — A3), so every old size is
+  // exactly identity (f = 1, featureScale clamps to 1).
+  const f = sheetAreaFactor(page);
+  const featureScale = Math.min(1, (297 * mm) / usableW);
 
   const options: LandscapeOptions = {
     width: page.widthPx,
@@ -49,7 +59,7 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     waterDash: z(state.waterDashMm * mm),
     waterGap: z(state.waterGapMm * mm),
 
-    ridgeCount: Math.round(state.ridgeCount),
+    ridgeCount: Math.round(state.ridgeCount * Math.sqrt(f)),
     ridgeAmp: z(state.ridgeAmpMm * mm),
     ridgeFreq: state.ridgeFreq,
     ridgeOctaves: Math.round(state.ridgeOctaves),
@@ -61,7 +71,7 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     ridgeSharpness: state.ridgeSharpness,
     atmosphere: state.atmosphere,
 
-    headlands: Math.round(state.headlands),
+    headlands: Math.round(state.headlands * f),
     foreground: state.foreground,
     foregroundSide: state.foregroundSide,
     focus: state.focus,
@@ -72,11 +82,12 @@ export function renderLandscape(state: LandscapeState, env: RenderEnv): LayerOut
     taper: state.taper,
 
     clouds: state.clouds,
-    trees: Math.round(state.trees),
+    trees: Math.round(state.trees * f),
     treeStyle: state.treeStyle,
-    birds: Math.round(state.birds),
+    birds: Math.round(state.birds * f),
+    featureScale,
 
-    rocks: Math.round(state.rocks),
+    rocks: Math.round(state.rocks * f),
     rockMaxSize: z(state.rockMaxSizeMm * mm),
     rockHatchSpacing: Math.max(1.2, z(state.rockHatchSpacingMm * mm)),
 

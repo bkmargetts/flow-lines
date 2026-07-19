@@ -73,6 +73,22 @@ export interface GestureOptions {
   passSpacing?: number;
   /** Hand-drawn wobble amplitude in px — low: the spines are already curved (default 0.5) */
   wobble?: number;
+  /**
+   * Reference min dimension in px — clamps the dimension mark sizes derive
+   * from (gesture/whip lengths, knot radii, bundle pitch, max stroke width)
+   * so marks keep their tuned physical size on sheets larger than the tuning
+   * anchor, while placement still spans the real page. Callers pass
+   * 297mm × pxPerMm (the largest previously-possible short edge); unset or
+   * ≥ the page's min dimension is a no-op.
+   */
+  refMinDim?: number;
+  /**
+   * Sheet-area growth factor (physical area ÷ A4 area, floored at 1 —
+   * default 1). Gesture/whip/knot counts are multiplied by it after their
+   * archetype draws, so a bigger sheet carries more same-sized marks instead
+   * of a fit-scaled enlargement. 1 is the exact identity.
+   */
+  sheetFactor?: number;
   /** Chain strokes and order them to cut pen travel (default true) */
   optimize?: boolean;
 }
@@ -102,6 +118,10 @@ export function generateGesture(options: GestureOptions): FlowLinesResult {
   const workH = height - 2 * margin;
   if (workW < 40 || workH < 40) return empty();
   const minDim = Math.min(workW, workH);
+  // Mark sizes anchor at refMinDim on oversized sheets (identity wherever
+  // minDim is smaller); counts grow with the sheet's area factor instead.
+  const sizingDim = Math.min(minDim, options.refMinDim ?? Infinity);
+  const sheetFactor = Math.max(1, options.sheetFactor ?? 1);
 
   const rng = makeRandom(seed);
   const noise = createNoise(seed + 4243);
@@ -116,20 +136,28 @@ export function generateGesture(options: GestureOptions): FlowLinesResult {
   const knotDraw = rng();
   const intIn = (range: [number, number], u: number): number =>
     range[0] + Math.floor(u * (range[1] - range[0] + 1)) % (range[1] - range[0] + 1);
-  const gestureCount = Math.max(
-    1,
-    options.gestures && options.gestures > 0 ? Math.round(options.gestures) : intIn(arch.gestures, gestureDraw)
+  // Counts scale with the sheet's area factor AFTER the archetype draws (the
+  // rng stream never shifts; ×1 is the exact identity) — a big sheet asks for
+  // more same-sized marks, and the placement vetoes still enforce restraint.
+  const scaleCount = (n: number): number => Math.round(n * sheetFactor);
+  const gestureCount = scaleCount(
+    Math.max(
+      1,
+      options.gestures && options.gestures > 0 ? Math.round(options.gestures) : intIn(arch.gestures, gestureDraw)
+    )
   );
-  const whipCount =
-    options.whips !== undefined && options.whips >= 0 ? Math.round(options.whips) : intIn(arch.whips, whipDraw);
-  const knotCount =
-    options.knots !== undefined && options.knots >= 0 ? Math.round(options.knots) : intIn(arch.knots, knotDraw);
+  const whipCount = scaleCount(
+    options.whips !== undefined && options.whips >= 0 ? Math.round(options.whips) : intIn(arch.whips, whipDraw)
+  );
+  const knotCount = scaleCount(
+    options.knots !== undefined && options.knots >= 0 ? Math.round(options.knots) : intIn(arch.knots, knotDraw)
+  );
 
   const energy = clamp01(energyOpt);
   const dryness = clamp01((options.dryness ?? 0.5) + arch.drynessBias);
   const spatterAmt = clamp01(spatter + arch.spatterBias);
   // Cap the half-width at what the lane cap can actually fill solid.
-  const maxHalf = Math.min(minDim * (0.015 + 0.085 * clamp01(inkWeight)) * arch.inkScale, 18 * passSpacing);
+  const maxHalf = Math.min(sizingDim * (0.015 + 0.085 * clamp01(inkWeight)) * arch.inkScale, 18 * passSpacing);
 
   const comp = compose(
     {
@@ -146,6 +174,7 @@ export function generateGesture(options: GestureOptions): FlowLinesResult {
       balance: clamp01(balance),
       negativeSpace: clamp01(negativeSpace),
       passSpacing,
+      refMinDim: options.refMinDim,
     },
     rng,
     noise
@@ -174,8 +203,9 @@ export function generateGesture(options: GestureOptions): FlowLinesResult {
     lines.push(renderKnot(k, noise, makeRandom(subSeed(seed, 500 + i))));
   });
 
-  // Spatter off every fast release (primaries and whips), globally capped.
-  let spatterBudget = 80;
+  // Spatter off every fast release (primaries and whips), globally capped —
+  // the cap rides the sheet factor so big sheets keep their spatter share.
+  let spatterBudget = Math.round(80 * sheetFactor);
   if (spatterAmt > 0) {
     const sources = [
       ...comp.gestures.map((g) => ({ spine: g.spine, energy: g.energy, half: g.maxHalf })),
