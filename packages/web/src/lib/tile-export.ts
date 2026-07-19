@@ -4,6 +4,7 @@ import {
   toSVG,
   toSVGLayers,
   TILE_MARKS_LAYER,
+  TILE_CROSSES_LAYER,
   type FlowLinesResult,
   type PageMetrics,
   type SVGOptions,
@@ -37,11 +38,12 @@ export function sheetsZipEntries(
       ...svgOptions,
       physicalWidth: t.physicalWidth,
       physicalHeight: t.physicalHeight,
-      ...(opts.registrationMarks
+      ...(opts.registrationMarks || opts.registrationCrosses
         ? {
             layerColors: {
               ...svgOptions.layerColors,
               [TILE_MARKS_LAYER]: svgOptions.strokeColor ?? '#111111',
+              [TILE_CROSSES_LAYER]: svgOptions.strokeColor ?? '#111111',
             },
           }
         : {}),

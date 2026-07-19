@@ -9,6 +9,7 @@ import {
   sliceResultIntoTiles,
   tileLabel,
   TILE_MARKS_LAYER,
+  TILE_CROSSES_LAYER,
   type TilingOptions,
 } from './tiling.js';
 import type { FlowLinesResult, Point } from './flow-lines.js';
@@ -327,6 +328,75 @@ describe('sliceResultIntoTiles', () => {
     );
     for (const s of marked) {
       expect(s.result.lines.some((l) => l.layer === TILE_MARKS_LAYER)).toBe(false);
+    }
+  });
+
+  it('registration crosses: one + per corner, centred at the offset, inside the blank corner', () => {
+    const opts = baseOpts({ registrationCrosses: true, crossOffsetMm: 3 });
+    const layout = computeTiling(a0, opts);
+    const sliced = sliceResultIntoTiles(makeResult(), a0, layout, opts);
+    const marginPx = 10 * a0.pxPerMm;
+    const offsetPx = 3 * a0.pxPerMm;
+    const half = 1.5 * a0.pxPerMm;
+    for (const s of sliced) {
+      const { widthPx: w, heightPx: h } = s.tile;
+      const crosses = s.result.lines.filter((l) => l.layer === TILE_CROSSES_LAYER);
+      // 4 corners × 2 strokes per +.
+      expect(crosses).toHaveLength(8);
+      for (const line of crosses) {
+        for (const p of line.points) {
+          // Entirely inside a blank margin corner: within marginPx of both a
+          // horizontal and a vertical paper edge.
+          expect(Math.min(p.x, w - p.x)).toBeLessThanOrEqual(marginPx + 1e-6);
+          expect(Math.min(p.y, h - p.y)).toBeLessThanOrEqual(marginPx + 1e-6);
+        }
+        // Stroke midpoint = the cross centre, at the offset from both edges.
+        const [a, b] = line.points;
+        const cx = (a.x + b.x) / 2;
+        const cy = (a.y + b.y) / 2;
+        expect(Math.min(cx, w - cx)).toBeCloseTo(offsetPx, 6);
+        expect(Math.min(cy, h - cy)).toBeCloseTo(offsetPx, 6);
+        expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeCloseTo(2 * half, 6);
+      }
+    }
+    // No crosses without the flag (the base marks test already covers the
+    // marks layer; ensure crosses don't leak in).
+    const plain = sliceResultIntoTiles(makeResult(), a0, layout, baseOpts());
+    for (const s of plain) {
+      expect(s.result.lines.some((l) => l.layer === TILE_CROSSES_LAYER)).toBe(false);
+    }
+  });
+
+  it('crosses clamp away from the paper edge and drop when the margin cannot hold them', () => {
+    // Offset 0 → clamped to clearance + half, never at the edge.
+    const clamped = baseOpts({ registrationCrosses: true, crossOffsetMm: 0 });
+    const slicedClamped = sliceResultIntoTiles(
+      makeResult(),
+      a0,
+      computeTiling(a0, clamped),
+      clamped
+    );
+    const clearance = 1.5 * a0.pxPerMm;
+    for (const s of slicedClamped) {
+      for (const line of s.result.lines) {
+        if (line.layer !== TILE_CROSSES_LAYER) continue;
+        for (const p of line.points) {
+          expect(Math.min(p.x, p.y, s.tile.widthPx - p.x, s.tile.heightPx - p.y)).toBeGreaterThanOrEqual(
+            clearance - 1e-6
+          );
+        }
+      }
+    }
+    // Offset so deep the cross would reach the artwork → dropped.
+    const tooDeep = baseOpts({ registrationCrosses: true, crossOffsetMm: 9.5 });
+    const slicedDeep = sliceResultIntoTiles(
+      makeResult(),
+      a0,
+      computeTiling(a0, tooDeep),
+      tooDeep
+    );
+    for (const s of slicedDeep) {
+      expect(s.result.lines.some((l) => l.layer === TILE_CROSSES_LAYER)).toBe(false);
     }
   });
 

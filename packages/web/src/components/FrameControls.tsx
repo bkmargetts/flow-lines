@@ -201,6 +201,40 @@ export function FrameControls() {
               />
             </>
           )}
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={frame.tileCrosses}
+              onChange={(e) => updateFrame({ tileCrosses: e.target.checked })}
+            />
+            Registration crosses
+            <InfoTip text="A small + in each corner of every sheet, on its own 'tile-crosses' pen layer — re-register the paper between pen swaps, or plot them in a light ink. They live entirely in the blank margin corner and drop out where they don't fit. Needs a per-sheet margin." />
+          </label>
+          {frame.tileCrosses && (
+            <>
+              <label>
+                Cross offset{" "}
+                <EditableValue
+                  value={frame.tileCrossOffsetMm}
+                  min={0}
+                  max={15}
+                  step={0.5}
+                  onChange={(v) => updateFrame({ tileCrossOffsetMm: v })}
+                >
+                  {frame.tileCrossOffsetMm}mm
+                </EditableValue>
+                <InfoTip text="Distance from the paper edge to each cross's centre. The plotter-safety clearance always wins, so a cross never sits closer to the edge than is safe to stroke." />
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="15"
+                step="0.5"
+                value={frame.tileCrossOffsetMm}
+                onChange={(e) => updateFrame({ tileCrossOffsetMm: parseFloat(e.target.value) })}
+              />
+            </>
+          )}
         </div>
       )}
 

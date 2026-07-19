@@ -75,6 +75,10 @@ export interface FrameSettings {
   tileMarks: boolean;
   /** Gap between each trim tick and the margin line it marks, in mm. */
   tileMarkOffsetMm: number;
+  /** Corner registration crosses on their own 'tile-crosses' pen layer. */
+  tileCrosses: boolean;
+  /** Distance from the paper edge to each cross's centre, in mm. */
+  tileCrossOffsetMm: number;
 }
 
 export const defaultFrame: FrameSettings = {
@@ -103,6 +107,8 @@ export const defaultFrame: FrameSettings = {
   tileOverlapMm: 0,
   tileMarks: false,
   tileMarkOffsetMm: 0,
+  tileCrosses: false,
+  tileCrossOffsetMm: 3,
 };
 
 interface FrameContextValue {

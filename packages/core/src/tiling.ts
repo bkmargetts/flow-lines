@@ -55,6 +55,19 @@ export interface TilingOptions {
    * near the edge.
    */
   markOffsetMm?: number;
+  /**
+   * Small + crosses in every corner of every sheet, on their own
+   * 'tile-crosses' pen layer — re-register the paper between pen swaps, or
+   * plot them in a light ink. They live entirely in the blank margin corner
+   * and are dropped when they don't fit.
+   */
+  registrationCrosses?: boolean;
+  /**
+   * Distance from the paper edge to each cross's centre, in mm (default 3 —
+   * just inside the default trim ticks). Clamped away from the paper edge by
+   * the plotter-safety clearance.
+   */
+  crossOffsetMm?: number;
 }
 
 export interface TileSpec {
@@ -97,6 +110,12 @@ export interface TileResult {
 
 /** Pen layer carrying registration/trim ticks, colored/weighted like any other layer. */
 export const TILE_MARKS_LAYER = 'tile-marks';
+
+/** Pen layer carrying the corner registration crosses. */
+export const TILE_CROSSES_LAYER = 'tile-crosses';
+
+/** Half-length of a registration cross arm, in mm (3mm crosses). */
+const CROSS_HALF_MM = 1.5;
 
 interface AxisBand {
   /** Printable band in artwork mm (may extend past the artwork on edge tiles). */
@@ -260,6 +279,51 @@ function tileMarks(
 }
 
 /**
+ * Registration crosses for one tile, in tile coordinates: a small + in each
+ * corner, centred `offsetPx` from both paper edges (clamped away from the
+ * edge by the plotter-safety clearance). Crosses must sit entirely inside
+ * the blank margin corner — where they'd reach the artwork area they are
+ * dropped, never drawn over the drawing.
+ */
+function tileCrosses(
+  tile: TileSpec,
+  marginPx: number,
+  offsetPx: number,
+  pxPerMm: number
+): FlowLine[] {
+  if (marginPx <= 0) return [];
+  const half = CROSS_HALF_MM * pxPerMm;
+  // A fixed physical floor (not the ticks' proportional rule): the offset is
+  // an explicit user position, so clamp only as far as pen safety demands.
+  const c = Math.max(offsetPx, 1.5 * pxPerMm + half);
+  if (c + half > marginPx) return [];
+  const w = tile.widthPx;
+  const h = tile.heightPx;
+  const lines: FlowLine[] = [];
+  for (const cx of [c, w - c]) {
+    for (const cy of [c, h - c]) {
+      lines.push({
+        points: [
+          { x: cx - half, y: cy },
+          { x: cx + half, y: cy },
+        ],
+        pen: 'fine',
+        layer: TILE_CROSSES_LAYER,
+      });
+      lines.push({
+        points: [
+          { x: cx, y: cy - half },
+          { x: cx, y: cy + half },
+        ],
+        pen: 'fine',
+        layer: TILE_CROSSES_LAYER,
+      });
+    }
+  }
+  return lines;
+}
+
+/**
  * Slice a finished result into one `FlowLinesResult` per tile: every line is
  * clipped to the tile's source band (owned region + flaps) and translated
  * into tile coordinates, preserving `pen` and `layer` so per-layer pens and
@@ -285,8 +349,8 @@ export function sliceResultIntoTiles(
         });
       }
     }
+    const marginPx = opts.perSheetMargin ? opts.marginMm * art.pxPerMm : 0;
     if (opts.registrationMarks) {
-      const marginPx = opts.perSheetMargin ? opts.marginMm * art.pxPerMm : 0;
       lines.push(
         ...tileMarks(
           tile,
@@ -294,6 +358,16 @@ export function sliceResultIntoTiles(
           marginPx,
           opts.markLengthMm ?? 5,
           Math.max(0, opts.markOffsetMm ?? 0) * art.pxPerMm,
+          art.pxPerMm
+        )
+      );
+    }
+    if (opts.registrationCrosses) {
+      lines.push(
+        ...tileCrosses(
+          tile,
+          marginPx,
+          Math.max(0, opts.crossOffsetMm ?? 3) * art.pxPerMm,
           art.pxPerMm
         )
       );

@@ -2,6 +2,7 @@ import {
   sliceResultIntoTiles,
   toSVG,
   TILE_MARKS_LAYER,
+  TILE_CROSSES_LAYER,
   type FlowLinesResult,
   type PageMetrics,
   type SVGOptions,
@@ -46,11 +47,12 @@ export function buildSheetsPreview(
     // exported sheets, not the preview.
     physicalWidth: undefined,
     physicalHeight: undefined,
-    ...(opts.registrationMarks
+    ...(opts.registrationMarks || opts.registrationCrosses
       ? {
           layerColors: {
             ...svgOptions.layerColors,
             [TILE_MARKS_LAYER]: svgOptions.strokeColor ?? '#111111',
+            [TILE_CROSSES_LAYER]: svgOptions.strokeColor ?? '#111111',
           },
         }
       : {}),

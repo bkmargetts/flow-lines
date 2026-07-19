@@ -8,6 +8,7 @@ import {
   sliceResultIntoTiles,
   tileLabel,
   TILE_MARKS_LAYER,
+  TILE_CROSSES_LAYER,
   toSVG,
   toSVGLayers,
   type Orientation,
@@ -87,6 +88,8 @@ export interface TileFlagValues {
   tileOverlap: string;
   tileMarks?: boolean;
   tileMarkOffset: string;
+  tileCrosses?: boolean;
+  tileCrossOffset: string;
 }
 
 /** Register the shared multi-sheet tiling flags on a command. */
@@ -114,6 +117,15 @@ export function addTileOptions(cmd: Command): Command {
       '--tile-mark-offset <mm>',
       'Gap between each trim tick and the margin line it marks (0 = tick ends on the line)',
       '0'
+    )
+    .option(
+      '--tile-crosses',
+      'Small registration crosses in every sheet corner on their own tile-crosses pen layer, for re-registering paper between pen swaps (needs the per-sheet margin)'
+    )
+    .option(
+      '--tile-cross-offset <mm>',
+      "Distance from the paper edge to each registration cross's centre",
+      '3'
     );
 }
 
@@ -159,6 +171,8 @@ export function writePlotOutput(
     overlapMm: parseFloat(options.tileOverlap),
     registrationMarks: options.tileMarks ?? false,
     markOffsetMm: parseFloat(options.tileMarkOffset),
+    registrationCrosses: options.tileCrosses ?? false,
+    crossOffsetMm: parseFloat(options.tileCrossOffset),
   };
   const layout = computeTiling(frame.page, tilingOptions);
   const tiles = sliceResultIntoTiles(result, frame.page, layout, tilingOptions);
@@ -171,11 +185,12 @@ export function writePlotOutput(
       ...svgOptions,
       physicalWidth: t.physicalWidth,
       physicalHeight: t.physicalHeight,
-      ...(tilingOptions.registrationMarks
+      ...(tilingOptions.registrationMarks || tilingOptions.registrationCrosses
         ? {
             layerColors: {
               ...svgOptions.layerColors,
               [TILE_MARKS_LAYER]: svgOptions.strokeColor ?? '#000000',
+              [TILE_CROSSES_LAYER]: svgOptions.strokeColor ?? '#000000',
             },
           }
         : {}),

@@ -108,6 +108,7 @@ export {
   sliceResultIntoTiles,
   tileLabel,
   TILE_MARKS_LAYER,
+  TILE_CROSSES_LAYER,
 } from './tiling.js';
 export type {
   TilingOptions,

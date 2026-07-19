@@ -13,6 +13,8 @@ export function tilingOptionsFromFrame(frame: FrameSettings): TilingOptions {
     overlapMm: frame.tileOverlapMm,
     registrationMarks: frame.tileMarks,
     markOffsetMm: frame.tileMarkOffsetMm,
+    registrationCrosses: frame.tileCrosses,
+    crossOffsetMm: frame.tileCrossOffsetMm,
   };
 }
 
