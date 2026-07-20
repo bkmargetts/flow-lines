@@ -273,6 +273,22 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
   (`value={Math.round(x * 100)}` … `onChange={(v) => set(v / 100)}`); mirror a
   slider's `disabled` onto the `EditableValue`.
 
+## Concept brainstorming (autonomous studio sessions)
+
+`concept-brainstorming/` is the home of an owner-scheduled creative
+routine: a session reads `concept-brainstorming/README.md` (the full
+brief) and experiments with the generators — configuration only, never
+code changes — until it lands on one artwork it would stand behind as a
+sellable piece. Each run commits a single date+timestamped folder
+(`concept-brainstorming/YYYY-MM-DD-HHMM/`) containing the final SVG(s),
+a `preview.png` (rasterized with `scripts/svg-to-png.mjs`, which can
+recolour paper/ink to approximate the envisioned materials), and an
+`ARTWORK.md` spelling out the complete physical vision — paper, named
+ink colours, layer order, hand processes, and the exact seeded commands
+that reproduce every SVG. The plotter limit is A3 (larger works go
+multi-sheet via `--tile`). Runs open a PR against `main` per piece;
+intermediates stay in the session scratchpad.
+
 ## Where the frontier is
 
 Implemented: everything above. The honest open gaps, in rough order of
