@@ -250,7 +250,17 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
   `index` exporting the `Module`. Controls are built from the shared
   atoms in `components/controls/` (`Slider`, `Toggle`, `SeedControl`,
   `AdvancedSection`/`AdvGroup`, `PresetPicker`) — don't hand-roll those
-  rows. The page frame (paper, orientation, resolution, margin, fit)
+  rows. **Every generator module's Controls opens with the shared
+  `RandomiseButton`** ("surprise me") wired to a `random<X>Genome(rng)`
+  that patches state within the sliders' ranges and rolls a fresh seed —
+  the genome itself must never touch the seed field, pen/ink aesthetics,
+  quality/fidelity prefs, or user data (painted points, masks). Register
+  every genome in the hand-maintained spec table in
+  `packages/web/src/modules/genomes.test.ts`, which enforces exactly
+  those rules — but note it only checks genomes that are registered, so a
+  module shipped without the button escapes silently. This one gets
+  forgotten: check for it whenever adding a module.
+  The page frame (paper, orientation, resolution, margin, fit)
   lives in a shared `FrameContext` (`FrameControls`) so every layer plots
   to the same physical sheet. New modules are developed on
   `art/<project>/<feature>` branches; merging adds them to the registry.

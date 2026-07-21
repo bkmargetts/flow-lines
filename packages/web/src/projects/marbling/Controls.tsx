@@ -2,10 +2,12 @@ import type { MarblingPattern } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { PresetPicker } from '../../components/controls/PresetPicker';
+import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
+import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
-import { MARBLING_WEB_PRESETS, getMarblingPreset } from './presets';
+import { MARBLING_WEB_PRESETS, getMarblingPreset, randomMarblingGenome } from './presets';
 import type { MarblingState } from './types';
 
 const PATTERN_LABELS = Object.fromEntries(
@@ -27,6 +29,11 @@ export function MarblingControls({ state, update }: ControlsProps<MarblingState>
   return (
     <div className="controls">
       <h3 className="section-title">Marbling</h3>
+
+      <RandomiseButton
+        onClick={() => update({ ...randomMarblingGenome(Math.random), seed: randomSeed() })}
+        hint="One roll for a whole new bath — or tune anything below."
+      />
 
       <PresetPicker
         label="Pattern"
