@@ -57,6 +57,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
     plateHatch: false,
     boldPasses: 1,
   },
+  marbling: { preset: 'feather', drops: 75, swirl: 0.6 },
   'city-generator': { style: 'mixed' },
   stickmen: { poseEnergy: 1 },
   'sports-balls': { shading: 0.7 },

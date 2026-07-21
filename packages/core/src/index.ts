@@ -173,6 +173,10 @@ export type { GestureOptions, GesturePreset } from './gesture/index.js';
 export { generateMachine } from './machine/index.js';
 export type { MachineOptions } from './machine/index.js';
 
+// Marbling (mathematical paper marbling — suminagashi / ebru)
+export { generateMarbling, inkLayerName, MARBLING_PRESETS } from './marbling/index.js';
+export type { MarblingOptions, MarblingPattern } from './marbling/index.js';
+
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
 

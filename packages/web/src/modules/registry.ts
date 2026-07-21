@@ -21,6 +21,7 @@ import { physarumModule } from '../projects/physarum';
 import { fractureModule } from '../projects/fracture';
 import { noiseTextureModule } from '../projects/noise-texture';
 import { colorFieldModule } from '../projects/color-field';
+import { marblingModule } from '../projects/marbling';
 
 /**
  * Every module, in panel order — the one flat registry the layer stack draws
@@ -52,6 +53,7 @@ export const MODULES: Module<any>[] = [
   fractureModule,
   noiseTextureModule,
   colorFieldModule,
+  marblingModule,
   classicTexture,
   gratingTexture,
   blankTexture,
