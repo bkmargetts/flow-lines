@@ -47,6 +47,7 @@ export function LayerStackPanel() {
     selectedId,
     liveOutputs,
     addLayer,
+    duplicateLayer,
     removeLayer,
     reorderLayer,
     selectLayer,
@@ -131,6 +132,23 @@ export function LayerStackPanel() {
                     onChange={(v) => setHoldOff(layer.instanceId, v)}
                   />
                 </label>
+
+                <button
+                  type="button"
+                  className="layer-duplicate"
+                  title={
+                    canAdd
+                      ? 'Duplicate layer — same settings, ready to nudge (seed, ink, a knob)'
+                      : `At most ${MAX_LAYERS} layers`
+                  }
+                  disabled={!canAdd}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    duplicateLayer(layer.instanceId);
+                  }}
+                >
+                  ⧉
+                </button>
 
                 <button
                   type="button"
