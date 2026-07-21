@@ -58,7 +58,8 @@ export interface MarblingOptions {
   refMinDim?: number;
 
   // ---- Bath ----
-  /** Ink drops (default preset; stone throws more) */
+  /** Ink drops per anchor-sheet area (default preset; stone throws more) —
+   *  scales with page area once refMinDim engages, so big sheets fill */
   drops?: number;
   /** Mean drop radius in px (default sizingDim/13) */
   dropRadius?: number;
@@ -146,11 +147,24 @@ export function generateMarbling(options: MarblingOptions): FlowLinesResult {
   // Feature sizes anchor at refMinDim on oversized sheets (identity wherever
   // minDim is smaller); drop counts keep the real dimensions.
   const sizingDim = Math.min(minDim, options.refMinDim ?? Infinity);
+  // Counts ride the real page (the fracture contract): once the anchor
+  // engages, a bigger sheet gets proportionally more ink at the same
+  // physical pattern scale — and a proportionally bigger point budget, or
+  // the fixed cap would coarsen the grain the anchor just held steady.
+  // √2·ref² ≈ the anchor sheet's area for A-series aspect, so the scale is
+  // ~1 right where the anchor engages (no jump) and grows with the sheet.
+  const areaScale =
+    options.refMinDim && options.refMinDim < minDim
+      ? clamp((innerW * innerH) / (options.refMinDim * options.refMinDim * Math.SQRT2), 1, 8)
+      : 1;
 
   const ringsPerDrop = clamp(Math.round(options.ringsPerDrop ?? 3), 1, 6);
   const inkGroups = clamp(Math.round(options.inkGroups ?? 1), 1, 4);
-  const requestedDrops = Math.max(1, Math.round(options.drops ?? p.drops));
-  const drops = Math.min(requestedDrops, Math.floor(MARBLING_RING_CAP / ringsPerDrop));
+  const requestedDrops = Math.max(1, Math.round((options.drops ?? p.drops) * areaScale));
+  const drops = Math.min(
+    requestedDrops,
+    Math.floor((MARBLING_RING_CAP * areaScale) / ringsPerDrop)
+  );
   const dropRadius = Math.max(2, options.dropRadius ?? sizingDim / 11);
   const combSpacing = Math.max(2, options.combSpacing ?? sizingDim / 45);
   const combStrength = clamp(options.combStrength ?? p.combStrength, 0, 1);
@@ -158,7 +172,7 @@ export function generateMarbling(options: MarblingOptions): FlowLinesResult {
   const wavy = clamp(options.wavy ?? p.wavy, 0, 1);
   const vortexStrength = clamp(options.vortexStrength ?? p.vortexStrength, 0, 1);
   const detail = Math.max(0.75, options.detail ?? 1.6);
-  const pointCap = Math.max(1000, options.pointCap ?? MARBLING_POINT_CAP);
+  const pointCap = Math.max(1000, options.pointCap ?? MARBLING_POINT_CAP * areaScale);
 
   const recipe: RecipeParams = {
     pattern,

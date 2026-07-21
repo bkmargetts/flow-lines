@@ -157,6 +157,34 @@ describe('generateMarbling', () => {
     expect(r.lines.every((l) => l.pen === 'fine')).toBe(true);
   });
 
+  it('scales ink with page area once the refMinDim anchor engages', () => {
+    // Counts ride the real page (the fracture contract): an A1-shaped sheet
+    // holds ~4× an A3's area, so it should carry ~4× the ink at the same
+    // physical pattern scale — not the same ~85 drops swimming in paper.
+    const mm = 3;
+    const render = (w: number, h: number) =>
+      generateMarbling({
+        width: w * mm,
+        height: h * mm,
+        margin: 10 * mm,
+        seed: 42,
+        pattern: 'nonpareil',
+        refMinDim: 297 * mm,
+      });
+    const a3 = render(297, 420);
+    const a1 = render(594, 841);
+    const density = (r: typeof a3, w: number, h: number) => {
+      const pts = r.lines.reduce((acc, l) => acc + l.points.length, 0);
+      return pts / ((w - 20) * (h - 20));
+    };
+    const d3 = density(a3, 297, 420);
+    const d1 = density(a1, 594, 841);
+    // Ink density holds within 40% across a 4× area jump.
+    expect(d1).toBeGreaterThan(d3 * 0.6);
+    expect(d1).toBeLessThan(d3 * 1.4);
+    expect(a1.lines.length).toBeGreaterThan(a3.lines.length * 2);
+  });
+
   it('returns empty output when the margin swallows the page', () => {
     const r = generateMarbling({ width: 40, height: 40, margin: 15, seed: 42 });
     expect(r.lines).toEqual([]);
