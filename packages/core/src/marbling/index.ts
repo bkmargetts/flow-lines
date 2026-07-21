@@ -8,9 +8,11 @@ import { MarblingOp } from './ops.js';
 import {
   Ring,
   PointBudget,
+  RefineFrame,
   makeCircleRing,
   applyOpToRing,
   ringOutOfReach,
+  ringOffSheet,
   MARBLING_POINT_CAP,
   MARBLING_RING_CAP,
 } from './rings.js';
@@ -181,27 +183,117 @@ export function generateMarbling(options: MarblingOptions): FlowLinesResult {
 
   const { drops: dropSpecs, strokes } = buildOps(recipe, makeRandom(subSeed(seed, 0)));
 
-  const budget: PointBudget = { points: 0, cap: pointCap };
-  const rings: Ring[] = [];
+  // Pre-scale detail to the budget: if the bath's initial circles wouldn't
+  // fit in a third of the point cap (the rest is refinement headroom for
+  // the ops), coarsen detail uniformly up front. A budget that instead ran
+  // dry mid-drawing would disable refinement for whatever ops remain, and
+  // every segment they stretch would render as a straight chord — the
+  // strongest "computer" tell a marbled sheet can have. Identity whenever
+  // the bath already fits.
+  let detailEff = detail;
+  {
+    let initialPts = 0;
+    for (const drop of dropSpecs) {
+      for (let k = 0; k < ringsPerDrop; k++) {
+        const r = drop.r * (1 - (0.55 * k) / ringsPerDrop);
+        initialPts += Math.max(16, Math.ceil((2 * Math.PI * r) / detail));
+      }
+    }
+    const bathAllowance = pointCap / 3;
+    if (initialPts > bathAllowance) detailEff = detail * (initialPts / bathAllowance);
+  }
+
   // Skip threshold: an op that can't move a ring by 1/50 px leaves it alone.
   const MIN_DISP = 0.02;
-
-  const applyToBath = (op: MarblingOp): void => {
-    for (const ring of rings) {
-      if (ringOutOfReach(ring, op, MIN_DISP)) continue;
-      applyOpToRing(ring, op, detail, budget);
+  // How far a stroke could still pull a point back toward the sheet. Drops
+  // only push outward from centres inside the sheet, so only rakes count: a
+  // balanced comb displaces at most z·(1+wavy)·max(balance, 1−balance), a
+  // vortex at most z·λ/4.
+  const strokeReach = (op: MarblingOp): number => {
+    if (op.kind === 'tine') {
+      const balance = op.balance ?? 0;
+      return Math.abs(op.z) * (1 + (op.wavyAmp ?? 0)) * Math.max(balance, 1 - balance);
     }
+    if (op.kind === 'vortex') return (Math.abs(op.z) * op.lambda) / 4;
+    return 0;
   };
 
-  for (const drop of dropSpecs) {
-    applyToBath({ kind: 'drop', cx: drop.cx, cy: drop.cy, r: drop.r });
-    // The drop's own ink: nested echo rings, outermost at the drop radius.
-    for (let k = 0; k < ringsPerDrop; k++) {
-      const r = drop.r * (1 - (0.55 * k) / ringsPerDrop);
-      rings.push(makeCircleRing(drop.cx, drop.cy, r, drop.group, detail, budget));
+  /** Run the whole bath at one refinement grain. Returns the rings plus the
+   *  budget's high-water mark, so the caller can tell whether the grain fit
+   *  or the budget pressure was doing the drawing's resolution real harm. */
+  const buildBath = (grain: number, cap: number): { rings: Ring[]; peak: number } => {
+    const budget: PointBudget = { points: 0, cap };
+    const rings: Ring[] = [];
+    let peak = 0;
+    // Off-sheet pad = the suffix sum of unapplied strokes' reach — culling
+    // and refinement-skipping get tighter as the strokes run out.
+    const frame: RefineFrame = {
+      x0,
+      y0,
+      x1,
+      y1,
+      pad: strokes.reduce((acc, op) => acc + strokeReach(op), 0),
+    };
+    const applyToBath = (op: MarblingOp): void => {
+      for (const ring of rings) {
+        if (ringOutOfReach(ring, op, MIN_DISP)) continue;
+        applyOpToRing(ring, op, grain, budget, frame);
+      }
+      // Rings pushed wholly beyond the pad can never return — cull them and
+      // refund their points so the budget measures the visible drawing.
+      for (let i = rings.length - 1; i >= 0; i--) {
+        if (ringOffSheet(rings[i], frame)) {
+          budget.points -= rings[i].pts.length;
+          rings.splice(i, 1);
+        }
+      }
+      if (budget.points > peak) peak = budget.points;
+    };
+
+    for (const drop of dropSpecs) {
+      // Bath's full: with half the budget spent before the rakes run, more
+      // ink would only coarsen everything. A real marbler runs out too.
+      if (budget.points > cap * 0.5) break;
+      applyToBath({ kind: 'drop', cx: drop.cx, cy: drop.cy, r: drop.r });
+      // The drop's own ink: nested echo rings, outermost at the drop radius.
+      for (let k = 0; k < ringsPerDrop; k++) {
+        const r = drop.r * (1 - (0.55 * k) / ringsPerDrop);
+        rings.push(makeCircleRing(drop.cx, drop.cy, r, drop.group, grain, budget));
+      }
+      if (budget.points > peak) peak = budget.points;
     }
+    for (const op of strokes) {
+      // This stroke can no longer pull anything back — drop it from the pad
+      // before applying so its own refinement already uses the tighter frame.
+      frame.pad -= strokeReach(op);
+      applyToBath(op);
+    }
+    return { rings, peak };
+  };
+
+  // Optimistic pass at the requested grain. If the budget saturated, the
+  // late ops were refining against an inflated grain (or not at all) — the
+  // straight-chord artifact. Measure the drawing's true on-sheet arc length
+  // with a coarse uncapped pass, then re-run once at the uniform grain that
+  // actually fits the budget: hostile settings degrade to a uniformly
+  // coarser drawing instead of chords slashing through a fine one.
+  let bath = buildBath(detailEff, pointCap);
+  if (bath.peak > pointCap * 0.9) {
+    const probe = buildBath(detailEff * 2, pointCap * 5);
+    let arcLength = 0;
+    for (const ring of probe.rings) {
+      if (ring.pts.length < 3) continue;
+      const closed = [...ring.pts, ring.pts[0]];
+      for (const run of clipPolylineToRect(closed, x0, y0, x1, y1)) {
+        for (let i = 1; i < run.length; i++) {
+          arcLength += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y);
+        }
+      }
+    }
+    const detailFit = Math.max(detailEff, (1.3 * arcLength) / (pointCap * 0.95));
+    bath = buildBath(detailFit, pointCap);
   }
-  for (const op of strokes) applyToBath(op);
+  const rings = bath.rings;
 
   const lines: FlowLine[] = [];
   for (const ring of rings) {
@@ -218,7 +310,7 @@ export function generateMarbling(options: MarblingOptions): FlowLinesResult {
   if (wobble > 0) {
     result = applyHandDrawnStyle(result, {
       amplitude: wobble,
-      wavelength: Math.max(24, detail * 15),
+      wavelength: Math.max(24, detailEff * 15),
       seed: subSeed(seed, 11),
     });
   }

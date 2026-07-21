@@ -19,13 +19,26 @@ export interface Ring {
   maxY: number;
 }
 
-/** Shared point budget across the whole bath: once spent, refinement stops
- *  adding midpoints (existing geometry still deforms exactly, rings just
- *  coarsen). Trips at the same op for a given seed/options, so output stays
- *  deterministic. */
+/** Shared point budget across the whole bath. Pressure on the budget
+ *  coarsens refinement smoothly (see `refineMaxSeg`) instead of switching
+ *  it off — a refinement cliff turns every segment a later op stretches
+ *  into a straight chord, the one artifact a marbled sheet cannot carry.
+ *  Fully deterministic for a given seed/options. */
 export interface PointBudget {
   points: number;
   cap: number;
+}
+
+/**
+ * The working max-segment length under budget pressure: identity below 70%
+ * spent, inflating smoothly to 16× at ~2× the cap. Ring growth stalls as
+ * resolution drops, so the cap is approached asymptotically; the hard stop
+ * (no refinement at all) sits at 2× cap and is practically unreachable.
+ */
+export function refineMaxSeg(maxSeg: number, budget: PointBudget): number {
+  const u = budget.points / budget.cap;
+  if (u <= 0.7) return maxSeg;
+  return maxSeg * Math.min(16, Math.exp((u - 0.7) * 6.93));
 }
 
 /** Total points across all rings — points, not rings, are the real cost in
@@ -35,7 +48,13 @@ export const MARBLING_POINT_CAP = 140_000;
 /** Rings = plotted polylines; drops × ringsPerDrop is clamped under this. */
 export const MARBLING_RING_CAP = 900;
 
-const MAX_REFINE_DEPTH = 5;
+// Deep enough to resolve the drop-centre singularity: a drop landing within
+// ε of a segment sweeps it ~half-way around the rim, and resolving that
+// wrap needs depth ~log2(r/ε). Depth 24 covers ε down to ~1e-5 px — below
+// float noise — so no chord survives. Depth does NOT bound the work: refine
+// only splits while a mapped span still exceeds maxSeg, so the points spent
+// on a wrap are ~(arc length / maxSeg) regardless of how deep it recursed.
+const MAX_REFINE_DEPTH = 24;
 
 function computeBBox(ring: Ring): void {
   let minX = Infinity;
@@ -62,7 +81,11 @@ export function makeCircleRing(
   maxSeg: number,
   budget: PointBudget
 ): Ring {
-  const n = Math.max(16, Math.ceil((2 * Math.PI * r) / maxSeg));
+  // Never sample past the remaining budget: a bath that would overrun the
+  // cap coarsens instead of silently disabling all later refinement (the
+  // detail pre-scale in the generator makes this a rarely-hit backstop).
+  const ideal = Math.max(16, Math.ceil((2 * Math.PI * r) / maxSeg));
+  const n = Math.max(16, Math.min(ideal, budget.cap - budget.points));
   const pts: Point[] = new Array(n);
   for (let i = 0; i < n; i++) {
     const a = (2 * Math.PI * i) / n;
@@ -81,6 +104,18 @@ function bboxDistance(ring: Ring, x: number, y: number): number {
   return Math.hypot(dx, dy);
 }
 
+/** True when the ring's bbox sits wholly beyond the padded frame on one
+ *  side — it can never return to the sheet, so it can be culled (and its
+ *  points refunded to the budget). */
+export function ringOffSheet(ring: Ring, f: RefineFrame): boolean {
+  return (
+    ring.maxX < f.x0 - f.pad ||
+    ring.minX > f.x1 + f.pad ||
+    ring.maxY < f.y0 - f.pad ||
+    ring.minY > f.y1 + f.pad
+  );
+}
+
 /** True when the op cannot move any point of the ring visibly. */
 export function ringOutOfReach(ring: Ring, op: MarblingOp, minDispPx: number): boolean {
   const reach = opInfluenceRadius(op, minDispPx);
@@ -91,18 +126,53 @@ export function ringOutOfReach(ring: Ring, op: MarblingOp, minDispPx: number): b
   return false;
 }
 
-export function applyOpToRing(ring: Ring, op: MarblingOp, maxSeg: number, budget: PointBudget): void {
+/**
+ * The frame refinement cares about: the margin box padded by the largest
+ * displacement any remaining op could apply inward. Geometry beyond the pad
+ * on one side can never re-enter the sheet, so its curvature is invisible —
+ * spending budget resolving it starves the on-page drawing (the budget
+ * pressure inflates `refineMaxSeg`, and the visible rings coarsen for
+ * detail that gets clipped anyway).
+ */
+export interface RefineFrame {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  pad: number;
+}
+
+/** Both points beyond the padded frame on the same side: the segment (and
+ *  any chord between refinements of it) stays off-sheet for good. */
+function offSheetSameSide(a: Point, b: Point, f: RefineFrame): boolean {
+  return (
+    (a.x < f.x0 - f.pad && b.x < f.x0 - f.pad) ||
+    (a.x > f.x1 + f.pad && b.x > f.x1 + f.pad) ||
+    (a.y < f.y0 - f.pad && b.y < f.y0 - f.pad) ||
+    (a.y > f.y1 + f.pad && b.y > f.y1 + f.pad)
+  );
+}
+
+export function applyOpToRing(
+  ring: Ring,
+  op: MarblingOp,
+  maxSeg: number,
+  budget: PointBudget,
+  frame: RefineFrame
+): void {
   const src = ring.pts;
   const n = src.length;
   const out: Point[] = [];
-  const maxSeg2 = maxSeg * maxSeg;
+  const seg = refineMaxSeg(maxSeg, budget);
+  const maxSeg2 = seg * seg;
 
   // Refine between original points a..b whose images ma..mb span too far.
   const refine = (a: Point, b: Point, ma: Point, mb: Point, depth: number): void => {
     const dx = mb.x - ma.x;
     const dy = mb.y - ma.y;
     if (dx * dx + dy * dy <= maxSeg2) return;
-    if (depth >= MAX_REFINE_DEPTH || budget.points >= budget.cap) return;
+    if (offSheetSameSide(ma, mb, frame)) return;
+    if (depth >= MAX_REFINE_DEPTH || budget.points >= budget.cap * 2) return;
     const mid: Point = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     const mm = applyOp(mid.x, mid.y, op);
     refine(a, mid, ma, mm, depth + 1);
