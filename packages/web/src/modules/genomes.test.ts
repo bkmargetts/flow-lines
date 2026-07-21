@@ -14,6 +14,7 @@ import { randomSportsBallsGenome } from '../projects/sports-balls/Controls';
 import { randomImageInkGenome } from '../projects/image-ink/genome';
 import { randomGratingGenome } from '../textures/grating/shared';
 import { randomMarblingGenome } from '../projects/marbling/presets';
+import { randomMeanderGenome } from '../projects/meander/Controls';
 
 /**
  * Every randomise-all genome must stay inside its sliders' ranges, pick enum
@@ -76,6 +77,36 @@ const SPECS: GenomeSpec[] = [
       'ink2Color',
       'ink3Color',
       'ink4Color',
+    ],
+  },
+  {
+    name: 'meander',
+    genome: randomMeanderGenome,
+    bounds: {
+      iterations: [60, 800],
+      migration: [0, 1],
+      bendScale: [0.04, 0.2],
+      valleyWidth: [0.2, 1],
+      flowAngleDeg: [0, 180],
+      jitter: [0, 1],
+      channelWidthMm: [1.5, 10],
+      traces: [0, 60],
+      fade: [0, 1],
+      flowLines: [0, 5],
+      boldPasses: [1, 6],
+      wobble: [0, 3],
+    },
+    ints: ['iterations', 'traces', 'flowLines', 'boldPasses'],
+    bools: ['oxbows'],
+    forbidden: [
+      'seed',
+      'preset',
+      'strokeColor',
+      'penWidthMm',
+      'multiInk',
+      'channelColor',
+      'traceColor',
+      'oxbowColor',
     ],
   },
   {

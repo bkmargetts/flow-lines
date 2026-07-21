@@ -18,6 +18,7 @@ import { renderFracture } from '../projects/fracture/render';
 import { renderNoiseTexture } from '../projects/noise-texture/render';
 import { renderColorField } from '../projects/color-field/render';
 import { renderMarbling } from '../projects/marbling/render';
+import { renderMeander } from '../projects/meander/render';
 import { renderClassicTexture } from '../textures/classic/render';
 import { renderGratingTexture } from '../textures/grating/render';
 import { renderBlankTexture } from '../textures/blank/render';
@@ -65,6 +66,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   'noise-texture': entry(renderNoiseTexture),
   'color-field': entry(renderColorField),
   marbling: entry(renderMarbling),
+  meander: entry(renderMeander),
   classic: entry(renderClassicTexture, true),
   grating: entry(renderGratingTexture, true),
   blank: entry(renderBlankTexture, true),

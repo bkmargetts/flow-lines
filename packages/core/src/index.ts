@@ -52,6 +52,17 @@ export type {
   FractureSimResult,
 } from './fracture/index.js';
 
+// Meander — river-migration cartography (Fisk-map channel history)
+export { generateMeander, simulateMeander, MEANDER_PRESETS } from './meander/index.js';
+export type {
+  MeanderOptions,
+  MeanderPreset,
+  MeanderSimParams,
+  MeanderSimResult,
+  MeanderTrace,
+  MeanderOxbow,
+} from './meander/index.js';
+
 // Complex-valued rational-function flow field (Savva-style poles & zeros)
 export { generateComplexFlow } from './complex-flow.js';
 export type {
