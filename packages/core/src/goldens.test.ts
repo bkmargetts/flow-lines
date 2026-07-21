@@ -19,6 +19,7 @@ import { generateCity } from './city/index.js';
 import { generateStickmen } from './stickmen/index.js';
 import { generateSportsBalls } from './sports-balls/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
+import { generateMarbling } from './marbling/index.js';
 import { generateGesture } from './gesture/index.js';
 import { generateMachine } from './machine/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
@@ -151,6 +152,8 @@ for (const seed of SEEDS) {
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
   CASES[`gesture/default/${seed}`] = () =>
     generateGesture({ width: 300, height: 400, margin: 20, seed });
+  CASES[`marbling/nonpareil/${seed}`] = () =>
+    generateMarbling({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -179,6 +182,12 @@ CASES['fracture/crazing/42'] = () =>
   generateFracture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'crazing' });
 CASES['fracture/shatter/42'] = () =>
   generateFracture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'shatter' });
+CASES['marbling/stone/42'] = () =>
+  generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'stone' });
+CASES['marbling/feather/42'] = () =>
+  generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'feather', inkGroups: 2 });
+CASES['marbling/vortex/42'] = () =>
+  generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'vortex' });
 CASES['botanical/wreath/42'] = () =>
   generateBotanical({ width: 300, height: 400, seed: 42, composition: 'wreath' });
 CASES['stickmen/energetic/42'] = () =>

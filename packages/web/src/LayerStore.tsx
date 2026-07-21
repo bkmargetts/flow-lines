@@ -39,6 +39,7 @@ interface LayerStoreValue {
   selectedId: string;
   liveOutputs: Record<string, LiveEntry>;
   addLayer: (moduleId: string) => void;
+  duplicateLayer: (instanceId: string) => void;
   removeLayer: (instanceId: string) => void;
   reorderLayer: (from: number, to: number) => void;
   selectLayer: (instanceId: string) => void;
@@ -80,6 +81,38 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       setSelectedId(layer.instanceId);
       // New layers sit on top of the stack (end of the array).
       return [...prev, layer];
+    });
+  }, []);
+
+  // Clone a layer directly above its source — the copy overprints the
+  // original, ready for the tiny change (new seed, offset ink, nudged knob)
+  // that makes echo/misregistration stacks. State is deep-copied so the two
+  // layers can drift apart; live-module state may hold non-cloneable data
+  // (bitmaps), where a shallow copy is fine — updates always patch into a
+  // fresh object, they never mutate in place.
+  const duplicateLayer = useCallback((instanceId: string) => {
+    setLayers((prev) => {
+      if (prev.length >= MAX_LAYERS) return prev;
+      const index = prev.findIndex((l) => l.instanceId === instanceId);
+      if (index < 0) return prev;
+      const src = prev[index];
+      let state: unknown;
+      try {
+        state = structuredClone(src.state);
+      } catch {
+        state = { ...(src.state as object) };
+      }
+      const copy: Layer = {
+        instanceId: newInstanceId(src.moduleId),
+        moduleId: src.moduleId,
+        state,
+        visible: src.visible,
+        holdOffMm: src.holdOffMm,
+      };
+      setSelectedId(copy.instanceId);
+      const next = prev.slice();
+      next.splice(index + 1, 0, copy);
+      return next;
     });
   }, []);
 
@@ -156,6 +189,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       selectedId,
       liveOutputs,
       addLayer,
+      duplicateLayer,
       removeLayer,
       reorderLayer,
       selectLayer,
@@ -170,6 +204,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       selectedId,
       liveOutputs,
       addLayer,
+      duplicateLayer,
       removeLayer,
       reorderLayer,
       selectLayer,

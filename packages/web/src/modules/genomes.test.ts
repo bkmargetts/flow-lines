@@ -13,6 +13,7 @@ import { randomStickmenGenome } from '../projects/stickmen/Controls';
 import { randomSportsBallsGenome } from '../projects/sports-balls/Controls';
 import { randomImageInkGenome } from '../projects/image-ink/genome';
 import { randomGratingGenome } from '../textures/grating/shared';
+import { randomMarblingGenome } from '../projects/marbling/presets';
 
 /**
  * Every randomise-all genome must stay inside its sliders' ranges, pick enum
@@ -49,6 +50,34 @@ const ART_TREATMENT_BOUNDS: Record<string, [number, number]> = {
 };
 
 const SPECS: GenomeSpec[] = [
+  {
+    name: 'marbling',
+    genome: randomMarblingGenome,
+    bounds: {
+      drops: [10, 150],
+      dropSizeMm: [5, 40],
+      ringsPerDrop: [1, 6],
+      dropJitter: [0, 1],
+      combSpacingMm: [1.5, 12],
+      swirl: [0, 1],
+      falloffMm: [0.3, 6],
+      wavy: [0, 1],
+      vortex: [0, 1],
+    },
+    ints: ['drops', 'ringsPerDrop'],
+    enums: { preset: ['stone', 'nonpareil', 'feather', 'bouquet', 'vortex'] },
+    forbidden: [
+      'seed',
+      'detailMm',
+      'penWidthMm',
+      'wobbleMm',
+      'inkGroups',
+      'strokeColor',
+      'ink2Color',
+      'ink3Color',
+      'ink4Color',
+    ],
+  },
   {
     name: 'flow-field',
     genome: randomFlowGenome,

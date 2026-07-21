@@ -696,6 +696,7 @@ button.secondary:hover {
 }
 
 .layer-visible,
+.layer-duplicate,
 .layer-remove {
   border: none;
   background: none;
@@ -705,6 +706,7 @@ button.secondary:hover {
   color: var(--text-secondary);
 }
 
+.layer-duplicate:disabled,
 .layer-remove:disabled {
   opacity: 0.25;
   cursor: default;

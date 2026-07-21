@@ -129,6 +129,8 @@ for (const [preset, flags] of Object.entries(PLANET_PRESETS)) {
 for (const scene of LANDSCAPE_SCENES) {
   CASES[`landscape/${scene}`] = ['landscape', ...SIZE, ...SEED, '--scene', scene];
 }
+CASES['marbling/nonpareil'] = ['marbling', ...SIZE, ...SEED];
+CASES['marbling/feather'] = ['marbling', ...SIZE, ...SEED, '--pattern', 'feather', '--ink-groups', '2'];
 // Paper-size page path (the block repeated across commands) + hand-drawn wobble.
 CASES['botanical/paper-a5'] = ['botanical', ...SEED, '--paper', 'a5', ...BOTANICAL_SPECIES.fern];
 CASES['landscape/paper-a5'] = ['landscape', ...SEED, '--paper', 'a5', '--scene', 'rolling-hills'];
