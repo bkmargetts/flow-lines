@@ -13,6 +13,11 @@ import { triggerDownload } from '../../lib/download';
  * (save/rename/delete) are not document state and are deliberately outside
  * undo history; applying a preset flows through the normal update path and
  * is undoable like any other edit.
+ *
+ * The panel is a tap-to-apply list styled like the layer stack (no
+ * select-and-then-act chrome): each row applies on click and carries its
+ * own rename/export/delete icons; import and export-all sit as quiet text
+ * actions in the footer.
  */
 
 // One store per tab, created on first render (never at import time — keeps
@@ -43,43 +48,59 @@ export function CustomPresetSection(props: {
   useEffect(() => store.subscribe(() => setVersion((v) => v + 1)), [store]);
 
   const presets = store.listPresets(moduleId);
-  const [selectedId, setSelectedId] = useState('');
-  const selected = presets.find((p) => p.id === selectedId);
 
-  // Inline name entry (no window.prompt — it's blocked in some mobile
-  // webviews and can't be styled). One field serves save and rename.
-  const [naming, setNaming] = useState<'save' | 'rename' | null>(null);
+  // One inline name editor serves both flows: 'save' shows it above the
+  // list; a preset id swaps that row's label for the input.
+  const [editing, setEditing] = useState<'save' | string | null>(null);
   const [name, setName] = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (naming) nameRef.current?.focus();
-  }, [naming]);
+    if (editing) nameRef.current?.focus();
+  }, [editing]);
+
+  // Which preset the current state came from — purely visual feedback,
+  // cleared as soon as the state changes underneath it (except for the
+  // change the apply itself just made).
+  const [appliedId, setAppliedId] = useState<string | null>(null);
+  const skipClearRef = useRef(false);
+  useEffect(() => {
+    if (skipClearRef.current) {
+      skipClearRef.current = false;
+      return;
+    }
+    setAppliedId(null);
+  }, [state]);
 
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+
   const fileRef = useRef<HTMLInputElement>(null);
 
   const commitName = () => {
     const trimmed = name.trim();
-    if (!trimmed) {
-      setNaming(null);
-      return;
+    if (trimmed) {
+      if (editing === 'save') {
+        const saved = store.savePreset(moduleId, trimmed, capturePreset(state));
+        setAppliedId(saved.id);
+      } else if (editing) {
+        store.renamePreset(moduleId, editing, trimmed);
+      }
     }
-    if (naming === 'save') {
-      const saved = store.savePreset(moduleId, trimmed, capturePreset(state));
-      setSelectedId(saved.id);
-    } else if (naming === 'rename' && selected) {
-      store.renamePreset(moduleId, selected.id, trimmed);
-    }
-    setNaming(null);
+    setEditing(null);
     setName('');
   };
 
   const apply = (id: string) => {
-    setSelectedId(id);
-    const preset = store.listPresets(moduleId).find((p) => p.id === id);
+    const preset = presets.find((p) => p.id === id);
     if (!preset) return;
     const defaults = getModule(moduleId).defaultState() as Record<string, unknown>;
+    skipClearRef.current = true;
     update(applyPreset(preset.state, defaults));
+    setAppliedId(id);
   };
 
   const exportJson = (envelope: PresetExport, filename: string) => {
@@ -105,128 +126,145 @@ export function CustomPresetSection(props: {
     }
   };
 
-  useEffect(() => {
-    if (!notice) return;
-    const t = window.setTimeout(() => setNotice(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [notice]);
+  const nameEditor = (
+    <div className="preset-name-edit">
+      <input
+        ref={nameRef}
+        type="text"
+        placeholder="Preset name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commitName();
+          if (e.key === 'Escape') setEditing(null);
+        }}
+        onBlur={commitName}
+      />
+    </div>
+  );
 
   return (
     <div className="custom-presets">
       <h4 className="custom-presets-title">My presets</h4>
 
-      <div className="control-group custom-presets-row">
-        <select
-          aria-label="My presets"
-          value={selected ? selectedId : ''}
-          onChange={(e) => apply(e.target.value)}
-        >
-          <option value="" disabled>
-            {presets.length ? 'Apply a saved preset…' : 'No saved presets yet'}
-          </option>
-          {presets.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => {
-            setName('');
-            setNaming('save');
-          }}
-        >
-          Save current…
-        </button>
-      </div>
-
-      {naming && (
-        <div className="control-group custom-presets-row">
-          <input
-            ref={nameRef}
-            type="text"
-            placeholder={naming === 'save' ? 'Preset name' : 'New name'}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitName();
-              if (e.key === 'Escape') setNaming(null);
-            }}
-          />
-          <button type="button" className="secondary" onClick={commitName}>
-            {naming === 'save' ? 'Save' : 'Rename'}
-          </button>
-          <button type="button" className="secondary" onClick={() => setNaming(null)}>
-            Cancel
-          </button>
+      {presets.length > 0 && (
+        <div className="preset-list">
+          {presets.map((p) =>
+            editing === p.id ? (
+              <div key={p.id} className="preset-row">
+                {nameEditor}
+              </div>
+            ) : (
+              <div
+                key={p.id}
+                className={`preset-row ${appliedId === p.id ? 'applied' : ''}`}
+                role="button"
+                tabIndex={0}
+                title="Apply this preset (restores everything, seed included)"
+                onClick={() => apply(p.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    apply(p.id);
+                  }
+                }}
+              >
+                <span className="preset-name">{p.name}</span>
+                {appliedId === p.id && (
+                  <span className="preset-applied" aria-label="Applied">
+                    ✓
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="preset-icon"
+                  title="Rename"
+                  aria-label={`Rename ${p.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setName(p.name);
+                    setEditing(p.id);
+                  }}
+                >
+                  ✎
+                </button>
+                <button
+                  type="button"
+                  className="preset-icon"
+                  title="Export as JSON"
+                  aria-label={`Export ${p.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    exportJson(
+                      store.exportPresets(moduleId, p.id),
+                      `${p.name.replace(/[^\w-]+/g, '-')}.flow-preset.json`
+                    );
+                  }}
+                >
+                  ⤓
+                </button>
+                <button
+                  type="button"
+                  className="preset-icon"
+                  title="Delete"
+                  aria-label={`Delete ${p.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Delete preset "${p.name}"?`)) {
+                      store.deletePreset(moduleId, p.id);
+                      if (appliedId === p.id) setAppliedId(null);
+                    }
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            )
+          )}
         </div>
       )}
 
-      <div className="control-group custom-presets-row custom-presets-actions">
+      {editing === 'save' ? (
+        <div className="preset-row preset-row-new">{nameEditor}</div>
+      ) : (
         <button
           type="button"
-          className="secondary"
-          disabled={!selected}
+          className="secondary preset-save"
+          title="Save the current settings — seed included — as a reusable preset"
           onClick={() => {
-            setName(selected?.name ?? '');
-            setNaming('rename');
+            setName('');
+            setEditing('save');
           }}
         >
-          Rename
+          ＋ Save current as preset
         </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={!selected}
-          onClick={() => {
-            if (!selected) return;
-            if (window.confirm(`Delete preset "${selected.name}"?`)) {
-              store.deletePreset(moduleId, selected.id);
-              setSelectedId('');
-            }
-          }}
-        >
-          Delete
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={!selected}
-          onClick={() =>
-            selected &&
-            exportJson(
-              store.exportPresets(moduleId, selected.id),
-              `${selected.name.replace(/[^\w-]+/g, '-')}.flow-preset.json`
-            )
-          }
-        >
-          Export
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={!store.listAll().length}
-          onClick={() => exportJson(store.exportPresets(), 'flow-lines-presets.json')}
-        >
-          Export all
-        </button>
-        <button type="button" className="secondary" onClick={() => fileRef.current?.click()}>
+      )}
+
+      <div className="preset-footer">
+        <button type="button" className="preset-link" onClick={() => fileRef.current?.click()}>
           Import…
         </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) void importFile(file);
-          }}
-        />
+        {store.listAll().length > 0 && (
+          <button
+            type="button"
+            className="preset-link"
+            onClick={() => exportJson(store.exportPresets(), 'flow-lines-presets.json')}
+          >
+            Export all
+          </button>
+        )}
       </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void importFile(file);
+        }}
+      />
 
       {notice && <p className="custom-presets-notice">{notice}</p>}
     </div>

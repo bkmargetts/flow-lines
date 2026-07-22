@@ -99,9 +99,11 @@ body {
 }
 
 .history-btn {
+  flex: 0 0 auto;
   width: 30px;
   height: 30px;
   padding: 0;
+  margin: 0;
   border-radius: 50%;
   background: var(--bg-inset);
   border: 1px solid var(--border);
@@ -431,28 +433,107 @@ button.secondary:hover {
   margin: 0 0 10px;
 }
 
-.custom-presets-row {
+/* Tap-to-apply preset rows, styled to rhyme with the layer stack. */
+.preset-list {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.preset-row {
+  display: flex;
   align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  cursor: pointer;
 }
 
-.custom-presets-row select {
+.preset-row:hover {
+  background: var(--bg-inset-strong);
+}
+
+.preset-row.applied {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.preset-row-new {
+  cursor: default;
+  margin-bottom: 8px;
+}
+
+.preset-name {
   flex: 1 1 auto;
-  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.custom-presets-row input[type='text'] {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.custom-presets-row button {
+.preset-applied {
   flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 0.85rem;
 }
 
-.custom-presets-actions {
-  flex-wrap: wrap;
+.preset-icon {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.preset-icon:hover {
+  color: var(--text-primary);
+}
+
+.preset-name-edit {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.preset-name-edit input {
+  width: 100%;
+  font-size: 0.85rem;
+}
+
+.preset-save {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.preset-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.preset-link {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  margin: 0;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.preset-link:hover {
+  color: var(--text-primary);
 }
 
 .custom-presets-notice {
