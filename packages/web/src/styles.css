@@ -90,6 +90,36 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* Undo/redo pair beside the title. */
+.undo-redo {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.history-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.history-btn:hover:not(:disabled) {
+  background: var(--bg-inset-strong);
+  color: var(--text-primary);
+}
+
+.history-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* Collapse the controls to full-screen the art pane. */
 .sidebar-toggle {
   flex: 0 0 auto;
@@ -383,6 +413,52 @@ button.secondary {
 
 button.secondary:hover {
   background: var(--bg-inset-strong);
+}
+
+/* "My presets" — the shared user-saved preset panel below a layer's controls. */
+.custom-presets {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.custom-presets-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin: 0 0 10px;
+}
+
+.custom-presets-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.custom-presets-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.custom-presets-row input[type='text'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.custom-presets-row button {
+  flex: 0 0 auto;
+}
+
+.custom-presets-actions {
+  flex-wrap: wrap;
+}
+
+.custom-presets-notice {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
 }
 
 .canvas-container {

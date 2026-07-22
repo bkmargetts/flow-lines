@@ -123,6 +123,8 @@ export const defaultFrame: FrameSettings = {
 interface FrameContextValue {
   frame: FrameSettings;
   updateFrame: (updates: Partial<FrameSettings>) => void;
+  /** Wholesale replace the frame from an undo/redo snapshot. */
+  restoreFrame: (frame: FrameSettings) => void;
 }
 
 const FrameContext = createContext<FrameContextValue | null>(null);
@@ -132,8 +134,9 @@ export function FrameProvider({ children }: { children: ReactNode }) {
   const updateFrame = useCallback((updates: Partial<FrameSettings>) => {
     setFrame((prev) => ({ ...prev, ...updates }));
   }, []);
+  const restoreFrame = useCallback((next: FrameSettings) => setFrame(next), []);
   return (
-    <FrameContext.Provider value={{ frame, updateFrame }}>
+    <FrameContext.Provider value={{ frame, updateFrame, restoreFrame }}>
       {children}
     </FrameContext.Provider>
   );
