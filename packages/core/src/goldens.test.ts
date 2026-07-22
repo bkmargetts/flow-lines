@@ -20,6 +20,7 @@ import { generateStickmen } from './stickmen/index.js';
 import { generateSportsBalls } from './sports-balls/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateMarbling } from './marbling/index.js';
+import { generateMeander } from './meander/index.js';
 import { generateGesture } from './gesture/index.js';
 import { generateMachine } from './machine/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
@@ -154,6 +155,8 @@ for (const seed of SEEDS) {
     generateGesture({ width: 300, height: 400, margin: 20, seed });
   CASES[`marbling/nonpareil/${seed}`] = () =>
     generateMarbling({ width: 300, height: 400, margin: 20, seed });
+  CASES[`meander/atlas/${seed}`] = () =>
+    generateMeander({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -188,6 +191,10 @@ CASES['marbling/feather/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'feather', inkGroups: 2 });
 CASES['marbling/vortex/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'vortex' });
+CASES['meander/young/42'] = () =>
+  generateMeander({ width: 300, height: 400, margin: 20, seed: 42, preset: 'young' });
+CASES['meander/tangle/42'] = () =>
+  generateMeander({ width: 300, height: 400, margin: 20, seed: 42, preset: 'tangle' });
 CASES['botanical/wreath/42'] = () =>
   generateBotanical({ width: 300, height: 400, seed: 42, composition: 'wreath' });
 CASES['stickmen/energetic/42'] = () =>
