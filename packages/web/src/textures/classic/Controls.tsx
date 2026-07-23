@@ -3,7 +3,6 @@ import { randomSeed } from '../../lib/random';
 import { InfoTip } from '../../components/InfoTip';
 import { EditableValue } from '../../components/EditableValue';
 import { ColorField } from '../../components/ColorField';
-import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
 import { Slider } from '../../components/controls/Slider';
@@ -404,110 +403,110 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
         </>
       )}
 
-      <AdvancedSection>
-        <AdvGroup title="Frame">
-          <div className="control-group">
-            <label>
-              Shape
-              <InfoTip text="Rect fills the whole page inside the margin. Organic fills a hand-sketched patch covering most — but not all — of the frame, with a ragged edge where strokes trail off." />
-            </label>
-            <div className="segmented">
-              {(['rect', 'organic'] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  className={state.region.frame === f ? 'active' : ''}
-                  onClick={() => update({ region: { ...state.region, frame: f } })}
-                >
-                  {f === 'rect' ? 'Rect' : 'Organic'}
-                </button>
-              ))}
-            </div>
-          </div>
-          {state.region.frame === 'organic' && (
-            <>
-              <Slider
-                label="Coverage"
-                value={state.region.coverage}
-                min={0.4}
-                max={1}
-                step={0.05}
-                onChange={(v) => update({ region: { ...state.region, coverage: v } })}
-                format={(v) => `${Math.round(v * 100)}%`}
-              />
-              <Slider
-                label="Irregularity"
-                value={state.region.irregularity}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => update({ region: { ...state.region, irregularity: v } })}
-                format={(v) => v.toFixed(2)}
-              />
-              <Slider
-                label="Offset X"
-                value={state.region.offsetX}
-                min={-0.5}
-                max={0.5}
-                step={0.05}
-                onChange={(v) => update({ region: { ...state.region, offsetX: v } })}
-                format={(v) => v.toFixed(2)}
-              />
-              <Slider
-                label="Offset Y"
-                value={state.region.offsetY}
-                min={-0.5}
-                max={0.5}
-                step={0.05}
-                onChange={(v) => update({ region: { ...state.region, offsetY: v } })}
-                format={(v) => v.toFixed(2)}
-              />
-              <Slider
-                labelNode={
-                  <span className="label-text">
-                    Patches
-                    <InfoTip text="Split the fill into separate sketched patches instead of one big one." />
-                  </span>
-                }
-                value={state.region.patches}
-                min={1}
-                max={4}
-                step={1}
-                onChange={(v) => update({ region: { ...state.region, patches: v } })}
-                format={(v) => `${v}`}
-              />
-              <Slider
-                labelNode={
-                  <span className="label-text">
-                    Ragged edge
-                    <InfoTip text="How raggedly strokes trail off at the patch boundary. 0 clips them hard on the outline; higher lets them stop short at varying depths, like a hand losing interest." />
-                  </span>
-                }
-                value={state.region.fade}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => update({ region: { ...state.region, fade: v } })}
-                format={(v) => v.toFixed(2)}
-              />
-            </>
-          )}
+      <h3 className="section-title">Frame</h3>
+
+      <div className="control-group">
+        <label>
+          Shape
+          <InfoTip text="Rect fills the whole page inside the margin. Organic fills a hand-sketched patch covering most — but not all — of the frame, with a ragged edge where strokes trail off." />
+        </label>
+        <div className="segmented">
+          {(['rect', 'organic'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              className={state.region.frame === f ? 'active' : ''}
+              onClick={() => update({ region: { ...state.region, frame: f } })}
+            >
+              {f === 'rect' ? 'Rect' : 'Organic'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {state.region.frame === 'organic' && (
+        <>
           <Slider
-            labelNode={
-              <span className="label-text">
-                Edge falloff
-                <InfoTip text="Texture loosens toward the frame edge — coverage thins in patches the closer it gets to the boundary. Works for both rect and organic frames." />
-              </span>
-            }
-            value={state.region.falloff}
+            label="Coverage"
+            value={state.region.coverage}
+            min={0.4}
+            max={1}
+            step={0.05}
+            onChange={(v) => update({ region: { ...state.region, coverage: v } })}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <Slider
+            label="Irregularity"
+            value={state.region.irregularity}
             min={0}
             max={1}
             step={0.05}
-            onChange={(v) => update({ region: { ...state.region, falloff: v } })}
+            onChange={(v) => update({ region: { ...state.region, irregularity: v } })}
             format={(v) => v.toFixed(2)}
           />
-        </AdvGroup>
-      </AdvancedSection>
+          <Slider
+            label="Offset X"
+            value={state.region.offsetX}
+            min={-0.5}
+            max={0.5}
+            step={0.05}
+            onChange={(v) => update({ region: { ...state.region, offsetX: v } })}
+            format={(v) => v.toFixed(2)}
+          />
+          <Slider
+            label="Offset Y"
+            value={state.region.offsetY}
+            min={-0.5}
+            max={0.5}
+            step={0.05}
+            onChange={(v) => update({ region: { ...state.region, offsetY: v } })}
+            format={(v) => v.toFixed(2)}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Patches
+                <InfoTip text="Split the fill into separate sketched patches instead of one big one." />
+              </span>
+            }
+            value={state.region.patches}
+            min={1}
+            max={4}
+            step={1}
+            onChange={(v) => update({ region: { ...state.region, patches: v } })}
+            format={(v) => `${v}`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Ragged edge
+                <InfoTip text="How raggedly strokes trail off at the patch boundary. 0 clips them hard on the outline; higher lets them stop short at varying depths, like a hand losing interest." />
+              </span>
+            }
+            value={state.region.fade}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => update({ region: { ...state.region, fade: v } })}
+            format={(v) => v.toFixed(2)}
+          />
+        </>
+      )}
+
+      <Slider
+        labelNode={
+          <span className="label-text">
+            Edge falloff
+            <InfoTip text="Texture loosens toward the frame edge — coverage thins in patches the closer it gets to the boundary. Works for both rect and organic frames." />
+          </span>
+        }
+        value={state.region.falloff}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => update({ region: { ...state.region, falloff: v } })}
+        format={(v) => v.toFixed(2)}
+      />
 
       <div className="control-group">
         <label>Texture ink</label>
