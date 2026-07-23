@@ -6,7 +6,9 @@ import {
   type ComponentType,
 } from 'react';
 import { FrameProvider } from './FrameContext';
+import { HistoryProvider, useHistory } from './HistoryContext';
 import { LayerStoreProvider, useLayerStore } from './LayerStore';
+import { CustomPresetSection } from './components/controls/CustomPresetSection';
 import { FrameControls } from './components/FrameControls';
 import { LayerStackPanel } from './components/LayerStackPanel';
 import { PlotActions } from './components/PlotActions';
@@ -18,7 +20,9 @@ import type { ControlsProps } from './modules/types';
 // handle bar), in px.
 const SHEET_PEEK = 60;
 
-/** The selected layer's module Controls, bound to that layer's state. */
+/** The selected layer's module Controls, bound to that layer's state, plus
+ *  the shared "My presets" section (shell-level so it needs no per-module
+ *  wiring — a custom preset is a full-state snapshot). */
 function SelectedLayerControls() {
   const { layers, selectedId, updateState } = useLayerStore();
   const layer = layers.find((l) => l.instanceId === selectedId) ?? layers[layers.length - 1];
@@ -26,13 +30,50 @@ function SelectedLayerControls() {
   const mod = getModule(layer.moduleId);
   const Controls = mod.Controls as ComponentType<ControlsProps<unknown>>;
   return (
-    <Controls
-      key={layer.instanceId}
-      state={layer.state}
-      update={(u) => updateState(layer.instanceId, u)}
-      instanceId={layer.instanceId}
-      selected
-    />
+    <>
+      <Controls
+        key={layer.instanceId}
+        state={layer.state}
+        update={(u) => updateState(layer.instanceId, u)}
+        instanceId={layer.instanceId}
+        selected
+      />
+      <CustomPresetSection
+        moduleId={layer.moduleId}
+        state={layer.state}
+        update={(patch) => updateState(layer.instanceId, patch)}
+      />
+    </>
+  );
+}
+
+/** Undo/redo pair in the sidebar header; keyboard shortcuts live in the
+ *  HistoryProvider so they work with the sidebar collapsed. */
+function UndoRedoButtons() {
+  const { undo, redo, canUndo, canRedo } = useHistory();
+  return (
+    <div className="undo-redo" role="group" aria-label="History">
+      <button
+        type="button"
+        className="history-btn"
+        aria-label="Undo"
+        title="Undo (Ctrl+Z)"
+        disabled={!canUndo}
+        onClick={undo}
+      >
+        ↺
+      </button>
+      <button
+        type="button"
+        className="history-btn"
+        aria-label="Redo"
+        title="Redo (Ctrl+Shift+Z)"
+        disabled={!canRedo}
+        onClick={redo}
+      >
+        ↻
+      </button>
+    </div>
   );
 }
 
@@ -124,6 +165,7 @@ function Shell() {
             <h1>Flow Lines</h1>
             <p className="subtitle">Generative Art for Pen Plotters</p>
           </div>
+          <UndoRedoButtons />
           <button
             type="button"
             className="sidebar-toggle"
@@ -166,7 +208,9 @@ export function App() {
   return (
     <FrameProvider>
       <LayerStoreProvider>
-        <Shell />
+        <HistoryProvider>
+          <Shell />
+        </HistoryProvider>
       </LayerStoreProvider>
     </FrameProvider>
   );

@@ -47,6 +47,8 @@ interface LayerStoreValue {
   setHoldOff: (instanceId: string, mm: number) => void;
   updateState: (instanceId: string, update: StateUpdate<unknown>) => void;
   publishOutput: (instanceId: string, output: LayerOutput | null, busy: boolean) => void;
+  /** Wholesale replace the stack from an undo/redo snapshot. */
+  restoreLayers: (layers: Layer[], selectedId: string) => void;
   canAdd: boolean;
 }
 
@@ -172,6 +174,29 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  // Undo/redo restore: snapshots were valid states (so the MAX_LAYERS cap
+  // always holds) and every entry is immutable, so a wholesale swap is safe.
+  // Live outputs for layers not in the restored stack are pruned (mirrors
+  // removeLayer); a re-added live layer remounts fresh and republishes.
+  const restoreLayers = useCallback((next: Layer[], nextSelectedId: string) => {
+    setLayers(next);
+    setSelectedId(
+      next.some((l) => l.instanceId === nextSelectedId)
+        ? nextSelectedId
+        : next.length
+          ? next[next.length - 1].instanceId
+          : ''
+    );
+    setLiveOutputs((prev) => {
+      const keep = new Set(next.map((l) => l.instanceId));
+      const stale = Object.keys(prev).filter((id) => !keep.has(id));
+      if (!stale.length) return prev;
+      const out = { ...prev };
+      stale.forEach((id) => delete out[id]);
+      return out;
+    });
+  }, []);
+
   const publishOutput = useCallback(
     (instanceId: string, output: LayerOutput | null, busy: boolean) => {
       setLiveOutputs((prev) => {
@@ -197,6 +222,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       setHoldOff,
       updateState,
       publishOutput,
+      restoreLayers,
       canAdd: layers.length < MAX_LAYERS,
     }),
     [
@@ -212,6 +238,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       setHoldOff,
       updateState,
       publishOutput,
+      restoreLayers,
     ]
   );
 
