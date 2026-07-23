@@ -63,6 +63,17 @@ export type {
   MeanderOxbow,
 } from './meander/index.js';
 
+// Coral — differential growth (self-repelling loops that buckle into folds)
+export { generateCoral, simulateCoral, CORAL_PRESETS } from './coral/index.js';
+export type {
+  CoralOptions,
+  CoralPreset,
+  CoralSeedShape,
+  CoralSimParams,
+  CoralSimResult,
+  CoralRing,
+} from './coral/index.js';
+
 // Complex-valued rational-function flow field (Savva-style poles & zeros)
 export { generateComplexFlow } from './complex-flow.js';
 export type {

@@ -13,6 +13,7 @@ import { registerMachine } from './commands/machine.js';
 import { registerFracture } from './commands/fracture.js';
 import { registerMarbling } from './commands/marbling.js';
 import { registerMeander } from './commands/meander.js';
+import { registerCoral } from './commands/coral.js';
 
 const program = new Command();
 
@@ -35,5 +36,6 @@ registerMachine(program);
 registerFracture(program);
 registerMarbling(program);
 registerMeander(program);
+registerCoral(program);
 
 program.parse();
