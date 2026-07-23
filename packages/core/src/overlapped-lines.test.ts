@@ -134,6 +134,28 @@ describe('generateOverlappedLines', () => {
     expect(Math.max(...ys)).toBeGreaterThan(179.5);
   });
 
+  it('clips the pattern to an organic blob mask', () => {
+    const blob: MaskShape[] = [
+      { type: 'blob', cx: 200, cy: 150, rx: 120, ry: 90, irregularity: 0.6, seed: 11 },
+    ];
+    const r = generateOverlappedLines(baseOptions({ maskShapes: blob }));
+    expect(r.lines.length).toBeGreaterThan(0);
+    // The blob is inscribed in its rx/ry box; every point stays within it.
+    for (const line of r.lines) {
+      for (const p of line.points) {
+        expect(Math.abs(p.x - 200)).toBeLessThanOrEqual(120 + 1e-6);
+        expect(Math.abs(p.y - 150)).toBeLessThanOrEqual(90 + 1e-6);
+      }
+    }
+    // Deterministic per shape seed, and the boundary genuinely varies with it.
+    const again = generateOverlappedLines(baseOptions({ maskShapes: blob }));
+    expect(JSON.stringify(again.lines)).toBe(JSON.stringify(r.lines));
+    const other = generateOverlappedLines(
+      baseOptions({ maskShapes: [{ ...blob[0], seed: 12 } as MaskShape] })
+    );
+    expect(JSON.stringify(other.lines)).not.toBe(JSON.stringify(r.lines));
+  });
+
   it('clips the pattern to a drawn-line band mask', () => {
     const band: MaskShape[] = [
       { type: 'band', path: [{ x: 60, y: 150 }, { x: 340, y: 150 }], halfWidthPx: 15 },
@@ -173,6 +195,15 @@ describe('pointInMask', () => {
     ];
     expect(pointInMask(band, 50, 3)).toBe(true);
     expect(pointInMask(band, 50, 8)).toBe(false);
+  });
+
+  it('tests blobs: inside near the centre, outside past the bounding box', () => {
+    const blob: MaskShape[] = [
+      { type: 'blob', cx: 0, cy: 0, rx: 100, ry: 80, irregularity: 0.5, seed: 3 },
+    ];
+    expect(pointInMask(blob, 0, 0)).toBe(true);
+    expect(pointInMask(blob, 101, 0)).toBe(false);
+    expect(pointInMask(blob, 0, 81)).toBe(false);
   });
 
   it('is the union of multiple shapes', () => {

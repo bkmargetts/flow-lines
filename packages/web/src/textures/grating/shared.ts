@@ -6,7 +6,7 @@ import { buildPaletteLayerColors } from '../../lib/palette';
  * project and the background-texture module. Project-only extras (pen width,
  * the drawn-line band path + draw mode) live on the project's own state.
  */
-export type GratingMaskMode = 'none' | 'strips' | 'band' | 'rect' | 'ellipse';
+export type GratingMaskMode = 'none' | 'strips' | 'band' | 'rect' | 'ellipse' | 'blob';
 
 export interface GratingParams {
   angleDeg: number;
@@ -35,6 +35,8 @@ export interface GratingParams {
   drawMode: boolean;
   maskWidthPct: number;
   maskHeightPct: number;
+  /** Boundary irregularity for the 'blob' mask, 0..1. */
+  maskIrregularity: number;
 }
 
 export const defaultGratingParams: GratingParams = {
@@ -62,6 +64,7 @@ export const defaultGratingParams: GratingParams = {
   drawMode: false,
   maskWidthPct: 0.6,
   maskHeightPct: 0.6,
+  maskIrregularity: 0.35,
 };
 
 /** Roll a fresh grating — spacing, angle, drift, noise and hand qualities all
@@ -106,11 +109,27 @@ export function parametricMaskShapes(
         },
       ];
     case 'rect':
-    case 'ellipse': {
+    case 'ellipse':
+    case 'blob': {
       const w = (page.widthPx - 2 * marginPx) * p.maskWidthPct;
       const h = (page.heightPx - 2 * marginPx) * p.maskHeightPct;
       const cx = page.widthPx / 2;
       const cy = page.heightPx / 2;
+      if (p.maskMode === 'blob') {
+        // Shape seed = pattern seed: the same seed reproduces the same
+        // drawing, boundary included, matching the SeedControl's promise.
+        return [
+          {
+            type: 'blob',
+            cx,
+            cy,
+            rx: w / 2,
+            ry: h / 2,
+            irregularity: p.maskIrregularity,
+            seed: p.seed,
+          },
+        ];
+      }
       return p.maskMode === 'rect'
         ? [{ type: 'rect', x: cx - w / 2, y: cy - h / 2, w, h }]
         : [{ type: 'ellipse', cx, cy, rx: w / 2, ry: h / 2 }];

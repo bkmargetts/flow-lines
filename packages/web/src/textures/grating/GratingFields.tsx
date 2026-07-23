@@ -12,6 +12,7 @@ const ALL_MASK_MODES: { id: GratingMaskMode; label: string }[] = [
   { id: 'band', label: 'Drawn line + band' },
   { id: 'rect', label: 'Rectangle' },
   { id: 'ellipse', label: 'Ellipse' },
+  { id: 'blob', label: 'Organic blob' },
 ];
 
 interface GratingFieldsProps {
@@ -253,7 +254,9 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
         </>
       )}
 
-      {(params.maskMode === 'rect' || params.maskMode === 'ellipse') && (
+      {(params.maskMode === 'rect' ||
+        params.maskMode === 'ellipse' ||
+        params.maskMode === 'blob') && (
         <>
           <div className="control-group">
             <label>
@@ -288,6 +291,23 @@ export function GratingFields({ params, update, maskModes, bandControls }: Grati
             />
           </div>
         </>
+      )}
+
+      {params.maskMode === 'blob' && (
+        <Slider
+          labelNode={
+            <span className="label-text">
+              Irregularity
+              <InfoTip text="How far the blob's boundary wanders from an ellipse — 0 is a clean oval, higher grows hand-sketched lobes. The shape follows the pattern seed." />
+            </span>
+          }
+          value={params.maskIrregularity}
+          min={0}
+          max={1}
+          step={0.05}
+          onChange={(v) => update({ maskIrregularity: v })}
+          format={(v) => v.toFixed(2)}
+        />
       )}
 
       <h3 className="section-title">Line style</h3>

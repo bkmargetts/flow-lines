@@ -1,6 +1,7 @@
 import { createNoise } from './noise.js';
 import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { randomSeed } from './lib/rng.js';
+import { normalizedBlobBoundary } from './texture-region.js';
 
 /**
  * Interleaved-grating texture. A block of evenly-spaced straight lines is
@@ -67,7 +68,11 @@ export type MaskShape =
   | { type: 'strips'; angleDeg: number; widthPx: number; gapPx: number; phasePx?: number }
   | { type: 'band'; path: Point[]; halfWidthPx: number }
   | { type: 'rect'; x: number; y: number; w: number; h: number }
-  | { type: 'ellipse'; cx: number; cy: number; rx: number; ry: number };
+  | { type: 'ellipse'; cx: number; cy: number; rx: number; ry: number }
+  // Seeded organic blob inscribed in its rx/ry box — a hand-sketched patch
+  // rather than a geometric panel. Hard-edged; a ragged fade like the classic
+  // texture's organic frame is a possible follow-up.
+  | { type: 'blob'; cx: number; cy: number; rx: number; ry: number; irregularity: number; seed: number };
 
 /** Squared distance from point (px,py) to segment (ax,ay)-(bx,by). */
 function distSqToSegment(
@@ -88,6 +93,19 @@ function distSqToSegment(
   return (px - cx) * (px - cx) + (py - cy) * (py - cy);
 }
 
+// A blob's seeded harmonic boundary can't be recomputed per point; compile it
+// once per shape object and cache. Pure in the shape's fields, so caching
+// never changes the result.
+const blobBoundaries = new WeakMap<object, (theta: number) => number>();
+function blobBoundary(shape: { irregularity: number; seed: number }): (theta: number) => number {
+  let b = blobBoundaries.get(shape);
+  if (!b) {
+    b = normalizedBlobBoundary(shape.seed, shape.irregularity);
+    blobBoundaries.set(shape, b);
+  }
+  return b;
+}
+
 function inShape(shape: MaskShape, x: number, y: number): boolean {
   switch (shape.type) {
     case 'rect':
@@ -106,6 +124,14 @@ function inShape(shape: MaskShape, x: number, y: number): boolean {
       const s = x * Math.cos(rad) + y * Math.sin(rad) - (shape.phasePx ?? 0);
       const m = ((s % period) + period) % period;
       return m < shape.widthPx;
+    }
+    case 'blob': {
+      if (shape.rx <= 0 || shape.ry <= 0) return false;
+      const ex = (x - shape.cx) / shape.rx;
+      const ey = (y - shape.cy) / shape.ry;
+      const r = Math.hypot(ex, ey);
+      if (r === 0) return true;
+      return r <= blobBoundary(shape)(Math.atan2(ey, ex));
     }
     case 'band': {
       const pts = shape.path;

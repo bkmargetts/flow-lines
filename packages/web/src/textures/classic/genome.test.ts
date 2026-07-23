@@ -9,7 +9,15 @@ import { defaultClassicParams } from './types';
  * never override the user's style or ink choices.
  */
 
-const STYLES: TextureStyle[] = ['hatch', 'grid', 'stipple', 'contours', 'shapes', 'dashes'];
+const STYLES: TextureStyle[] = [
+  'hatch',
+  'grid',
+  'stipple',
+  'contours',
+  'shapes',
+  'dashes',
+  'scribble',
+];
 
 // Slider bounds from ClassicControls (min/max per knob).
 const BOUNDS: Record<string, [number, number]> = {
@@ -33,6 +41,13 @@ const SHAPE_BOUNDS: Record<string, [number, number]> = {
   sizeMm: [1, 20],
   overlap: [0, 0.9],
 };
+const SCRIBBLE_BOUNDS: Record<string, [number, number]> = {
+  loopSizeMm: [1, 15],
+  advance: [0.2, 1.5],
+  slant: [-1, 1],
+  wobbleMm: [0, 2],
+  sparsity: [0, 0.9],
+};
 
 describe('randomClassicGenome', () => {
   it('never touches style, colour, or seed', () => {
@@ -42,6 +57,10 @@ describe('randomClassicGenome', () => {
         expect(g).not.toHaveProperty('style');
         expect(g).not.toHaveProperty('color');
         expect(g).not.toHaveProperty('seed');
+        // The frame region is user structure (like the grating's mask block):
+        // where the texture sits on the page is a composition choice, not a
+        // surprise to reroll.
+        expect(g).not.toHaveProperty('region');
       }
     }
   });
@@ -62,6 +81,13 @@ describe('randomClassicGenome', () => {
           for (const [key, [lo, hi]] of Object.entries(DASH_BOUNDS)) {
             expect(dashes[key], `dashes.${key}`).toBeGreaterThanOrEqual(lo);
             expect(dashes[key], `dashes.${key}`).toBeLessThanOrEqual(hi);
+          }
+        }
+        const scribble = g.scribble as Record<string, number> | undefined;
+        if (scribble) {
+          for (const [key, [lo, hi]] of Object.entries(SCRIBBLE_BOUNDS)) {
+            expect(scribble[key], `scribble.${key}`).toBeGreaterThanOrEqual(lo);
+            expect(scribble[key], `scribble.${key}`).toBeLessThanOrEqual(hi);
           }
         }
         const shapes = g.shapes as Record<string, unknown> | undefined;
@@ -90,6 +116,10 @@ describe('randomClassicGenome', () => {
     expect(g('dashes')).not.toHaveProperty('scale'); // no Mark size slider
     expect(g('shapes')).toHaveProperty('shapes');
     expect(g('shapes')).not.toHaveProperty('scale');
+    expect(g('scribble')).toHaveProperty('scribble');
+    expect(g('scribble')).not.toHaveProperty('scale'); // no Mark size slider
+    expect(g('scribble')).not.toHaveProperty('dashes');
+    expect(g('hatch')).not.toHaveProperty('scribble');
   });
 
   it('rolled sub-objects carry every knob their panel shows', () => {
@@ -98,5 +128,7 @@ describe('randomClassicGenome', () => {
     // The internal wobble wavelength has no slider and keeps its default.
     expect(dashes).not.toHaveProperty('wobbleWavelengthMm');
     expect(defaultClassicParams.dashes.wobbleWavelengthMm).toBeDefined();
+    const scribble = randomClassicGenome('scribble', Math.random).scribble!;
+    for (const key of Object.keys(SCRIBBLE_BOUNDS)) expect(scribble).toHaveProperty(key);
   });
 });
