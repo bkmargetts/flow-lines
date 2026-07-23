@@ -19,7 +19,7 @@ export function renderCoral(state: CoralState, env: RenderEnv): LayerOutput {
     preset: state.preset,
     iterations: state.iterations,
     growth: state.growth,
-    repulsion: state.repulsionMm * page.pxPerMm,
+    foldDiv: state.foldDiv,
     maxNodes: state.maxNodes,
     noiseScale: state.noiseScale,
     patchiness: state.patchiness,
@@ -31,10 +31,6 @@ export function renderCoral(state: CoralState, env: RenderEnv): LayerOutput {
     fade: state.fade,
     boldPasses: state.boldPasses,
     wobble: state.wobble,
-    // Anchor seed/fold sizing at the A3 short edge (297mm) so bigger sheets
-    // grow a larger organism at the same physical fold scale; a no-op at
-    // A4-and-below.
-    refMinDim: 297 * page.pxPerMm,
   };
 
   const result = generateCoral(options);

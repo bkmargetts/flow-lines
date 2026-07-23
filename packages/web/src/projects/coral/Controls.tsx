@@ -25,16 +25,6 @@ const SEED_SHAPE_LABELS: Record<CoralSeedShape, string> = {
   blobs: 'Blobs (colonies)',
 };
 
-/** The presets' page-relative fold wavelength, translated to millimetres for
- * the physical slider (anchored at the ~190mm inner dimension of A4). */
-const PRESET_REPULSION_MM: Record<CoralPreset, number> = {
-  reef: 7,
-  brain: 5,
-  lichen: 6.5,
-  bloom: 9.5,
-  maze: 7,
-};
-
 /**
  * Roll a whole new organism. Every knob lands inside its slider's range but
  * biased off the extremes so a roll never comes out unreadable (or takes tens
@@ -48,7 +38,7 @@ export function randomCoralGenome(rng: () => number): Partial<CoralState> {
   return {
     iterations: 150 + Math.round(rng() * 550),
     growth: Number((0.25 + rng() * 0.7).toFixed(2)),
-    repulsionMm: Number((3 + rng() * 7).toFixed(1)),
+    foldDiv: 14 + Math.round(rng() * 22),
     maxNodes: 1200 + Math.round(rng() * 2800),
     noiseScale: Number((0.08 + rng() * 0.3).toFixed(2)),
     patchiness: Number((rng() * 0.9).toFixed(2)),
@@ -76,7 +66,7 @@ export function CoralControls({ state, update }: ControlsProps<CoralState>) {
       seedShape: p.seedShape,
       iterations: p.iterations,
       growth: p.growth,
-      repulsionMm: PRESET_REPULSION_MM[preset],
+      foldDiv: p.foldDiv,
       patchiness: p.patchiness,
       curvatureBias: p.curvatureBias,
       maxNodes: p.maxNodes,
@@ -130,16 +120,15 @@ export function CoralControls({ state, update }: ControlsProps<CoralState>) {
       <Slider
         labelNode={
           <span className="label-text">
-            Fold scale
-            <InfoTip text="The physical wavelength the curve buckles at, in millimetres — the width of a fold on paper. Everything else scales from it." />
+            Fold count
+            <InfoTip text="How many folds fit across the sheet — the wavelength the curve buckles at, as a divisor of the page. Higher is finer. Fold size scales with the paper, so the composition holds from A5 to A1 at the same render cost." />
           </span>
         }
-        value={state.repulsionMm}
-        min={2}
-        max={12}
-        step={0.5}
-        onChange={(v) => updateState({ repulsionMm: v })}
-        format={(v) => `${v}mm`}
+        value={state.foldDiv}
+        min={12}
+        max={40}
+        step={1}
+        onChange={(v) => updateState({ foldDiv: v })}
       />
 
       <Slider

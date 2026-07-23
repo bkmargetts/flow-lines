@@ -34,14 +34,6 @@ export interface CoralOptions {
   margin?: number;
   /** Seed: seed geometry, growth gate, stroke breaks */
   seed?: number;
-  /**
-   * Reference min dimension in px — clamps the dimension feature sizes (fold
-   * wavelength, node spacing, seed radius) derive from so the organism keeps
-   * its tuned physical scale on sheets larger than the tuning anchor; it
-   * still grows into the real page. Callers pass 297mm × pxPerMm; unset or
-   * ≥ the page's min dimension is a no-op.
-   */
-  refMinDim?: number;
   /** Named look preset (default 'reef') */
   preset?: CoralPreset;
 
@@ -50,7 +42,14 @@ export interface CoralOptions {
   iterations?: number;
   /** Insertion rate, 0..1 — how eagerly the curve grows (default preset) */
   growth?: number;
-  /** Fold wavelength: repulsion radius in px (default ~minDim/26) */
+  /**
+   * Fold wavelength as a divisor of the min dimension — smaller is chunkier
+   * (default preset). Every feature size derives from the page, so the
+   * composition (folds across the sheet) holds at any sheet size at constant
+   * cost — deliberately unlike meander's physical-scale anchoring.
+   */
+  foldDiv?: number;
+  /** Fold wavelength: absolute repulsion radius in px (overrides foldDiv) */
   repulsion?: number;
   /** Approximate node cap — growth stops here (default preset) */
   maxNodes?: number;
@@ -101,7 +100,7 @@ export const CORAL_PRESETS: Record<
     seedShape: CoralSeedShape;
     iterations: number;
     growth: number;
-    /** Fold wavelength as a divisor of the sizing dimension */
+    /** Fold wavelength as a divisor of the min dimension */
     foldDiv: number;
     patchiness: number;
     curvatureBias: number;
@@ -214,13 +213,13 @@ export function generateCoral(options: CoralOptions): FlowLinesResult {
   const empty = (): FlowLinesResult => ({ lines: [], width, height, seed });
   if (innerW < 16 || innerH < 16) return empty();
   const minDim = Math.min(innerW, innerH);
-  // Feature sizes anchor at refMinDim on oversized sheets (identity wherever
-  // minDim is smaller); the organism still grows into the real page.
-  const sizingDim = Math.min(minDim, options.refMinDim ?? Infinity);
 
-  const R = clamp(options.repulsion ?? sizingDim / p.foldDiv, 4, sizingDim / 4);
-  const edgeLen = clamp(R / 6, 1.5, 8);
-  const noiseScale = clamp(options.noiseScale ?? 0.18, 0.02, 1) * sizingDim;
+  const foldDiv = clamp(options.foldDiv ?? p.foldDiv, 8, 60);
+  const R = clamp(options.repulsion ?? minDim / foldDiv, 4, minDim / 4);
+  // Spacing tracks the fold wavelength (no upper cap — capping it would let
+  // node count creep back up on big sheets and break constant cost).
+  const edgeLen = Math.max(1.5, R / 6);
+  const noiseScale = clamp(options.noiseScale ?? 0.18, 0.02, 1) * minDim;
   // The point budget: history is a multiple of the node cap, so stride the
   // snapshots down before they can swamp the plot.
   const rings = Math.min(
@@ -236,14 +235,14 @@ export function generateCoral(options: CoralOptions): FlowLinesResult {
   const cy = (y0 + y1) / 2;
   const seedLoops: Point[][] = [];
   if (seedShape === 'circle') {
-    seedLoops.push(circleSeed(cx, cy, sizingDim * 0.14, edgeLen));
+    seedLoops.push(circleSeed(cx, cy, minDim * 0.14, edgeLen));
   } else if (seedShape === 'polygon') {
-    seedLoops.push(polygonSeed(cx, cy, sizingDim * 0.16, edgeLen, rng));
+    seedLoops.push(polygonSeed(cx, cy, minDim * 0.16, edgeLen, rng));
   } else if (seedShape === 'blobs') {
     // Colonies scattered with breathing room: rejection-sampled centres, a
     // bounded number of tries so pathological rects still terminate.
-    const pad = sizingDim * 0.12;
-    const minSep = sizingDim * 0.3;
+    const pad = minDim * 0.12;
+    const minSep = minDim * 0.3;
     const centres: Point[] = [];
     for (let tries = 0; centres.length < blobCount && tries < 200; tries++) {
       const bx = x0 + pad + rng() * Math.max(1, innerW - pad * 2);
@@ -253,7 +252,7 @@ export function generateCoral(options: CoralOptions): FlowLinesResult {
       }
     }
     for (const c of centres) {
-      seedLoops.push(circleSeed(c.x, c.y, sizingDim * (0.05 + rng() * 0.03), edgeLen));
+      seedLoops.push(circleSeed(c.x, c.y, minDim * (0.05 + rng() * 0.03), edgeLen));
     }
   } else {
     // Pinned line across the frame, a gentle arc of noise so the buckling

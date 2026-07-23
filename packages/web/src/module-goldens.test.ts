@@ -73,7 +73,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
     seedShape: 'polygon',
     iterations: 300,
     growth: 0.5,
-    repulsionMm: 9.5,
+    foldDiv: 20,
     patchiness: 0.3,
     curvatureBias: 0.85,
     maxNodes: 3000,

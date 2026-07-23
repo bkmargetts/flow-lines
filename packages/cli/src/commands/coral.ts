@@ -28,7 +28,11 @@ export function registerCoral(program: Command) {
     .option('--preset <name>', 'Look preset: reef | brain | lichen | bloom | maze', 'reef')
     .option('--iterations <number>', 'Growth steps — how long the organism has lived')
     .option('--growth <number>', 'Insertion rate (0-1); how eagerly the curve grows')
-    .option('--repulsion <number>', 'Fold wavelength: repulsion radius in px')
+    .option(
+      '--fold-div <number>',
+      'Fold wavelength as a divisor of the min dimension — smaller is chunkier'
+    )
+    .option('--repulsion <number>', 'Fold wavelength: absolute repulsion radius in px')
     .option('--max-nodes <number>', 'Approximate node cap — growth stops here')
     .option('--noise-scale <number>', 'Growth-gate patch size as a fraction of the min dimension')
     .option('--patchiness <number>', 'How hard noise gates growth into patches (0-1)')
@@ -63,6 +67,7 @@ export function registerCoral(program: Command) {
         preset: options.preset as CoralPreset,
         iterations: options.iterations ? parseInt(options.iterations, 10) : undefined,
         growth: options.growth ? parseFloat(options.growth) : undefined,
+        foldDiv: options.foldDiv ? parseFloat(options.foldDiv) : undefined,
         repulsion: options.repulsion ? parseFloat(options.repulsion) : undefined,
         maxNodes: options.maxNodes ? parseInt(options.maxNodes, 10) : undefined,
         noiseScale: options.noiseScale ? parseFloat(options.noiseScale) : undefined,
@@ -77,11 +82,6 @@ export function registerCoral(program: Command) {
         taper: options.taper ? parseFloat(options.taper) : undefined,
         wobble: options.wobble ? parseFloat(options.wobble) : undefined,
         optimize: options.optimize,
-        // With --paper, anchor feature sizes at the largest previously-possible
-        // short edge (A3, 297mm) so bigger sheets grow a larger organism at the
-        // same physical fold scale; a no-op at A4-and-below. Raw px mode:
-        // page-derived sizing, untouched.
-        refMinDim: frame.page ? 297 * frame.page.pxPerMm : undefined,
       };
 
       console.log('Rendering coral growth...');

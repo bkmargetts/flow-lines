@@ -116,7 +116,7 @@ const SPECS: GenomeSpec[] = [
     bounds: {
       iterations: [100, 1200],
       growth: [0.05, 1],
-      repulsionMm: [2, 12],
+      foldDiv: [12, 40],
       maxNodes: [800, 6000],
       noiseScale: [0.06, 0.4],
       patchiness: [0, 1],
@@ -128,7 +128,7 @@ const SPECS: GenomeSpec[] = [
       boldPasses: [1, 6],
       wobble: [0, 3],
     },
-    ints: ['iterations', 'maxNodes', 'blobs', 'rings', 'boldPasses'],
+    ints: ['iterations', 'foldDiv', 'maxNodes', 'blobs', 'rings', 'boldPasses'],
     enums: { seedShape: ['circle', 'polygon', 'line', 'blobs'] },
     forbidden: [
       'seed',

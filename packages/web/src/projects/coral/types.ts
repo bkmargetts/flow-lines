@@ -3,9 +3,10 @@ import { randomSeed } from '../../lib/random';
 
 /**
  * Coral (differential growth) settings. The page frame (paper, orientation,
- * resolution, margin) lives in the shared FrameContext, not here. Simulation
- * knobs are unitless (0..1 or counts); the fold wavelength is physical (mm)
- * so the organism keeps its scale across sheet sizes.
+ * resolution, margin) lives in the shared FrameContext, not here. Every knob
+ * is page-relative (0..1, counts, or a divisor of the min dimension) so the
+ * composition — folds across the sheet — holds at any sheet size at constant
+ * cost.
  */
 export interface CoralState {
   seed: number;
@@ -17,8 +18,8 @@ export interface CoralState {
   iterations: number;
   /** Insertion rate, 0..1 — how eagerly the curve grows */
   growth: number;
-  /** Fold wavelength (repulsion radius) in millimetres */
-  repulsionMm: number;
+  /** Fold wavelength as a divisor of the min dimension — smaller is chunkier */
+  foldDiv: number;
   /** Approximate node cap — growth stops here */
   maxNodes: number;
   /** Growth-gate patch size as a fraction of the min dimension */
@@ -66,7 +67,7 @@ export const defaultCoralState: CoralState = {
 
   iterations: 420,
   growth: 0.6,
-  repulsionMm: 7,
+  foldDiv: 26,
   maxNodes: 3000,
   noiseScale: 0.18,
   patchiness: 0.45,
