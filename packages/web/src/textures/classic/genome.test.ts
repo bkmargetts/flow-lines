@@ -4,10 +4,9 @@ import { randomClassicGenome } from './Controls';
 import { defaultClassicParams } from './types';
 
 /**
- * The 🎲 Randomize-everything genome: it rolls the style itself plus every
- * knob the rolled style exposes, all inside the slider bounds the panel
- * shows, and never overrides the user's ink choice, seed, or frame region
- * (the composition block, same precedent as the grating's mask).
+ * The 🎲 Randomize-everything genome: it rolls the style itself, every knob
+ * the rolled style exposes, and the frame region — all inside the slider
+ * bounds the panel shows — and never overrides the user's ink choice or seed.
  */
 
 const STYLES: TextureStyle[] = [
@@ -49,6 +48,15 @@ const SCRIBBLE_BOUNDS: Record<string, [number, number]> = {
   wobbleMm: [0, 2],
   sparsity: [0, 0.9],
 };
+const REGION_BOUNDS: Record<string, [number, number]> = {
+  coverage: [0.4, 1],
+  irregularity: [0, 1],
+  offsetX: [-0.5, 0.5],
+  offsetY: [-0.5, 0.5],
+  patches: [1, 4],
+  fade: [0, 1],
+  falloff: [0, 1],
+};
 
 /** An rng whose first draw forces the style pick, random afterwards — pins
  *  per-style knob sets without depending on luck. The style is the genome's
@@ -65,22 +73,25 @@ function rngForStyle(style: TextureStyle): () => number {
 }
 
 describe('randomClassicGenome', () => {
-  it('rolls a style from the panel list; never touches colour, seed, or the frame region', () => {
+  it('rolls a style from the panel list; never touches colour or seed', () => {
     for (let roll = 0; roll < 100; roll++) {
       const g = randomClassicGenome(Math.random);
       expect(STYLES).toContain(g.style);
       expect(g).not.toHaveProperty('color');
       expect(g).not.toHaveProperty('seed');
-      expect(g).not.toHaveProperty('region');
     }
   });
 
-  it('reaches every style', () => {
-    const seen = new Set<TextureStyle>();
-    for (let roll = 0; roll < 500 && seen.size < STYLES.length; roll++) {
-      seen.add(randomClassicGenome(Math.random).style!);
+  it('reaches every style and both frame modes', () => {
+    const styles = new Set<TextureStyle>();
+    const frames = new Set<string>();
+    for (let roll = 0; roll < 500 && (styles.size < STYLES.length || frames.size < 2); roll++) {
+      const g = randomClassicGenome(Math.random);
+      styles.add(g.style!);
+      frames.add(g.region!.frame);
     }
-    expect([...seen].sort()).toEqual([...STYLES].sort());
+    expect([...styles].sort()).toEqual([...STYLES].sort());
+    expect([...frames].sort()).toEqual(['organic', 'rect']);
   });
 
   it('stays inside the slider bounds on every roll', () => {
@@ -115,6 +126,13 @@ describe('randomClassicGenome', () => {
         }
         expect(['square', 'circle', 'line']).toContain(shapes.kind);
       }
+      const region = g.region as Record<string, unknown>;
+      expect(['rect', 'organic']).toContain(region.frame);
+      for (const [key, [lo, hi]] of Object.entries(REGION_BOUNDS)) {
+        expect(region[key], `region.${key}`).toBeGreaterThanOrEqual(lo);
+        expect(region[key], `region.${key}`).toBeLessThanOrEqual(hi);
+      }
+      expect(Number.isInteger(region.patches), 'region.patches is an integer').toBe(true);
     }
   });
 

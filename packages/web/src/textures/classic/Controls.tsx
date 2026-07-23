@@ -21,14 +21,28 @@ const TEXTURE_STYLES: Array<{ id: TextureStyle; label: string }> = [
 
 const TEXTURE_INKS = ['#c9c2b4', '#b06a3c', '#5b6e7a', '#9aa0a6', '#1a1a1a'];
 
-/** Roll a fresh style and fresh values for every knob that style shows — the
- *  ink colour, the frame region (a composition choice) and the seed are left
- *  alone (the button rolls the seed itself). Ranges sit inside the slider
- *  bounds, biased away from the extremes so a surprise never lands unreadably
- *  dense or nearly blank. */
+/** Roll a fresh style, fresh values for every knob that style shows, and a
+ *  fresh frame region — only the ink colour and the seed are left alone (the
+ *  button rolls the seed itself). Ranges sit inside the slider bounds, biased
+ *  away from the extremes so a surprise never lands unreadably dense or
+ *  nearly blank. */
 export function randomClassicGenome(rng: () => number): Partial<ClassicParams> {
   const style = TEXTURE_STYLES[Math.floor(rng() * TEXTURE_STYLES.length)].id;
   const genome: Partial<ClassicParams> = { style };
+  // The frame: half the rolls keep the classic full rect, half go organic —
+  // mostly one patch, occasionally a small constellation. Falloff stays
+  // biased low so surprises don't read as half-erased.
+  const organic = rng() < 0.5;
+  genome.region = {
+    frame: organic ? 'organic' : 'rect',
+    coverage: Number((0.55 + rng() * 0.45).toFixed(2)),
+    irregularity: Number((rng() * 0.8).toFixed(2)),
+    offsetX: Number(((rng() - 0.5) * 0.7).toFixed(2)),
+    offsetY: Number(((rng() - 0.5) * 0.7).toFixed(2)),
+    patches: rng() < 0.6 ? 1 : 2 + Math.floor(rng() * 3),
+    fade: Number((rng() * 0.9).toFixed(2)),
+    falloff: rng() < 0.5 ? 0 : Number((rng() * 0.6).toFixed(2)),
+  };
   if (
     style === 'hatch' ||
     style === 'grid' ||
