@@ -23,6 +23,7 @@ import { noiseTextureModule } from '../projects/noise-texture';
 import { colorFieldModule } from '../projects/color-field';
 import { marblingModule } from '../projects/marbling';
 import { meanderModule } from '../projects/meander';
+import { coralModule } from '../projects/coral';
 
 /**
  * Every module, in panel order — the one flat registry the layer stack draws
@@ -56,6 +57,7 @@ export const MODULES: Module<any>[] = [
   colorFieldModule,
   marblingModule,
   meanderModule,
+  coralModule,
   classicTexture,
   gratingTexture,
   blankTexture,

@@ -21,6 +21,7 @@ import { generateSportsBalls } from './sports-balls/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateMeander } from './meander/index.js';
+import { generateCoral } from './coral/index.js';
 import { generateGesture } from './gesture/index.js';
 import { generateMachine } from './machine/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
@@ -157,6 +158,8 @@ for (const seed of SEEDS) {
     generateMarbling({ width: 300, height: 400, margin: 20, seed });
   CASES[`meander/atlas/${seed}`] = () =>
     generateMeander({ width: 300, height: 400, margin: 20, seed });
+  CASES[`coral/reef/${seed}`] = () =>
+    generateCoral({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -195,6 +198,24 @@ CASES['meander/young/42'] = () =>
   generateMeander({ width: 300, height: 400, margin: 20, seed: 42, preset: 'young' });
 CASES['meander/tangle/42'] = () =>
   generateMeander({ width: 300, height: 400, margin: 20, seed: 42, preset: 'tangle' });
+CASES['coral/bloom/42'] = () =>
+  generateCoral({ width: 300, height: 400, margin: 20, seed: 42, preset: 'bloom' });
+CASES['coral/lichen/42'] = () =>
+  generateCoral({ width: 300, height: 400, margin: 20, seed: 42, preset: 'lichen' });
+// The long-lived presets get explicit budgets: full defaults would double the
+// suite's runtime without pinning anything the short runs don't.
+CASES['coral/brain/42'] = () =>
+  generateCoral({ width: 300, height: 400, margin: 20, seed: 42, preset: 'brain', iterations: 300 });
+CASES['coral/maze/42'] = () =>
+  generateCoral({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    preset: 'maze',
+    iterations: 300,
+    maxNodes: 1500,
+  });
 CASES['botanical/wreath/42'] = () =>
   generateBotanical({ width: 300, height: 400, seed: 42, composition: 'wreath' });
 CASES['stickmen/energetic/42'] = () =>
