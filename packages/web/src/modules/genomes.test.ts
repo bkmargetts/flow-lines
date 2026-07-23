@@ -15,6 +15,7 @@ import { randomImageInkGenome } from '../projects/image-ink/genome';
 import { randomGratingGenome } from '../textures/grating/shared';
 import { randomMarblingGenome } from '../projects/marbling/presets';
 import { randomMeanderGenome } from '../projects/meander/Controls';
+import { randomCoralGenome } from '../projects/coral/Controls';
 
 /**
  * Every randomise-all genome must stay inside its sliders' ranges, pick enum
@@ -107,6 +108,37 @@ const SPECS: GenomeSpec[] = [
       'channelColor',
       'traceColor',
       'oxbowColor',
+    ],
+  },
+  {
+    name: 'coral',
+    genome: randomCoralGenome,
+    bounds: {
+      iterations: [100, 1200],
+      growth: [0.05, 1],
+      repulsionMm: [2, 12],
+      maxNodes: [800, 6000],
+      noiseScale: [0.06, 0.4],
+      patchiness: [0, 1],
+      curvatureBias: [0, 1],
+      jitter: [0, 0.8],
+      blobs: [2, 6],
+      rings: [0, 40],
+      fade: [0, 1],
+      boldPasses: [1, 6],
+      wobble: [0, 3],
+    },
+    ints: ['iterations', 'maxNodes', 'blobs', 'rings', 'boldPasses'],
+    enums: { seedShape: ['circle', 'polygon', 'line', 'blobs'] },
+    forbidden: [
+      'seed',
+      'preset',
+      'strokeColor',
+      'penWidthMm',
+      'multiInk',
+      'edgeColor',
+      'ringColor',
+      'relicColor',
     ],
   },
   {
