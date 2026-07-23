@@ -21,15 +21,14 @@ const TEXTURE_STYLES: Array<{ id: TextureStyle; label: string }> = [
 
 const TEXTURE_INKS = ['#c9c2b4', '#b06a3c', '#5b6e7a', '#9aa0a6', '#1a1a1a'];
 
-/** Roll fresh values for every knob the current style shows — the style itself
- *  and the ink colour are the user's choices and stay put. Ranges sit inside
- *  the slider bounds, biased away from the extremes so a surprise never lands
- *  unreadably dense or nearly blank. */
-export function randomClassicGenome(
-  style: TextureStyle,
-  rng: () => number
-): Partial<ClassicParams> {
-  const genome: Partial<ClassicParams> = {};
+/** Roll a fresh style and fresh values for every knob that style shows — the
+ *  ink colour, the frame region (a composition choice) and the seed are left
+ *  alone (the button rolls the seed itself). Ranges sit inside the slider
+ *  bounds, biased away from the extremes so a surprise never lands unreadably
+ *  dense or nearly blank. */
+export function randomClassicGenome(rng: () => number): Partial<ClassicParams> {
+  const style = TEXTURE_STYLES[Math.floor(rng() * TEXTURE_STYLES.length)].id;
+  const genome: Partial<ClassicParams> = { style };
   if (
     style === 'hatch' ||
     style === 'grid' ||
@@ -95,8 +94,7 @@ export function randomClassicGenome(
 
 /** Controls for the classic single-pen texture styles. */
 export function ClassicControls({ state, update }: ControlsProps<ClassicParams>) {
-  const surprise = () =>
-    update({ ...randomClassicGenome(state.style, Math.random), seed: randomSeed() });
+  const surprise = () => update({ ...randomClassicGenome(Math.random), seed: randomSeed() });
 
   return (
     <>
@@ -114,7 +112,7 @@ export function ClassicControls({ state, update }: ControlsProps<ClassicParams>)
         </select>
       </div>
 
-      <RandomiseButton onClick={surprise} hint="One roll for a fresh take on this style — or tune anything below." />
+      <RandomiseButton onClick={surprise} hint="One roll for a fresh style and take — or tune anything below." />
 
       {(state.style === 'hatch' ||
         state.style === 'grid' ||
