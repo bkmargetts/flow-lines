@@ -25,6 +25,9 @@ export interface HeartSpec {
   /** Build-time genome draws (0..1): hatch angle jitter, hatch phase, crack
    *  shape ×5, arrow angle — fixed count so knobs never move anyone. */
   g: number[];
+  /** Seed for the per-heart kid-hand rng (drawn unconditionally, LAST in the
+   *  misc stream, so the age knob can never shift placement or identity). */
+  childSeed: number;
   depth: number;
 }
 
@@ -153,6 +156,7 @@ export function placeHearts(o: HeartLayoutOptions, noise: SimplexNoise, seed: nu
     const arrow = miscRng() < o.arrows;
     const bold = miscRng() < o.boldOutline;
     const g = Array.from({ length: 8 }, () => miscRng());
+    const childSeed = Math.floor(miscRng() * 1e9);
     const bound = heartBoundRadius(r, plump);
 
     // Sampling window: the drawable box inset by the bounding radius (plus a
@@ -242,7 +246,7 @@ export function placeHearts(o: HeartLayoutOptions, noise: SimplexNoise, seed: nu
     }
     grid.add({ x: cx - o.x0, y: cy - o.y0 });
 
-    specs.push({ x: cx, y: cy, r, style, rot, plump, arrow, bold, g, depth: cy });
+    specs.push({ x: cx, y: cy, r, style, rot, plump, arrow, bold, g, childSeed, depth: cy });
   }
 
   // Depth size grading: a deterministic function of position (identities are

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateHearts, type HeartsOptions } from './hearts/index.js';
 import { placeHearts, HEART_STYLES, type HeartStyle } from './hearts/layout.js';
-import { heartOutline, hatchPolygon, heartBoundRadius } from './hearts/heart.js';
+import { heartOutline, hatchPolygon, heartBoundRadius, kidHand } from './hearts/heart.js';
 import { compileRegion, starRegion } from './stickmen/region.js';
 import { pointInPolygon } from './lib/polyline.js';
 import { createNoise } from './noise.js';
@@ -104,6 +104,133 @@ describe('generateHearts', () => {
   });
 });
 
+describe('artist age', () => {
+  it('age 18 (and unset) is byte-identical to the pre-age generator', () => {
+    const unset = JSON.stringify(generateHearts(BASE));
+    expect(JSON.stringify(generateHearts({ ...BASE, age: 18 }))).toBe(unset);
+    expect(JSON.stringify(generateHearts({ ...BASE, age: 25 }))).toBe(unset); // clamps
+  });
+
+  it('is deterministic per seed at a young age', () => {
+    const a = generateHearts({ ...BASE, age: 5 });
+    const b = generateHearts({ ...BASE, age: 5 });
+    expect(a).toEqual(b);
+  });
+
+  it('a younger hand shakes more (turning angle per arc length rises as age drops)', () => {
+    // Mean absolute turning angle per unit arc length — driven directly by
+    // the wobble boost (amp up, wavelength down), so robustly monotone where
+    // total ink is not (closure gaps and scribble connectors pull both ways).
+    const shake = (age: number): number => {
+      const res = generateHearts({ ...BASE, age, occlude: false, arrows: 0, shading: 0 });
+      let turn = 0;
+      let len = 0;
+      for (const l of res.lines) {
+        for (let i = 1; i < l.points.length; i++) {
+          const dx = l.points[i].x - l.points[i - 1].x;
+          const dy = l.points[i].y - l.points[i - 1].y;
+          len += Math.hypot(dx, dy);
+          if (i >= 2) {
+            const px = l.points[i - 1].x - l.points[i - 2].x;
+            const py = l.points[i - 1].y - l.points[i - 2].y;
+            const cross = px * dy - py * dx;
+            const dot = px * dx + py * dy;
+            turn += Math.abs(Math.atan2(cross, dot));
+          }
+        }
+      }
+      return turn / len;
+    };
+    const ages = [18, 12, 8, 4];
+    const shakes = ages.map(shake);
+    for (let i = 1; i < shakes.length; i++) {
+      expect(shakes[i]).toBeGreaterThan(shakes[i - 1]);
+    }
+  });
+
+  it('the kid warp keeps the outline simple and inside its bounding circle', () => {
+    for (const seedling of [1, 99, 4242, 777777]) {
+      const kid = kidHand(seedling, 1);
+      const pts = heartOutline(0, 0, 40, 0.3, 0.5, undefined, kid.warp);
+      const bound = heartBoundRadius(40, 0.5) + 1e-6;
+      for (const p of pts) expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(bound);
+      // No self-intersections: O(n²) segment sweep (n ≤ 96).
+      const segs = pts.length - 1;
+      for (let i = 0; i < segs; i++) {
+        for (let j = i + 2; j < segs; j++) {
+          if (i === 0 && j === segs - 1) continue; // shared closing vertex
+          const [a, b] = [pts[i], pts[i + 1]];
+          const [c, d] = [pts[j], pts[j + 1]];
+          const den = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x);
+          if (den === 0) continue;
+          const t = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / den;
+          const u = ((c.x - a.x) * (b.y - a.y) - (c.y - a.y) * (b.x - a.x)) / den;
+          const crosses = t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9;
+          expect(crosses, `segments ${i} and ${j} cross`).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('young outlines fail to close; teen outlines close', () => {
+    const opts: HeartsOptions = {
+      ...BASE,
+      count: 8,
+      heartScale: 60,
+      mix: { outline: 1 },
+      arrows: 0,
+      boldOutline: 0,
+      occlude: false,
+      wobble: 0,
+    };
+    const gapOf = (age: number): number[] =>
+      generateHearts({ ...opts, age })
+        .lines.filter((l) => l.layer === 'outline')
+        .map((l) => {
+          const a = l.points[0];
+          const b = l.points[l.points.length - 1];
+          return Math.hypot(a.x - b.x, a.y - b.y);
+        });
+    // Age 4: closure failure is near-certain — some outline has a real gap
+    // or revisits its start (overshoot ends away from the start point too).
+    expect(gapOf(4).some((d) => d > 1.4)).toBe(true);
+    // Age 15: the closure gate is 0 — every outline closes exactly.
+    for (const d of gapOf(15)) expect(d).toBeLessThan(1e-9);
+  });
+
+  it('young hatch fills scribble continuously; adult hatch stays discrete', () => {
+    const opts: HeartsOptions = {
+      ...BASE,
+      count: 8,
+      heartScale: 60,
+      mix: { hatched: 1 },
+      arrows: 0,
+      occlude: false,
+    };
+    const fillPointCounts = (age: number): number[] =>
+      generateHearts({ ...opts, age })
+        .lines.filter((l) => l.layer === 'fill')
+        .map((l) => l.points.length);
+    // applyHandDrawnStyle preserves point counts, so these are stable.
+    expect(fillPointCounts(5).some((n) => n >= 6)).toBe(true);
+    for (const n of fillPointCounts(18)) expect(n).toBe(2);
+  });
+
+  it('keeps every point finite and near the page at age 3', () => {
+    const res = generateHearts({ ...BASE, count: 60, age: 3, shading: 0.8, arrows: 0.5 });
+    for (const line of res.lines) {
+      for (const p of line.points) {
+        expect(Number.isFinite(p.x)).toBe(true);
+        expect(Number.isFinite(p.y)).toBe(true);
+        expect(p.x).toBeGreaterThan(-50);
+        expect(p.x).toBeLessThan(350);
+        expect(p.y).toBeGreaterThan(-50);
+        expect(p.y).toBeLessThan(450);
+      }
+    }
+  });
+});
+
 describe('placeHearts', () => {
   const noise = createNoise(1);
 
@@ -111,8 +238,8 @@ describe('placeHearts', () => {
     const all = placeHearts({ ...LAYOUT_BASE, mix: {} }, noise, 7);
     const some = placeHearts({ ...LAYOUT_BASE, mix: { solid: 1, broken: 3 } }, noise, 7);
     expect(some.length).toBe(all.length);
-    const key = (s: { x: number; y: number; r: number; rot: number; plump: number }): string =>
-      JSON.stringify([s.x, s.y, s.r, s.rot, s.plump]);
+    const key = (s: { x: number; y: number; r: number; rot: number; plump: number; childSeed: number }): string =>
+      JSON.stringify([s.x, s.y, s.r, s.rot, s.plump, s.childSeed]);
     expect(some.map(key).sort()).toEqual(all.map(key).sort());
     for (const s of some) expect(['solid', 'broken']).toContain(s.style);
   });
@@ -120,8 +247,8 @@ describe('placeHearts', () => {
   it('changing the decor knobs never moves a heart', () => {
     const plain = placeHearts({ ...LAYOUT_BASE, arrows: 0, boldOutline: 0 }, noise, 7);
     const dressed = placeHearts({ ...LAYOUT_BASE, arrows: 1, boldOutline: 1 }, noise, 7);
-    const key = (s: { x: number; y: number; r: number; rot: number; plump: number }): string =>
-      JSON.stringify([s.x, s.y, s.r, s.rot, s.plump]);
+    const key = (s: { x: number; y: number; r: number; rot: number; plump: number; childSeed: number }): string =>
+      JSON.stringify([s.x, s.y, s.r, s.rot, s.plump, s.childSeed]);
     expect(dressed.map(key)).toEqual(plain.map(key));
     expect(dressed.every((s) => s.arrow && s.bold)).toBe(true);
   });

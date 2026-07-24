@@ -33,6 +33,7 @@ export interface HeartsState {
   plumpness: number; // 0..1 — 0 tall and pointy, 1 wide and chubby
   plumpVariance: number; // 0..1 per-heart jitter
   tilt: number; // 0..1 rotation jitter
+  age: number; // 3..18 artist age; 18 = adult (today's exact output)
   mix: Record<HeartStyle, boolean>;
 
   // Fill / decor
@@ -73,6 +74,7 @@ export const defaultHeartsState: HeartsState = {
   plumpness: 0.5,
   plumpVariance: 0.25,
   tilt: 0.35,
+  age: 18,
   mix: {
     outline: true,
     solid: true,

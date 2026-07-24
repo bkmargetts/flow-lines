@@ -46,6 +46,7 @@ export function randomHeartsGenome(rng: () => number): Partial<HeartsState> {
     plumpness: Number((0.2 + rng() * 0.6).toFixed(2)),
     plumpVariance: Number((rng() * 0.5).toFixed(2)),
     tilt: Number((rng() * 0.8).toFixed(2)),
+    age: rng() < 0.7 ? 18 : 3 + Math.floor(rng() * 16),
     fillDensity: Number((0.25 + rng() * 0.6).toFixed(2)),
     hatchAngleDeg: Math.round((rng() * 2 - 1) * 60),
     hatchJitter: Number((rng() * 0.7).toFixed(2)),
@@ -121,6 +122,21 @@ export function HeartsControls({ state, update }: ControlsProps<HeartsState>) {
         step={0.01}
         onChange={(v) => update({ plumpness: v })}
         format={(v) => `${Math.round(v * 100)}%`}
+      />
+
+      <Slider
+        labelNode={
+          <span className="label-text">
+            Artist age
+            <InfoTip text="Who's holding the pen — young kids draw wonky, wobbly, scribbled-in hearts that don't quite close. 18 is today's steady adult hand." />
+          </span>
+        }
+        value={state.age}
+        min={3}
+        max={18}
+        step={1}
+        onChange={(v) => update({ age: v })}
+        format={(v) => (v >= 18 ? '18 (adult)' : `${v.toFixed(0)} yrs`)}
       />
 
       <div className="control-group">

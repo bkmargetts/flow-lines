@@ -295,6 +295,21 @@ CASES['hearts/arrows/42'] = () =>
     minSeparation: 50,
     arrows: 1,
   });
+CASES['hearts/age-6/42'] = () =>
+  generateHearts({ width: 300, height: 400, margin: 20, seed: 42, age: 6 });
+CASES['hearts/age-12/42'] = () =>
+  generateHearts({ width: 300, height: 400, margin: 20, seed: 42, age: 12 });
+CASES['hearts/age-4-solid/42'] = () =>
+  generateHearts({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    age: 4,
+    count: 25,
+    heartScale: 70,
+    mix: { solid: 1 },
+  });
 CASES['hearts/region-ring/42'] = () =>
   generateHearts({
     width: 300,

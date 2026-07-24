@@ -1,4 +1,5 @@
 import type { FlowLine, FlowLinesResult } from '../flow-lines.js';
+import { clamp, lerp } from '../lib/math.js';
 import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
@@ -58,6 +59,12 @@ export interface HeartsOptions {
   plumpVariance?: number;
   /** 0..1 — per-heart rotation jitter (±~35° at 1). */
   tilt?: number;
+  /** 3..18 — who's holding the pen. 18 (the default) is an adult and
+   *  reproduces today's exact output; younger hands draw progressively
+   *  lopsided, wobblier hearts that don't quite close, re-trace their lines,
+   *  nest solid fills off-centre and scribble the hatch out past the
+   *  outline. Values outside 3..18 clamp. */
+  age?: number;
   /** Style weights; omitted/<=0 excludes a style. All-off falls back to all. */
   mix?: Partial<Record<HeartStyle, number>>;
 
@@ -94,6 +101,7 @@ const DEFAULTS: Required<Omit<HeartsOptions, 'width' | 'height' | 'margin' | 'se
   plumpness: 0.5,
   plumpVariance: 0.25,
   tilt: 0.35,
+  age: 18,
   mix: {
     outline: 1,
     solid: 1,
@@ -152,6 +160,10 @@ export function generateHearts(options: HeartsOptions): FlowLinesResult {
     seed
   );
 
+  // 0 at 18 (adult — every kid effect is a skipped branch, so the adult
+  // path is byte-identical to the pre-age generator), 1 at 3.
+  const childish = (18 - clamp(o.age, 3, 18)) / 15;
+
   const builds: HeartBuild[] = specs.map((s) =>
     buildHeart(s, {
       shading: o.shading,
@@ -160,6 +172,7 @@ export function generateHearts(options: HeartsOptions): FlowLinesResult {
       hatchAngle: o.hatchAngle,
       hatchJitter: o.hatchJitter,
       penWidth: o.penWidth,
+      childish,
     })
   );
 
@@ -214,10 +227,19 @@ export function generateHearts(options: HeartsOptions): FlowLinesResult {
   // Hand finish: a light wobble, damped on the fill passes so concentric and
   // hatch lines never cross each other. Placement already insets each centre
   // by its bounding radius, so the pile stays on the sheet; the web layer
-  // still clips defensively for a clean plot.
+  // still clips defensively for a clean plot. A young hand shakes harder and
+  // faster (the boosted amplitude can poke ~1px past the margin — accepted,
+  // the web clip trims it); the adult branch keeps today's exact literals.
   const finished = applyHandDrawnStyle(
     { lines, width, height, seed },
-    { amplitude: o.wobble, wavelength: 38, seed, layerAmplitude: { fill: 0.5 } }
+    childish > 0
+      ? {
+          amplitude: o.wobble * (1 + 2.4 * Math.pow(childish, 1.7)),
+          wavelength: lerp(38, 22, childish),
+          seed,
+          layerAmplitude: { fill: lerp(0.5, 0.85, childish) },
+        }
+      : { amplitude: o.wobble, wavelength: 38, seed, layerAmplitude: { fill: 0.5 } }
   ).lines;
 
   return { lines: finished, width, height, seed };

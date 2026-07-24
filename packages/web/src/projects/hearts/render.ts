@@ -72,6 +72,7 @@ export function renderHearts(state: HeartsState, env: RenderEnv): LayerOutput {
     plumpness: state.plumpness,
     plumpVariance: state.plumpVariance,
     tilt: state.tilt,
+    age: state.age,
     mix,
 
     fillDensity: state.fillDensity,

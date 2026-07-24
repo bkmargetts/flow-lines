@@ -1,5 +1,6 @@
 import type { FlowLine, Point } from '../flow-lines.js';
 import { clamp, lerp } from '../lib/math.js';
+import { makeRandom } from '../lib/rng.js';
 import type { HeartSpec } from './layout.js';
 
 const TAU = Math.PI * 2;
@@ -12,6 +13,9 @@ export interface HeartBuildOpts {
   hatchAngle: number;
   hatchJitter: number;
   penWidth: number;
+  /** 0..1 — how young the hand holding the pen is (0 = adult, the default:
+   *  every kid effect is skipped entirely so the adult path is byte-stable). */
+  childish?: number;
 }
 
 export interface HeartBuild {
@@ -41,6 +45,9 @@ const heartSamples = (r: number): number => clamp(Math.round(r * 1.6), 24, 96);
  * plumpness stretches or squashes it vertically, rotated about the centre.
  * Insets are just re-evaluations at a smaller r — always simple and closed,
  * with the cleft shallowing toward the centre the way hand-nested hearts do.
+ * `warp` is an optional radial multiplier over the curve parameter t (the
+ * kid hand's lopsidedness); because it's a function of t, every inset shares
+ * it exactly and nested copies remain pure scalings that can never cross.
  */
 export function heartOutline(
   cx: number,
@@ -48,7 +55,8 @@ export function heartOutline(
   r: number,
   rot: number,
   plump: number,
-  n = heartSamples(r)
+  n = heartSamples(r),
+  warp?: (t: number) => number
 ): Point[] {
   const ay = heartAspect(plump);
   const cosR = Math.cos(rot);
@@ -59,11 +67,73 @@ export function heartOutline(
     // x ∈ [-16,16], y ∈ [-17,12] (y up); normalize by 17 and flip y for the page.
     const hx = 16 * Math.pow(Math.sin(t), 3);
     const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-    const dx = (hx / 17) * r;
-    const dy = (-hy / 17) * r * ay;
+    const w = warp ? warp(t) : 1;
+    const dx = (hx / 17) * r * w;
+    const dy = (-hy / 17) * r * ay * w;
     pts.push({ x: cx + dx * cosR - dy * sinR, y: cy + dx * sinR + dy * cosR });
   }
   return pts;
+}
+
+/**
+ * The per-heart "kid hand": everything a young artist gets wrong, drawn once
+ * from the heart's own childSeed in a PINNED order (warp → closure → retrace
+ * → drift → arrow) so no render knob can shift a heart's lopsidedness or
+ * where its outline fails to close. The residual `rng` is reserved for
+ * trailing variable-count draws (per-hatch-segment overshoots) only.
+ */
+export interface KidHand {
+  /** Radial multiplier over the curve parameter t, max exactly 1 (the warped
+   *  heart never leaves its bounding circle, so layout stays valid). */
+  warp: (t: number) => number;
+  closure: { mode: 'gap' | 'overshoot'; frac: number } | null;
+  /** Bold-pass inset jitters, in pen widths. */
+  retraceJit: [number, number];
+  /** Signed sloppy-retrace offset in pen widths (young hands re-trace even
+   *  unemphasised hearts), or null when the hand is steady enough. */
+  extraRetrace: number | null;
+  driftAng: number;
+  driftK: number;
+  /** Signed unit jitters for arrow shaft / barb / fletch angles. */
+  arrowJit: [number, number, number];
+  rng: () => number;
+}
+
+export function kidHand(childSeed: number, c: number): KidHand {
+  const rng = makeRandom(childSeed);
+  // Lopsidedness: low-order radial asymmetry, normalized so the multiplier
+  // peaks at exactly 1 — kid hearts dent inward, never grow outward.
+  const a1 = 0.55 + 0.45 * rng();
+  const p1 = rng() * TAU;
+  const a2 = 0.3 + 0.5 * rng();
+  const p2 = rng() * TAU;
+  const A = 0.22 * c * c;
+  const amp = A / (a1 + a2);
+  const warp = (t: number): number =>
+    (1 + amp * (a1 * Math.sin(t + p1) + a2 * Math.sin(2 * t + p2))) / (1 + A);
+
+  // Closure failure at the cleft (the parametric seam is the cleft dip —
+  // exactly where a child starts and finishes a heart).
+  const closeRoll = rng();
+  const closeMode: 'gap' | 'overshoot' = rng() < 0.5 ? 'gap' : 'overshoot';
+  const closeFrac = c * c * (0.03 + 0.05 * rng());
+  const closure =
+    closeRoll < clamp(1.8 * c - 0.55, 0, 1) ? { mode: closeMode, frac: closeFrac } : null;
+
+  const retraceJit: [number, number] = [(rng() * 2 - 1) * c * 0.8, (rng() * 2 - 1) * c * 0.8];
+  const extraRetraceDraw = (rng() * 2 - 1) * c * 1.2;
+  const extraRetrace = c >= 0.6 ? extraRetraceDraw : null;
+
+  const driftAng = rng() * TAU;
+  const driftK = 0.18 * Math.pow(c, 1.5);
+
+  const arrowJit: [number, number, number] = [
+    (rng() * 2 - 1) * c,
+    (rng() * 2 - 1) * c,
+    (rng() * 2 - 1) * c,
+  ];
+
+  return { warp, closure, retraceJit, extraRetrace, driftAng, driftK, arrowJit, rng };
 }
 
 /**
@@ -134,20 +204,40 @@ const place = (spec: HeartSpec, lx: number, ly: number): Point => {
  * for solid, exact even-odd hatch for hatched, a jagged crack for broken —
  * an optional shadow-side band lit by one shared page-space light, bold
  * multi-pass emphasis, and a cupid's arrow whose shaft is hidden where it
- * passes behind the heart's own body.
+ * passes behind the heart's own body. A young artist (opts.childish > 0)
+ * warps the shape lopsided, fails to close the outline at the cleft,
+ * re-traces sloppily, nests solid fills off-centre and scribbles the hatch
+ * out past the lines; the occluder always stays the CLOSED warped outline so
+ * the depth buffer matches the drawn silhouette.
  */
 export function buildHeart(spec: HeartSpec, o: HeartBuildOpts): HeartBuild {
   const { x, y, r, plump, rot } = spec;
   const strokes: FlowLine[] = [];
   const spacing = Math.max(2, lerp(o.penWidth * 4.5, o.penWidth * 1.8, clamp(o.fillDensity, 0, 1)));
+  const c = clamp(o.childish ?? 0, 0, 1);
+  const kid = c > 0 ? kidHand(spec.childSeed, c) : null;
+  const w = kid?.warp;
 
-  strokes.push({ points: heartOutline(x, y, r, rot, plump), pen: 'fine', layer: 'outline' });
+  const outer = heartOutline(x, y, r, rot, plump, undefined, w);
+  strokes.push({ points: kid ? failClosure(outer, spec, kid) : outer, pen: 'fine', layer: 'outline' });
   if (spec.bold) {
     // Bold emphasis is repeated offset passes of the same pen, never a wider
-    // stroke — the repo's one-pen contract.
-    for (const inset of [o.penWidth * 0.9, o.penWidth * 1.8]) {
+    // stroke — the repo's one-pen contract. A kid re-traces less precisely.
+    const insets = [o.penWidth * 0.9, o.penWidth * 1.8];
+    for (let k = 0; k < insets.length; k++) {
+      const inset = kid
+        ? Math.max(o.penWidth * 0.15, insets[k] + kid.retraceJit[k] * o.penWidth)
+        : insets[k];
       if (r - inset < 2) break;
-      strokes.push({ points: heartOutline(x, y, r - inset, rot, plump), pen: 'fine', layer: 'outline' });
+      strokes.push({ points: heartOutline(x, y, r - inset, rot, plump, undefined, w), pen: 'fine', layer: 'outline' });
+    }
+  } else if (kid && kid.extraRetrace !== null) {
+    // Young hands go over the line again even without meaning emphasis; a
+    // negative offset re-traces just OUTSIDE the outline (≤ ~1.7px past the
+    // bound, inside the layout's +2 page inset).
+    const rr = r - kid.extraRetrace * o.penWidth;
+    if (rr > 2) {
+      strokes.push({ points: heartOutline(x, y, rr, rot, plump, undefined, w), pen: 'fine', layer: 'outline' });
     }
   }
 
@@ -156,7 +246,12 @@ export function buildHeart(spec: HeartSpec, o: HeartBuildOpts): HeartBuild {
       break;
     case 'solid':
       for (let rr = r - spacing; rr > Math.max(2, spacing * 0.6); rr -= spacing) {
-        strokes.push({ points: heartOutline(x, y, rr, rot, plump), pen: 'fine', layer: 'fill' });
+        // Kid nesting drifts off-centre, more the deeper it goes; driftK is
+        // capped so even the worst-warped cleft keeps every ring inside.
+        const d = kid ? kid.driftK * (r - rr) : 0;
+        const cxr = x + Math.cos(kid?.driftAng ?? 0) * d;
+        const cyr = y + Math.sin(kid?.driftAng ?? 0) * d;
+        strokes.push({ points: heartOutline(cxr, cyr, rr, rot, plump, undefined, w), pen: 'fine', layer: 'fill' });
       }
       break;
     case 'hatched': {
@@ -164,8 +259,11 @@ export function buildHeart(spec: HeartSpec, o: HeartBuildOpts): HeartBuild {
       if (inset > 2) {
         const angle =
           o.hatchAngle + rot + (spec.g[0] * 2 - 1) * clamp(o.hatchJitter, 0, 1) * 30 * DEG;
-        for (const seg of hatchPolygon(heartOutline(x, y, inset, rot, plump), angle, spacing, spec.g[1])) {
-          strokes.push({ points: seg, pen: 'fine', layer: 'fill' });
+        const segs = hatchPolygon(heartOutline(x, y, inset, rot, plump, undefined, w), angle, spacing, spec.g[1]);
+        if (!kid) {
+          for (const seg of segs) strokes.push({ points: seg, pen: 'fine', layer: 'fill' });
+        } else {
+          strokes.push(...kidFill(segs, angle, spacing, c, kid));
         }
       }
       break;
@@ -175,15 +273,86 @@ export function buildHeart(spec: HeartSpec, o: HeartBuildOpts): HeartBuild {
       break;
   }
 
-  if (o.shading > 0) strokes.push(...shade(spec, o));
-  if (spec.arrow && r >= 9) strokes.push(...arrow(spec));
+  if (o.shading > 0) strokes.push(...shade(spec, o, w));
+  if (spec.arrow && r >= 9) strokes.push(...arrow(spec, kid));
 
   const inflate = Math.max(0.6, o.penWidth * 0.75);
   return {
     strokes,
-    occluder: heartOutline(x, y, r + inflate, rot, plump),
+    occluder: heartOutline(x, y, r + inflate, rot, plump, undefined, w),
     depth: spec.depth,
   };
+}
+
+/** A kid's outline doesn't quite close at the cleft: either it stops short
+ *  (a gap) or swings past the start again (an overshoot drifting slightly
+ *  outward, capped inside the layout's +2 page inset). Drawn stroke only —
+ *  the occluder stays closed. */
+function failClosure(outer: Point[], spec: HeartSpec, kid: KidHand): Point[] {
+  if (!kid.closure) return outer;
+  const n = outer.length - 1; // last point duplicates the first
+  if (kid.closure.mode === 'gap') {
+    const k = Math.max(1, Math.round((n * kid.closure.frac) / 2));
+    if (outer.length - 2 * k < 3) return outer;
+    return outer.slice(k, outer.length - k);
+  }
+  const k = Math.max(2, Math.round(n * kid.closure.frac * 1.5));
+  const growCap = Math.min(1.04, 1 + 2 / heartBoundRadius(spec.r, spec.plump));
+  const pts = outer.slice();
+  for (let i = 1; i <= Math.min(k, n); i++) {
+    const p = outer[i];
+    const s = lerp(1, growCap, i / k);
+    pts.push({ x: spec.x + (p.x - spec.x) * s, y: spec.y + (p.y - spec.y) * s });
+  }
+  return pts;
+}
+
+/** A kid's hatch fill: every stroke overshoots the outline a little
+ *  (coloring outside the lines), and a young-enough hand doesn't lift the
+ *  pen between strokes — nearby segments chain into one boustrophedon
+ *  scribble. The chain gate (≤ 2.6 spacings) never bridges the cleft: the
+ *  two even-odd runs on one scanline sit far apart. */
+function kidFill(segs: Point[][], angle: number, spacing: number, c: number, kid: KidHand): FlowLine[] {
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const over = (): number => Math.min(4.5, Math.pow(c, 1.2) * (1.5 + 3 * kid.rng()));
+  const shot = segs.map(([a, b]) => {
+    const e0 = over();
+    const e1 = over();
+    return [
+      { x: a.x - dx * e0, y: a.y - dy * e0 },
+      { x: b.x + dx * e1, y: b.y + dy * e1 },
+    ];
+  });
+  const out: FlowLine[] = [];
+  if (c < 0.66) {
+    for (const seg of shot) out.push({ points: seg, pen: 'fine', layer: 'fill' });
+    return out;
+  }
+  const maxHop = 2.6 * spacing;
+  let chain: Point[] = [];
+  const flush = (): void => {
+    if (chain.length >= 2) out.push({ points: chain, pen: 'fine', layer: 'fill' });
+    chain = [];
+  };
+  for (const [a, b] of shot) {
+    if (chain.length === 0) {
+      chain.push(a, b);
+      continue;
+    }
+    const end = chain[chain.length - 1];
+    const da = Math.hypot(end.x - a.x, end.y - a.y);
+    const db = Math.hypot(end.x - b.x, end.y - b.y);
+    const [entry, exit] = da <= db ? [a, b] : [b, a];
+    if (Math.min(da, db) <= maxHop) {
+      chain.push(entry, exit);
+    } else {
+      flush();
+      chain.push(a, b);
+    }
+  }
+  flush();
+  return out;
 }
 
 /** The broken-heart crack: a jagged polyline from the cleft notch down
@@ -213,7 +382,7 @@ function crack(spec: HeartSpec): Point[] {
  * the shadow side. The light is page-space and shared by the whole pile
  * (deliberately NOT heart-rotated), like the sports-balls shade rings.
  */
-function shade(spec: HeartSpec, o: HeartBuildOpts): FlowLine[] {
+function shade(spec: HeartSpec, o: HeartBuildOpts, warp?: (t: number) => number): FlowLine[] {
   const { x, y, r, rot, plump } = spec;
   if (r < 6) return []; // rings on a tiny heart turn to mush
   const shading = clamp(o.shading, 0, 1);
@@ -226,7 +395,7 @@ function shade(spec: HeartSpec, o: HeartBuildOpts): FlowLine[] {
   for (let k = 0; k < rings; k++) {
     const rk = r * 0.96 - (k * band) / Math.max(1, rings - 1);
     if (rk < 3) break;
-    const ring = heartOutline(x, y, rk, rot, plump);
+    const ring = heartOutline(x, y, rk, rot, plump, undefined, warp);
     ring.pop(); // drop the duplicated closing point; we re-walk it cyclically
     const n = ring.length;
     const inShadow = (p: Point): boolean => {
@@ -258,17 +427,20 @@ function shade(spec: HeartSpec, o: HeartBuildOpts): FlowLine[] {
 /**
  * The cupid's arrow: a shaft through the heart's centre kept only OUTSIDE the
  * outline (the body occludes it), barbs at the exit tip, fletching ticks at
- * the entry — the classic pierced heart.
+ * the entry — the classic pierced heart. A kid's arrow leans and its barbs
+ * and fletching splay at wonky angles.
  */
-function arrow(spec: HeartSpec): FlowLine[] {
+function arrow(spec: HeartSpec, kid: KidHand | null): FlowLine[] {
   const { x, y, r, rot, plump, g } = spec;
-  const arot = rot - 0.45 + (g[6] - 0.5) * 0.3;
+  const arot = rot - 0.45 + (g[6] - 0.5) * 0.3 + (kid ? kid.arrowJit[0] * 0.25 : 0);
+  const barbA = 0.42 + (kid ? kid.arrowJit[1] * 0.35 : 0);
+  const fletchA = 0.7 + (kid ? kid.arrowJit[2] * 0.35 : 0);
   const dx = Math.cos(arot);
   const dy = Math.sin(arot);
   const L = heartBoundRadius(r, plump) * 1.45;
   // Even-odd crossings of the infinite shaft with a slightly inflated
   // outline, as params along the shaft — sorted, they bound the inside spans.
-  const poly = heartOutline(x, y, r + Math.max(1, r * 0.04), rot, plump);
+  const poly = heartOutline(x, y, r + Math.max(1, r * 0.04), rot, plump, undefined, kid?.warp);
   const nx = -dy;
   const ny = dx;
   const ts: number[] = [];
@@ -299,7 +471,7 @@ function arrow(spec: HeartSpec): FlowLine[] {
   // Head barbs at the exit tip.
   const barb = r * 0.24;
   for (const side of [1, -1]) {
-    const ba = arot + Math.PI + side * 0.42;
+    const ba = arot + Math.PI + side * barbA;
     const tip = at(L);
     out.push({
       points: [tip, { x: tip.x + Math.cos(ba) * barb, y: tip.y + Math.sin(ba) * barb }],
@@ -312,7 +484,7 @@ function arrow(spec: HeartSpec): FlowLine[] {
   for (let k = 0; k < 3; k++) {
     const base = at(-L + k * fl * 0.55);
     for (const side of [1, -1]) {
-      const fa = arot + Math.PI - side * 0.7;
+      const fa = arot + Math.PI - side * fletchA;
       out.push({
         points: [base, { x: base.x + Math.cos(fa) * fl, y: base.y + Math.sin(fa) * fl }],
         pen: 'fine',
