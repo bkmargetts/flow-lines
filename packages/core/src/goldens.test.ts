@@ -22,6 +22,7 @@ import { generateRibbonWeave } from './ribbons/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateMeander } from './meander/index.js';
 import { generateCoral } from './coral/index.js';
+import { generateWarpGrid } from './warp-grid/index.js';
 import { generateGesture } from './gesture/index.js';
 import { generateMachine } from './machine/index.js';
 import { generateTexture, type TextureOptions } from './texture.js';
@@ -160,6 +161,8 @@ for (const seed of SEEDS) {
     generateMeander({ width: 300, height: 400, margin: 20, seed });
   CASES[`coral/reef/${seed}`] = () =>
     generateCoral({ width: 300, height: 400, margin: 20, seed });
+  CASES[`warp-grid/dome/${seed}`] = () =>
+    generateWarpGrid({ width: 300, height: 400, margin: 20, seed });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -216,6 +219,16 @@ CASES['coral/maze/42'] = () =>
     iterations: 300,
     maxNodes: 1500,
   });
+CASES['warp-grid/current/42'] = () =>
+  generateWarpGrid({ width: 300, height: 400, margin: 20, seed: 42, preset: 'current' });
+CASES['warp-grid/relief/42'] = () =>
+  generateWarpGrid({ width: 300, height: 400, margin: 20, seed: 42, preset: 'relief' });
+CASES['warp-grid/vortex/42'] = () =>
+  generateWarpGrid({ width: 300, height: 400, margin: 20, seed: 42, preset: 'vortex' });
+CASES['warp-grid/pinch/42'] = () =>
+  generateWarpGrid({ width: 300, height: 400, margin: 20, seed: 42, preset: 'pinch' });
+CASES['warp-grid/blaze/42'] = () =>
+  generateWarpGrid({ width: 300, height: 400, margin: 20, seed: 42, preset: 'blaze' });
 CASES['botanical/wreath/42'] = () =>
   generateBotanical({ width: 300, height: 400, seed: 42, composition: 'wreath' });
 CASES['stickmen/energetic/42'] = () =>

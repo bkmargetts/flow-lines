@@ -16,6 +16,7 @@ import { randomGratingGenome } from '../textures/grating/shared';
 import { randomMarblingGenome } from '../projects/marbling/presets';
 import { randomMeanderGenome } from '../projects/meander/Controls';
 import { randomCoralGenome } from '../projects/coral/Controls';
+import { randomWarpGridGenome } from '../projects/warp-grid/presets';
 
 /**
  * Every randomise-all genome must stay inside its sliders' ranges, pick enum
@@ -79,6 +80,30 @@ const SPECS: GenomeSpec[] = [
       'ink3Color',
       'ink4Color',
     ],
+  },
+  {
+    name: 'warp-grid',
+    genome: randomWarpGridGenome,
+    bounds: {
+      spacingMm: [1.5, 8],
+      angle: [0, 180],
+      waveAmp: [0, 1],
+      wavelengthMm: [10, 60],
+      deformers: [0, 8],
+      strength: [0, 1],
+      relief: [0, 1],
+      scale: [0.1, 0.6],
+      noiseScale: [0.1, 0.8],
+      dropFloor: [0, 1],
+      edgeCalm: [0, 1],
+    },
+    ints: ['deformers', 'angle'],
+    bools: ['occlude'],
+    enums: {
+      preset: ['dome', 'current', 'vortex', 'relief', 'pinch', 'blaze'],
+      pattern: ['lines', 'waves', 'circles', 'rays'],
+    },
+    forbidden: ['seed', 'detailMm', 'penWidthMm', 'wobbleMm', 'strokeColor'],
   },
   {
     name: 'meander',

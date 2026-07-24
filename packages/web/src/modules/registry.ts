@@ -24,6 +24,7 @@ import { colorFieldModule } from '../projects/color-field';
 import { marblingModule } from '../projects/marbling';
 import { meanderModule } from '../projects/meander';
 import { coralModule } from '../projects/coral';
+import { warpGridModule } from '../projects/warp-grid';
 
 /**
  * Every module, in panel order — the one flat registry the layer stack draws
@@ -58,6 +59,7 @@ export const MODULES: Module<any>[] = [
   marblingModule,
   meanderModule,
   coralModule,
+  warpGridModule,
   classicTexture,
   gratingTexture,
   blankTexture,
