@@ -192,6 +192,10 @@ export type { StickmenOptions, FacingMode, PoseMode, StickmenRegion } from './st
 export { generateSportsBalls } from './sports-balls/index.js';
 export type { SportsBallsOptions, BallType, SportsBallsRegion } from './sports-balls/index.js';
 
+// Hearts (a page full of love hearts — outlined, solid, hatched, broken)
+export { generateHearts } from './hearts/index.js';
+export type { HeartsOptions, HeartStyle, HeartsRegion } from './hearts/index.js';
+
 // Ribbon weave / knotwork (interlaced bands, tangle → Celtic lattice)
 export { generateRibbonWeave } from './ribbons/index.js';
 export type { RibbonWeaveOptions, RibbonEdgeMode, RibbonStyle } from './ribbons/index.js';

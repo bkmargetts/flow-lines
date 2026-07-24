@@ -84,6 +84,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   'city-generator': { style: 'mixed' },
   stickmen: { poseEnergy: 1 },
   'sports-balls': { shading: 0.7 },
+  hearts: { shading: 0.6 },
   'ribbon-weave': { order: 0.1 },
   gesture: { preset: 'kline' },
   machine: { connectivity: 0 },

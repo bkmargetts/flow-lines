@@ -10,6 +10,7 @@ import { landscapeGeneratorModule } from '../projects/landscape-generator';
 import { cityGeneratorModule } from '../projects/city-generator';
 import { stickmenModule } from '../projects/stickmen';
 import { sportsBallsModule } from '../projects/sports-balls';
+import { heartsModule } from '../projects/hearts';
 import { ribbonWeaveModule } from '../projects/ribbon-weave';
 import { gestureModule } from '../projects/gesture';
 import { machineModule } from '../projects/machine';
@@ -45,6 +46,7 @@ export const MODULES: Module<any>[] = [
   cityGeneratorModule,
   stickmenModule,
   sportsBallsModule,
+  heartsModule,
   ribbonWeaveModule,
   gestureModule,
   machineModule,

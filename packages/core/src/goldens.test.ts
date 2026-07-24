@@ -18,6 +18,7 @@ import { generateLandscape } from './landscape/index.js';
 import { generateCity } from './city/index.js';
 import { generateStickmen } from './stickmen/index.js';
 import { generateSportsBalls } from './sports-balls/index.js';
+import { generateHearts } from './hearts/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateMeander } from './meander/index.js';
@@ -151,6 +152,8 @@ for (const seed of SEEDS) {
     generateStickmen({ width: 300, height: 400, margin: 20, seed });
   CASES[`sports-balls/default/${seed}`] = () =>
     generateSportsBalls({ width: 300, height: 400, margin: 20, seed });
+  CASES[`hearts/default/${seed}`] = () =>
+    generateHearts({ width: 300, height: 400, margin: 20, seed });
   CASES[`ribbons/default/${seed}`] = () =>
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
   CASES[`gesture/default/${seed}`] = () =>
@@ -268,6 +271,40 @@ CASES['sports-balls/region-ellipse/42'] = () =>
     count: 50,
     minSeparation: 14,
     region: { kind: 'ellipse', cx: 0.5, cy: 0.5, rx: 0.35, ry: 0.3 },
+  });
+CASES['hearts/solid-only/42'] = () =>
+  generateHearts({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    count: 25,
+    heartScale: 70,
+    mix: { solid: 1 },
+  });
+CASES['hearts/shaded/42'] = () =>
+  generateHearts({ width: 300, height: 400, margin: 20, seed: 42, shading: 0.7 });
+CASES['hearts/arrows/42'] = () =>
+  generateHearts({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    count: 18,
+    heartScale: 80,
+    minSeparation: 50,
+    arrows: 1,
+  });
+CASES['hearts/region-ring/42'] = () =>
+  generateHearts({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    count: 50,
+    heartScale: 30,
+    minSeparation: 10,
+    region: { kind: 'ring', cx: 0.5, cy: 0.5, rOuter: 0.45, rInner: 0.22 },
   });
 CASES['planet/gas-giant/42'] = () =>
   generatePlanet({ width: 300, height: 400, margin: 20, seed: 42, planetType: 'gas-giant' });
