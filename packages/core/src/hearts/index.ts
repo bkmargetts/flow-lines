@@ -60,10 +60,12 @@ export interface HeartsOptions {
   /** 0..1 — per-heart rotation jitter (±~35° at 1). */
   tilt?: number;
   /** 3..18 — who's holding the pen. 18 (the default) is an adult and
-   *  reproduces today's exact output; younger hands draw progressively
-   *  lopsided, wobblier hearts that don't quite close, re-trace their lines,
-   *  nest solid fills off-centre and scribble the hatch out past the
-   *  outline. Values outside 3..18 clamp. */
+   *  reproduces today's exact output. Younger hands draw progressively
+   *  SIMPLER hearts — the curve collapses toward a schema of a few straight
+   *  strokes with an exaggerated notch and tip, shading finesse disappears,
+   *  solid fills become colouring-in scribble — plus lopsidedness, outlines
+   *  that don't quite close, sloppy retraces and a little extra shake.
+   *  Values outside 3..18 clamp. */
   age?: number;
   /** Style weights; omitted/<=0 excludes a style. All-off falls back to all. */
   mix?: Partial<Record<HeartStyle, number>>;
@@ -234,8 +236,8 @@ export function generateHearts(options: HeartsOptions): FlowLinesResult {
     { lines, width, height, seed },
     childish > 0
       ? {
-          amplitude: o.wobble * (1 + 2.4 * Math.pow(childish, 1.7)),
-          wavelength: lerp(38, 22, childish),
+          amplitude: o.wobble * (1 + 1.4 * Math.pow(childish, 1.7)),
+          wavelength: lerp(38, 26, childish),
           seed,
           layerAmplitude: { fill: lerp(0.5, 0.85, childish) },
         }

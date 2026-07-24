@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateHearts, type HeartsOptions } from './hearts/index.js';
 import { placeHearts, HEART_STYLES, type HeartStyle } from './hearts/layout.js';
-import { heartOutline, hatchPolygon, heartBoundRadius, kidHand } from './hearts/heart.js';
+import { heartOutline, kidOutline, hatchPolygon, heartBoundRadius, kidHand } from './hearts/heart.js';
 import { compileRegion, starRegion } from './stickmen/region.js';
 import { pointInPolygon } from './lib/polyline.js';
 import { createNoise } from './noise.js';
@@ -117,41 +117,56 @@ describe('artist age', () => {
     expect(a).toEqual(b);
   });
 
-  it('a younger hand shakes more (turning angle per arc length rises as age drops)', () => {
-    // Mean absolute turning angle per unit arc length — driven directly by
-    // the wobble boost (amp up, wavelength down), so robustly monotone where
-    // total ink is not (closure gaps and scribble connectors pull both ways).
-    const shake = (age: number): number => {
-      const res = generateHearts({ ...BASE, age, occlude: false, arrows: 0, shading: 0 });
-      let turn = 0;
-      let len = 0;
-      for (const l of res.lines) {
-        for (let i = 1; i < l.points.length; i++) {
-          const dx = l.points[i].x - l.points[i - 1].x;
-          const dy = l.points[i].y - l.points[i - 1].y;
-          len += Math.hypot(dx, dy);
-          if (i >= 2) {
-            const px = l.points[i - 1].x - l.points[i - 2].x;
-            const py = l.points[i - 1].y - l.points[i - 2].y;
-            const cross = px * dy - py * dx;
-            const dot = px * dx + py * dy;
-            turn += Math.abs(Math.atan2(cross, dot));
-          }
-        }
-      }
-      return turn / len;
+  it('younger hands stray monotonically further from the classic curve', () => {
+    // Mean distance between the kid outline and the classic outline at the
+    // same samples — simplification + lopsidedness both grow it, and it is
+    // knob-independent (pure geometry, no wobble in the loop).
+    const dev = (c: number): number => {
+      const kid = kidHand(7, c);
+      const pts = kidOutline(0, 0, 40, 0, 0.5, kid);
+      const ref = heartOutline(0, 0, 40, 0, 0.5);
+      let sum = 0;
+      for (let i = 0; i < pts.length; i++) sum += Math.hypot(pts[i].x - ref[i].x, pts[i].y - ref[i].y);
+      return sum / pts.length;
     };
-    const ages = [18, 12, 8, 4];
-    const shakes = ages.map(shake);
-    for (let i = 1; i < shakes.length; i++) {
-      expect(shakes[i]).toBeGreaterThan(shakes[i - 1]);
+    const devs = [0.2, 0.6, 0.93].map(dev);
+    expect(devs[0]).toBeGreaterThan(0);
+    expect(devs[1]).toBeGreaterThan(devs[0]);
+    expect(devs[2]).toBeGreaterThan(devs[1]);
+  });
+
+  it('a young outline is SIMPLER: drawn with a handful of strokes, not a curve', () => {
+    // Corner count = samples where the direction turns by more than ~5°.
+    // The age-3 schema is the polygon through ~8 anchors; the classic curve
+    // turns continuously.
+    const corners = (pts: { x: number; y: number }[]): number => {
+      let n = 0;
+      for (let i = 2; i < pts.length; i++) {
+        const ax = pts[i - 1].x - pts[i - 2].x;
+        const ay = pts[i - 1].y - pts[i - 2].y;
+        const bx = pts[i].x - pts[i - 1].x;
+        const by = pts[i].y - pts[i - 1].y;
+        const turn = Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by));
+        if (turn > 0.09) n++;
+      }
+      return n;
+    };
+    expect(corners(heartOutline(0, 0, 40, 0, 0.5))).toBeGreaterThan(40);
+    for (const seedling of [1, 99, 4242]) {
+      expect(corners(kidOutline(0, 0, 40, 0, 0.5, kidHand(seedling, 1)))).toBeLessThan(16);
     }
   });
 
-  it('the kid warp keeps the outline simple and inside its bounding circle', () => {
+  it('young hearts drop the finesse: no shading below age 8', () => {
+    const opts: HeartsOptions = { ...BASE, count: 10, heartScale: 60, shading: 0.8, arrows: 0 };
+    expect(generateHearts({ ...opts, age: 18 }).lines.some((l) => l.layer === 'shading')).toBe(true);
+    expect(generateHearts({ ...opts, age: 6 }).lines.some((l) => l.layer === 'shading')).toBe(false);
+  });
+
+  it('the kid outline stays simple and inside its bounding circle', () => {
     for (const seedling of [1, 99, 4242, 777777]) {
       const kid = kidHand(seedling, 1);
-      const pts = heartOutline(0, 0, 40, 0.3, 0.5, undefined, kid.warp);
+      const pts = kidOutline(0, 0, 40, 0.3, 0.5, kid);
       const bound = heartBoundRadius(40, 0.5) + 1e-6;
       for (const p of pts) expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(bound);
       // No self-intersections: O(n²) segment sweep (n ≤ 96).

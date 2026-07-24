@@ -128,7 +128,7 @@ export function HeartsControls({ state, update }: ControlsProps<HeartsState>) {
         labelNode={
           <span className="label-text">
             Artist age
-            <InfoTip text="Who's holding the pen — young kids draw wonky, wobbly, scribbled-in hearts that don't quite close. 18 is today's steady adult hand." />
+            <InfoTip text="Who's holding the pen — young kids draw simpler hearts: a few straight strokes, lopsided lobes, scribbled-in colour, no shading, outlines that don't quite close. 18 is today's practised adult hand." />
           </span>
         }
         value={state.age}
