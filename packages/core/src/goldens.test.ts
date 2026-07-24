@@ -413,6 +413,40 @@ CASES['texture/shapes/42'] = () =>
   generateTexture({ ...textureBase, style: 'shapes', seed: 42 });
 CASES['texture/dashes/42'] = () =>
   generateTexture({ ...textureBase, style: 'dashes', seed: 42 });
+CASES['texture/scribble/42'] = () =>
+  generateTexture({ ...textureBase, style: 'scribble', seed: 42 });
+// Organic frame with a ragged fade edge, falloff and two patches — the whole
+// region feature exercised on hatch.
+CASES['texture/organic/42'] = () =>
+  generateTexture({
+    ...textureBase,
+    style: 'hatch',
+    seed: 42,
+    region: {
+      frame: 'organic',
+      coverage: 0.85,
+      irregularity: 0.5,
+      offsetX: 0.1,
+      offsetY: -0.1,
+      patches: 2,
+      fade: 0.5,
+      falloff: 0.4,
+    },
+  });
+CASES['overlapped-lines/blob/42'] = () =>
+  generateOverlappedLines({
+    width: 300,
+    height: 400,
+    margin: 20,
+    angleDeg: 30,
+    lineLengthPct: 1,
+    spacingPx: 8,
+    colorCount: 2,
+    seed: 42,
+    maskShapes: [
+      { type: 'blob', cx: 150, cy: 200, rx: 120, ry: 160, irregularity: 0.6, seed: 42 },
+    ],
+  });
 
 // Post-processing stages, applied to a fixed base drawing.
 CASES['optimize/flow-lines/42'] = () =>

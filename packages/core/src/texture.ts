@@ -3,7 +3,8 @@ import { createNoise } from './noise.js';
 import { traceIsoContours } from './iso-contours.js';
 import { gaussianBlur } from './image.js';
 import { generateOverlappedLines, type MaskShape } from './overlapped-lines.js';
-import { makeRandom } from './lib/rng.js';
+import { makeRandom, subSeed } from './lib/rng.js';
+import { compileTextureRegion, type TextureRegionOptions } from './texture-region.js';
 
 /**
  * A plottable background texture — a field of single-pen strokes laid behind
@@ -22,6 +23,7 @@ export type TextureStyle =
   | 'grid'
   | 'shapes'
   | 'dashes'
+  | 'scribble'
   | 'grating';
 
 /**
@@ -97,6 +99,36 @@ export interface DashTextureOptions {
 /** Per-field dash defaults — the single source of truth shared with the web
  * module's `defaultClassicParams`; partial `dashes` sub-objects fall back
  * field by field. */
+/**
+ * Continuous looping meander (style === 'scribble'): rows of cursive-"e"
+ * loops advancing along one direction, like a quick pen scrawl filling a
+ * patch. Row pitch from `spacingMm`, direction from `angleDeg`, per-loop
+ * size variance from `jitter`. One polyline per unbroken run, so it plots
+ * without lifting the pen.
+ */
+export interface ScribbleTextureOptions {
+  /** Loop height, mm */
+  loopSizeMm: number;
+  /** Advance per loop as a fraction of loop size (<1 = overlapping scrawl) */
+  advance: number;
+  /** -1..1 — loop shear along the travel direction */
+  slant: number;
+  /** fBm hand-wobble amplitude, mm */
+  wobbleMm: number;
+  /** 0..1 — noise-gated pen lifts; coverage thins in hand-sized patches */
+  sparsity: number;
+}
+
+/** Per-field scribble defaults — the single source of truth shared with the
+ * web module's `defaultClassicParams`. */
+export const SCRIBBLE_DEFAULTS: Required<ScribbleTextureOptions> = {
+  loopSizeMm: 5,
+  advance: 0.55,
+  slant: 0.15,
+  wobbleMm: 1,
+  sparsity: 0.15,
+};
+
 export const DASH_DEFAULTS: Required<DashTextureOptions> = {
   dashLengthMm: 6,
   gapMm: 3,
@@ -134,12 +166,16 @@ export interface TextureOptions {
   shapes?: TextureShapeOptions;
   /** Broken-dash parameters (style === 'dashes') */
   dashes?: DashTextureOptions;
+  /** Looping-meander parameters (style === 'scribble') */
+  scribble?: ScribbleTextureOptions;
   /** Grating-style parameters (style === 'grating') */
   grating?: GratingTextureOptions;
   /** Drawing strokes the texture should hold off (for the halo) */
   avoid?: FlowLine[];
   /** Clean-paper sliver reserved around `avoid`, in mm (0 = no halo) */
   haloMm?: number;
+  /** Organic framing / edge falloff (absent or rect+falloff 0 = legacy full rect) */
+  region?: TextureRegionOptions;
 }
 
 /**
@@ -427,11 +463,25 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
 
   const haloPx = Math.max(0, haloMm) * pxPerMm;
   const hasHalo = haloPx > 0 && !!avoid && avoid.length > 0;
-  const isClear = hasHalo
+  const haloClear = hasHalo
     ? buildHaloMask(avoid as FlowLine[], width, height, haloPx)
     : () => true;
-  // Densify step for halo clipping — fine enough to resolve the reserved gap.
-  const step = Math.max(2, Math.min(spacing, haloPx > 0 ? haloPx : spacing));
+  // The region field composes with the halo: a stroke point must satisfy BOTH
+  // masks. It draws from its own sub-seed, so region-off output is
+  // bit-identical and toggling region knobs never reshuffles the base texture.
+  const regionField = options.region
+    ? compileTextureRegion(options.region, rect, pxPerMm, subSeed(seed, 5))
+    : null;
+  const hasClip = hasHalo || regionField !== null;
+  const isClear = regionField
+    ? (x: number, y: number): boolean => regionField.clear(x, y) && haloClear(x, y)
+    : haloClear;
+  // Densify step for clipping — fine enough to resolve the reserved halo gap,
+  // or (region-only) the ragged organic edge.
+  const step = Math.max(
+    2,
+    Math.min(spacing, haloPx > 0 ? haloPx : regionField ? 2 * pxPerMm : spacing)
+  );
 
   const out: FlowLine[] = [];
 
@@ -462,7 +512,7 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
     for (const line of grating.lines) {
       const band = line.layer ?? 'band-00';
       const texLayer = band.startsWith('band-') ? `texture-${band.slice(5)}` : 'texture';
-      if (hasHalo) pushClippedLayer(out, line.points, texLayer, isClear);
+      if (hasClip) pushClippedLayer(out, line.points, texLayer, isClear);
       else out.push({ points: line.points, pen: 'fine', layer: texLayer });
     }
     return out;
@@ -471,9 +521,9 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
   if (style === 'hatch' || style === 'grid') {
     const gridMode = style === 'grid';
     const j = gridMode ? 0 : jitter;
-    hatchLines(out, angle, spacing, j, 0.0001, rect, random, step, hasHalo, isClear);
+    hatchLines(out, angle, spacing, j, 0.0001, rect, random, step, hasClip, isClear);
     if (gridMode || crossHatch) {
-      hatchLines(out, angle + Math.PI / 2, spacing, j, 0.137, rect, random, step, hasHalo, isClear);
+      hatchLines(out, angle + Math.PI / 2, spacing, j, 0.137, rect, random, step, hasClip, isClear);
     }
     return out;
   }
@@ -541,7 +591,7 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
           x: x0 + (p.x / (gx - 1)) * (x1 - x0),
           y: y0 + (p.y / (gy - 1)) * (y1 - y0),
         }));
-        if (hasHalo) pushClipped(out, mapped, isClear);
+        if (hasClip) pushClipped(out, mapped, isClear);
         else out.push(TEX(mapped));
       }
     }
@@ -666,6 +716,88 @@ export function generateTexture(options: TextureOptions): FlowLine[] {
         }
         v += len + gap;
       }
+    }
+    return out;
+  }
+
+  if (style === 'scribble') {
+    // Continuous looping meander: each row traces a prolate cycloid (the
+    // cursive-"eeee" path — a circle rolling forward slower than it spins, so
+    // the pen loops back over itself) along the travel direction. Loop radius
+    // breathes with a smooth noise field (per-loop RNG steps would kink the
+    // curve), an fBm wobble shakes both axes, and a low-frequency stateless
+    // gate lifts the pen in hand-sized patches per `sparsity` — stateless so
+    // the sliders modulate the scrawl instead of reshuffling it.
+    const sc = { ...SCRIBBLE_DEFAULTS, ...(options.scribble ?? {}) };
+    const loopPx = Math.max(2, sc.loopSizeMm * pxPerMm);
+    const advancePx = Math.max(0.5, sc.advance * loopPx);
+    const slant = Math.max(-1, Math.min(1, sc.slant));
+    const wobblePx = Math.max(0, sc.wobbleMm) * pxPerMm;
+    const sparsity = Math.min(0.95, Math.max(0, sc.sparsity));
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const nx = -dy;
+    const ny = dx;
+    const corners = [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x0, y: y1 },
+      { x: x1, y: y1 },
+    ];
+    let uMin = Infinity;
+    let uMax = -Infinity;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (const c of corners) {
+      const u = c.x * nx + c.y * ny;
+      const v = c.x * dx + c.y * dy;
+      uMin = Math.min(uMin, u);
+      uMax = Math.max(uMax, u);
+      vMin = Math.min(vMin, v);
+      vMax = Math.max(vMax, v);
+    }
+    const radNoise = createNoise(subSeed(seed, 7));
+    const wobNoise = createNoise(subSeed(seed, 8));
+    const gateNoise = createNoise(subSeed(seed, 9));
+    // Loops overshoot their row line, so the rect test rides along with the
+    // halo/region test (and the sparsity gate) in one clipped-emit predicate.
+    const clear = (x: number, y: number): boolean =>
+      x >= x0 &&
+      x <= x1 &&
+      y >= y0 &&
+      y <= y1 &&
+      isClear(x, y) &&
+      (sparsity <= 0 || gateNoise.fbm(x * 0.004, y * 0.004, 2, 0.5, 2.0) * 0.5 + 0.5 >= sparsity);
+    // Sample finely enough that the loop curvature and any clip boundary
+    // (halo, organic edge) resolve smoothly.
+    const sampleStep = Math.max(1.5, Math.min(step, loopPx / 8));
+    const nPerLoop = Math.max(8, Math.ceil((Math.PI * loopPx + advancePx) / sampleStep));
+    const ds = (Math.PI * 2) / nPerLoop;
+    let row = 0;
+    for (let u = uMin + spacing / 2; u <= uMax; u += spacing, row++) {
+      // Per-row phase so loops never align into columns across rows.
+      const v0 = vMin + random() * advancePx;
+      const totalS = Math.max(0, ((vMax - v0) / advancePx) * Math.PI * 2);
+      const pts: Point[] = [];
+      for (let s = 0; s <= totalS; s += ds) {
+        // Loop size breathes slowly along the row — a hand never repeats a
+        // loop exactly — and the row baseline itself drifts at very low
+        // frequency (nobody scrawls along a rail), which is what breaks the
+        // phase-locked "chainmail" read of a perfectly periodic cycloid.
+        const radius =
+          (loopPx / 2) * (1 + jitter * 1.2 * radNoise.fbm(s * 0.05, row * 3.7, 2, 0.5, 2.0));
+        const perpBase = radius * Math.sin(s);
+        const along = v0 + (advancePx * s) / (Math.PI * 2) + radius * Math.cos(s) + slant * perpBase;
+        const drift = 0.35 * loopPx * radNoise.fbm(along * 0.003, row * 3.7 + 51.3, 2, 0.5, 2.0);
+        const wobAlong =
+          wobblePx > 0 ? wobblePx * wobNoise.fbm(along * 0.02, u * 0.013, 2, 0.5, 2.0) : 0;
+        const wobPerp =
+          wobblePx > 0 ? wobblePx * wobNoise.fbm(along * 0.02 + 41.7, u * 0.013, 2, 0.5, 2.0) : 0;
+        const uu = u + perpBase + drift + wobPerp;
+        const vv = along + wobAlong;
+        pts.push({ x: nx * uu + dx * vv, y: ny * uu + dy * vv });
+      }
+      pushClipped(out, pts, clear);
     }
     return out;
   }

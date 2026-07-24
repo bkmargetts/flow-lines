@@ -94,6 +94,32 @@ for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   if (mod) CASES[`${id}/${Object.values(patch)[0]}`] = () => mod.render(stateFor(mod, patch), env);
 }
 
+// The classic texture's PRESET_VARIANTS slot pins 'dashes'; the newer style
+// and the organic frame get explicit cases.
+{
+  const classic = pureModules.find((m) => m.id === 'classic')!;
+  CASES['classic/scribble'] = () => classic.render(stateFor(classic, { style: 'scribble' }), env);
+  CASES['classic/organic'] = () =>
+    classic.render(
+      stateFor(classic, {
+        region: {
+          frame: 'organic',
+          coverage: 0.85,
+          irregularity: 0.5,
+          offsetX: 0.1,
+          offsetY: -0.1,
+          patches: 2,
+          fade: 0.5,
+          falloff: 0.4,
+        },
+      }),
+      env
+    );
+  const grating = pureModules.find((m) => m.id === 'grating')!;
+  CASES['grating/blob'] = () =>
+    grating.render(stateFor(grating, { maskMode: 'blob', maskIrregularity: 0.6 }), env);
+}
+
 // One small stack through the compositor: a texture under two generative
 // layers, the top layer holding paper off the lines above it — exercises
 // hold-off accumulation, per-slot namespacing, and the border pen.

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateTexture, type TextureOptions, type TextureStyle } from './texture.js';
+import { compileTextureRegion, type TextureRegionOptions } from './texture-region.js';
+import { subSeed } from './lib/rng.js';
 
 const base: TextureOptions = {
   width: 600,
@@ -16,7 +18,15 @@ const base: TextureOptions = {
   seed: 7,
 };
 
-const STYLES: TextureStyle[] = ['hatch', 'grid', 'stipple', 'contours', 'shapes', 'dashes'];
+const STYLES: TextureStyle[] = [
+  'hatch',
+  'grid',
+  'stipple',
+  'contours',
+  'shapes',
+  'dashes',
+  'scribble',
+];
 
 function allPoints(lines: { points: { x: number; y: number }[] }[]) {
   return lines.flatMap((l) => l.points);
@@ -48,7 +58,8 @@ describe('generateTexture', () => {
 
   it('varies with the seed for the randomized styles', () => {
     // grid is a regular lattice with no randomness — intentionally seed-stable.
-    for (const style of ['hatch', 'stipple', 'contours', 'shapes', 'dashes'] as TextureStyle[]) {
+    const seeded: TextureStyle[] = ['hatch', 'stipple', 'contours', 'shapes', 'dashes', 'scribble'];
+    for (const style of seeded) {
       const a = generateTexture({ ...base, style });
       const c = generateTexture({ ...base, style, seed: 99 });
       expect(JSON.stringify(a), style).not.toBe(JSON.stringify(c));
@@ -393,6 +404,179 @@ describe('generateTexture', () => {
       expect(down[2]).toBeGreaterThan(down[0] * 1.2);
       const up = bandMeans(-1);
       expect(up[0]).toBeGreaterThan(up[2] * 1.2);
+    });
+  });
+
+  describe('scribble style', () => {
+    function inkLength(lines: { points: { x: number; y: number }[] }[]) {
+      let total = 0;
+      for (const l of lines) {
+        for (let i = 1; i < l.points.length; i++) {
+          total += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+        }
+      }
+      return total;
+    }
+
+    it('traces long continuous meanders, not confetti', () => {
+      const lines = generateTexture({
+        ...base,
+        style: 'scribble',
+        scribble: { loopSizeMm: 5, advance: 0.55, slant: 0.15, wobbleMm: 0.5, sparsity: 0 },
+      });
+      const meanPts = lines.reduce((s, l) => s + l.points.length, 0) / lines.length;
+      expect(meanPts).toBeGreaterThan(50);
+    });
+
+    it('lays down more ink as advance falls (denser scrawl)', () => {
+      const scribble = { loopSizeMm: 5, slant: 0.15, wobbleMm: 0.5, sparsity: 0 };
+      const loose = generateTexture({ ...base, style: 'scribble', scribble: { ...scribble, advance: 1.2 } });
+      const dense = generateTexture({ ...base, style: 'scribble', scribble: { ...scribble, advance: 0.3 } });
+      expect(inkLength(dense)).toBeGreaterThan(inkLength(loose) * 1.5);
+    });
+
+    it('thins coverage as sparsity rises', () => {
+      const scribble = { loopSizeMm: 5, advance: 0.55, slant: 0.15, wobbleMm: 0.5 };
+      const full = generateTexture({ ...base, style: 'scribble', scribble: { ...scribble, sparsity: 0 } });
+      const thin = generateTexture({ ...base, style: 'scribble', scribble: { ...scribble, sparsity: 0.7 } });
+      expect(inkLength(thin)).toBeLessThan(inkLength(full) * 0.7);
+      expect(inkLength(thin)).toBeGreaterThan(0);
+    });
+
+    it('works without a scribble sub-object (built-in defaults)', () => {
+      expect(generateTexture({ ...base, style: 'scribble' }).length).toBeGreaterThan(0);
+    });
+
+    it('holds the halo off the drawing', () => {
+      const avoid = [{ points: [{ x: 40, y: 400 }, { x: 560, y: 400 }] }];
+      const haloPx = 6 * base.pxPerMm;
+      const lines = generateTexture({ ...base, style: 'scribble', avoid, haloMm: 6 });
+      for (const p of allPoints(lines)) {
+        if (p.x >= 40 && p.x <= 560) expect(Math.abs(p.y - 400)).toBeGreaterThan(haloPx - 3);
+      }
+    });
+  });
+
+  describe('region (organic frame / falloff)', () => {
+    const organic: TextureRegionOptions = {
+      frame: 'organic',
+      coverage: 0.7,
+      irregularity: 0.5,
+      offsetX: 0,
+      offsetY: 0,
+      patches: 1,
+      fade: 0,
+      falloff: 0,
+    };
+    const rect = {
+      x0: base.margin,
+      y0: base.margin,
+      x1: base.width - base.margin,
+      y1: base.height - base.margin,
+    };
+
+    it('an inert region (rect frame, no falloff) is byte-identical to no region', () => {
+      for (const style of STYLES) {
+        const off = generateTexture({ ...base, style });
+        const inert = generateTexture({
+          ...base,
+          style,
+          region: { ...organic, frame: 'rect', fade: 0.5 },
+        });
+        expect(JSON.stringify(inert), style).toBe(JSON.stringify(off));
+      }
+    });
+
+    it('confines every style to the organic patch', () => {
+      // Recompile the same field generateTexture derives (sub-seed 5 of the
+      // texture seed) and check emitted points against its hard containment.
+      const field = compileTextureRegion(organic, rect, base.pxPerMm, subSeed(base.seed, 5))!;
+      // Point-clipped styles keep every emitted point inside; mark styles
+      // (stipple, shapes) test the mark's centre, so check centroids —
+      // exactly the semantics the avoid halo already has.
+      const strict: TextureStyle[] = ['hatch', 'grid', 'contours', 'dashes', 'scribble'];
+      for (const style of strict) {
+        const lines = generateTexture({ ...base, style, region: organic });
+        expect(lines.length, style).toBeGreaterThan(0);
+        for (const p of allPoints(lines)) {
+          expect(field.inside(p.x, p.y), style).toBe(true);
+        }
+      }
+      for (const style of ['stipple', 'shapes'] as TextureStyle[]) {
+        const lines = generateTexture({ ...base, style, region: organic });
+        expect(lines.length, style).toBeGreaterThan(0);
+        for (const l of lines) {
+          const cx = l.points.reduce((s, p) => s + p.x, 0) / l.points.length;
+          const cy = l.points.reduce((s, p) => s + p.y, 0) / l.points.length;
+          // A square is emitted as four edges whose centroids sit half a side
+          // off the lattice centre — allow the mark's own reach.
+          const reach = style === 'shapes' ? base.pxPerMm * 4 : 2;
+          const on =
+            field.inside(cx, cy) ||
+            field.inside(cx - reach, cy) ||
+            field.inside(cx + reach, cy) ||
+            field.inside(cx, cy - reach) ||
+            field.inside(cx, cy + reach);
+          expect(on, style).toBe(true);
+        }
+      }
+    });
+
+    it('shrinks the covered area as coverage falls', () => {
+      const bboxArea = (coverage: number): number => {
+        const lines = generateTexture({
+          ...base,
+          style: 'hatch',
+          region: { ...organic, coverage },
+        });
+        const pts = allPoints(lines);
+        const minX = Math.min(...pts.map((p) => p.x));
+        const maxX = Math.max(...pts.map((p) => p.x));
+        const minY = Math.min(...pts.map((p) => p.y));
+        const maxY = Math.max(...pts.map((p) => p.y));
+        return (maxX - minX) * (maxY - minY);
+      };
+      expect(bboxArea(0.5)).toBeLessThan(bboxArea(1) * 0.8);
+    });
+
+    it('composes with the avoid halo — both masks hold', () => {
+      const avoid = [{ points: [{ x: 40, y: 400 }, { x: 560, y: 400 }] }];
+      const haloPx = 6 * base.pxPerMm;
+      const field = compileTextureRegion(organic, rect, base.pxPerMm, subSeed(base.seed, 5))!;
+      const lines = generateTexture({
+        ...base,
+        style: 'hatch',
+        region: organic,
+        avoid,
+        haloMm: 6,
+      });
+      expect(lines.length).toBeGreaterThan(0);
+      for (const p of allPoints(lines)) {
+        if (p.x >= 40 && p.x <= 560) expect(Math.abs(p.y - 400)).toBeGreaterThan(haloPx - 3);
+        expect(field.inside(p.x, p.y)).toBe(true);
+      }
+    });
+
+    it('fade and falloff thin the ink without touching the deep interior', () => {
+      const inkLength = (region: TextureRegionOptions): number => {
+        let total = 0;
+        for (const l of generateTexture({ ...base, style: 'hatch', region })) {
+          for (let i = 1; i < l.points.length; i++) {
+            total += Math.hypot(
+              l.points[i].x - l.points[i - 1].x,
+              l.points[i].y - l.points[i - 1].y
+            );
+          }
+        }
+        return total;
+      };
+      const hard = inkLength(organic);
+      const faded = inkLength({ ...organic, fade: 0.8 });
+      const thinned = inkLength({ ...organic, falloff: 0.8 });
+      expect(faded).toBeLessThan(hard);
+      expect(faded).toBeGreaterThan(hard * 0.5);
+      expect(thinned).toBeLessThan(hard);
+      expect(thinned).toBeGreaterThan(0);
     });
   });
 

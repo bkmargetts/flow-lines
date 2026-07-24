@@ -40,7 +40,7 @@ export function GratingTextureControls({ state, update }: ControlsProps<GratingP
       <GratingFields
         params={state}
         update={update}
-        maskModes={['none', 'strips', 'band', 'rect', 'ellipse']}
+        maskModes={['none', 'strips', 'band', 'rect', 'ellipse', 'blob']}
         bandControls={bandControls}
       />
     </>

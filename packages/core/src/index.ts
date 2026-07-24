@@ -210,14 +210,16 @@ export type { ContourOptions } from './contours.js';
 export { traceIsoContours } from './iso-contours.js';
 
 // Plottable background texture (its own export layer, behind the drawing)
-export { generateTexture, DASH_DEFAULTS } from './texture.js';
+export { generateTexture, DASH_DEFAULTS, SCRIBBLE_DEFAULTS } from './texture.js';
 export type {
   TextureOptions,
   TextureStyle,
   TextureShapeOptions,
   DashTextureOptions,
+  ScribbleTextureOptions,
   GratingTextureOptions,
 } from './texture.js';
+export type { TextureRegionOptions } from './texture-region.js';
 
 // Plot optimization
 export { optimizePlot, measurePenTravel, limitStrokeDensity } from './optimize.js';

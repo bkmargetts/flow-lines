@@ -24,6 +24,10 @@ export function renderClassicTexture(state: ClassicParams, env: RenderEnv): Laye
     seed: state.seed,
     shapes: state.shapes,
     dashes: state.dashes,
+    scribble: state.scribble,
+    // Layer states persisted before the region feature lack the field; core
+    // treats undefined as the legacy full rect.
+    region: state.region,
     avoid: env.avoid,
     haloMm: env.haloPx != null ? env.haloPx / page.pxPerMm : undefined,
   });

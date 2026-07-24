@@ -464,6 +464,7 @@ const SPECS: GenomeSpec[] = [
       'drawMode',
       'maskWidthPct',
       'maskHeightPct',
+      'maskIrregularity',
       'wobbleWavelengthMm',
       'penWidthMm',
     ],
