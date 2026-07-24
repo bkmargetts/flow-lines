@@ -78,9 +78,12 @@ export interface FrameSettings {
   /**
    * How split sheets will be assembled: 'trim' = cut margins at the marks
    * and butt sheets (seamless); 'stitch' = tape whole sheets edge-to-edge —
-   * the picture lines up because strips under the margins are dropped.
+   * the picture lines up because strips under the margins are dropped;
+   * 'fit' = the sheets with their margins tile the artwork page exactly —
+   * the drawing scales down uniformly into the combined printable area and
+   * slices contiguously, so nothing is dropped.
    */
-  tileAssembly: 'trim' | 'stitch';
+  tileAssembly: 'trim' | 'stitch' | 'fit';
 
   // ---- Corner registration crosses (their own 'register' pen layer) ----
   /** Small + in each corner of the sheet (each sheet, when splitting). */

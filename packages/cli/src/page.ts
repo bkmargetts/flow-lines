@@ -122,7 +122,7 @@ export function addTileOptions(cmd: Command): Command {
     )
     .option(
       '--tile-assembly <mode>',
-      "How the sheets will be assembled: 'trim' (cut margins at the marks, butt sheets — seamless) or 'stitch' (tape whole sheets edge-to-edge; the picture lines up because strips under the margins are silently dropped)",
+      "How the sheets will be assembled: 'trim' (cut margins at the marks, butt sheets — seamless), 'stitch' (tape whole sheets edge-to-edge; the picture lines up because strips under the margins are silently dropped), or 'fit' (the sheets with their margins tile the artwork page exactly; the drawing is scaled down uniformly into the combined printable area and sliced contiguously — nothing dropped, overlap inert)",
       'trim'
     )
     .option(
@@ -201,7 +201,10 @@ export function writePlotOutput(
     marginMm: frame.marginMm,
     perSheetMargin: options.tileMargin,
     overlapMm: parseFloat(options.tileOverlap),
-    assembly: options.tileAssembly === 'stitch' ? 'stitch' : 'trim',
+    assembly:
+      options.tileAssembly === 'stitch' || options.tileAssembly === 'fit'
+        ? options.tileAssembly
+        : 'trim',
     registrationMarks: options.tileMarks ?? false,
     markOffsetMm: parseFloat(options.tileMarkOffset),
     registrationCrosses: options.crosses ?? false,
@@ -212,6 +215,12 @@ export function writePlotOutput(
   console.log(
     `  Tiling: ${layout.rows}×${layout.cols} sheets of ${tilingOptions.sheet.name} (${tiles.length} total)`
   );
+  if (tilingOptions.assembly === 'fit' && !layout.single) {
+    console.log(
+      `  Fit: assembles to ${layout.assembledWidthMm}×${layout.assembledHeightMm}mm, ` +
+        `artwork at ${Math.round(layout.artworkScale * 100)}%`
+    );
+  }
   const base = resolve(process.cwd(), options.output.replace(/\.svg$/i, ''));
   for (const t of tiles) {
     const tileSvgOptions: SVGOptions = {

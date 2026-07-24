@@ -38,6 +38,17 @@ export function FrameControls() {
         ? 'Fits on 1 sheet'
         : `${tileLayout.rows} × ${tileLayout.cols} sheets (${tileLayout.tiles.length})`
       : null);
+  const mm = (v: number): string => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  // Exact fit changes the physical outcome (assembled size, artwork scale) —
+  // spell it out so each sheet's place in the larger plot is judgeable.
+  const fitSummary =
+    tileLayout && !tileLayout.single && frame.tileAssembly === 'fit'
+      ? [
+          `Assembles to ${mm(tileLayout.assembledWidthMm)} × ${mm(tileLayout.assembledHeightMm)}mm`,
+          `Artwork at ${Math.round(tileLayout.artworkScale * 100)}%`,
+          `Printable per sheet ${mm(tileLayout.sheetPrintableWidthMm)} × ${mm(tileLayout.sheetPrintableHeightMm)}mm`,
+        ]
+      : null;
   return (
     <div className="frame-controls">
       <h3 className="section-title">Page</h3>
@@ -105,6 +116,12 @@ export function FrameControls() {
         {frame.tileEnabled && tileSummary && (
           <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>{tileSummary}</div>
         )}
+        {frame.tileEnabled &&
+          fitSummary?.map((line) => (
+            <div key={line} style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
+              {line}
+            </div>
+          ))}
       </div>
 
       {frame.tileEnabled && (
@@ -150,7 +167,7 @@ export function FrameControls() {
             <>
               <label>
                 Assembly
-                <InfoTip text="Trim & butt: the sheets carry the complete drawing; cut the margins off at the marks and butt them for a seamless whole. Stitch whole: tape full sheets edge-to-edge, margins and all — the picture lines up across the seams because the strips that fall under the margins are silently dropped from the drawing." />
+                <InfoTip text="Trim & butt: the sheets carry the complete drawing; cut the margins off at the marks and butt them for a seamless whole. Stitch whole: tape full sheets edge-to-edge, margins and all — the picture lines up across the seams because the strips that fall under the margins are silently dropped from the drawing. Exact fit: the sheets with their margins tile the page size above exactly — the drawing scales down slightly (shown as Artwork %) to clear every margin, nothing is dropped, and trimming and butting still restores a continuous picture." />
               </label>
               <div className="segmented">
                 <button
@@ -166,6 +183,13 @@ export function FrameControls() {
                   onClick={() => updateFrame({ tileAssembly: 'stitch' })}
                 >
                   Stitch whole
+                </button>
+                <button
+                  type="button"
+                  className={frame.tileAssembly === 'fit' ? 'active' : ''}
+                  onClick={() => updateFrame({ tileAssembly: 'fit' })}
+                >
+                  Exact fit
                 </button>
               </div>
             </>
@@ -193,6 +217,10 @@ export function FrameControls() {
             value={frame.tileOverlapMm}
             onChange={(e) => updateFrame({ tileOverlapMm: parseInt(e.target.value, 10) })}
           />
+          </>
+          )}
+          {(!frame.tilePerSheetMargin || frame.tileAssembly !== 'stitch') && (
+          <>
           <label className="checkbox-label">
             <input
               type="checkbox"

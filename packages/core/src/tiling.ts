@@ -65,8 +65,17 @@ export interface TilingOptions {
    * the margins are silently dropped — the drawing continues under the
    * blank margins. Overlap and trim marks are inert in stitch mode
    * (nothing is cut); with the per-sheet margin off the two modes coincide.
+   * 'fit': the sheet grid is sized from the artwork page (ceil per axis), so
+   * the sheets laid edge-to-edge with their margins intact tile the page —
+   * exactly, when the page is a whole multiple of the sheet. The artwork is
+   * scaled down uniformly (aspect preserved, never up) into the combined
+   * printable area and sliced contiguously: nothing is dropped, every slice
+   * clears its sheet's margins, and trimming the margins and butting still
+   * reconstructs a continuous (slightly smaller) picture. Overlap is inert
+   * (slices are contiguous); trim marks apply as in 'trim'. With the
+   * per-sheet margin off, fit coincides with trim's edge-to-edge slicing.
    */
-  assembly?: 'trim' | 'stitch';
+  assembly?: 'trim' | 'stitch' | 'fit';
   /**
    * Small + crosses in every corner of every sheet, on their own
    * 'register' pen layer — re-register the paper between pen swaps, or
@@ -109,6 +118,23 @@ export interface TilingLayout {
   overlapPx: number;
   /** True when the whole artwork fits on a single sheet. */
   single: boolean;
+  /** Uniform scale applied to the artwork before slicing (fit assembly; 1 otherwise). */
+  artworkScale: number;
+  /**
+   * Physical footprint of the assembled sheets, in mm. Fit/stitch: whole
+   * sheets taped edge-to-edge (`cols·sheet × rows·sheet` — for fit this is
+   * the artwork page itself when the page is a whole multiple of the sheet).
+   * Trim: the trimmed-and-butted object — the butted printable coverage plus
+   * the outer margins, which are never cut.
+   */
+  assembledWidthMm: number;
+  assembledHeightMm: number;
+  /** Combined printable area across all sheets (`cols·pw × rows·ph`), in mm. */
+  printableWidthMm: number;
+  printableHeightMm: number;
+  /** One sheet's printable span (sheet − 2×margin when perSheetMargin), in mm. */
+  sheetPrintableWidthMm: number;
+  sheetPrintableHeightMm: number;
 }
 
 export interface TileResult {
@@ -138,6 +164,13 @@ interface AxisBand {
   /** Owned (post-trim) span, clamped to the artwork. */
   trim0: number;
   trim1: number;
+  /**
+   * Fit bands only: where src0 lands on the sheet, in mm from the paper edge.
+   * Scaling breaks the trim/stitch origin formula (`margin + src0 − raw0`),
+   * so fit bands carry the origin directly; trim/stitch leave it unset and
+   * keep their historical px arithmetic untouched.
+   */
+  originMm?: number;
 }
 
 /**
@@ -191,6 +224,54 @@ function layoutAxis(
 }
 
 /**
+ * Sheets per axis for fit assembly: how many sheets, laid edge-to-edge with
+ * their margins intact, cover the artwork page. The relative epsilon keeps
+ * exact ISO halvings exact (A2 across A4 is 2, not 3, despite float noise).
+ */
+function fitAxisCount(aw: number, sw: number): number {
+  return Math.max(1, Math.ceil(aw / sw - 1e-9));
+}
+
+/**
+ * 1-D fit layout: `count` printable bands of `pw` mm laid end to end hold
+ * the artwork scaled by `s` (s·aw ≤ count·pw), centred so slack splits
+ * evenly between the edge sheets. Slices are contiguous in artwork space —
+ * shared boundaries come from the same expression, so neighbours meet
+ * exactly and the cut lines sit on the margin lines.
+ */
+function fitBands(aw: number, pw: number, m: number, count: number, s: number): AxisBand[] {
+  const off = (count * pw - s * aw) / 2;
+  // Window i start in scaled-artwork mm (relative to the scaled artwork's
+  // origin; negative on the first band when the artwork is narrower than
+  // the combined printable span).
+  const edge = (i: number): number => i * pw - off;
+  const bands: AxisBand[] = [];
+  for (let i = 0; i < count; i++) {
+    const src0 = Math.min(aw, Math.max(0, edge(i) / s));
+    const src1 = Math.min(aw, Math.max(0, edge(i + 1) / s));
+    bands.push({
+      raw0: edge(i) / s,
+      src0,
+      src1,
+      trim0: src0,
+      trim1: src1,
+      originMm: m + (src0 * s - edge(i)),
+    });
+  }
+  return bands;
+}
+
+/**
+ * Fit assembly on a single sheet: the artwork page IS the (only) sheet, so
+ * its own frame margin already provides the per-sheet margin — plot it
+ * unscaled, centred (re-shrinking into the printable region would double
+ * the margin).
+ */
+function singleFitBand(aw: number, sw: number): AxisBand {
+  return { raw0: 0, src0: 0, src1: aw, trim0: 0, trim1: aw, originMm: (sw - aw) / 2 };
+}
+
+/**
  * Compute the sheet grid for splitting artwork of `art`'s physical size
  * across sheets of `opts.sheet`. Throws when the sheet's printable region
  * (sheet − 2×margin when `perSheetMargin`) is degenerate or smaller than the
@@ -199,9 +280,11 @@ function layoutAxis(
 export function computeTiling(art: PageMetrics, opts: TilingOptions): TilingLayout {
   const { widthMm: sw, heightMm: sh } = orientedDimsMm(opts.sheet, opts.sheetOrientation);
   const margin = opts.perSheetMargin ? opts.marginMm : 0;
+  const fit = (opts.assembly ?? 'trim') === 'fit';
   const stitch = (opts.assembly ?? 'trim') === 'stitch' && margin > 0;
-  // No cutting in stitch mode → no flaps; overlap is inert there.
-  const o = stitch ? 0 : Math.max(0, opts.overlapMm ?? 0);
+  // No cutting in stitch mode → no flaps; fit slices are contiguous by
+  // construction — overlap is inert in both.
+  const o = stitch || fit ? 0 : Math.max(0, opts.overlapMm ?? 0);
   const pw = sw - 2 * margin;
   const ph = sh - 2 * margin;
   if (pw <= 0 || ph <= 0) {
@@ -212,8 +295,26 @@ export function computeTiling(art: PageMetrics, opts: TilingOptions): TilingLayo
   }
   const k = art.pxPerMm;
   const marginPx = margin * k;
-  const colBands = layoutAxis(art.widthMm, pw, o, margin, stitch);
-  const rowBands = layoutAxis(art.heightMm, ph, o, margin, stitch);
+  let scale = 1;
+  let colBands: AxisBand[];
+  let rowBands: AxisBand[];
+  if (fit) {
+    const nx = fitAxisCount(art.widthMm, sw);
+    const ny = fitAxisCount(art.heightMm, sh);
+    if (nx === 1 && ny === 1) {
+      colBands = [singleFitBand(art.widthMm, sw)];
+      rowBands = [singleFitBand(art.heightMm, sh)];
+    } else {
+      // One scalar for both axes: aspect preserved, never upscaled; the
+      // non-binding axis centres its slack in the combined printable span.
+      scale = Math.min(1, (nx * pw) / art.widthMm, (ny * ph) / art.heightMm);
+      colBands = fitBands(art.widthMm, pw, margin, nx, scale);
+      rowBands = fitBands(art.heightMm, ph, margin, ny, scale);
+    }
+  } else {
+    colBands = layoutAxis(art.widthMm, pw, o, margin, stitch);
+    rowBands = layoutAxis(art.heightMm, ph, o, margin, stitch);
+  }
   const widthPx = Math.max(1, Math.round(sw * k));
   const heightPx = Math.max(1, Math.round(sh * k));
   const tiles: TileSpec[] = [];
@@ -240,17 +341,28 @@ export function computeTiling(art: PageMetrics, opts: TilingOptions): TilingLayo
         heightMm: sh,
         widthPx,
         heightPx,
-        originX: marginPx + (cb.src0 - cb.raw0) * k,
-        originY: marginPx + (rb.src0 - rb.raw0) * k,
+        originX: cb.originMm !== undefined ? cb.originMm * k : marginPx + (cb.src0 - cb.raw0) * k,
+        originY: rb.originMm !== undefined ? rb.originMm * k : marginPx + (rb.src0 - rb.raw0) * k,
       });
     }
   }
+  const rows = rowBands.length;
+  const cols = colBands.length;
   return {
-    rows: rowBands.length,
-    cols: colBands.length,
+    rows,
+    cols,
     tiles,
     overlapPx: o * k,
-    single: rowBands.length === 1 && colBands.length === 1,
+    single: rows === 1 && cols === 1,
+    artworkScale: scale,
+    // Trim: butted printable coverage plus the never-cut outer margins;
+    // fit/stitch: whole sheets edge-to-edge.
+    assembledWidthMm: fit || stitch ? cols * sw : cols * pw - (cols - 1) * o + 2 * margin,
+    assembledHeightMm: fit || stitch ? rows * sh : rows * ph - (rows - 1) * o + 2 * margin,
+    printableWidthMm: cols * pw,
+    printableHeightMm: rows * ph,
+    sheetPrintableWidthMm: pw,
+    sheetPrintableHeightMm: ph,
   };
 }
 
@@ -373,6 +485,7 @@ export function sliceResultIntoTiles(
   layout: TilingLayout,
   opts: TilingOptions
 ): TileResult[] {
+  const s = layout.artworkScale;
   return layout.tiles.map((tile) => {
     const { x, y, width, height } = tile.sourceRect;
     const dx = tile.originX - x;
@@ -382,7 +495,17 @@ export function sliceResultIntoTiles(
       for (const run of clipPolylineToRect(line.points, x, y, x + width, y + height)) {
         lines.push({
           ...line,
-          points: run.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+          points:
+            s === 1
+              ? // Historical translate path, kept verbatim so trim/stitch
+                // output never moves by an ulp.
+                run.map((p) => ({ x: p.x + dx, y: p.y + dy }))
+              : // Fit assembly: scale about the band start, land at the
+                // tile origin — clipping already ran in artwork space.
+                run.map((p) => ({
+                  x: tile.originX + (p.x - x) * s,
+                  y: tile.originY + (p.y - y) * s,
+                })),
         });
       }
     }
