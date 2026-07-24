@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   getPaperSize,
+  resolvePaperSize,
   pageMetrics,
   BASE_PX_PER_MM,
 } from './paper-sizes.js';
@@ -166,11 +167,213 @@ describe('computeTiling — grid math', () => {
     expect(stitch.tiles.map((t) => t.sourceRect)).toEqual(trim.tiles.map((t) => t.sourceRect));
   });
 
+  it('reports assembled/printable dims for trim and stitch', () => {
+    // Trim on A0: 5×5 sheets, printable 190×277 each; the trimmed-and-butted
+    // object is the butted coverage plus the never-cut outer margins.
+    const trim = computeTiling(a0, baseOpts());
+    expect(trim.artworkScale).toBe(1);
+    expect(trim.sheetPrintableWidthMm).toBe(190);
+    expect(trim.sheetPrintableHeightMm).toBe(277);
+    expect(trim.printableWidthMm).toBe(5 * 190);
+    expect(trim.assembledWidthMm).toBe(5 * 190 + 20);
+    expect(trim.assembledHeightMm).toBe(5 * 277 + 20);
+    // Stitch: whole sheets taped edge-to-edge.
+    const stitch = computeTiling(a0, baseOpts({ assembly: 'stitch' }));
+    expect(stitch.assembledWidthMm).toBe(5 * 210);
+    expect(stitch.assembledHeightMm).toBe(5 * 297);
+  });
+
   it('labels tiles row-major, 1-based', () => {
     const layout = computeTiling(a0, baseOpts());
     expect(tileLabel(layout.tiles[0])).toBe('r1c1');
     expect(tileLabel(layout.tiles[layout.cols])).toBe('r2c1');
     expect(tileLabel(layout.tiles[layout.tiles.length - 1])).toBe('r5c5');
+  });
+});
+
+describe('fit assembly', () => {
+  const a2 = pageMetrics(getPaperSize('a2'), 'portrait', BASE_PX_PER_MM);
+  const fitOpts = (over: Partial<TilingOptions> = {}): TilingOptions =>
+    baseOpts({ assembly: 'fit', ...over });
+
+  /** Full-bleed synthetic artwork: border rectangle at the page corners plus a diagonal. */
+  const fullBleed = (art: { widthPx: number; heightPx: number }): FlowLinesResult => ({
+    lines: [
+      {
+        points: [
+          { x: 0, y: 0 },
+          { x: art.widthPx, y: 0 },
+          { x: art.widthPx, y: art.heightPx },
+          { x: 0, y: art.heightPx },
+          { x: 0, y: 0 },
+        ],
+        pen: 'fine',
+        layer: 'L0/fine',
+      },
+      {
+        points: [
+          { x: 0, y: 0 },
+          { x: art.widthPx, y: art.heightPx },
+        ],
+        pen: 'fine',
+        layer: 'L0/diag',
+      },
+    ],
+    width: art.widthPx,
+    height: art.heightPx,
+    seed: 3,
+  });
+
+  it('sheets including their margins tile an exact-multiple page exactly', () => {
+    // A2 across A4 portrait: 2×2 whole sheets = 420×594 = the page itself.
+    const layout = computeTiling(a2, fitOpts());
+    expect(layout.cols).toBe(2);
+    expect(layout.rows).toBe(2);
+    expect(layout.assembledWidthMm).toBe(420);
+    expect(layout.assembledHeightMm).toBe(594);
+    expect(layout.printableWidthMm).toBe(380);
+    expect(layout.printableHeightMm).toBe(554);
+    // Aspect-preserving scale: one scalar, the binding axis is width.
+    expect(layout.artworkScale).toBeCloseTo(380 / 420, 9);
+  });
+
+  it('centres the non-binding axis: slack splits evenly between edge sheets', () => {
+    const layout = computeTiling(a2, fitOpts());
+    const k = a2.pxPerMm;
+    const marginPx = 10 * k;
+    const s = layout.artworkScale;
+    const first = layout.tiles[0];
+    // Width binds → art starts exactly on the margin line horizontally.
+    expect(first.originX).toBeCloseTo(marginPx, 6);
+    // Height doesn't → half the vertical slack sits above the art.
+    const slackMm = (554 - s * 594) / 2;
+    expect(first.originY).toBeCloseTo(marginPx + slackMm * k, 6);
+    const last = layout.tiles[layout.tiles.length - 1];
+    const printableBottom = last.heightPx - marginPx;
+    const artBottom = last.originY + last.sourceRect.height * s;
+    expect(printableBottom - artBottom).toBeCloseTo(slackMm * k, 5);
+  });
+
+  it('slices are contiguous: neighbours meet exactly, nothing dropped, trim = source', () => {
+    const layout = computeTiling(a2, fitOpts());
+    for (const t of layout.tiles) {
+      expect(t.trimRect).toEqual(t.sourceRect);
+    }
+    for (let c = 0; c + 1 < layout.cols; c++) {
+      const left = layout.tiles[c];
+      const right = layout.tiles[c + 1];
+      expect(left.sourceRect.x + left.sourceRect.width).toBeCloseTo(right.sourceRect.x, 6);
+    }
+    // Bands cover the whole artwork: first starts at 0, last ends at the edge.
+    expect(layout.tiles[0].sourceRect.x).toBe(0);
+    const lastCol = layout.tiles[layout.cols - 1];
+    expect(lastCol.sourceRect.x + lastCol.sourceRect.width).toBeCloseTo(a2.widthPx, 5);
+  });
+
+  it('every sliced point clears its sheet margins — including the artwork corners', () => {
+    const opts = fitOpts();
+    const layout = computeTiling(a2, opts);
+    const slices = sliceResultIntoTiles(fullBleed(a2), a2, layout, opts);
+    const marginPx = 10 * a2.pxPerMm;
+    const eps = 1e-6;
+    let points = 0;
+    for (const s of slices) {
+      for (const line of s.result.lines) {
+        for (const p of line.points) {
+          points++;
+          expect(p.x).toBeGreaterThanOrEqual(marginPx - eps);
+          expect(p.x).toBeLessThanOrEqual(s.tile.widthPx - marginPx + eps);
+          expect(p.y).toBeGreaterThanOrEqual(marginPx - eps);
+          expect(p.y).toBeLessThanOrEqual(s.tile.heightPx - marginPx + eps);
+        }
+      }
+    }
+    expect(points).toBeGreaterThan(0);
+  });
+
+  it('trimming the margins and butting reconstructs contiguous content across the cut', () => {
+    // The diagonal leaves tile r1c1 at its cut line and re-enters r1c2 on
+    // its cut line: mapped back through origin/scale, both ends name the
+    // same artwork point.
+    const opts = fitOpts();
+    const layout = computeTiling(a2, opts);
+    const slices = sliceResultIntoTiles(fullBleed(a2), a2, layout, opts);
+    const s = layout.artworkScale;
+    const back = (
+      p: Point,
+      t: { originX: number; originY: number; sourceRect: { x: number; y: number } }
+    ): Point => ({
+      x: t.sourceRect.x + (p.x - t.originX) / s,
+      y: t.sourceRect.y + (p.y - t.originY) / s,
+    });
+    const t00 = slices.find((sl) => sl.tile.row === 0 && sl.tile.col === 0)!;
+    const t01 = slices.find((sl) => sl.tile.row === 0 && sl.tile.col === 1)!;
+    const diag00 = t00.result.lines.find((l) => l.layer === 'L0/diag')!;
+    const diag01 = t01.result.lines.find((l) => l.layer === 'L0/diag')!;
+    const exit = back(diag00.points[1], t00.tile);
+    const enter = back(diag01.points[0], t01.tile);
+    expect(exit.x).toBeCloseTo(enter.x, 4);
+    expect(exit.y).toBeCloseTo(enter.y, 4);
+  });
+
+  it('is deterministic and overlap is inert', () => {
+    const a = computeTiling(a2, fitOpts());
+    const b = computeTiling(a2, fitOpts());
+    expect(a).toEqual(b);
+    const withOverlap = computeTiling(a2, fitOpts({ overlapMm: 8 }));
+    expect(withOverlap.overlapPx).toBe(0);
+    expect(withOverlap.tiles.map((t) => t.sourceRect)).toEqual(a.tiles.map((t) => t.sourceRect));
+  });
+
+  it('draws trim marks on neighbour edges (cuts run on the margin lines)', () => {
+    const opts = fitOpts({ registrationMarks: true });
+    const layout = computeTiling(a2, opts);
+    const slices = sliceResultIntoTiles(fullBleed(a2), a2, layout, opts);
+    for (const s of slices) {
+      const { row, col } = s.tile;
+      const cutEdges =
+        (col > 0 ? 1 : 0) +
+        (col < layout.cols - 1 ? 1 : 0) +
+        (row > 0 ? 1 : 0) +
+        (row < layout.rows - 1 ? 1 : 0);
+      const ticks = s.result.lines.filter((l) => l.layer === TILE_MARKS_LAYER);
+      expect(ticks).toHaveLength(cutEdges * 2);
+    }
+  });
+
+  it('a covering grid over a non-multiple page reports its true size; scale never exceeds 1', () => {
+    // 500×700mm page across A4: 3×3 sheets cover 630×891; the combined
+    // printable span (570×831) exceeds the page, so the art plots unscaled.
+    const odd = pageMetrics(resolvePaperSize('500x700'), 'portrait', BASE_PX_PER_MM);
+    const layout = computeTiling(odd, fitOpts());
+    expect(layout.cols).toBe(3);
+    expect(layout.rows).toBe(3);
+    expect(layout.assembledWidthMm).toBe(630);
+    expect(layout.assembledHeightMm).toBe(891);
+    expect(layout.artworkScale).toBe(1);
+  });
+
+  it('with the per-sheet margin off, fit coincides with trim edge-to-edge slicing', () => {
+    const fit = computeTiling(a2, fitOpts({ perSheetMargin: false }));
+    const trim = computeTiling(a2, baseOpts({ perSheetMargin: false }));
+    expect(fit.artworkScale).toBe(1);
+    expect(fit.tiles.map((t) => t.sourceRect)).toEqual(trim.tiles.map((t) => t.sourceRect));
+    expect(fit.tiles.map((t) => [t.originX, t.originY])).toEqual(
+      trim.tiles.map((t) => [t.originX, t.originY])
+    );
+  });
+
+  it('passes a single-sheet page through unscaled (the frame margin is the sheet margin)', () => {
+    const a5 = pageMetrics(getPaperSize('a5'), 'portrait', BASE_PX_PER_MM);
+    const layout = computeTiling(a5, fitOpts({ sheet: getPaperSize('a3') }));
+    expect(layout.single).toBe(true);
+    expect(layout.artworkScale).toBe(1);
+    const t = layout.tiles[0];
+    expect(t.sourceRect.width).toBeCloseTo(a5.widthPx, 5);
+    // Centred on the sheet, exactly as the trim single-sheet case.
+    const trimT = computeTiling(a5, baseOpts({ sheet: getPaperSize('a3') })).tiles[0];
+    expect(t.originX).toBeCloseTo(trimT.originX, 6);
+    expect(t.originY).toBeCloseTo(trimT.originY, 6);
   });
 });
 

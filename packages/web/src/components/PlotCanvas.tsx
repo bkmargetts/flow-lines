@@ -1,9 +1,9 @@
 import type { Point } from '@flow-lines/core';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Preview } from './Preview';
 import { useFrame } from '../FrameContext';
 import { tilingOptionsFromFrame, useTileLayout } from '../lib/use-tile-layout';
-import { buildSheetsPreview } from '../lib/tile-preview';
+import { buildAssembledPreview, buildSheetsPreview } from '../lib/tile-preview';
 import { useComposite, useCompositeBusy, useLayerStore, usePage } from '../LayerStore';
 import { useInstanceApi } from '../projects/image-ink/instance-store';
 import type { ImageInkLayerState } from '../projects/image-ink/types';
@@ -36,13 +36,21 @@ export function PlotCanvas() {
   const page = usePage();
   const { layout: tileGrid } = useTileLayout();
 
+  // Split view: 'sheets' shows each page separately (what the export zip
+  // contains); 'assembled' composes them at their final taped positions —
+  // the total expected sheet, for judging how each page pieces into the
+  // larger plot. Presentation-only, so plain local state (never part of the
+  // frame snapshot/undo history).
+  const [assembledView, setAssembledView] = useState(false);
+
   // Split preview: the sheets themselves, each with its clear per-page
   // margin, artwork continuing across the printable areas — what the export
   // zip will actually contain. Null when splitting is off (or its settings
   // are degenerate), which falls back to the continuous single-sheet view.
   const sheetsPreview = useMemo(() => {
     if (!frame.tileEnabled || !tileGrid || comp.result.lines.length === 0) return null;
-    return buildSheetsPreview(
+    const build = assembledView ? buildAssembledPreview : buildSheetsPreview;
+    return build(
       comp.result,
       page,
       tileGrid,
@@ -50,7 +58,7 @@ export function PlotCanvas() {
       comp.svgOptions,
       frame.paperTone
     );
-  }, [frame, tileGrid, comp, page]);
+  }, [frame, tileGrid, comp, page, assembledView]);
 
   const selected = layers.find((l) => l.instanceId === selectedId);
   const isInk = selected?.moduleId === 'image-ink';
@@ -108,6 +116,24 @@ export function PlotCanvas() {
   return (
     <>
       {(api?.isRendering || compositing) && <div className="rendering-badge">Rendering…</div>}
+      {sheetsPreview && (
+        <div className="preview-mode-toggle">
+          <button
+            type="button"
+            className={assembledView ? '' : 'active'}
+            onClick={() => setAssembledView(false)}
+          >
+            Sheets
+          </button>
+          <button
+            type="button"
+            className={assembledView ? 'active' : ''}
+            onClick={() => setAssembledView(true)}
+          >
+            Assembled
+          </button>
+        </div>
+      )}
       {emptyHint ? (
         <div className="empty-state">
           <p>{emptyHint}</p>

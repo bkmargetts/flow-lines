@@ -86,4 +86,26 @@ describe('sheetsZipEntries', () => {
     const b = sheetsZipEntries(result, page, layout, o, {}, true);
     expect(a).toEqual(b);
   });
+
+  it('fit assembly exports the same entry shape with every stroke clear of the margins', () => {
+    const o = opts({ assembly: 'fit' });
+    const layout = computeTiling(page, o);
+    const entries = sheetsZipEntries(result, page, layout, o, {}, false);
+    expect(entries).toHaveLength(layout.tiles.length);
+    expect(entries[0].name).toBe('flow-lines-r1c1.svg');
+    // A5 sheets keep their true physical dims.
+    expect(entries[0].text).toContain('width="148mm"');
+    // The diagonals span the artwork corner to corner, yet every exported
+    // coordinate sits inside the per-sheet printable region.
+    const marginPx = 10 * page.pxPerMm;
+    const t = layout.tiles[0];
+    for (const e of entries) {
+      for (const m of e.text.matchAll(/M ?(-?[\d.]+)[, ](-?[\d.]+)/g)) {
+        expect(parseFloat(m[1])).toBeGreaterThanOrEqual(marginPx - 1e-6);
+        expect(parseFloat(m[1])).toBeLessThanOrEqual(t.widthPx - marginPx + 1e-6);
+        expect(parseFloat(m[2])).toBeGreaterThanOrEqual(marginPx - 1e-6);
+        expect(parseFloat(m[2])).toBeLessThanOrEqual(t.heightPx - marginPx + 1e-6);
+      }
+    }
+  });
 });

@@ -599,6 +599,41 @@ button.secondary:hover {
   50% { opacity: 0.55; }
 }
 
+/* Split-view switch (Sheets | Assembled), floating over the canvas opposite
+   the rendering badge. */
+.preview-mode-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+.preview-mode-toggle button {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.preview-mode-toggle button.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+}
+
 .canvas-wrapper {
   background: white;
   border-radius: var(--radius-sm);
