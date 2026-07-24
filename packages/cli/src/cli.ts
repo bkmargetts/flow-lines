@@ -14,6 +14,7 @@ import { registerFracture } from './commands/fracture.js';
 import { registerMarbling } from './commands/marbling.js';
 import { registerMeander } from './commands/meander.js';
 import { registerCoral } from './commands/coral.js';
+import { registerWarpGrid } from './commands/warp-grid.js';
 
 const program = new Command();
 
@@ -37,5 +38,6 @@ registerFracture(program);
 registerMarbling(program);
 registerMeander(program);
 registerCoral(program);
+registerWarpGrid(program);
 
 program.parse();

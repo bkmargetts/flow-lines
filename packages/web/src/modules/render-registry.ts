@@ -20,6 +20,7 @@ import { renderColorField } from '../projects/color-field/render';
 import { renderMarbling } from '../projects/marbling/render';
 import { renderMeander } from '../projects/meander/render';
 import { renderCoral } from '../projects/coral/render';
+import { renderWarpGrid } from '../projects/warp-grid/render';
 import { renderClassicTexture } from '../textures/classic/render';
 import { renderGratingTexture } from '../textures/grating/render';
 import { renderBlankTexture } from '../textures/blank/render';
@@ -69,6 +70,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   marbling: entry(renderMarbling),
   meander: entry(renderMeander),
   coral: entry(renderCoral),
+  'warp-grid': entry(renderWarpGrid),
   classic: entry(renderClassicTexture, true),
   grating: entry(renderGratingTexture, true),
   blank: entry(renderBlankTexture, true),

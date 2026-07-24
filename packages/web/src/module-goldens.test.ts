@@ -88,6 +88,16 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   gesture: { preset: 'kline' },
   machine: { connectivity: 0 },
   classic: { style: 'dashes' },
+  'warp-grid': {
+    preset: 'relief',
+    pattern: 'lines',
+    deformers: 1,
+    strength: 0.9,
+    relief: 0.85,
+    angle: 0,
+    occlude: true,
+    noiseScale: 0.22,
+  },
 };
 for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const mod = pureModules.find((m) => m.id === id);

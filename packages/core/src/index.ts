@@ -74,6 +74,15 @@ export type {
   CoralRing,
 } from './coral/index.js';
 
+// Warp grid — op-art gratings deformed by hidden relief (Riley Current/Blaze)
+export { generateWarpGrid, WARP_GRID_PRESETS } from './warp-grid/index.js';
+export type {
+  WarpGridOptions,
+  WarpGridPreset,
+  WarpBasePattern,
+  WarpDeformerKind,
+} from './warp-grid/index.js';
+
 // Complex-valued rational-function flow field (Savva-style poles & zeros)
 export { generateComplexFlow } from './complex-flow.js';
 export type {
