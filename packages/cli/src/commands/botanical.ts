@@ -113,6 +113,7 @@ export function registerBotanical(program: Command) {
       const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
 
       const botanicalOptions: BotanicalOptions = {
+        optimize: options.optimize,
         width,
         height,
         margin: marginPx,

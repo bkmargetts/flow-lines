@@ -1,6 +1,7 @@
 import type { FlowLine, FlowLinesResult } from '../flow-lines.js';
 import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
+import { orderPlot } from '../optimize.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { ZBuffer } from '../lib/spatial.js';
 import { compileRegion, type StickmenRegion } from '../stickmen/region.js';
@@ -75,9 +76,12 @@ export interface SportsBallsOptions {
   occlude?: boolean;
   penWidth?: number;
   wobble?: number;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 const DEFAULTS: Required<Omit<SportsBallsOptions, 'width' | 'height' | 'margin' | 'seed' | 'region'>> = {
+  optimize: true,
   count: 60,
   clustering: 0.35,
   minSeparation: 30,
@@ -214,5 +218,6 @@ export function generateSportsBalls(options: SportsBallsOptions): FlowLinesResul
     { amplitude: o.wobble, wavelength: 38, seed }
   ).lines;
 
-  return { lines: finished, width, height, seed };
+  const result: FlowLinesResult = { lines: finished, width, height, seed };
+  return o.optimize ? orderPlot(result) : result;
 }

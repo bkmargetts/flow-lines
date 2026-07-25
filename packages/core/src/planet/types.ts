@@ -137,4 +137,6 @@ export interface PlanetOptions {
   wobble?: number; // px wobble amplitude
   sketch?: number; // 0..1 hand-drawn overdraw intensity (multi-pass)
   sketchStyle?: SketchStyle; // character of the overdraw
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }

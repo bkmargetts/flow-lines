@@ -23,6 +23,7 @@ export function registerGrid(program: Command) {
     .option('--stroke-width <number>', 'SVG stroke width', '1')
     .option('--background', 'Include background rectangle')
     .option('--background-color <color>', 'Background color', '#ffffff')
+    .option('--no-optimize', 'Skip pen-travel ordering')
     .option('-o, --output <file>', 'Output file path', 'flow-lines.svg')
     .action((options) => {
       const svgOptions: SVGOptions = {
@@ -49,6 +50,7 @@ export function registerGrid(program: Command) {
         octaves: parseInt(options.octaves, 10),
         persistence: parseFloat(options.persistence),
         lacunarity: parseFloat(options.lacunarity),
+        optimize: options.optimize,
       });
 
       console.log(`  Seed: ${result.seed}`);

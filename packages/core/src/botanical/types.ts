@@ -154,6 +154,8 @@ export interface BotanicalOptions {
 
   /** Hand-drawn wobble amplitude applied to stem centerlines, px (0 = off). */
   wobble?: number;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 /** A grown stem: a centerline, the half-width it carries at its base, and

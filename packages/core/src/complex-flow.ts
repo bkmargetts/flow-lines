@@ -1,4 +1,5 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { orderPlot } from './optimize.js';
 import { randomSeed } from './lib/rng.js';
 
 /**
@@ -97,6 +98,8 @@ export interface ComplexFlowOptions {
   /** Number of colour bands == pen layers. */
   layerCount: number;
   layerBy: LayerBy;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 // ---- field ----
@@ -416,5 +419,6 @@ export function generateComplexFlow(options: ComplexFlowOptions): FlowLinesResul
     lines.push({ points: pts, layer: bandName(band) });
   }
 
-  return { lines, width: o.width, height: o.height, seed };
+  const result: FlowLinesResult = { lines, width: o.width, height: o.height, seed };
+  return o.optimize !== false ? orderPlot(result) : result;
 }

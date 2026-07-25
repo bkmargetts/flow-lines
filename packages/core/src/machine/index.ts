@@ -1,5 +1,6 @@
 import type { FlowLine, Point } from '../flow-lines.js';
 import { randomSeed } from '../lib/rng.js';
+import { orderPlot } from '../optimize.js';
 import { DEFAULTS, type MachineOptions, type ResolvedOptions } from './types.js';
 import { makeCtx } from './context.js';
 import { synthesize } from './synth.js';
@@ -92,5 +93,6 @@ export function generateMachine(options: MachineOptions): {
   let finished = applyFinish(ctx);
   finished = fitMachineToMargin(ctx, finished);
 
-  return { lines: finished, width: ctx.width, height: ctx.height };
+  const result = { lines: finished, width: ctx.width, height: ctx.height };
+  return ctx.o.optimize ? orderPlot(result) : result;
 }

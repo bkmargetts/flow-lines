@@ -2,6 +2,7 @@ import type { Vec3 } from './vec3.js';
 import type { PlanetOptions, PlanetType } from './types.js';
 
 export const DEFAULTS: Required<Omit<PlanetOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
+  optimize: true,
   radiusFrac: 0.7,
   planetType: 'terrestrial',
   lightAngle: -35,

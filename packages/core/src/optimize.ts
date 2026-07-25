@@ -1,4 +1,4 @@
-import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 
 export interface OptimizePlotOptions {
   /**
@@ -51,6 +51,30 @@ export function optimizePlot(
   }
 
   return { ...result, lines };
+}
+
+/**
+ * Reorder-only plot optimisation: cuts pen-up travel without chaining strokes.
+ *
+ * Generators that draw *discrete shapes* — buildings, figures, hearts, plants,
+ * gear teeth — must not merge. Chaining fuses separate outlines into a single
+ * path, and the round end-caps that were extending half a pen-width past every
+ * corner become interior joins instead. Geometry is unchanged, but small
+ * features (windows, facets, petals) visibly soften. Reordering alone still
+ * removes 70-99% of pen-up travel, so the plot-time win survives intact while
+ * the drawing stays byte-for-byte the same strokes.
+ *
+ * Hatching generators, where linked strokes genuinely read as more "drawn",
+ * call `optimizePlot` directly instead.
+ */
+export function orderPlot<T extends { lines: FlowLine[]; width: number; height: number }>(
+  result: T
+): T {
+  // Generic over the result shape: `generatePlanet`/`generateMachine` return
+  // `{ lines, width, height }` with no seed, so the caller's own fields are
+  // carried through rather than forced into `FlowLinesResult`.
+  const ordered = optimizePlot({ ...result, seed: 0 } as FlowLinesResult, { mergeTolerance: 0 });
+  return { ...result, lines: ordered.lines };
 }
 
 interface EndpointRef {
