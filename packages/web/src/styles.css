@@ -1264,3 +1264,64 @@ button:disabled {
     width: 80px; /* the desktop 68px clips at 16px type */
   }
 }
+
+/* Plot cost of the current sheet, above the export buttons. */
+.plot-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 12px;
+  margin: 16px 0 0;
+  padding: 12px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-md);
+}
+
+.plot-stats > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.plot-stats dt {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.plot-stats dd {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Recoverable render failure (see components/ErrorBoundary.tsx). */
+.error-boundary {
+  margin: 16px 0;
+  padding: 16px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+.error-boundary h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.error-boundary-message {
+  margin: 0 0 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.error-boundary-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}

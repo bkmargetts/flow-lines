@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { useFrame } from '../FrameContext';
 import { useComposite, useCompositeBusy, usePage } from '../LayerStore';
 import { compositeLayers } from '../lib/composite';
+import { computePlotStats, formatDistance, formatDuration } from '../lib/plot-stats';
 import { downloadSvgText, triggerDownload } from '../lib/download';
 import { sheetsZipEntries } from '../lib/tile-export';
 import { tilingOptionsFromFrame, useTileLayout } from '../lib/use-tile-layout';
@@ -52,8 +54,38 @@ export function PlotActions() {
     triggerDownload(zipStore(entries), 'flow-lines-sheets.zip');
   };
 
+  // Plot cost of what's on screen. Recomputed only when the composited result
+  // changes — it's a full pass over every stroke.
+  const stats = useMemo(
+    () => (hasContent ? computePlotStats(comp.result, page.pxPerMm) : null),
+    [hasContent, comp.result, page.pxPerMm]
+  );
+
   return (
-    <div className="button-group">
+    <>
+      {stats && (
+        <dl className="plot-stats" aria-label="Plot estimate">
+          <div>
+            <dt>Strokes</dt>
+            <dd>{stats.strokes.toLocaleString()}</dd>
+          </div>
+          <div>
+            <dt>Drawn</dt>
+            <dd>{formatDistance(stats.drawnMm)}</dd>
+          </div>
+          <div>
+            <dt>Pen-up</dt>
+            <dd>{formatDistance(stats.travelMm)}</dd>
+          </div>
+          <div>
+            <dt>Est. plot</dt>
+            <dd title="Rough estimate at 25mm/s drawing, 75mm/s travel — your plotter will differ">
+              ~{formatDuration(stats.seconds)}
+            </dd>
+          </div>
+        </dl>
+      )}
+      <div className="button-group">
       <button type="button" className="primary" disabled={!hasContent} onClick={downloadSVG}>
         Download SVG
       </button>
@@ -77,6 +109,7 @@ export function PlotActions() {
           Download sheets (.zip)
         </button>
       )}
-    </div>
+      </div>
+    </>
   );
 }
