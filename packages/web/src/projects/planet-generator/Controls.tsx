@@ -58,7 +58,10 @@ export function PlanetGeneratorControls({ state, update }: ControlsProps<PlanetS
         </div>
       </div>
 
-      <Slider label="Size" value={state.radiusFrac} min={0.3} max={0.95} step={0.01} onChange={(v) => update({ radiusFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      {/* min 0.15, not 0.3: a comet nucleus is small — the shipped comet preset
+          sits at 0.2 and the randomiser rolls 0.16-0.26, both of which a 0.3
+          floor could not represent. */}
+      <Slider label="Size" value={state.radiusFrac} min={0.15} max={0.95} step={0.01} onChange={(v) => update({ radiusFrac: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Zoom" value={state.zoom} min={0.3} max={3} step={0.05} onChange={(v) => update({ zoom: v })} format={(v) => `${v.toFixed(2)}×`} />
 
       <h3 className="section-title">Composition</h3>

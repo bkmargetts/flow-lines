@@ -257,9 +257,14 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
   quality/fidelity prefs, or user data (painted points, masks). Register
   every genome in the hand-maintained spec table in
   `packages/web/src/modules/genomes.test.ts`, which enforces exactly
-  those rules — but note it only checks genomes that are registered, so a
-  module shipped without the button escapes silently. This one gets
-  forgotten: check for it whenever adding a module.
+  those rules. That table used to check only the genomes already listed
+  in it, so a module could ship unregistered and escape silently; it now
+  scans the source for every exported `random<X>Genome` and fails unless
+  each one is either in the table or in a `COVERED_ELSEWHERE` allowlist
+  that names a test genuinely referencing it. The three scene generators
+  (botanical / landscape / planet) build their genome by crossing whole
+  presets and so deliberately re-roll `palette`; `PALETTE_ROLLERS` pins
+  that list, and every other module is asserted never to touch ink.
   The page frame (paper, orientation, resolution, margin, fit)
   lives in a shared `FrameContext` (`FrameControls`) so every layer plots
   to the same physical sheet. New modules are developed on
