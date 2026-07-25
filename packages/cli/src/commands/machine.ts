@@ -45,6 +45,7 @@ export function registerMachine(program: Command) {
       const scale = sketchScale(options);
 
       const machineOptions: MachineOptions = {
+        optimize: options.optimize,
         width,
         height,
         margin: marginPx,

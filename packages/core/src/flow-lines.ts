@@ -1,5 +1,6 @@
 import { FlowField, FlowFieldOptions } from './flow-field.js';
 import { randomSeed } from './lib/rng.js';
+import { orderPlot } from './optimize.js';
 
 export interface Point {
   x: number;
@@ -29,6 +30,8 @@ export interface FlowLinesOptions extends Omit<FlowFieldOptions, 'resolution'> {
   minLineLength?: number;
   fieldResolution?: number;
   startPoints?: Point[];
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 export interface FlowLinesResult {
@@ -56,6 +59,7 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     octaves,
     persistence,
     lacunarity,
+    optimize = true,
     startPoints,
   } = options;
 
@@ -89,12 +93,13 @@ export function generateFlowLines(options: FlowLinesOptions): FlowLinesResult {
     }
   }
 
-  return {
+  const result: FlowLinesResult = {
     lines,
     width,
     height,
     seed,
   };
+  return optimize ? orderPlot(result) : result;
 }
 
 /**
@@ -245,6 +250,7 @@ export function generateFlowLinesEven(options: EvenFlowLinesOptions): FlowLinesR
     octaves,
     persistence,
     lacunarity,
+    optimize = true,
   } = options;
 
   const field = new FlowField({
@@ -302,7 +308,8 @@ export function generateFlowLinesEven(options: EvenFlowLinesOptions): FlowLinesR
     }
   }
 
-  return { lines, width, height, seed };
+  const result: FlowLinesResult = { lines, width, height, seed };
+  return optimize ? orderPlot(result) : result;
 }
 
 /**

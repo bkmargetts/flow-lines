@@ -1,6 +1,7 @@
 import type { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
 import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
+import { orderPlot } from '../optimize.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { ellipse } from '../planet/geometry.js';
 import { ZBuffer } from '../lib/spatial.js';
@@ -76,9 +77,12 @@ export interface StickmenOptions {
   occlude?: boolean;
   groundContact?: boolean;
   wobble?: number;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 const DEFAULTS: Required<Omit<StickmenOptions, 'width' | 'height' | 'margin' | 'seed' | 'region'>> = {
+  optimize: true,
   count: 150,
   spread: 1,
   clustering: 0.35,
@@ -223,5 +227,6 @@ export function generateStickmen(options: StickmenOptions): FlowLinesResult {
     { amplitude: o.wobble, wavelength: 38, seed }
   ).lines;
 
-  return { lines: finished, width, height, seed };
+  const result: FlowLinesResult = { lines: finished, width, height, seed };
+  return o.optimize ? orderPlot(result) : result;
 }

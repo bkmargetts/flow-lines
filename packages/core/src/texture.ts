@@ -1,4 +1,5 @@
 import { FlowLine, Point } from './flow-lines.js';
+import { orderPlot } from './optimize.js';
 import { createNoise } from './noise.js';
 import { traceIsoContours } from './iso-contours.js';
 import { gaussianBlur } from './image.js';
@@ -176,6 +177,8 @@ export interface TextureOptions {
   haloMm?: number;
   /** Organic framing / edge falloff (absent or rect+falloff 0 = legacy full rect) */
   region?: TextureRegionOptions;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 /**
@@ -432,6 +435,15 @@ function closedLoop(cx: number, cy: number, radius: number, segs: number, phase:
  * `layer: 'texture'`.
  */
 export function generateTexture(options: TextureOptions): FlowLine[] {
+  const out = buildTexture(options);
+  // Single exit: buildTexture returns early per style branch, so ordering has
+  // to happen here rather than at any one of those returns.
+  return options.optimize === false
+    ? out
+    : orderPlot({ lines: out, width: options.width, height: options.height }).lines;
+}
+
+function buildTexture(options: TextureOptions): FlowLine[] {
   const {
     width,
     height,

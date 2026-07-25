@@ -1,6 +1,7 @@
 import { FlowLine, FlowLinesResult } from '../flow-lines.js';
 import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
+import { orderPlot } from '../optimize.js';
 import { getSketchStyleConfig, type SketchStyle } from '../sketch-styles.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { clipPolylineToRect } from '../lib/polyline.js';
@@ -77,9 +78,12 @@ export interface CityOptions {
   wobble?: number;
   sketch?: number;
   sketchStyle?: SketchStyle;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 const DEFAULTS: Required<Omit<CityOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
+  optimize: true,
   order: 0.5,
   style: 'towers',
   blockCols: 7,
@@ -187,5 +191,6 @@ export function generateCity(options: CityOptions): FlowLinesResult {
     clipPolylineToRect(l.points, x0, y0, x1, y1).map((pts) => ({ ...l, points: pts }))
   );
 
-  return { lines: finished, width, height, seed };
+  const result: FlowLinesResult = { lines: finished, width, height, seed };
+  return o.optimize ? orderPlot(result) : result;
 }

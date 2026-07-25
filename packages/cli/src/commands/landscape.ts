@@ -100,6 +100,7 @@ export function registerLandscape(program: Command) {
       const featureScale = frame.page ? Math.min(1, (297 * frame.page.pxPerMm) / Math.max(1, width - 2 * marginPx)) : 1;
 
       const landscapeOptions: LandscapeOptions = {
+        optimize: options.optimize,
         width,
         height,
         margin: marginPx,

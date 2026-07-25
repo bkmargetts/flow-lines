@@ -124,6 +124,7 @@ export function registerPlanet(program: Command) {
       const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
 
       const planetOptions: PlanetOptions = {
+        optimize: options.optimize,
         width,
         height,
         margin: marginPx,
