@@ -11,6 +11,7 @@ import { randomPhysarumGenome } from '../projects/physarum/Controls';
 import { randomColorFieldGenome } from '../projects/color-field/Controls';
 import { randomStickmenGenome } from '../projects/stickmen/Controls';
 import { randomSportsBallsGenome } from '../projects/sports-balls/Controls';
+import { randomHeartsGenome } from '../projects/hearts/Controls';
 import { randomImageInkGenome } from '../projects/image-ink/genome';
 import { randomGratingGenome } from '../textures/grating/shared';
 import { randomMarblingGenome } from '../projects/marbling/presets';
@@ -542,6 +543,37 @@ const SPECS: GenomeSpec[] = [
     ints: ['count'],
     bools: ['occlude', 'regionSoftEdge'],
     forbidden: ['seed', 'mix', 'penWidthMm', 'strokeColor', 'wobble', 'zoom'],
+  },
+  {
+    name: 'hearts',
+    genome: randomHeartsGenome,
+    bounds: {
+      count: [1, 300],
+      clustering: [0, 1],
+      spacingMm: [0, 40],
+      heartSizeMm: [6, 50],
+      sizeVariance: [0, 0.8],
+      depthGrade: [0, 0.5],
+      plumpness: [0, 1],
+      plumpVariance: [0, 0.6],
+      tilt: [0, 1],
+      age: [3, 18],
+      fillDensity: [0.1, 1],
+      hatchAngleDeg: [-90, 90],
+      hatchJitter: [0, 1],
+      arrows: [0, 1],
+      boldOutline: [0, 1],
+      shading: [0, 1],
+      lightAngleDeg: [0, 360],
+      regionSize: [0.15, 1],
+      regionX: [0, 1],
+      regionY: [0, 1],
+      regionInner: [0.1, 0.9],
+    },
+    ints: ['count', 'hatchAngleDeg', 'lightAngleDeg', 'age'],
+    bools: ['occlude', 'regionSoftEdge'],
+    enums: { regionShape: ['full', 'ellipse', 'ring', 'diamond', 'star', 'heart', 'blob'] },
+    forbidden: ['seed', 'mix', 'penWidthMm', 'strokeColor', 'wobbleMm', 'wobble', 'zoom'],
   },
   {
     name: 'image-ink',
