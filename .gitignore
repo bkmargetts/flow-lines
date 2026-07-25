@@ -34,3 +34,7 @@ packages/web/public/mediapipe-wasm/
 packages/web/public/ort-wasm/
 gallery/
 botanical-gallery/
+
+# Working artifacts from scripts/hash-baseline.mjs — a local before/after
+# manifest, not a committed baseline.
+cli-hash-baseline.json
