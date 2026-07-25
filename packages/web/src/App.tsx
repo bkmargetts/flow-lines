@@ -11,6 +11,7 @@ import { LayerStoreProvider, useLayerStore } from './LayerStore';
 import { CustomPresetSection } from './components/controls/CustomPresetSection';
 import { FrameControls } from './components/FrameControls';
 import { LayerStackPanel } from './components/LayerStackPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { PlotActions } from './components/PlotActions';
 import { PlotCanvas } from './components/PlotCanvas';
 import { getModule } from './modules/registry';
@@ -31,13 +32,16 @@ function SelectedLayerControls() {
   const Controls = mod.Controls as ComponentType<ControlsProps<unknown>>;
   return (
     <>
-      <Controls
-        key={layer.instanceId}
-        state={layer.state}
-        update={(u) => updateState(layer.instanceId, u)}
-        instanceId={layer.instanceId}
-        selected
-      />
+      {/* Keyed on the layer so selecting a different one clears a stuck error:
+          one module's Controls throwing must not take the whole app down. */}
+      <ErrorBoundary key={layer.instanceId} label={`the ${mod.label} controls`}>
+        <Controls
+          state={layer.state}
+          update={(u) => updateState(layer.instanceId, u)}
+          instanceId={layer.instanceId}
+          selected
+        />
+      </ErrorBoundary>
       <CustomPresetSection
         moduleId={layer.moduleId}
         state={layer.state}
@@ -206,12 +210,16 @@ function Shell() {
 
 export function App() {
   return (
-    <FrameProvider>
-      <LayerStoreProvider>
-        <HistoryProvider>
-          <Shell />
-        </HistoryProvider>
-      </LayerStoreProvider>
-    </FrameProvider>
+    // Backstop around the whole shell: the per-module boundary above catches
+    // the common case, this catches anything in the providers or the canvas.
+    <ErrorBoundary>
+      <FrameProvider>
+        <LayerStoreProvider>
+          <HistoryProvider>
+            <Shell />
+          </HistoryProvider>
+        </LayerStoreProvider>
+      </FrameProvider>
+    </ErrorBoundary>
   );
 }
