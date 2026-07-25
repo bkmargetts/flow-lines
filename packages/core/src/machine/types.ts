@@ -46,9 +46,12 @@ export interface MachineOptions {
   /** Multi-pass sketch overdraw intensity 0..1 (0 = single wobble pass). */
   sketch?: number;
   sketchStyle?: SketchStyle;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 export const DEFAULTS = {
+  optimize: true,
   complexity: 0.7,
   connectivity: 0.8,
   gearSize: 90,

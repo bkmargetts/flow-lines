@@ -3,6 +3,7 @@ import { createNoise, SimplexNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { getSketchStyleConfig, type SketchStyle } from '../sketch-styles.js';
 import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
+import { orderPlot } from '../optimize.js';
 import { trimPolyline, offsetPolyline, clipSegmentToRect, pointInPolygon } from '../lib/polyline.js';
 import { lerp, clamp01 } from '../lib/math.js';
 import {
@@ -129,9 +130,12 @@ export interface LandscapeOptions {
   wobble?: number;
   sketch?: number;
   sketchStyle?: SketchStyle;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 const DEFAULTS: Required<Omit<LandscapeOptions, 'width' | 'height' | 'margin' | 'seed' | 'sunX' | 'sunY' | 'focusX'>> = {
+  optimize: true,
   horizonFrac: 0.46,
   horizonWobble: 6,
   horizonFreq: 2.2,
@@ -860,7 +864,8 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   }
   finished = finished.map((l) => clampLineToRect(l, x0, y0, x1, y1)).flat();
 
-  return { lines: finished, width, height, seed };
+  const result: FlowLinesResult = { lines: finished, width, height, seed };
+  return o.optimize ? orderPlot(result) : result;
 }
 
 /** Clip a polyline to a rect, splitting it into the runs that lie inside. */

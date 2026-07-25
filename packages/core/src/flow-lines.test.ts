@@ -103,6 +103,10 @@ describe('generateFlowLines', () => {
       startPoints,
       seed: 42,
       minLineLength: 1,
+      // Plot ordering reorders (and may reverse) strokes to cut pen travel;
+      // this test is about the start points being honoured, not about the
+      // order they come back in.
+      optimize: false,
     });
 
     expect(result.lines[0].points[0].x).toBe(100);

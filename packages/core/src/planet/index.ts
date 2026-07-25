@@ -1,5 +1,6 @@
 import { FlowLine } from '../flow-lines.js';
 import { randomSeed } from '../lib/rng.js';
+import { orderPlot } from '../optimize.js';
 import { DEG, norm } from './vec3.js';
 import { DEFAULTS } from './body.js';
 import { bodyKy, makeSceneCtx, type ResolvedOptions } from './context.js';
@@ -111,5 +112,6 @@ export function generatePlanet(options: PlanetOptions): {
   let finished = applyFinish(scene);
   finished = fitBodyToMargin(scene, finished);
 
-  return { lines: finished, width, height };
+  const result = { lines: finished, width, height };
+  return scene.o.optimize ? orderPlot(result) : result;
 }

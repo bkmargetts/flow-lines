@@ -1,6 +1,7 @@
 import { createNoise } from './noise.js';
 import { bandLayerName, pointInMask, type MaskShape } from './overlapped-lines.js';
 import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { orderPlot } from './optimize.js';
 import { randomSeed } from './lib/rng.js';
 
 /**
@@ -96,6 +97,8 @@ export interface ColorFieldOptions {
   /** Shapes the field is clipped to (union); undefined = the whole page. */
   maskShapes?: MaskShape[];
   seed?: number;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 /**
@@ -231,6 +234,7 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
     penWidthPx = 1.2,
     maskShapes,
     seed = randomSeed(),
+    optimize = true,
   } = options;
 
   const noise = createNoise(seed);
@@ -426,5 +430,6 @@ export function generateColorField(options: ColorFieldOptions): FlowLinesResult 
   }
 
   lines.push(...barLines);
-  return { lines, width, height, seed };
+  const result: FlowLinesResult = { lines, width, height, seed };
+  return optimize ? orderPlot(result) : result;
 }

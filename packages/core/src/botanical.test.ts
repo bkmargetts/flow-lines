@@ -496,8 +496,12 @@ describe('scene value & light (tonal massing)', () => {
       seed: 7, composition: 'specimen', mode: 'growth', tonalMassing: 0.85, valueBands: 3,
       stemFill: 'outline', leaves: false, flowers: false, tendrils: false,
     });
-    const lit = generateBotanical({ ...g, lightAngle: -135 });
-    const flip = generateBotanical({ ...g, lightAngle: 45 });
+    // Plot ordering is a global nearest-neighbour pass over every layer, so
+    // changing the light changes the shading strokes and with them the order
+    // (and direction) the stems come back in. The claim under test is about
+    // the stem geometry itself, so compare it before that reordering.
+    const lit = generateBotanical({ ...g, lightAngle: -135, optimize: false });
+    const flip = generateBotanical({ ...g, lightAngle: 45, optimize: false });
     expect(layers(flip.lines, 'stem')).toEqual(layers(lit.lines, 'stem'));
   });
 

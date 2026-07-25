@@ -221,8 +221,11 @@ describe('spin', () => {
   it('spin changes orientation but never placement', () => {
     // wobble 0: the hand finish varies with stroke order, and spin changes
     // how many seam runs survive the silhouette gate.
-    const spun = generateSportsBalls({ ...BASE, spin: 1, wobble: 0 });
-    const upright = generateSportsBalls({ ...BASE, spin: 0, wobble: 0 });
+    // optimize off: plot ordering is a global nearest-neighbour pass, so the
+    // extra seam strokes a spin produces would also reshuffle the (unchanged)
+    // outline circles, and this asserts on their order.
+    const spun = generateSportsBalls({ ...BASE, spin: 1, wobble: 0, optimize: false });
+    const upright = generateSportsBalls({ ...BASE, spin: 0, wobble: 0, optimize: false });
     expect(JSON.stringify(spun.lines)).not.toBe(JSON.stringify(upright.lines));
     // Outlines are orientation-free, so the set of outline circles must match.
     const outlines = (res: typeof spun): string =>

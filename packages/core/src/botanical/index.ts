@@ -30,6 +30,7 @@ import { getSketchStyleConfig } from '../sketch-styles.js';
 import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
 import { smoothPolyline, pointInPolygon, clipPolylineToRect } from '../lib/polyline.js';
 import { traceIsoContours } from '../iso-contours.js';
+import { orderPlot } from '../optimize.js';
 import { FillShape, Root, Stem, BotanicalComposition, BotanicalMode, BotanicalSeeding, BotanicalOptions, BotanicalSupport, BotanicalVessel } from './types.js';
 import { LINE_CAP, ProximityGrid, ZBuffer, polylineLength, smoothstep } from '../lib/spatial.js';
 import { colonize, growStems } from './growth.js';
@@ -168,6 +169,7 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
     valueBands = 0,
     guidePaths,
     support = 'none',
+    optimize = true,
   } = options;
 
   const penPx = Math.max(0.6, penWidth);
@@ -516,7 +518,8 @@ export function generateBotanical(options: BotanicalOptions): FlowLinesResult {
     outLines = clipped;
   }
 
-  return { lines: outLines, width, height, seed };
+  const result: FlowLinesResult = { lines: outLines, width, height, seed };
+  return optimize ? orderPlot(result) : result;
 }
 
 /** Split a polyline into the runs whose points are not hidden by nearer ones. */

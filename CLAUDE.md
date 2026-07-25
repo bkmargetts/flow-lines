@@ -182,7 +182,15 @@ pnpm monorepo:
 - **Humanisation** — low-frequency simplex wobble per stroke (bold lines
   wobble less), misregistration offsets.
 - **`optimizePlot`** — endpoint chaining + nearest-neighbour ordering;
-  fewer pen lifts, big plot-time wins. On by default.
+  fewer pen lifts, big plot-time wins. On by default, via an `optimize`
+  option every generator accepts (`--no-optimize` on the CLI).
+  **`orderPlot`** is the reorder-only variant: the hatching generators
+  chain, but generators that draw *discrete shapes* (buildings, figures,
+  hearts, plants, gear teeth) must not — chaining fuses separate outlines
+  into one path, and the round end-caps that extended half a pen-width
+  past every corner become interior joins, visibly softening small
+  features. Reordering alone still removes 70-99% of pen-up travel and
+  leaves the stroke geometry byte-identical.
 
 ## Testing & tuning
 

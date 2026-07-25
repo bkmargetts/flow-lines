@@ -1,5 +1,6 @@
 import { createNoise } from './noise.js';
 import type { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
+import { orderPlot } from './optimize.js';
 import { randomSeed } from './lib/rng.js';
 import { normalizedBlobBoundary } from './texture-region.js';
 
@@ -61,6 +62,8 @@ export interface OverlappedLinesOptions {
    */
   maskShapes?: MaskShape[];
   seed?: number;
+  /** Reorder strokes to cut pen-up travel (default true) */
+  optimize?: boolean;
 }
 
 /** A region the grating is clipped to. Coordinates are canvas px. */
@@ -189,6 +192,7 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
     edgeSmoothPx = 0,
     maskShapes,
     seed = randomSeed(),
+    optimize = true,
   } = options;
 
   const noise = createNoise(seed);
@@ -303,5 +307,6 @@ export function generateOverlappedLines(options: OverlappedLinesOptions): FlowLi
     }
   }
 
-  return { lines, width, height, seed };
+  const result: FlowLinesResult = { lines, width, height, seed };
+  return optimize ? orderPlot(result) : result;
 }
