@@ -108,7 +108,7 @@ export function simulateCoral(
     closed,
   } = params;
 
-  let loops: Point[][] = params.seedLoops.map((loop) => loop.map((p) => ({ ...p })));
+  const loops: Point[][] = params.seedLoops.map((loop) => loop.map((p) => ({ ...p })));
 
   // History is spread across the whole life but stops shy of the end — the
   // final loop is drawn as the bold silhouette, and a ring recorded a breath

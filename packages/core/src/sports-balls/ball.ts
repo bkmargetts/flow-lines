@@ -1,5 +1,5 @@
 import type { FlowLine, Point } from '../flow-lines.js';
-import { ellipse, pushRun } from '../planet/geometry.js';
+import { ellipse } from '../planet/geometry.js';
 import { type Vec3, TAU, DEG, norm } from '../planet/vec3.js';
 import { clamp } from '../lib/math.js';
 import type { BallSpec } from './layout.js';

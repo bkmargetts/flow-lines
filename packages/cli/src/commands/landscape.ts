@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { generateLandscape, type LandscapeOptions, type SVGOptions } from '@flow-lines/core';
 import { LANDSCAPE_PALETTES, LANDSCAPE_SCENES } from '../palettes.js';
-import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
+import { addTileOptions, resolvePageFrame, writePlotOutput } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerLandscape(program: Command) {

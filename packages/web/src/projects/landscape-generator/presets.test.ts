@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { generateLandscape } from '@flow-lines/core';
 import { LANDSCAPE_PRESETS, getLandscapePreset, randomLandscapeGenome } from './presets';
 import { defaultLandscapeState, type LandscapeState } from './types';
 import { renderLandscape } from './render';

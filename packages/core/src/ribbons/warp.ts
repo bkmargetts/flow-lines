@@ -142,7 +142,7 @@ export interface StrandSample {
 /** Interpolated point / normal / tangent at arc position `a` (wrapped). */
 export function sampleAt(s: Strand, a: number): StrandSample {
   const n = s.pts.length;
-  let arc = ((a % s.len) + s.len) % s.len;
+  const arc = ((a % s.len) + s.len) % s.len;
   // Binary search for the last index with arc[i] <= arc.
   let lo = 0;
   let hi = n - 1;

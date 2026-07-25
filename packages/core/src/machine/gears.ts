@@ -3,7 +3,7 @@ import { makeRandom, subSeed } from '../lib/rng.js';
 import { TAU, circle, radialOffset } from './geometry.js';
 import { type MachineCtx } from './context.js';
 import type { Gear } from './types.js';
-import { outerR, pitchR, rootR } from './synth.js';
+import { pitchR, rootR } from './synth.js';
 
 /**
  * Gear rendering — wooden-clockwork wheels in elevation. One closed tooth

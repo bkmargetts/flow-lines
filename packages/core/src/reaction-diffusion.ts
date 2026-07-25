@@ -1,7 +1,7 @@
 import { FlowLine, FlowLinesResult, Point } from './flow-lines.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import { optimizePlot } from './optimize.js';
-import { GrayscaleImage, gaussianBlur } from './image.js';
+import { gaussianBlur } from './image.js';
 import { traceIsoContours } from './iso-contours.js';
 import { createNoise, SimplexNoise } from './noise.js';
 import { makeRandom, randomSeed } from './lib/rng.js';

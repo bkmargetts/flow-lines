@@ -1,6 +1,6 @@
 import type { Command } from 'commander';
 import { generateMachine, type MachineOptions, type SVGOptions } from '@flow-lines/core';
-import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
+import { addTileOptions, resolvePageFrame, writePlotOutput } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerMachine(program: Command) {

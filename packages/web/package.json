@@ -9,10 +9,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src --ext .ts,.tsx",
+    "lint": "eslint src",
     "clean": "rm -rf dist",
     "predev": "node scripts/copy-mediapipe-wasm.mjs",
-    "prebuild": "node scripts/copy-mediapipe-wasm.mjs"
+    "prebuild": "node scripts/copy-mediapipe-wasm.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "generative-art",

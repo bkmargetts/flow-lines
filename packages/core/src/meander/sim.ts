@@ -263,7 +263,7 @@ export function simulateMeander(params: MeanderSimParams, noise: SimplexNoise): 
 
     const next: Point[] = new Array(n);
     let s = 0;
-    let total = (n - 1) * ds;
+    const total = (n - 1) * ds;
     for (let i = 0; i < n; i++, s += ds) {
       const prev = points[Math.max(0, i - 1)];
       const nxt = points[Math.min(n - 1, i + 1)];

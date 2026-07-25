@@ -302,10 +302,6 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
 
   const horizonY = y0 + clamp01(o.horizonFrac) * usableH;
   const profStep = Math.max(2, usableW / 200);
-  const bottomLine: Point[] = [
-    { x: x0, y: y1 },
-    { x: x1, y: y1 },
-  ];
 
   const horizon = makeProfile(noise, 7.3, x0, x1, profStep, horizonY, o.horizonWobble, o.horizonFreq, 3, 0.5, usableW);
 
@@ -336,7 +332,7 @@ export function generateLandscape(options: LandscapeOptions): FlowLinesResult {
   // The nearest land crest, where trees sit (so they're in front, not floating
   // on a distant ridge).
   let treeCrest = horizon;
-  let waterTopY = horizonY;
+  const waterTopY = horizonY;
   let waterBotY = horizonY;
 
   // Reflective features feeding the water shimmer.

@@ -1,6 +1,6 @@
 import { FlowLine } from '../flow-lines.js';
 import { randomSeed } from '../lib/rng.js';
-import { DEG, norm } from './vec3.js';
+import { DEG } from './vec3.js';
 import { DEFAULTS } from './body.js';
 import { bodyKy, makeSceneCtx, type ResolvedOptions } from './context.js';
 import { renderBody } from './render-body.js';

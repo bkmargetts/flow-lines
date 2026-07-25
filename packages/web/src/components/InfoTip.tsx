@@ -69,7 +69,7 @@ export function InfoTip({ text }: { text: string }) {
       window.removeEventListener('scroll', dismiss, true);
       window.removeEventListener('resize', dismiss);
     };
-  }, [open]);
+  }, [open, close]);
 
   return (
     <>
