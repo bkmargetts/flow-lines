@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { LENIA_PRESETS, PHYSARUM_PRESETS, RD_PRESETS } from '@flow-lines/core';
 import { randomFlowGenome } from '../projects/flow-field/Controls';
 import { randomCityGenome } from '../projects/city-generator/presets';
@@ -18,6 +21,11 @@ import { randomMarblingGenome } from '../projects/marbling/presets';
 import { randomMeanderGenome } from '../projects/meander/Controls';
 import { randomCoralGenome } from '../projects/coral/Controls';
 import { randomWarpGridGenome } from '../projects/warp-grid/presets';
+import { randomMachineGenome } from '../projects/machine/presets';
+import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
+import { randomPlanetGenome } from '../projects/planet-generator/presets';
+import { randomLandscapeGenome } from '../projects/landscape-generator/presets';
+import { randomBotanicalGenome } from '../projects/botanical-generator/presets';
 
 /**
  * Every randomise-all genome must stay inside its sliders' ranges, pick enum
@@ -52,6 +60,18 @@ const ART_TREATMENT_BOUNDS: Record<string, [number, number]> = {
   valueBands: [0, 8],
   vignette: [0, 1],
 };
+
+/**
+ * The three scene generators build their genome by crossing two whole curated
+ * presets, and a preset's state includes its `palette` — so unlike the
+ * slider-rolling modules (which must leave ink choice alone) these three
+ * deliberately re-roll the palette, for variety beyond the two parents'.
+ *
+ * Listed explicitly so the omission of `palette` from their forbidden lists
+ * reads as a decision rather than an oversight, and so a *new* module can't
+ * quietly join them.
+ */
+const PALETTE_ROLLERS = ['botanical-generator', 'landscape-generator', 'planet-generator'];
 
 const SPECS: GenomeSpec[] = [
   {
@@ -622,6 +642,119 @@ const SPECS: GenomeSpec[] = [
       'whiteCutoff',
     ],
   },
+  {
+    name: 'machine',
+    genome: randomMachineGenome,
+    bounds: {
+      complexity: [0, 1],
+      connectivity: [0, 1],
+      gearSizeMm: [12, 42],
+      scaleVariety: [0, 1],
+      mechanisms: [0, 1],
+      frameDensity: [0, 1],
+      cutaways: [0, 3],
+      hatchMm: [0.5, 2.5],
+      shading: [0, 1],
+      sketch: [0, 1],
+      wobbleMm: [0, 1.2],
+    },
+    ints: ['cutaways'],
+    bools: ['hiddenLines'],
+    enums: { sketchStyle: ['loose', 'fine', 'gestural'] },
+    forbidden: ['seed', 'palette', 'strokeColor', 'penWidthMm', 'zoom'],
+  },
+  {
+    name: 'ribbon-weave',
+    genome: randomRibbonGenome,
+    bounds: {
+      order: [0, 1],
+      cellMm: [8, 40],
+      bandMm: [1.5, 12],
+      breaks: [0, 1],
+      shading: [0, 1],
+      meander: [0, 1],
+      twists: [0, 1],
+      rungs: [0, 1],
+      rungCurve: [0, 1],
+      shadowHatch: [0, 1],
+      lightAngleDeg: [-180, 180],
+      wobbleMm: [0, 1.2],
+      sketch: [0, 1],
+    },
+    ints: ['lightAngleDeg'],
+    enums: {
+      style: ['band', 'silk'],
+      edge: ['closed', 'bleed'],
+      sketchStyle: ['loose', 'fine', 'gestural'],
+    },
+    forbidden: ['seed', 'palette', 'strokeColor', 'penWidthMm', 'gapMm', 'zoom'],
+  },
+  {
+    name: 'planet-generator',
+    genome: randomPlanetGenome,
+    bounds: {
+      lightAngle: [-180, 180],
+      lightElevation: [0, 90],
+      radiusFrac: [0.15, 0.95],
+      lumpiness: [0, 0.25],
+      terrainScale: [0.6, 3.5],
+      terrainContrast: [0.6, 2.5],
+      crossHatchLayers: [1, 5],
+      ringTilt: [2, 45],
+      oblateness: [0, 0.15],
+      moonAngle: [-180, 180],
+      rivers: [0, 12],
+      rilles: [0, 8],
+    },
+    ints: ['crossHatchLayers', 'rivers', 'rilles'],
+    bools: ['rings', 'iceCaps', 'aurora', 'starfield', 'moon'],
+    // `palette` is absent from forbidden by design — see PALETTE_ROLLERS below.
+    forbidden: ['seed', 'strokeColor', 'penWidthMm', 'wobbleMm', 'zoom'],
+  },
+  {
+    name: 'landscape-generator',
+    genome: randomLandscapeGenome,
+    bounds: {
+      horizonFrac: [0.15, 0.8],
+      horizonWobbleMm: [0, 20],
+      sunXFrac: [0.1, 0.9],
+      sunYFrac: [0.08, 0.6],
+      sunRadiusMm: [4, 30],
+      ridgeCount: [1, 8],
+      ridgeAmpMm: [2, 36],
+      ridgeHatchAngle: [0, 90],
+      ridgeSharpness: [0, 1],
+      atmosphere: [0, 1],
+      toneContrast: [0, 1],
+      crossHatch: [0, 2],
+      headlands: [0, 5],
+      foreground: [0, 1],
+      focus: [0, 1],
+      clouds: [0, 1],
+      trees: [0, 12],
+      birds: [0, 10],
+      rocks: [0, 8],
+    },
+    ints: ['ridgeCount', 'headlands', 'trees', 'birds', 'rocks'],
+    bools: ['sun', 'sunRays', 'reflection', 'formFollow', 'slopeFollow'],
+    enums: {
+      foregroundSide: ['left', 'right'],
+      treeStyle: ['mixed', 'round', 'conifer', 'scrub'],
+    },
+    // `palette` is absent from forbidden by design — see PALETTE_ROLLERS below.
+    forbidden: ['seed', 'strokeColor', 'penWidthMm', 'wobbleMm', 'zoom'],
+  },
+  {
+    name: 'botanical-generator',
+    genome: randomBotanicalGenome,
+    // Bounds are empty on purpose: this genome crosses two whole curated
+    // presets rather than rolling sliders one at a time, so its numeric fields
+    // are whatever the parents held. The forbidden list is the part that
+    // matters here — a crossover must still not carry a seed or a pen setting
+    // across. (`palette` is deliberately absent — see PALETTE_ROLLERS below.)
+    bounds: {},
+    forbidden: ['seed', 'strokeColor', 'penWidthMm', 'wobbleMm', 'zoom'],
+  },
 ];
 
 const ROLLS = 50;
@@ -705,4 +838,84 @@ describe('module-specific genome invariants', () => {
       }
     }
   });
+});
+
+/**
+ * Coverage guardrail: no genome may ship without a test.
+ *
+ * The SPECS table above is hand-maintained, and nothing used to notice when a
+ * new module's `random<X>Genome` was never added to it — `machine` and
+ * `ribbon-weave` both shipped with zero coverage that way. CLAUDE.md warns
+ * that this step "gets forgotten"; this test is what stops it.
+ *
+ * Every exported `random<X>Genome` in the web source must be either imported
+ * by this file (and so driven through the shared assertions) or listed in
+ * COVERED_ELSEWHERE, which has to name a real test file that actually
+ * references the symbol.
+ */
+const COVERED_ELSEWHERE: Record<string, string> = {
+  randomFractureGenome: '../projects/fracture/genome.test.ts',
+  randomClassicGenome: '../textures/classic/genome.test.ts',
+};
+
+describe('only the scene generators re-roll the palette', () => {
+  for (const spec of SPECS) {
+    it(`${spec.name} ${PALETTE_ROLLERS.includes(spec.name) ? 'may' : 'must not'} roll palette`, () => {
+      const rolls = Array.from({ length: ROLLS }, () => spec.genome(Math.random));
+      const touches = rolls.some((g) => 'palette' in g);
+      if (PALETTE_ROLLERS.includes(spec.name)) {
+        expect(touches, `${spec.name} is listed as a palette roller but never rolls one`).toBe(true);
+      } else {
+        expect(touches, `${spec.name} rolled a palette — ink choice is the user's`).toBe(false);
+      }
+    });
+  }
+});
+
+describe('every genome is covered by a test', () => {
+  const webSrc = fileURLToPath(new URL('..', import.meta.url));
+  const selfPath = fileURLToPath(import.meta.url);
+
+  function sourceFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...sourceFiles(p));
+      else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) out.push(p);
+    }
+    return out;
+  }
+
+  const genomeRe = /export\s+(?:function|const)\s+(random[A-Za-z]*Genome)\b/g;
+  const declared = new Set<string>();
+  for (const file of sourceFiles(webSrc)) {
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(genomeRe)) declared.add(m[1]);
+  }
+
+  const selfSrc = readFileSync(selfPath, 'utf8');
+  const importedHere = new Set(
+    [...selfSrc.matchAll(/import\s+\{\s*(random[A-Za-z]*Genome)\s*\}/g)].map((m) => m[1])
+  );
+
+  it('finds the genomes to check (sanity)', () => {
+    expect(declared.size).toBeGreaterThan(15);
+  });
+
+  for (const name of [...declared].sort()) {
+    it(`${name} is in SPECS or documented as covered elsewhere`, () => {
+      if (importedHere.has(name)) return;
+      const where = COVERED_ELSEWHERE[name];
+      expect(
+        where,
+        `${name} has no coverage. Add it to SPECS in this file, or to ` +
+          `COVERED_ELSEWHERE naming the test that covers it.`
+      ).toBeTruthy();
+      // The allowlist must point at a test that genuinely exercises it.
+      const covering = join(webSrc, 'modules', where);
+      const src = readFileSync(covering, 'utf8');
+      expect(src, `${where} does not reference ${name}`).toContain(name);
+    });
+  }
 });
