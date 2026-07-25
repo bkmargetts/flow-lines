@@ -11,9 +11,10 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "clean": "rm -rf dist",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "generative-art",

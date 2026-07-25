@@ -153,7 +153,7 @@ export function generateCity(options: CityOptions): FlowLinesResult {
     seed
   );
   const { scale, proj } = fitCity(specs, morph, { x0, y0, x1, y1 });
-  let lines: FlowLine[] = drawIsoCity(specs, proj, morph, noise, {
+  const lines: FlowLine[] = drawIsoCity(specs, proj, morph, noise, {
     lightSide: o.lightSide,
     windows: o.windows,
     windowPitch: o.windowSize * scale,

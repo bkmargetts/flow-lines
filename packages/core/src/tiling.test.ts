@@ -532,7 +532,6 @@ describe('sliceResultIntoTiles', () => {
     const marked = sliceResultIntoTiles(makeResult(), a0, layout, opts);
     const marginPx = 10 * a0.pxPerMm;
     const offsetPx = 2 * a0.pxPerMm;
-    const eps = 1e-6;
     let ticks = 0;
     for (const s of marked) {
       const { widthPx: w, heightPx: h } = s.tile;

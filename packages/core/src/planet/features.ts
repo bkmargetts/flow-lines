@@ -282,7 +282,7 @@ export function renderRivers(ctx: BodyCtx): void {
  *  gradient — rilles hug basin edges) with a noise heading wobble; inked as a
  *  double line (near wall + offset far wall) with collapse ticks at the ends. */
 export function renderRilles(ctx: BodyCtx): void {
-  const { b, bx, by, br, bry, occluded, surface } = ctx;
+  const { b, bx, by, br, bry, occluded } = ctx;
   const { o, lines } = ctx.scene;
   if (!(o.rilles > 0 && (b.bodyType === 'moon' || b.bodyType === 'barren'))) return;
   const rr = makeRandom(b.bodySeed + 1919);

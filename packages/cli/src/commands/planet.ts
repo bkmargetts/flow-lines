@@ -6,7 +6,7 @@ import {
   type SVGOptions,
 } from '@flow-lines/core';
 import { PLANET_PALETTES } from '../palettes.js';
-import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
+import { addTileOptions, resolvePageFrame, writePlotOutput } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
 export function registerPlanet(program: Command) {

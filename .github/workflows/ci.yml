@@ -2,9 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `main` plus the branch namespaces that deploy to Pages — a branch that can
+    # go live should have been through CI first.
+    branches:
+      - main
+      - 'claude/**'
+      - 'art/**'
   pull_request:
-    branches: [main]
+
+# A rapid series of pushes only needs the newest commit checked.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -28,8 +37,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      # Lint is not type-aware, so it runs before the build.
+      - name: Lint
+        run: pnpm lint
+
+      # Build first: cli and web resolve @flow-lines/core through its emitted
+      # declarations, so typecheck needs core's dist to exist.
       - name: Build packages
         run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Run tests
         run: pnpm test

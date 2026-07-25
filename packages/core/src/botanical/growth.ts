@@ -239,8 +239,8 @@ export function colonize(
       if (best >= 0) {
         any = true;
         const nd = nodes[best];
-        let dx = a.x - nd.x;
-        let dy = a.y - nd.y;
+        const dx = a.x - nd.x;
+        const dy = a.y - nd.y;
         const L = Math.hypot(dx, dy) || 1;
         const inf = influence.get(best) ?? { dx: 0, dy: 0 };
         inf.dx += dx / L;
@@ -268,7 +268,7 @@ export function colonize(
     }
   }
 
-  return extractChains(nodes, baseHalf, penPx, maxLength, stepLength, rng);
+  return extractChains(nodes, baseHalf, penPx, maxLength, stepLength);
 }
 
 function extractChains(
@@ -276,8 +276,7 @@ function extractChains(
   baseHalf: number,
   penPx: number,
   longLen: number,
-  stepLength: number,
-  rng: () => number
+  stepLength: number
 ): Stem[] {
   const childCount = new Array(nodes.length).fill(0);
   for (const nd of nodes) if (nd.parent >= 0) childCount[nd.parent]++;

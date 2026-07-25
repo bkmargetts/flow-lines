@@ -13,8 +13,6 @@ import {
 import { getRenderClient } from '../../render-client';
 import type { LayerOutput, LiveInstanceArgs } from '../../modules/types';
 import {
-  PRESETS,
-  type InkSettings,
   type ImageInkLayerState,
   type SegmentStatus,
   type PortraitStatus,
@@ -132,13 +130,6 @@ export function useImageInkInstance(args: LiveInstanceArgs<ImageInkLayerState>):
   // Last published output, so we can re-publish it with busy=true at the
   // start of a render (the previous frame stays visible while the next computes)
   const lastOutputRef = useRef<LayerOutput | null>(null);
-
-  const updateSettings = useCallback(
-    (updates: Partial<InkSettings>) => {
-      update((s) => ({ settings: { ...s.settings, ...updates } }));
-    },
-    [update]
-  );
 
   const randomizeSeed = useCallback(() => {
     // Surprise me: a new seed barely changes the look, so the dice also
