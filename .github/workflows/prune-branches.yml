@@ -1,0 +1,155 @@
+name: Prune Stale Branches
+
+# `delete-branch.yml` cleans up a branch when its PR closes, but it only fires
+# on that event — branches whose PR was closed before it existed, or that never
+# had a PR at all, accumulate forever. This is the manual catch-up: run it from
+# the Actions tab to sweep what that workflow never saw.
+#
+# Defaults to a dry run. Read the listing it prints, then re-run with
+# dry_run = false to actually delete.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'List what would be deleted without deleting it'
+        type: boolean
+        default: true
+      include_no_pr:
+        description: 'Also prune branches that never had a pull request'
+        type: boolean
+        default: false
+      min_age_days:
+        description: 'Only prune branches with no commit in this many days'
+        type: string
+        default: '30'
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Dispatch inputs reach github-script through templating, not
+            // through core.getInput — that reads INPUT_* env vars, which a
+            // workflow_dispatch input does not set on this step.
+            const dryRun = '${{ inputs.dry_run }}' !== 'false';
+            const includeNoPr = '${{ inputs.include_no_pr }}' === 'true';
+            const minAgeDays = parseInt('${{ inputs.min_age_days }}', 10) || 30;
+
+            // Never touch these. `model-cache` is not development work — the
+            // model-cache workflow force-pushes cached weights to it.
+            const PROTECTED = new Set([
+              context.payload.repository.default_branch,
+              'main',
+              'master',
+              'gh-pages',
+              'model-cache',
+            ]);
+
+            const branches = await github.paginate(github.rest.repos.listBranches, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              per_page: 100,
+            });
+
+            // A branch is off-limits while any PR pointing at it is still open,
+            // including one used as another PR's base (a stacked PR).
+            const openHeads = new Set();
+            const openBases = new Set();
+            const prsByHead = new Map();
+            for (const pr of pulls) {
+              if (pr.state === 'open') {
+                openHeads.add(pr.head.ref);
+                openBases.add(pr.base.ref);
+              }
+              if (!prsByHead.has(pr.head.ref)) prsByHead.set(pr.head.ref, []);
+              prsByHead.get(pr.head.ref).push(pr);
+            }
+
+            const cutoff = Date.now() - minAgeDays * 24 * 60 * 60 * 1000;
+            const kept = [];
+            const targets = [];
+
+            for (const branch of branches) {
+              const name = branch.name;
+              if (PROTECTED.has(name)) { kept.push([name, 'protected']); continue; }
+              if (branch.protected) { kept.push([name, 'branch protection']); continue; }
+              if (openHeads.has(name)) { kept.push([name, 'open PR']); continue; }
+              if (openBases.has(name)) { kept.push([name, 'base of an open PR']); continue; }
+
+              const prs = prsByHead.get(name) ?? [];
+              const merged = prs.some((p) => p.merged_at);
+              if (!prs.length && !includeNoPr) {
+                kept.push([name, 'never had a PR (set include_no_pr to prune)']);
+                continue;
+              }
+
+              // Age gate on the tip commit, so recent work is never swept up.
+              const { data: commit } = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: branch.commit.sha,
+              });
+              const when = Date.parse(
+                commit.commit.committer?.date ?? commit.commit.author?.date
+              );
+              if (Number.isFinite(when) && when > cutoff) {
+                kept.push([name, `tip is newer than ${minAgeDays}d`]);
+                continue;
+              }
+
+              const reason = merged
+                ? `merged (#${prs.filter((p) => p.merged_at).map((p) => p.number).join(', #')})`
+                : prs.length
+                  ? `PR closed unmerged (#${prs.map((p) => p.number).join(', #')})`
+                  : 'no PR';
+              targets.push({ name, sha: branch.commit.sha, reason });
+            }
+
+            core.summary.addHeading(dryRun ? 'Prune — dry run' : 'Prune');
+            core.summary.addRaw(
+              `\n${targets.length} branch(es) ${dryRun ? 'would be' : 'to be'} deleted, ` +
+                `${kept.length} kept.\n\n`
+            );
+
+            // Print the tip SHAs before deleting: a branch is restorable with
+            // `git push origin <sha>:refs/heads/<name>` as long as you have this.
+            core.summary.addHeading('Deleting', 3);
+            core.summary.addTable([
+              [{ data: 'branch', header: true }, { data: 'tip', header: true }, { data: 'why', header: true }],
+              ...targets.map((t) => [t.name, t.sha, t.reason]),
+            ]);
+            core.summary.addHeading('Kept', 3);
+            core.summary.addTable([
+              [{ data: 'branch', header: true }, { data: 'why', header: true }],
+              ...kept.map(([n, r]) => [n, r]),
+            ]);
+            await core.summary.write();
+
+            for (const t of targets) {
+              console.log(`${dryRun ? '[dry-run] would delete' : 'deleting'} ${t.name} @ ${t.sha} — ${t.reason}`);
+              if (dryRun) continue;
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${t.name}`,
+                });
+              } catch (error) {
+                core.warning(`Failed to delete ${t.name}: ${error.message}`);
+              }
+            }
