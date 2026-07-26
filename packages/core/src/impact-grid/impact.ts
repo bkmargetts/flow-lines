@@ -1,6 +1,7 @@
 import type { Point } from '../flow-lines.js';
 import { clamp01 } from '../lib/math.js';
-import { densify, smoothstep } from '../lib/spatial.js';
+import { smoothstep } from '../lib/spatial.js';
+import type { RegionSpec } from './layout.js';
 
 /** Nearest-point query result against the prepared impact path. */
 export interface PathHit {
@@ -9,164 +10,231 @@ export interface PathHit {
   /** Nearest point on the path. */
   qx: number;
   qy: number;
-  /** Which side of the nearest segment the query point sits on (±1; +1 when
-   *  the cross product of segment direction × offset is positive). Drives the
-   *  brushed-past torque so squares rotate opposite ways across the path. */
+  /** Which side of the nearest segment the query point sits on (±1). */
   side: number;
   /** Unit tangent of the nearest segment, in the path's direction of travel
-   *  — the sweep direction rubble drags along. */
+   *  — the sweep direction debris drags along. */
   tx: number;
   ty: number;
+  /** Gesture speed at the nearest sample, 0..1 — fast flicks hit harder. */
+  speed: number;
+}
+
+/** Where the trajectory actually strikes: the fast, deep sample the
+ *  pane-wide damage radiates from. */
+export interface Epicentre {
+  x: number;
+  y: number;
+  /** Gesture speed at the strike, 0..1. */
+  speed: number;
 }
 
 export interface PathField {
   nearest(x: number, y: number): PathHit;
   falloff(d: number): number;
-  /** The prepared (thinned + densified) centreline — what `inkPath` draws. */
+  /** The prepared (thinned + resampled) centreline — what `inkPath` draws. */
   points: Point[];
+  epicentre: Epicentre | null;
 }
 
-/** Longest segment list we'll query against — a slow careful drag can carry
- *  thousands of raw points; beyond this the extra resolution is invisible. */
+/** Longest segment list we'll query against. */
 const MAX_SEGMENTS = 512;
 
+interface Sample extends Point {
+  speed: number;
+}
+
 /**
- * Compile the drawn path into a queryable distance field. The raw drag points
- * are resampled to a density-independent polyline (drop near-duplicates, then
- * densify) so the output depends on the drawn *curve*, not on how fast the
- * pointer moved. Returns null when there's no usable path — the whole impact
- * stage is then skipped and the pristine grid renders byte-identical.
+ * Compile the drawn trajectory into a queryable, speed-aware field. The RAW
+ * drag points carry the gesture's velocity — pointer events arrive on a
+ * clock, so fast flicks leave wide gaps and careful passes dense ones.
+ * Speed is read per raw sample (gap / reference), then the polyline is
+ * thinned and resampled to a density-independent spacing with speed
+ * interpolated along — so the *geometry* is stable however it was drawn,
+ * while the *violence* still remembers the gesture. Synthetic evenly-spaced
+ * paths (tests, CLI) read as constant speed.
+ *
+ * The epicentre is the sample inside the region maximizing speed² plus a
+ * penetration-depth bonus — the fast, deep strike; null when the path
+ * never enters the region.
  */
-export function preparePath(path: Point[] | undefined, radius: number): PathField | null {
+export function preparePath(
+  path: Point[] | undefined,
+  radius: number,
+  region: RegionSpec,
+  innerMin: number
+): PathField | null {
   if (!path || path.length < 2) return null;
+
+  // Per-raw-point speed, normalized against a page-relative flick gap.
+  const speedRef = 0.06 * innerMin;
+  const raw: Sample[] = path.map((p, i) => {
+    if (i === 0) return { x: p.x, y: p.y, speed: 0 };
+    const gap = Math.hypot(p.x - path[i - 1].x, p.y - path[i - 1].y);
+    return { x: p.x, y: p.y, speed: clamp01(gap / speedRef) };
+  });
+  if (raw.length >= 2) raw[0].speed = raw[1].speed;
+
+  // Thin near-duplicates (keeping the max speed seen through the gap), then
+  // resample to a fixed step with speed lerped along each kept segment.
   const minStep = radius * 0.02;
-  const thinned: Point[] = [path[0]];
-  for (let i = 1; i < path.length; i++) {
+  const thinned: Sample[] = [raw[0]];
+  let pending = raw[0].speed;
+  for (let i = 1; i < raw.length; i++) {
+    pending = Math.max(pending, raw[i].speed);
     const prev = thinned[thinned.length - 1];
-    if (Math.hypot(path[i].x - prev.x, path[i].y - prev.y) >= minStep) thinned.push(path[i]);
+    if (Math.hypot(raw[i].x - prev.x, raw[i].y - prev.y) >= minStep) {
+      thinned.push({ x: raw[i].x, y: raw[i].y, speed: pending });
+      pending = 0;
+    }
   }
   if (thinned.length < 2) return null;
-  let pts = densify(thinned, minStep * 2);
+
+  const step = minStep * 2;
+  let pts: Sample[] = [thinned[0]];
+  for (let i = 1; i < thinned.length; i++) {
+    const a = thinned[i - 1];
+    const b = thinned[i];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.max(1, Math.ceil(segLen / step));
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      pts.push({
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        speed: a.speed + (b.speed - a.speed) * t,
+      });
+    }
+  }
   if (pts.length - 1 > MAX_SEGMENTS) {
     const stride = Math.ceil((pts.length - 1) / MAX_SEGMENTS);
-    const strided: Point[] = [];
+    const strided: Sample[] = [];
     for (let i = 0; i < pts.length; i += stride) strided.push(pts[i]);
     if (strided[strided.length - 1] !== pts[pts.length - 1]) strided.push(pts[pts.length - 1]);
     pts = strided;
   }
 
-  const nearest = (x: number, y: number): PathHit => {
-    let best = Infinity;
-    let bqx = pts[0].x;
-    let bqy = pts[0].y;
-    let bside = 1;
-    let btx = 1;
-    let bty = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const ax = pts[i - 1].x;
-      const ay = pts[i - 1].y;
-      const dx = pts[i].x - ax;
-      const dy = pts[i].y - ay;
-      const len2 = dx * dx + dy * dy;
-      let t = len2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / len2 : 0;
-      t = Math.max(0, Math.min(1, t));
-      const qx = ax + t * dx;
-      const qy = ay + t * dy;
-      const dist2 = (x - qx) * (x - qx) + (y - qy) * (y - qy);
-      if (dist2 < best) {
-        best = dist2;
-        bqx = qx;
-        bqy = qy;
-        bside = dx * (y - ay) - dy * (x - ax) >= 0 ? 1 : -1;
-        const len = Math.sqrt(len2) || 1;
-        btx = dx / len;
-        bty = dy / len;
+  let epicentre: Epicentre | null = null;
+  let best = -Infinity;
+  for (const p of pts) {
+    if (!region.contains(p.x, p.y)) continue;
+    const score = p.speed * p.speed + 0.3 * (region.depth(p.x, p.y) / region.extent);
+    if (score > best) {
+      best = score;
+      epicentre = { x: p.x, y: p.y, speed: p.speed };
+    }
+  }
+  if (!epicentre) {
+    // The path never enters the slab: strike from its closest approach.
+    let bestD = Infinity;
+    for (const p of pts) {
+      const d = Math.hypot(p.x - region.centroid.x, p.y - region.centroid.y);
+      if (d < bestD) {
+        bestD = d;
+        epicentre = { x: p.x, y: p.y, speed: p.speed };
       }
     }
-    return { d: Math.sqrt(best), qx: bqx, qy: bqy, side: bside, tx: btx, ty: bty };
+  }
+
+  const nearest = (x: number, y: number): PathHit => {
+    let bestD2 = Infinity;
+    let hit: PathHit = { d: 0, qx: pts[0].x, qy: pts[0].y, side: 1, tx: 1, ty: 0, speed: 0 };
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      let t = len2 > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const qx = a.x + t * dx;
+      const qy = a.y + t * dy;
+      const d2 = (x - qx) * (x - qx) + (y - qy) * (y - qy);
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        const len = Math.sqrt(len2) || 1;
+        hit = {
+          d: 0,
+          qx,
+          qy,
+          side: dx * (y - a.y) - dy * (x - a.x) >= 0 ? 1 : -1,
+          tx: dx / len,
+          ty: dy / len,
+          speed: a.speed + (b.speed - a.speed) * t,
+        };
+      }
+    }
+    hit.d = Math.sqrt(bestD2);
+    return hit;
   };
 
-  return { nearest, falloff: (d) => smoothstep(clamp01(1 - d / radius)), points: pts };
+  return {
+    nearest,
+    falloff: (d) => smoothstep(clamp01(1 - d / radius)),
+    points: pts.map((p) => ({ x: p.x, y: p.y })),
+    epicentre,
+  };
 }
 
-/** Everything the render stage needs to know about one square's impact
- *  response. `f` is the smoothstep falloff at the centre (0 = untouched). */
-export interface SquareResponse {
-  f: number;
-  /** Unit push direction, radially away from the nearest path point. */
-  ux: number;
-  uy: number;
-  /** Centre displacement. */
-  dx: number;
-  dy: number;
-  /** Rotation added to the resting angle, radians. */
-  theta: number;
-  /** Side-length scale (compression near the blow). */
-  scale: number;
-  shattered: boolean;
-}
+/** The four states of the pane, graded from the strike outward. */
+export type DamageZone = 'dust' | 'cascade' | 'cracked' | 'intact';
 
-const UNTOUCHED: SquareResponse = {
-  f: 0,
-  ux: 0,
-  uy: 0,
-  dx: 0,
-  dy: 0,
-  theta: 0,
-  scale: 1,
-  shattered: false,
-};
+export interface CellDamage {
+  zone: DamageZone;
+  /** Combined damage 0..1 (channel + pane stress). */
+  D: number;
+  hit: PathHit;
+  /** Radial direction from the epicentre (unit) — sliver orientation. */
+  rx: number;
+  ry: number;
+}
 
 /**
- * The per-square impact model, evaluated once at the square's centre:
- * quadratic-falloff push away from the path (the far field barely stirs),
- * a side-signed torque as if the impact brushed past, compression near the
- * blow, and a soft probabilistic shatter gate — no visible ring where
- * shattering starts.
+ * The single-pane damage model: every cell's damage is the sum of a channel
+ * term (how close the trajectory passes, weighted by gesture speed) and a
+ * pane term (stress radiating from the epicentre across the whole slab).
+ * Zone thresholds widen with `shatter`; a cell the line physically crosses
+ * is always at least cascade.
  */
-export function squareResponse(
+export function cellDamage(
   field: PathField,
   cx: number,
   cy: number,
-  half: number,
+  extent: number,
   radius: number,
-  strength: number,
-  shatter: number,
-  rng: () => number
-): SquareResponse {
+  reach: number,
+  energy: number,
+  paneStress: number,
+  shatter: number
+): CellDamage {
   const hit = field.nearest(cx, cy);
-  if (hit.d >= radius && hit.d >= half) return UNTOUCHED;
-  const f = field.falloff(hit.d);
-  let ux: number;
-  let uy: number;
-  if (hit.d > 1e-6) {
-    ux = (cx - hit.qx) / hit.d;
-    uy = (cy - hit.qy) / hit.d;
-  } else {
-    const a = rng() * Math.PI * 2;
-    ux = Math.cos(a);
-    uy = Math.sin(a);
+  const channel =
+    smoothstep(clamp01(1 - hit.d / radius)) * (0.4 + 0.6 * hit.speed) * (0.5 + 0.5 * energy);
+  const epi = field.epicentre;
+  let pane = 0;
+  let rx = hit.side * -hit.ty;
+  let ry = hit.side * hit.tx;
+  if (epi) {
+    const dEpi = Math.hypot(cx - epi.x, cy - epi.y);
+    // Squared falloff with a sub-cascade ceiling: the pane's far field
+    // CRACKS (facets stay lodged); only near the strike does pane stress
+    // alone fling shards — flanks survive, graded, like a real pane.
+    const s = smoothstep(clamp01(1 - dEpi / reach));
+    pane = paneStress * 0.55 * s * s;
+    if (dEpi > 1e-6) {
+      rx = (cx - epi.x) / dEpi;
+      ry = (cy - epi.y) / dEpi;
+    }
   }
-  const push = strength * 0.5 * radius * f * f;
-  // Both torque terms scale with strength: at 0 (crush-in-place) intact
-  // squares near the path sit perfectly still — order right up to the band.
-  const theta =
-    strength * (hit.side * (35 * Math.PI / 180) + (2 * rng() - 1) * (10 * Math.PI / 180)) * f;
-  // A cell the line physically crosses always shatters ("smashes everything
-  // in its path"); the probabilistic halo widens with `shatter` around it.
-  const shatterRadius = radius * (0.2 + 0.5 * shatter);
-  const crossed = hit.d < half;
-  const shattered =
-    shatter > 0 &&
-    (crossed || (hit.d < shatterRadius && rng() < shatter * smoothstep(1 - hit.d / shatterRadius)));
-  return {
-    f,
-    ux,
-    uy,
-    dx: push * ux,
-    dy: push * uy,
-    theta,
-    scale: 1 - 0.35 * strength * f,
-    shattered,
-  };
+  const D = clamp01(channel + pane);
+  // shatter widens every zone; at 0 the pane refuses to break at all.
+  let zone: DamageZone = 'intact';
+  if (shatter > 0) {
+    const dustT = 0.92 - 0.3 * shatter;
+    const cascadeT = 0.62 - 0.28 * shatter;
+    const crackT = 0.32 - 0.2 * shatter;
+    zone = D > dustT ? 'dust' : D > cascadeT ? 'cascade' : D > crackT ? 'cracked' : 'intact';
+    if (hit.d < extent && zone !== 'dust') zone = 'cascade';
+  }
+  return { zone, D, hit, rx, ry };
 }

@@ -146,11 +146,14 @@ const SPECS: GenomeSpec[] = [
       sweep: [0, 1],
       fill: [0, 1],
       inkSplit: [0, 1],
+      paneStress: [0, 1],
+      energy: [0, 1],
     },
     ints: ['frameDepth', 'impactRadiusMm'],
     bools: ['inkPath'],
     enums: {
       layout: ['grid', 'frame', 'bars'],
+      region: ['slab', 'band', 'disc', 'full'],
       fillStyle: ['texture', 'none', 'hatch', 'concentric'],
     },
     // maskPath / drawMode are user data — the drawn strike survives a reroll.
@@ -162,6 +165,7 @@ const SPECS: GenomeSpec[] = [
       'wobbleMm',
       'strokeColor',
       'accentColor',
+      'pathColor',
       'maskPath',
       'drawMode',
     ],

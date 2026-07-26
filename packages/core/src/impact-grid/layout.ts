@@ -32,10 +32,79 @@ export interface LayoutOptions {
   rotationJitter: number;
   gap: number;
   penWidth: number;
+  region: RegionSpec;
 }
 
 /** Hard cap so a runaway cell-size knob can't blow up plot time. */
 const MAX_CELLS = 4000;
+
+/** The slab the mosaic occupies — a shaped object floating in paper, per
+ *  the reference compositions, whose boundary the damage can erode. */
+export type RegionKind = 'slab' | 'band' | 'disc' | 'full';
+
+export interface RegionSpec {
+  contains(x: number, y: number): boolean;
+  /** Distance inside the boundary (0 outside) — the "penetration depth". */
+  depth(x: number, y: number): number;
+  /** Vertical extent of the region at column x, or null if outside. */
+  yRange(x: number): [number, number] | null;
+  centroid: Point;
+  /** Half-diagonal — the pane-stress reach is scaled from this. */
+  extent: number;
+}
+
+export function makeRegion(
+  kind: RegionKind,
+  width: number,
+  height: number,
+  margin: number
+): RegionSpec {
+  const innerW = width - 2 * margin;
+  const innerH = height - 2 * margin;
+  const rect = (x0: number, y0: number, x1: number, y1: number): RegionSpec => ({
+    contains: (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1,
+    depth: (x, y) =>
+      Math.max(0, Math.min(x - x0, x1 - x, y - y0, y1 - y)),
+    yRange: (x) => (x >= x0 && x <= x1 ? [y0, y1] : null),
+    centroid: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 },
+    extent: Math.hypot(x1 - x0, y1 - y0) / 2,
+  });
+  switch (kind) {
+    case 'full':
+      return rect(margin, margin, width - margin, height - margin);
+    case 'slab':
+      return rect(
+        margin + innerW * 0.08,
+        margin + innerH * 0.15,
+        width - margin - innerW * 0.08,
+        height - margin - innerH * 0.15
+      );
+    case 'band':
+      return rect(
+        margin,
+        margin + innerH * 0.29,
+        width - margin,
+        height - margin - innerH * 0.29
+      );
+    case 'disc': {
+      const cx = width / 2;
+      const cy = height / 2;
+      const r = Math.min(innerW, innerH) * 0.4;
+      return {
+        contains: (x, y) => Math.hypot(x - cx, y - cy) <= r,
+        depth: (x, y) => Math.max(0, r - Math.hypot(x - cx, y - cy)),
+        yRange: (x) => {
+          const dx = Math.abs(x - cx);
+          if (dx >= r) return null;
+          const h = Math.sqrt(r * r - dx * dx);
+          return [cy - h, cy + h];
+        },
+        centroid: { x: cx, y: cy },
+        extent: r,
+      };
+    }
+  }
+}
 
 /** Closed 5-point ring for a rectangle at `centre`, half-extents `hx`/`hy`,
  *  rotated by `rotation`. */
@@ -96,6 +165,7 @@ export function layoutCells(o: LayoutOptions): PlacedCell[] {
       const rng = makeRandom(subSeed(o.seed, index));
       const cx = originX + (col + 0.5) * pitch + o.positionJitter * pitch * 0.35 * (2 * rng() - 1);
       const cy = originY + (row + 0.5) * pitch + o.positionJitter * pitch * 0.35 * (2 * rng() - 1);
+      if (!o.region.contains(cx, cy)) continue;
       let half = (pitch / 2) * (1 - o.gap) * (1 + o.sizeVariation * 0.45 * (2 * rng() - 1));
       half *= 1 + 0.12 * drift.fbm(cx * 0.01, cy * 0.01, 2, 0.5, 2);
       half = clamp(half, o.penWidth, pitch);
@@ -118,11 +188,16 @@ function layoutBars(o: LayoutOptions, innerW: number, innerH: number): PlacedCel
     const w = pitch * (0.55 + 0.5 * colRng()) * (1 + o.sizeVariation * 0.5 * (2 * colRng() - 1));
     if (x + w > o.margin + innerW) break;
     // Ragged column ends: each bar starts and stops a little short of the
-    // frame, more so as sizeVariation rises.
+    // region's edge at this column, more so as sizeVariation rises.
     const ragTop = colRng() * pitch * (0.4 + 2 * o.sizeVariation);
     const ragBot = colRng() * pitch * (0.4 + 2 * o.sizeVariation);
-    let y = o.margin + ragTop;
-    const yEnd = o.margin + innerH - ragBot;
+    const range = o.region.yRange(x + w / 2);
+    if (!range) {
+      x += w + o.gap * pitch * 0.5;
+      continue;
+    }
+    let y = range[0] + ragTop;
+    const yEnd = range[1] - ragBot;
     while (y < yEnd && cells.length < MAX_CELLS) {
       const rng = makeRandom(subSeed(o.seed, 100000 + index));
       const h = Math.min(

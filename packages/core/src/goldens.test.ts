@@ -219,6 +219,17 @@ CASES['impact-grid/shatter-heavy/42'] = () =>
     debris: 0.6,
     fill: 0.4,
   });
+CASES['impact-grid/band-bars/42'] = () =>
+  generateImpactGrid({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    region: 'band',
+    layout: 'bars',
+    impactPath: impactGridPath,
+    paneStress: 1,
+  });
 // The v1 "rip": displacement field + far-flung hatch-filled debris — keeps
 // the push/scatter code path pinned now the defaults crush in place.
 CASES['impact-grid/rip/42'] = () =>

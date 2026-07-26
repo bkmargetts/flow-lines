@@ -1,6 +1,6 @@
 import type { ImpactGridState } from './types';
 
-export type ImpactGridLook = 'breakpoint' | 'mosaic' | 'rough' | 'rip';
+export type ImpactGridLook = 'breakpoint' | 'mosaic' | 'disc' | 'rough' | 'rip';
 
 /** Named looks spanning the module's range. Each is a state patch — seed,
  *  pens/inks, and the drawn trajectory are never touched. */
@@ -11,6 +11,7 @@ export const IMPACT_GRID_LOOKS: Record<
   breakpoint: {
     label: 'Breakpoint bars',
     state: {
+      region: 'band',
       layout: 'bars',
       sizeVariation: 0.25,
       positionJitter: 0.03,
@@ -30,8 +31,31 @@ export const IMPACT_GRID_LOOKS: Record<
     },
   },
   mosaic: {
-    label: 'Mosaic',
+    label: 'Mosaic slab',
     state: {
+      region: 'slab',
+      layout: 'grid',
+      sizeVariation: 0.15,
+      positionJitter: 0.03,
+      rotationJitter: 0.02,
+      gap: 0.06,
+      impactStrength: 0,
+      shatter: 0.85,
+      scatter: 0.35,
+      debris: 0.25,
+      crush: 0.7,
+      sweep: 0.7,
+      fill: 1,
+      fillStyle: 'texture',
+      inkSplit: 0.35,
+      inkPath: true,
+      wobbleMm: 0,
+    },
+  },
+  disc: {
+    label: 'Disc',
+    state: {
+      region: 'disc',
       layout: 'grid',
       sizeVariation: 0.15,
       positionJitter: 0.03,
@@ -53,6 +77,7 @@ export const IMPACT_GRID_LOOKS: Record<
   rough: {
     label: 'Rough grid',
     state: {
+      region: 'full',
       layout: 'grid',
       sizeVariation: 0.35,
       positionJitter: 0.25,
@@ -74,6 +99,7 @@ export const IMPACT_GRID_LOOKS: Record<
   rip: {
     label: 'Rip',
     state: {
+      region: 'full',
       layout: 'grid',
       sizeVariation: 0.35,
       positionJitter: 0.25,

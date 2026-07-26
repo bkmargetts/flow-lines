@@ -20,6 +20,13 @@ const LOOK_LABELS = Object.fromEntries(
   Object.entries(IMPACT_GRID_LOOKS).map(([id, l]) => [id, l.label])
 ) as Record<ImpactGridLook, string>;
 
+const REGION_LABELS: Record<ImpactGridState['region'], string> = {
+  slab: 'Slab',
+  band: 'Band',
+  disc: 'Disc',
+  full: 'Full page',
+};
+
 const FILL_STYLE_LABELS: Record<ImpactGridState['fillStyle'], string> = {
   texture: 'Textures',
   none: 'None',
@@ -70,8 +77,16 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
       />
 
       <PresetPicker
+        label="Pane"
+        info="The shaped slab the mosaic occupies — damage erodes its edge."
+        labels={REGION_LABELS}
+        value={state.region}
+        onChange={(region) => update({ region })}
+      />
+
+      <PresetPicker
         label="Layout"
-        info="Grid fills the page; Frame keeps a border band with an empty centre."
+        info="Grid packs the pane; Frame keeps a border band; Bars stacks tall columns."
         labels={LAYOUT_LABELS}
         value={state.layout}
         onChange={(layout) => update({ layout })}
@@ -80,6 +95,8 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
       <SeedControl seed={state.seed} onChange={(seed) => update({ seed })} />
 
       <Slider label="Cell size" value={state.cellSizeMm} min={3} max={20} step={0.5} onChange={(v) => update({ cellSizeMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      <Slider label="Energy" value={state.energy} min={0} max={1} step={0.01} onChange={(v) => update({ energy: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      <Slider label="Pane stress" value={state.paneStress} min={0} max={1} step={0.01} onChange={(v) => update({ paneStress: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Crush" value={state.crush} min={0} max={1} step={0.01} onChange={(v) => update({ crush: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Shatter" value={state.shatter} min={0} max={1} step={0.01} onChange={(v) => update({ shatter: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Impact strength" value={state.impactStrength} min={0} max={1} step={0.01} onChange={(v) => update({ impactStrength: v })} format={(v) => `${Math.round(v * 100)}%`} />
@@ -110,6 +127,7 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
       <Slider label="Pen width" value={state.penWidthMm} min={0.05} max={0.8} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
       <ColorField label="Ink" value={state.strokeColor} onChange={(strokeColor) => update({ strokeColor })} />
       <ColorField label="Accent ink" value={state.accentColor} onChange={(accentColor) => update({ accentColor })} />
+      <ColorField label="Line ink" value={state.pathColor} onChange={(pathColor) => update({ pathColor })} />
     </div>
   );
 }

@@ -46,11 +46,8 @@ function centroidOf(poly: Point[]): Point {
 }
 
 export interface FragmentOptions {
-  /** Falloff at the parent cell's centre (0..1). */
+  /** Damage at the parent cell's centre (0..1). */
   f: number;
-  /** Radial push direction (unit, away from the path). */
-  ux: number;
-  uy: number;
   /** Parent centre displacement — fragments inherit it before drifting. */
   dx: number;
   dy: number;
@@ -66,10 +63,16 @@ export interface FragmentOptions {
   /** Path tangent (unit, direction of travel) at the nearest point. */
   tx: number;
   ty: number;
+  /** Radial direction from the epicentre (unit) — glass slivers elongate
+   *  along this. */
+  rx: number;
+  ry: number;
   /** Half-width of the swept-clean channel, px. */
   channel: number;
   /** Distance from the parent centre to the path, px. */
   d: number;
+  /** True in the dust zone: finer cuts, smaller survivors, more loss. */
+  dust: boolean;
   penWidth: number;
 }
 
@@ -87,13 +90,22 @@ export function shatterCell(
   o: FragmentOptions,
   rng: () => number
 ): Point[][] {
-  const cuts = Math.max(1, Math.min(5, 1 + Math.floor(o.crush * (1.5 + 2.5 * o.f) + rng() * 0.5)));
+  const cuts = Math.max(
+    1,
+    Math.min(7, 1 + (o.dust ? 2 : 0) + Math.floor(o.crush * (1.5 + 2.5 * o.f) + rng() * 0.5))
+  );
   let fragments: Point[][] = [cell];
   const centre = centroidOf(cell);
+  const radialAngle = Math.atan2(o.ry, o.rx);
   for (let c = 0; c < cuts; c++) {
     const px = centre.x + (2 * rng() - 1) * 0.5 * extent;
     const py = centre.y + (2 * rng() - 1) * 0.5 * extent;
-    const alpha = rng() * Math.PI;
+    // Glass breaks radially: most cuts run along the ray from the strike
+    // (long thin slivers), the rest cross them.
+    const alpha =
+      rng() < 0.6
+        ? radialAngle + (2 * rng() - 1) * (Math.PI / 12)
+        : radialAngle + Math.PI / 2 + (2 * rng() - 1) * (Math.PI / 6);
     const n = { x: -Math.sin(alpha), y: Math.cos(alpha) };
     const next: Point[][] = [];
     for (const frag of fragments) {
@@ -105,12 +117,15 @@ export function shatterCell(
     fragments = next;
   }
 
-  const minArea = (2 * o.penWidth) * (2 * o.penWidth);
+  const minArea = o.dust
+    ? (1.2 * o.penWidth) * (1.2 * o.penWidth)
+    : (2 * o.penWidth) * (2 * o.penWidth);
+  const debris = o.dust ? Math.min(1, o.debris + 0.35) : o.debris;
   const out: Point[][] = [];
   for (const frag of fragments) {
     if (ringArea(frag) < minArea) continue;
     // Pulverised: the closest shards lose mass entirely.
-    if (o.d < o.channel && rng() < o.debris * o.f) continue;
+    if ((o.dust || o.d < o.channel) && rng() < debris * Math.max(o.f, 0.6)) continue;
     const g = centroidOf(frag);
     // Drift along the direction of travel — heavy-tailed so the cascade
     // spreads: most shards travel a moderate way, a few fly far.
@@ -119,10 +134,12 @@ export function shatterCell(
     // Channel clearing: shards born inside the channel must at least reach
     // its edge, or the stroke wouldn't read as swept clean.
     if (o.d < o.channel) drift += o.sweep * (o.channel - o.d) * (1.5 + rng());
-    // A light radial component spreads the cascade off the centreline.
-    const spread = o.scatter * 0.3 * o.radius * o.f * o.f * rng();
-    const gx = g.x + o.dx + drift * o.tx + spread * o.ux;
-    const gy = g.y + o.dy + drift * o.ty + spread * o.uy;
+    if (o.dust) drift *= 1.4;
+    // The cascade also sprays radially from the strike, dust hardest.
+    const spread =
+      (o.dust ? 0.45 : 0.3) * o.scatter * o.radius * o.f * o.f * rng();
+    const gx = g.x + o.dx + drift * o.tx + spread * o.rx;
+    const gy = g.y + o.dy + drift * o.ty + spread * o.ry;
     // Shear toward the flow: shards leave aligned with the sweep, plus spin.
     const flowAngle = Math.atan2(o.ty, o.tx);
     const shearTo = ((flowAngle % Math.PI) + Math.PI) % Math.PI;

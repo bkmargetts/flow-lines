@@ -20,6 +20,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     height: page.heightPx,
     margin: marginPx,
     seed: state.seed,
+    region: state.region,
     layout: state.layout,
     frameDepth: state.frameDepth,
 
@@ -31,6 +32,8 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
 
     impactPath: state.maskPath,
     impactRadius: state.impactRadiusMm * mm,
+    paneStress: state.paneStress,
+    energy: state.energy,
     impactStrength: state.impactStrength,
     shatter: state.shatter,
     scatter: state.scatter,
@@ -64,7 +67,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     layerColors: {
       ink: state.strokeColor,
       accent: state.accentColor,
-      path: state.strokeColor,
+      path: state.pathColor,
     },
   };
 }

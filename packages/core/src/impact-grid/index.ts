@@ -1,27 +1,32 @@
 import type { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
-import { lerp } from '../lib/math.js';
+import { clamp01, lerp } from '../lib/math.js';
 import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { orderPlot } from '../optimize.js';
 import { createNoise } from '../noise.js';
-import { densify } from '../lib/spatial.js';
+import { densify, smoothstep } from '../lib/spatial.js';
 import { smoothPolyline } from '../lib/polyline.js';
-import { layoutCells, rectAt } from './layout.js';
-import { preparePath, squareResponse } from './impact.js';
+import { layoutCells, makeRegion, rectAt, type RegionKind } from './layout.js';
+import { preparePath } from './impact.js';
+import { cellDamage } from './impact.js';
+import { makeCracks, type CrackNetwork } from './cracks.js';
 import { shatterCell } from './shatter.js';
 import { concentricFill, hatchConvex } from './hatch.js';
 import { TEXTURES, textureFill } from './textures.js';
 
 /**
- * A dense mosaic of texture-filled cells — packed squares, a border frame,
- * or tall stacked bars — struck along a drawn trajectory. The line sweeps
- * its channel clean: struck cells shear into shards that cascade along the
- * stroke's direction of travel, textures intact, densest at the flanks and
- * fading down the flow; the innermost shards pulverise away. The mosaic
- * splits across two pen layers ('ink' / 'accent') in coherent regions, and
- * the trajectory itself can be inked with a terminal dot. Everything is
- * plain stroked paths, single pen width per layer, deterministic per seed;
- * no path ⇒ the pristine mosaic.
+ * One pane under one strike. A dense mosaic of texture-filled cells —
+ * packed squares, a border frame, or tall stacked bars — occupies a shaped
+ * slab floating in paper (band / slab / disc / full page). A drawn
+ * trajectory strikes it: damage radiates from the epicentre across the
+ * whole pane, graded dust → detached shard cascade → cracked-in-place
+ * facets whose fracture lines run continuously across cell boundaries →
+ * intact; the stroke also sweeps its own channel clean, debris cascading
+ * along its direction of travel. The gesture's speed drives the violence
+ * (fast flicks leave sparse drawn points — that spacing is read as
+ * velocity). Two pen layers ('ink'/'accent') in coherent regions; the
+ * trajectory itself plots on a 'path' layer with a terminal dot. Plain
+ * stroked paths, deterministic per seed; no path ⇒ the pristine mosaic.
  */
 export interface ImpactGridOptions {
   width: number;
@@ -29,8 +34,11 @@ export interface ImpactGridOptions {
   margin: number;
   seed?: number;
 
-  /** 'grid' packs the framed page; 'frame' keeps a border band; 'bars'
-   *  builds tall columns of stacked segments with ragged ends. */
+  /** The slab the mosaic occupies: inset 'slab' (default), a central
+   *  horizontal 'band', a 'disc', or the 'full' framed page. */
+  region?: RegionKind;
+  /** 'grid' packs the region; 'frame' keeps a border band of the grid;
+   *  'bars' builds tall columns of stacked segments with ragged ends. */
   layout?: 'grid' | 'frame' | 'bars';
   /** Cells deep the 'frame' band runs, 1..6. */
   frameDepth?: number;
@@ -48,20 +56,26 @@ export interface ImpactGridOptions {
   gap?: number;
 
   // Impact — inert when the path is missing/short: pristine mosaic.
-  /** Impact trajectory in page px (the web layer passes the drawn path). */
+  /** Impact trajectory in page px (the web layer passes the RAW drawn
+   *  points — their spacing carries the gesture's speed). */
   impactPath?: Point[];
-  /** Falloff radius, px. Default: min(innerW, innerH) * 0.3. */
+  /** Channel falloff radius, px. Default: min(innerW, innerH) * 0.3. */
   impactRadius?: number;
-  /** 0..1 radial push / torque / compression of intact cells (0 = the
-   *  mosaic stands still right up to the swept channel). */
+  /** 0..1 pane-wide stress: how far the shared crack network and damage
+   *  radiate from the epicentre across the whole slab. */
+  paneStress?: number;
+  /** 0..1 overall impact violence, scaling the gesture's speed. */
+  energy?: number;
+  /** 0..1 radial push / torque of intact cells near the channel (0 = the
+   *  pane stands still outside its damage zones). */
   impactStrength?: number;
-  /** 0..1 shatter-zone width around the channel. */
+  /** 0..1 damage-zone width (dust / cascade / cracked thresholds). */
   shatter?: number;
-  /** 0..1 sideways spread of the cascade off the centreline. */
+  /** 0..1 sideways spray of the cascade off the strike. */
   scatter?: number;
-  /** 0..1 chance the innermost shards vanish entirely — pulverised. */
+  /** 0..1 chance shards vanish entirely — pulverised. */
   debris?: number;
-  /** 0..1 shard fineness: how deeply struck cells subdivide near the line. */
+  /** 0..1 shard fineness (subdivision depth near the strike). */
   crush?: number;
   /** 0..1 how far shards are carried along the stroke's direction of travel
    *  — also how hard the channel is swept clean. */
@@ -71,11 +85,9 @@ export interface ImpactGridOptions {
   /** 0..1 fraction of cells carrying fill marks (region-committed). */
   fill?: number;
   /** The fill vocabulary: 'texture' draws each cell in one of eight fill
-   *  patterns (hatch, scales, waves, dots…); 'hatch' and 'concentric' are
-   *  single-style fills; 'none' leaves outlines. */
+   *  patterns; 'hatch' / 'concentric' are single-style; 'none' outlines. */
   fillStyle?: 'texture' | 'hatch' | 'concentric' | 'none';
-  /** 0..1 fraction of the mosaic drawn in the 'accent' pen layer, committed
-   *  in coherent regions. 0 = single ink. */
+  /** 0..1 fraction of the mosaic drawn in the 'accent' pen layer. */
   inkSplit?: number;
   /** Ink the trajectory itself as a thin stroke with a terminal dot. */
   inkPath?: boolean;
@@ -85,19 +97,18 @@ export interface ImpactGridOptions {
   optimize?: boolean;
 }
 
-// Defaults follow the Breakpoint read: a dense, near-ordered, fully
-// textured mosaic; the drawn line sweeps its channel clean and the debris
-// cascades along the stroke, crisp and unwobbled. The v1 organic/rip looks
-// remain reachable via the jitter, strength and scatter knobs.
 const DEFAULTS: Required<
   Omit<ImpactGridOptions, 'width' | 'height' | 'margin' | 'seed' | 'impactPath' | 'cellSize' | 'impactRadius'>
 > = {
+  region: 'slab',
   layout: 'grid',
   frameDepth: 3,
   sizeVariation: 0.15,
   positionJitter: 0.03,
   rotationJitter: 0.02,
   gap: 0.06,
+  paneStress: 0.7,
+  energy: 0.7,
   impactStrength: 0,
   shatter: 0.85,
   scatter: 0.35,
@@ -121,6 +132,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
   const cellSize = options.cellSize ?? innerMin / 16;
   const radius = options.impactRadius ?? innerMin * 0.3;
   const channel = Math.max(cellSize * 0.5, radius * 0.12);
+  const region = makeRegion(o.region, width, height, margin);
 
   const cells = layoutCells({
     width,
@@ -135,13 +147,18 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     rotationJitter: o.rotationJitter,
     gap: o.gap,
     penWidth: o.penWidth,
+    region,
   });
   if (cells.length === 0) return { lines: [], width, height, seed };
 
-  const field = preparePath(o.impactPath, radius);
-  // Region-committing noise fields: which neighbourhoods carry fill, and
-  // which sit in the accent ink. (Per-cell LCG first draws correlate across
-  // sequential sub-seeds, so region decisions never ride on them.)
+  const field = preparePath(o.impactPath, radius, region, innerMin);
+  const epi = field?.epicentre ?? null;
+  const reach = epi
+    ? region.extent * (0.22 + 0.55 * o.energy * (0.3 + 0.7 * epi.speed))
+    : 0;
+  const cracks: CrackNetwork | null =
+    epi && o.paneStress > 0 ? makeCracks(epi, reach, region, seed) : null;
+
   const fillNoise = createNoise(subSeed(seed, 2));
   const inkNoise = createNoise(subSeed(seed, 4));
   const lines: FlowLine[] = [];
@@ -152,8 +169,6 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
 
   for (const cell of cells) {
     const extent = Math.max(cell.hx, cell.hy);
-    // Separate per-cell streams per stage (layout untouched by the impact),
-    // each burning two draws — adjacent sub-seeds' first LCG draws correlate.
     const impactRng = makeRandom(subSeed(seed, cell.index) + 17);
     impactRng();
     impactRng();
@@ -161,21 +176,19 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     cellRng();
     cellRng();
 
-    const r = field
-      ? squareResponse(
+    const dmg = field
+      ? cellDamage(
           field,
           cell.centre.x,
           cell.centre.y,
           extent,
           radius,
-          o.impactStrength,
-          o.shatter,
-          impactRng
+          reach,
+          o.energy,
+          o.paneStress,
+          o.shatter
         )
       : null;
-    const f = r?.f ?? 0;
-    const scale = r?.scale ?? 1;
-    const rotation = cell.rotation + (r?.theta ?? 0);
 
     const ink =
       o.inkSplit > 0 &&
@@ -187,6 +200,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       fillNoise.noise2D(cell.centre.x * 0.008, cell.centre.y * 0.008) * 0.5 + 0.5 < o.fill;
     const texture = TEXTURES[Math.floor(cellRng() * TEXTURES.length) % TEXTURES.length];
     const fillSpacing = Math.max(2 * o.penWidth, cellSize * 0.15);
+    const D = dmg?.D ?? 0;
     const fillPoly = (poly: Point[]): Point[][] => {
       switch (o.fillStyle) {
         case 'texture':
@@ -194,57 +208,98 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
         case 'hatch':
           return hatchConvex(
             poly,
-            rotation + Math.PI / 4,
-            lerp(4 * o.penWidth, 2.5 * o.penWidth, f),
+            cell.rotation + Math.PI / 4,
+            lerp(4 * o.penWidth, 2.5 * o.penWidth, D),
             o.penWidth
           );
         case 'concentric':
-          return concentricFill(poly, lerp(4 * o.penWidth, 2.5 * o.penWidth, f), o.penWidth);
+          return concentricFill(poly, lerp(4 * o.penWidth, 2.5 * o.penWidth, D), o.penWidth);
         default:
           return [];
       }
     };
+    const emit = (poly: Point[], filled: boolean) => {
+      push(poly, ink);
+      if (filled) for (const span of fillPoly(poly)) push(span, ink);
+    };
 
-    if (r?.shattered) {
-      const resting = rectAt(cell.centre, cell.hx * scale, cell.hy * scale, rotation);
-      const hit = field!.nearest(cell.centre.x, cell.centre.y);
+    if (dmg && (dmg.zone === 'dust' || dmg.zone === 'cascade')) {
+      const resting = rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
       const shards = shatterCell(
         resting,
         extent,
         {
-          f,
-          ux: r.ux,
-          uy: r.uy,
-          dx: r.dx,
-          dy: r.dy,
+          f: D,
+          dx: 0,
+          dy: 0,
           radius,
           shatter: o.shatter,
           scatter: o.scatter,
           debris: o.debris,
           crush: o.crush,
           sweep: o.sweep,
-          tx: hit.tx,
-          ty: hit.ty,
+          tx: dmg.hit.tx,
+          ty: dmg.hit.ty,
+          rx: dmg.rx,
+          ry: dmg.ry,
           channel,
-          d: hit.d,
+          d: dmg.hit.d,
+          dust: dmg.zone === 'dust',
           penWidth: o.penWidth,
         },
         impactRng
       );
-      for (const shard of shards) {
-        push(shard, ink);
-        if (regionFilled) for (const span of fillPoly(shard)) push(span, ink);
+      for (const shard of shards) emit(shard, regionFilled);
+    } else if (dmg && dmg.zone === 'cracked' && cracks) {
+      // Cracked in place: the shared spiderweb facets this cell; facets stay
+      // lodged — hairline gaps and a whisper of rotation, no displacement.
+      const resting = rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
+      for (const facet of cracks.facet(resting)) {
+        const n = facet.length - 1;
+        let gx = 0;
+        let gy = 0;
+        for (let i = 0; i < n; i++) {
+          gx += facet[i].x;
+          gy += facet[i].y;
+        }
+        gx /= n;
+        gy /= n;
+        const rot = (2 * impactRng() - 1) * 0.05 * D;
+        const cos = Math.cos(rot);
+        const sin = Math.sin(rot);
+        emit(
+          facet.map((p) => {
+            const lx = (p.x - gx) * 0.985;
+            const ly = (p.y - gy) * 0.985;
+            return { x: gx + lx * cos - ly * sin, y: gy + lx * sin + ly * cos };
+          }),
+          regionFilled
+        );
       }
     } else {
-      const centre = { x: cell.centre.x + (r?.dx ?? 0), y: cell.centre.y + (r?.dy ?? 0) };
-      const ring = rectAt(centre, cell.hx * scale, cell.hy * scale, rotation);
-      push(ring, ink);
-      if (regionFilled) for (const span of fillPoly(ring)) push(span, ink);
+      // Intact — optionally leaned on by the strike (impactStrength > 0).
+      let cx = cell.centre.x;
+      let cy = cell.centre.y;
+      let rotation = cell.rotation;
+      let scale = 1;
+      if (dmg && o.impactStrength > 0 && dmg.hit.d < radius) {
+        const f = smoothstep(clamp01(1 - dmg.hit.d / radius));
+        const d = dmg.hit.d;
+        const ux = d > 1e-6 ? (cx - dmg.hit.qx) / d : dmg.rx;
+        const uy = d > 1e-6 ? (cy - dmg.hit.qy) / d : dmg.ry;
+        const pushDist = o.impactStrength * 0.5 * radius * f * f;
+        cx += pushDist * ux;
+        cy += pushDist * uy;
+        rotation +=
+          o.impactStrength *
+          (dmg.hit.side * (35 * Math.PI / 180) + (2 * impactRng() - 1) * (10 * Math.PI / 180)) *
+          f;
+        scale = 1 - 0.35 * o.impactStrength * f;
+      }
+      emit(rectAt({ x: cx, y: cy }, cell.hx * scale, cell.hy * scale, rotation), regionFilled);
     }
   }
 
-  // The trajectory itself: a thin confident stroke ending in a dot — the
-  // "playful line" made visible.
   if (o.inkPath && field) {
     const stroke = smoothPolyline(field.points, 2);
     if (stroke.length >= 2) {
@@ -260,7 +315,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     }
   }
 
-  // Optional hand finish — off by default: the Breakpoint read is crisp,
+  // Optional hand finish — off by default: the reference read is crisp,
   // the chaos lives in the displacement, not the pen.
   const finished =
     o.wobble > 0

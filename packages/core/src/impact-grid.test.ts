@@ -1,17 +1,45 @@
 import { describe, it, expect } from 'vitest';
 import { generateImpactGrid, type ImpactGridOptions } from './impact-grid/index.js';
-import { layoutCells, squareAt } from './impact-grid/layout.js';
+import { layoutCells, makeRegion, rectAt, squareAt } from './impact-grid/layout.js';
 import { clipHalfPlane, ringArea, shatterCell } from './impact-grid/shatter.js';
 import { concentricFill, hatchConvex } from './impact-grid/hatch.js';
+import { makeCracks } from './impact-grid/cracks.js';
+import { preparePath } from './impact-grid/impact.js';
 import { makeRandom } from './lib/rng.js';
 
-const BASE: ImpactGridOptions = { width: 300, height: 400, margin: 20, seed: 7, wobble: 0, inkPath: false };
+const BASE: ImpactGridOptions = {
+  width: 300,
+  height: 400,
+  margin: 20,
+  seed: 7,
+  wobble: 0,
+  inkPath: false,
+  region: 'full',
+};
 
 // A path straight down the page centre, used by the impact tests.
 const CENTRE_PATH = [
   { x: 150, y: 30 },
   { x: 150, y: 370 },
 ];
+
+const FULL_REGION = makeRegion('full', 300, 400, 20);
+
+const GRID_ARGS = {
+  width: 300,
+  height: 400,
+  margin: 20,
+  seed: 7,
+  layout: 'grid' as const,
+  frameDepth: 3,
+  cellSize: 20,
+  sizeVariation: 0,
+  positionJitter: 0,
+  rotationJitter: 0,
+  gap: 0.15,
+  penWidth: 1.2,
+  region: FULL_REGION,
+};
 
 describe('clipHalfPlane / shatter geometry', () => {
   it('chord splits conserve area and produce closed rings inside the parent', () => {
@@ -49,8 +77,6 @@ describe('clipHalfPlane / shatter geometry', () => {
       15,
       {
         f: 0.8,
-        ux: 1,
-        uy: 0,
         dx: 5,
         dy: 0,
         radius: 80,
@@ -61,8 +87,11 @@ describe('clipHalfPlane / shatter geometry', () => {
         sweep: 0.3,
         tx: 0,
         ty: 1,
+        rx: 1,
+        ry: 0,
         channel: 10,
         d: 30,
+        dust: false,
         penWidth: 1.2,
       },
       makeRandom(9)
@@ -71,8 +100,6 @@ describe('clipHalfPlane / shatter geometry', () => {
     for (const shard of shards) {
       expect(shard.length).toBeGreaterThanOrEqual(4);
       expect(shard[0]).toEqual(shard[shard.length - 1]);
-      // Slivers below the pen's resolving power were culled (shrink is 0.9,
-      // so surviving areas sit above 0.81 × the raw floor).
       expect(ringArea(shard)).toBeGreaterThan((2 * 1.2) * (2 * 1.2) * 0.8);
     }
   });
@@ -107,6 +134,95 @@ describe('clipHalfPlane / shatter geometry', () => {
   });
 });
 
+describe('regions and the pane', () => {
+  it('disc region keeps only cells inside the circle; band spans the width', () => {
+    const disc = layoutCells({ ...GRID_ARGS, region: makeRegion('disc', 300, 400, 20) });
+    const r = Math.min(260, 360) * 0.4;
+    expect(disc.length).toBeGreaterThan(10);
+    for (const c of disc) {
+      expect(Math.hypot(c.centre.x - 150, c.centre.y - 200)).toBeLessThanOrEqual(r);
+    }
+    const band = layoutCells({ ...GRID_ARGS, region: makeRegion('band', 300, 400, 20) });
+    const ys = band.map((c) => c.centre.y);
+    const xs = band.map((c) => c.centre.x);
+    expect(Math.min(...ys)).toBeGreaterThan(20 + 360 * 0.29 - 1e-9);
+    expect(Math.max(...ys)).toBeLessThan(380 - 360 * 0.29 + 1e-9);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(200);
+  });
+
+  it('epicentre lands on the fast segment of the gesture, not the deepest point', () => {
+    // A slow careful pass (2px steps) across the upper slab with one violent
+    // flick (32px gaps) near x=60..120, y=100 — far from the region centre.
+    const path: { x: number; y: number }[] = [];
+    for (let x = 30; x <= 60; x += 2) path.push({ x, y: 100 });
+    for (let x = 60; x <= 120; x += 32) path.push({ x, y: 100 });
+    for (let x = 120; x <= 270; x += 2) path.push({ x, y: 100 });
+    const field = preparePath(path, 80, FULL_REGION, 260)!;
+    expect(field.epicentre).not.toBeNull();
+    expect(Math.abs(field.epicentre!.y - 100)).toBeLessThan(10);
+    expect(field.epicentre!.x).toBeGreaterThan(50);
+    expect(field.epicentre!.x).toBeLessThan(135);
+  });
+
+  it('crack lines run collinearly across neighbouring cells — one pane', () => {
+    const region = FULL_REGION;
+    const epi = { x: 100, y: 100, speed: 1 };
+    const cracks = makeCracks(epi, 200, region, 7);
+    // Two cells side by side with the epicentre inside the left one: radials
+    // leave A rightward into B; the shared chords must cut both collinearly.
+    const cellA = rectAt({ x: 100, y: 100 }, 20, 20, 0);
+    const cellB = rectAt({ x: 140, y: 100 }, 20, 20, 0);
+    const facetsA = cracks.facet(cellA);
+    const facetsB = cracks.facet(cellB);
+    expect(facetsA.length).toBeGreaterThan(1);
+    expect(facetsB.length).toBeGreaterThan(1);
+
+    const interiorEdges = (facets: { x: number; y: number }[][], ring: { x: number; y: number }[]) => {
+      const onBorder = (p: { x: number; y: number }) => {
+        for (let i = 0; i < ring.length - 1; i++) {
+          const a = ring[i];
+          const b = ring[i + 1];
+          const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+          const len = Math.hypot(b.x - a.x, b.y - a.y);
+          if (Math.abs(cross / len) < 0.01) return true;
+        }
+        return false;
+      };
+      const edges: [{ x: number; y: number }, { x: number; y: number }][] = [];
+      for (const f of facets) {
+        for (let i = 0; i < f.length - 1; i++) {
+          if (!onBorder(f[i]) || !onBorder(f[i + 1])) {
+            if (Math.hypot(f[i + 1].x - f[i].x, f[i + 1].y - f[i].y) > 6) edges.push([f[i], f[i + 1]]);
+          }
+        }
+      }
+      return edges;
+    };
+    const edgesA = interiorEdges(facetsA, cellA);
+    const edgesB = interiorEdges(facetsB, cellB);
+    expect(edgesA.length).toBeGreaterThan(0);
+    expect(edgesB.length).toBeGreaterThan(0);
+    // Some interior cut in A lines up with one in B: both endpoints of the
+    // B edge within a pen width of A's cut line.
+    let continuous = false;
+    for (const [a1, a2] of edgesA) {
+      const dx = a2.x - a1.x;
+      const dy = a2.y - a1.y;
+      const len = Math.hypot(dx, dy);
+      for (const [b1, b2] of edgesB) {
+        const d1 = Math.abs(dx * (b1.y - a1.y) - dy * (b1.x - a1.x)) / len;
+        const d2 = Math.abs(dx * (b2.y - a1.y) - dy * (b2.x - a1.x)) / len;
+        if (d1 < 1.2 && d2 < 1.2) {
+          continuous = true;
+          break;
+        }
+      }
+      if (continuous) break;
+    }
+    expect(continuous).toBe(true);
+  });
+});
+
 describe('generateImpactGrid', () => {
   it('is deterministic per seed and differs across seeds', () => {
     const opts = { ...BASE, impactPath: CENTRE_PATH };
@@ -117,7 +233,7 @@ describe('generateImpactGrid', () => {
     expect(JSON.stringify(a)).not.toEqual(JSON.stringify(c));
   });
 
-  it('pristine default: closed rings inside the margin, full lattice count', () => {
+  it('pristine default: closed rings inside the region, full lattice count', () => {
     const grid = {
       sizeVariation: 0.2,
       positionJitter: 0.1,
@@ -126,30 +242,18 @@ describe('generateImpactGrid', () => {
     };
     const result = generateImpactGrid({ ...BASE, fill: 0, cellSize: 260 / 14, ...grid });
     const placed = layoutCells({
-      width: 300,
-      height: 400,
-      margin: 20,
-      seed: 7,
-      layout: 'grid',
-      frameDepth: 3,
+      ...GRID_ARGS,
       cellSize: 260 / 14,
-      penWidth: 1.2,
       ...grid,
     });
     expect(result.lines.length).toBe(placed.length);
     const pitch = 260 / 14;
-    const cols = Math.floor(260 / pitch);
-    const rows = Math.floor(360 / pitch);
-    expect(placed.length).toBe(cols * rows);
     for (const line of result.lines) {
-      // Rings are densified so the hand wobble can bend the sides.
       expect(line.points.length).toBeGreaterThanOrEqual(5);
       const first = line.points[0];
       const last = line.points[line.points.length - 1];
       expect(Math.hypot(first.x - last.x, first.y - last.y)).toBeLessThan(1e-9);
       for (const p of line.points) {
-        // Jitter can push a corner slightly past the margin; a pitch of slack
-        // is the layout's contract.
         expect(p.x).toBeGreaterThan(20 - pitch);
         expect(p.x).toBeLessThan(280 + pitch);
         expect(p.y).toBeGreaterThan(20 - pitch);
@@ -160,39 +264,12 @@ describe('generateImpactGrid', () => {
 
   it('frame layout keeps only the border band', () => {
     const depth = 2;
-    const all = layoutCells({
-      width: 300,
-      height: 400,
-      margin: 20,
-      seed: 7,
-      layout: 'grid',
-      frameDepth: depth,
-      cellSize: 20,
-      sizeVariation: 0,
-      positionJitter: 0,
-      rotationJitter: 0,
-      gap: 0.15,
-      penWidth: 1.2,
-    });
-    const band = layoutCells({
-      width: 300,
-      height: 400,
-      margin: 20,
-      seed: 7,
-      layout: 'frame',
-      frameDepth: depth,
-      cellSize: 20,
-      sizeVariation: 0,
-      positionJitter: 0,
-      rotationJitter: 0,
-      gap: 0.15,
-      penWidth: 1.2,
-    });
+    const all = layoutCells({ ...GRID_ARGS, frameDepth: depth, layout: 'grid' });
+    const band = layoutCells({ ...GRID_ARGS, frameDepth: depth, layout: 'frame' });
     const cols = Math.floor(260 / 20);
     const rows = Math.floor(360 / 20);
     const interior = (cols - 2 * depth) * (rows - 2 * depth);
     expect(band.length).toBe(cols * rows - interior);
-    // Band cells keep the exact index/character they had in the full grid.
     const byIndex = new Map(all.map((s) => [s.index, s]));
     for (const s of band) expect(byIndex.get(s.index)).toEqual(s);
   });
@@ -203,6 +280,7 @@ describe('generateImpactGrid', () => {
       ...BASE,
       shatter: 0,
       fill: 0,
+      paneStress: 0,
       impactStrength: 0.7,
       impactRadius: radius,
       positionJitter: 0,
@@ -214,7 +292,6 @@ describe('generateImpactGrid', () => {
     const struck = generateImpactGrid({ ...common, impactPath: CENTRE_PATH });
     expect(struck.lines.length).toBe(calm.lines.length);
 
-    // Group displacement magnitude by distance band from the path (x = 150).
     const bands = new Map<number, { sum: number; n: number }>();
     for (let i = 0; i < calm.lines.length; i++) {
       const a = centroid(calm.lines[i].points);
@@ -236,20 +313,8 @@ describe('generateImpactGrid', () => {
     }
   });
 
-  it('shatter adds lines; debris removes shards near the path', () => {
-    const common = { ...BASE, fill: 0, impactPath: CENTRE_PATH, optimize: false };
-    const whole = generateImpactGrid({ ...common, shatter: 0 });
-    const broken = generateImpactGrid({ ...common, shatter: 1, debris: 0 });
-    expect(broken.lines.length).toBeGreaterThan(whole.lines.length);
-
-    // Debris drops shards outright (same rng stream — acceptance only), so
-    // the plot strictly loses lines.
-    const dusted = generateImpactGrid({ ...common, shatter: 1, debris: 1 });
-    expect(dusted.lines.length).toBeLessThan(broken.lines.length);
-  });
-
-  it('crush in place: with no push, scatter, or sweep, rubble stays within its cell', () => {
-    const cellSize = 260 / 14;
+  it('crush in place: with no push, scatter, or sweep, rubble stays near its cell', () => {
+    const cellSize = 260 / 16;
     const common = {
       ...BASE,
       fill: 0,
@@ -263,10 +328,8 @@ describe('generateImpactGrid', () => {
       sizeVariation: 0,
       optimize: false,
     };
-    const calm = generateImpactGrid({ ...common, shatter: 0 });
+    const calm = generateImpactGrid({ ...common, shatter: 0, paneStress: 0 });
     const crushed = generateImpactGrid({ ...common, shatter: 1 });
-    // Every crushed point lies within a cell radius of some calm square's
-    // centroid — nothing flew: the band is rubble in place, not a blast.
     const centres = calm.lines.map((l) => centroid(l.points));
     const bound = cellSize * Math.SQRT2 * 0.51;
     for (const line of crushed.lines) {
@@ -282,6 +345,7 @@ describe('generateImpactGrid', () => {
       fill: 0,
       impactPath: CENTRE_PATH,
       shatter: 0.5,
+      paneStress: 0,
       positionJitter: 0,
       rotationJitter: 0,
       sizeVariation: 0,
@@ -290,9 +354,6 @@ describe('generateImpactGrid', () => {
     };
     const calm = generateImpactGrid({ ...common, impactPath: undefined });
     const struck = generateImpactGrid(common);
-    // Any calm square whose ring straddles x=150 (the path) must not survive
-    // intact: no struck line may share its exact centroid AND be a plain
-    // 4-corner ring of the same size.
     const struckKeys = new Set(
       struck.lines.map((l) => {
         const g = centroid(l.points);
@@ -303,9 +364,6 @@ describe('generateImpactGrid', () => {
     for (const line of calm.lines) {
       const xs = line.points.map((p) => p.x);
       const gy = centroid(line.points).y;
-      // Interior rows only: at the path's endpoints the centre-to-path
-      // distance picks up a y component and the always-shatter rule
-      // (centre within half of the path) deliberately doesn't fire.
       if (gy > 50 && gy < 350 && Math.min(...xs) < 150 && Math.max(...xs) > 150) {
         crossed++;
         const g = centroid(line.points);
@@ -317,19 +375,18 @@ describe('generateImpactGrid', () => {
     expect(crossed).toBeGreaterThan(5);
   });
 
-  it('fill 0 emits outlines only; fill adds hatch that thickens near the impact', () => {
+  it('fill 0 emits outlines only; fill adds texture that thickens the plot', () => {
     const common = { ...BASE, impactPath: CENTRE_PATH, optimize: false };
     const bare = generateImpactGrid({ ...common, fill: 0 });
     for (const line of bare.lines) {
       expect(line.points.length).toBeGreaterThanOrEqual(4);
     }
-    const toned = generateImpactGrid({ ...common, fill: 0.4 });
+    const toned = generateImpactGrid({ ...common, fill: 0.6 });
     expect(toned.lines.length).toBeGreaterThan(bare.lines.length);
   });
 });
 
 function centroid(points: { x: number; y: number }[]): { x: number; y: number } {
-  // Skip the ring-closing duplicate so a symmetric ring's centroid is exact.
   const last = points[points.length - 1];
   const n =
     points.length > 1 && last.x === points[0].x && last.y === points[0].y

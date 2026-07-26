@@ -51,6 +51,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
     // First key is the case's display name — keep it a scalar.
     shatter: 0.9,
     crush: 1,
+    paneStress: 1,
     fill: 0.4,
     fillStyle: 'concentric',
     maskPath: [
