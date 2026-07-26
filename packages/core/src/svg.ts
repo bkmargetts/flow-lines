@@ -260,15 +260,28 @@ function lineToPath(line: FlowLine, precision: number, optimize: boolean): strin
     // Smooth curves through densely-sampled points. A vertex whose adjacent
     // segments are long is a real corner (plate frames, rules, sparse
     // geometry), not a sampling artifact — honor it with straight lines, or a
-    // page-spanning rectangle balloons into arcs.
+    // page-spanning rectangle balloons into arcs. Segment length alone isn't
+    // enough: a small square's corners sit between sub-30px sides, so a
+    // near-right-angle turn is honored too. The threshold sits at 80° because
+    // RDP-sparsified smooth curves can kink up to ~60° at tight bends and
+    // must keep their smoothing — only genuine corners turn harder.
     const CORNER = 30;
+    const CORNER_TURN_COS = Math.cos((80 * Math.PI) / 180);
     for (let i = 1; i < points.length - 1; i++) {
       const prev = points[i - 1];
       const current = points[i];
       const next = points[i + 1];
-      const inLong = Math.hypot(current.x - prev.x, current.y - prev.y) > CORNER;
-      const outLong = Math.hypot(next.x - current.x, next.y - current.y) > CORNER;
-      if (inLong || outLong) {
+      const inX = current.x - prev.x;
+      const inY = current.y - prev.y;
+      const outX = next.x - current.x;
+      const outY = next.y - current.y;
+      const inLen = Math.hypot(inX, inY);
+      const outLen = Math.hypot(outX, outY);
+      const inLong = inLen > CORNER;
+      const outLong = outLen > CORNER;
+      const sharpTurn =
+        (inX * outX + inY * outY) / ((inLen || 1) * (outLen || 1)) < CORNER_TURN_COS;
+      if (inLong || outLong || sharpTurn) {
         d += ` L${formatNum(current.x)},${formatNum(current.y)}`;
       } else {
         const midX = (current.x + next.x) / 2;

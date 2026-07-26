@@ -19,6 +19,7 @@ import { generateCity } from './city/index.js';
 import { generateStickmen } from './stickmen/index.js';
 import { generateSportsBalls } from './sports-balls/index.js';
 import { generateHearts } from './hearts/index.js';
+import { generateImpactGrid } from './impact-grid/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateMeander } from './meander/index.js';
@@ -154,6 +155,8 @@ for (const seed of SEEDS) {
     generateSportsBalls({ width: 300, height: 400, margin: 20, seed });
   CASES[`hearts/default/${seed}`] = () =>
     generateHearts({ width: 300, height: 400, margin: 20, seed });
+  CASES[`impact-grid/default/${seed}`] = () =>
+    generateImpactGrid({ width: 300, height: 400, margin: 20, seed });
   CASES[`ribbons/default/${seed}`] = () =>
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
   CASES[`gesture/default/${seed}`] = () =>
@@ -194,6 +197,27 @@ CASES['fracture/crazing/42'] = () =>
   generateFracture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'crazing' });
 CASES['fracture/shatter/42'] = () =>
   generateFracture({ width: 300, height: 400, margin: 20, seed: 42, preset: 'shatter' });
+const impactGridPath = [
+  { x: 60, y: 60 },
+  { x: 150, y: 200 },
+  { x: 240, y: 340 },
+];
+CASES['impact-grid/impact/42'] = () =>
+  generateImpactGrid({ width: 300, height: 400, margin: 20, seed: 42, impactPath: impactGridPath });
+CASES['impact-grid/frame/42'] = () =>
+  generateImpactGrid({ width: 300, height: 400, margin: 20, seed: 42, layout: 'frame' });
+CASES['impact-grid/shatter-heavy/42'] = () =>
+  generateImpactGrid({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    impactPath: impactGridPath,
+    shatter: 1,
+    scatter: 0.9,
+    debris: 0.6,
+    fill: 0.4,
+  });
 CASES['marbling/stone/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'stone' });
 CASES['marbling/feather/42'] = () =>

@@ -196,6 +196,10 @@ export type { SportsBallsOptions, BallType, SportsBallsRegion } from './sports-b
 export { generateHearts } from './hearts/index.js';
 export type { HeartsOptions, HeartStyle, HeartsRegion } from './hearts/index.js';
 
+// Impact grid (a hand-ruled grid of squares struck by a drawn impact path)
+export { generateImpactGrid } from './impact-grid/index.js';
+export type { ImpactGridOptions } from './impact-grid/index.js';
+
 // Ribbon weave / knotwork (interlaced bands, tangle → Celtic lattice)
 export { generateRibbonWeave } from './ribbons/index.js';
 export type { RibbonWeaveOptions, RibbonEdgeMode, RibbonStyle } from './ribbons/index.js';

@@ -21,6 +21,7 @@ import { randomMarblingGenome } from '../projects/marbling/presets';
 import { randomMeanderGenome } from '../projects/meander/Controls';
 import { randomCoralGenome } from '../projects/coral/Controls';
 import { randomWarpGridGenome } from '../projects/warp-grid/presets';
+import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
 import { randomPlanetGenome } from '../projects/planet-generator/presets';
@@ -125,6 +126,30 @@ const SPECS: GenomeSpec[] = [
       pattern: ['lines', 'waves', 'circles', 'rays'],
     },
     forbidden: ['seed', 'detailMm', 'penWidthMm', 'wobbleMm', 'strokeColor'],
+  },
+  {
+    name: 'impact-grid',
+    genome: randomImpactGridGenome,
+    bounds: {
+      frameDepth: [1, 6],
+      cellSizeMm: [3, 20],
+      sizeVariation: [0, 1],
+      positionJitter: [0, 1],
+      rotationJitter: [0, 1],
+      gap: [0, 0.6],
+      impactRadiusMm: [10, 150],
+      impactStrength: [0, 1],
+      shatter: [0, 1],
+      scatter: [0, 1],
+      debris: [0, 1],
+      fill: [0, 1],
+    },
+    ints: ['frameDepth', 'impactRadiusMm'],
+    enums: {
+      layout: ['grid', 'frame'],
+    },
+    // maskPath / drawMode are user data — the drawn strike survives a reroll.
+    forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'strokeColor', 'maskPath', 'drawMode'],
   },
   {
     name: 'meander',
