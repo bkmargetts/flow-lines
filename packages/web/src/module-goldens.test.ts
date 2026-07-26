@@ -45,6 +45,21 @@ for (const mod of pureModules) {
 }
 
 const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
+  'impact-grid': {
+    // A fixed synthetic strike (page px for the A4 × 1.5 test frame) so the
+    // crush/shatter/fill code path is pinned, not just the pristine grid.
+    // First key is the case's display name — keep it a scalar.
+    shatter: 0.9,
+    crush: 1,
+    paneStress: 1,
+    fill: 0.4,
+    fillStyle: 'concentric',
+    maskPath: [
+      { x: 150, y: 80 },
+      { x: 220, y: 200 },
+      { x: 180, y: 340 },
+    ],
+  },
   'reaction-diffusion': { preset: 'coral' },
   lenia: { preset: 'cells' },
   physarum: { preset: 'veins' },

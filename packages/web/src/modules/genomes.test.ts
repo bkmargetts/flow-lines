@@ -21,6 +21,7 @@ import { randomMarblingGenome } from '../projects/marbling/presets';
 import { randomMeanderGenome } from '../projects/meander/Controls';
 import { randomCoralGenome } from '../projects/coral/Controls';
 import { randomWarpGridGenome } from '../projects/warp-grid/presets';
+import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
 import { randomPlanetGenome } from '../projects/planet-generator/presets';
@@ -71,7 +72,7 @@ const ART_TREATMENT_BOUNDS: Record<string, [number, number]> = {
  * reads as a decision rather than an oversight, and so a *new* module can't
  * quietly join them.
  */
-const PALETTE_ROLLERS = ['botanical-generator', 'landscape-generator', 'planet-generator'];
+const PALETTE_ROLLERS = ['botanical-generator', 'landscape-generator', 'planet-generator', 'impact-grid'];
 
 const SPECS: GenomeSpec[] = [
   {
@@ -125,6 +126,44 @@ const SPECS: GenomeSpec[] = [
       pattern: ['lines', 'waves', 'circles', 'rays'],
     },
     forbidden: ['seed', 'detailMm', 'penWidthMm', 'wobbleMm', 'strokeColor'],
+  },
+  {
+    name: 'impact-grid',
+    genome: randomImpactGridGenome,
+    bounds: {
+      frameDepth: [1, 6],
+      cellSizeMm: [3, 20],
+      sizeVariation: [0, 1],
+      positionJitter: [0, 1],
+      rotationJitter: [0, 1],
+      gap: [0, 0.6],
+      impactRadiusMm: [10, 150],
+      impactStrength: [0, 1],
+      shatter: [0, 1],
+      scatter: [0, 1],
+      debris: [0, 1],
+      crush: [0, 1],
+      sweep: [0, 1],
+      fill: [0, 1],
+      inkBalance: [0, 1],
+      paneStress: [0, 1],
+      energy: [0, 1],
+      granularity: [0, 1],
+    },
+    ints: ['frameDepth', 'impactRadiusMm'],
+    bools: ['inkPath'],
+    enums: {
+      layout: ['mosaic', 'grid', 'frame', 'bars'],
+      region: ['slab', 'band', 'disc', 'full'],
+      fillStyle: ['texture', 'none', 'hatch', 'concentric'],
+      inkMode: ['regions', 'damage'],
+    },
+    // maskPath / drawMode are user data — the drawn strike survives a
+    // reroll. `look` is the preset label, not a knob. Ink fields are absent
+    // from forbidden by design: impact-grid is in PALETTE_ROLLERS and rolls
+    // a NAMED palette (inkColors/pathColor come from the table, never
+    // generated colours).
+    forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'maskPath', 'drawMode'],
   },
   {
     name: 'meander',

@@ -1,0 +1,133 @@
+import type { ImpactGridState } from './types';
+
+/** Named pen sets — applying one sets `inkColors` + `pathColor` and stamps
+ *  `palette`; editing any colour flips the state back to 'custom'. The
+ *  mosaic supports arbitrarily many pens: a palette is just an array. */
+export const INK_PALETTES: Record<string, { label: string; inks: string[]; path: string }> = {
+  blueprint: { label: 'Blueprint', inks: ['#26282e', '#1766d1'], path: '#a3b34a' },
+  'navy-orange': { label: 'Navy & orange', inks: ['#1d2f6f', '#e2571b'], path: '#8a8f3c' },
+  'violet-silver': { label: 'Violet & silver', inks: ['#5b45c0', '#9aa0a8'], path: '#b8952e' },
+  archival: { label: 'Archival', inks: ['#2b2620', '#8a5a2b'], path: '#6f6a5e' },
+  mono: { label: 'Mono', inks: ['#26282e'], path: '#26282e' },
+  riso: { label: 'Riso', inks: ['#0078bf', '#ff48b0', '#f6a800'], path: '#26282e' },
+  'field-notes': {
+    label: 'Field notes',
+    inks: ['#26282e', '#4a6741', '#a34a28', '#5a6b7a'],
+    path: '#8a8f3c',
+  },
+};
+
+export type ImpactGridLook = 'breakpoint' | 'mosaic' | 'disc' | 'rough' | 'rip';
+
+/** Named looks spanning the module's range. Each is a state patch — seed,
+ *  pens/inks, and the drawn trajectory are never touched. */
+export const IMPACT_GRID_LOOKS: Record<
+  ImpactGridLook,
+  { label: string; state: Partial<ImpactGridState> }
+> = {
+  breakpoint: {
+    label: 'Breakpoint bars',
+    state: {
+      region: 'band',
+      layout: 'bars',
+      sizeVariation: 0.25,
+      positionJitter: 0.03,
+      rotationJitter: 0.02,
+      gap: 0.1,
+      impactStrength: 0,
+      shatter: 0.85,
+      scatter: 0.35,
+      debris: 0.25,
+      crush: 0.7,
+      sweep: 0.7,
+      fill: 1,
+      fillStyle: 'texture',
+      inkPath: true,
+      wobbleMm: 0,
+    },
+  },
+  mosaic: {
+    label: 'Mosaic slab',
+    state: {
+      region: 'slab',
+      layout: 'mosaic',
+      sizeVariation: 0.15,
+      positionJitter: 0.03,
+      rotationJitter: 0.02,
+      gap: 0.06,
+      impactStrength: 0,
+      shatter: 0.85,
+      scatter: 0.35,
+      debris: 0.25,
+      crush: 0.7,
+      sweep: 0.7,
+      fill: 1,
+      fillStyle: 'texture',
+      inkPath: true,
+      wobbleMm: 0,
+    },
+  },
+  disc: {
+    label: 'Disc',
+    state: {
+      region: 'disc',
+      layout: 'mosaic',
+      sizeVariation: 0.15,
+      positionJitter: 0.03,
+      rotationJitter: 0.02,
+      gap: 0.06,
+      impactStrength: 0,
+      shatter: 0.85,
+      scatter: 0.35,
+      debris: 0.25,
+      crush: 0.7,
+      sweep: 0.7,
+      fill: 1,
+      fillStyle: 'texture',
+      inkPath: true,
+      wobbleMm: 0,
+    },
+  },
+  rough: {
+    label: 'Rough grid',
+    state: {
+      region: 'full',
+      layout: 'grid',
+      sizeVariation: 0.35,
+      positionJitter: 0.25,
+      rotationJitter: 0.3,
+      gap: 0.15,
+      impactStrength: 0.15,
+      shatter: 0.7,
+      scatter: 0.2,
+      debris: 0.2,
+      crush: 0.5,
+      sweep: 0.2,
+      fill: 0,
+      fillStyle: 'none',
+      inkPath: false,
+      wobbleMm: 0.25,
+    },
+  },
+  rip: {
+    label: 'Rip',
+    state: {
+      region: 'full',
+      layout: 'grid',
+      sizeVariation: 0.35,
+      positionJitter: 0.25,
+      rotationJitter: 0.3,
+      gap: 0.15,
+      impactStrength: 0.7,
+      shatter: 0.6,
+      scatter: 0.7,
+      debris: 0.4,
+      crush: 0.4,
+      sweep: 0,
+      fill: 0.2,
+      fillStyle: 'hatch',
+      inkPath: false,
+      wobbleMm: 0.25,
+    },
+  },
+};
