@@ -135,7 +135,7 @@ export function layoutCells(o: LayoutOptions): PlacedCell[] {
   const innerW = o.width - 2 * o.margin;
   const innerH = o.height - 2 * o.margin;
   if (innerW <= 0 || innerH <= 0) return [];
-  if (o.layout === 'bars') return layoutBars(o, innerW, innerH);
+  if (o.layout === 'bars') return layoutBars(o, innerW);
 
   let pitch = Math.max(2, o.cellSize);
   if ((innerW / pitch) * (innerH / pitch) > MAX_CELLS) {
@@ -178,7 +178,7 @@ export function layoutCells(o: LayoutOptions): PlacedCell[] {
 
 /** Columns of stacked segments spanning the page height, with ragged column
  *  ends and per-segment heights — the dense vertical-bar composition. */
-function layoutBars(o: LayoutOptions, innerW: number, innerH: number): PlacedCell[] {
+function layoutBars(o: LayoutOptions, innerW: number): PlacedCell[] {
   const pitch = Math.max(2, o.cellSize);
   const colRng = makeRandom(subSeed(o.seed, 9));
   const cells: PlacedCell[] = [];
