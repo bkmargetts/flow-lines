@@ -1,13 +1,15 @@
 import type { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
-import { clamp01, lerp } from '../lib/math.js';
+import { lerp } from '../lib/math.js';
 import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { orderPlot } from '../optimize.js';
+import { createNoise } from '../noise.js';
 import { densify } from '../lib/spatial.js';
+import { smoothPolyline } from '../lib/polyline.js';
 import { layoutSquares, squareAt } from './layout.js';
 import { preparePath, squareResponse } from './impact.js';
 import { shatterSquare } from './shatter.js';
-import { hatchConvex } from './hatch.js';
+import { concentricFill, hatchConvex } from './hatch.js';
 
 /**
  * A page of hand-ruled squares — organic by default (variable sizes, jittered
@@ -57,33 +59,53 @@ export interface ImpactGridOptions {
   scatter?: number;
   /** 0..1 chance the innermost fragments vanish entirely — pulverised. */
   debris?: number;
+  /** 0..1 rubble fineness: how deeply struck squares subdivide, deepest
+   *  tight to the line. */
+  crush?: number;
+  /** 0..1 rubble drift along the line's direction of travel — the stroke
+   *  ploughing through rather than blasting outward. */
+  sweep?: number;
 
   // Marks
-  /** 0..1 hatch-fill amount: a light scatter of toned squares, and shards
-   *  that darken toward the impact. 0 = pure outlines. */
+  /** 0..1 fill amount: fraction of cells carrying the fill marks, with
+   *  shards darkening toward the impact. 0 = pure outlines. */
   fill?: number;
+  /** What the fill marks are: parallel hatch, concentric nested rings (the
+   *  plotter "solid"), or none. */
+  fillStyle?: 'none' | 'hatch' | 'concentric';
+  /** Ink the drawn path itself as a stroke (default false — the line is
+   *  revealed by the destruction it causes). */
+  inkPath?: boolean;
   penWidth?: number;
   wobble?: number;
   /** Reorder strokes to cut pen-up travel (default true) */
   optimize?: boolean;
 }
 
+// Defaults follow the Breakpoint read: a calm, near-ordered system, one line
+// crushing what it touches in place — no displacement field, dense fills.
+// The v1 "rip" (big push + far-flung debris) stays reachable via
+// impactStrength / scatter / debris.
 const DEFAULTS: Required<
   Omit<ImpactGridOptions, 'width' | 'height' | 'margin' | 'seed' | 'impactPath' | 'cellSize' | 'impactRadius'>
 > = {
   layout: 'grid',
   frameDepth: 3,
-  sizeVariation: 0.35,
-  positionJitter: 0.25,
-  rotationJitter: 0.3,
-  gap: 0.15,
-  impactStrength: 0.7,
-  shatter: 0.6,
-  scatter: 0.5,
-  debris: 0.3,
-  fill: 0.2,
+  sizeVariation: 0.1,
+  positionJitter: 0.06,
+  rotationJitter: 0.05,
+  gap: 0.12,
+  impactStrength: 0,
+  shatter: 0.85,
+  scatter: 0.1,
+  debris: 0.15,
+  crush: 0.8,
+  sweep: 0.15,
+  fill: 0.6,
+  fillStyle: 'concentric',
+  inkPath: false,
   penWidth: 1.2,
-  wobble: 0.8,
+  wobble: 0.5,
   optimize: true,
 };
 
@@ -112,6 +134,12 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
   if (squares.length === 0) return { lines: [], width, height, seed };
 
   const field = preparePath(o.impactPath, radius);
+  // Fill is committed in coherent regions, not per-cell coin flips: a
+  // low-frequency noise field decides which neighbourhoods read solid, the
+  // way Breakpoint-style compositions commit whole areas. (Per-cell LCG
+  // draws also correlate across sequential sub-seeds — visible as filled
+  // runs along rows.)
+  const fillNoise = createNoise(subSeed(seed, 2));
   const lines: FlowLine[] = [];
   // The wobble bends strokes at existing points only — straight 2-point edges
   // would stay ruler-straight, so every mark is resampled first.
@@ -119,19 +147,47 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
 
   for (const sq of squares) {
     // Separate per-cell streams per stage: the layout stream stays untouched,
-    // so drawing a path never reshuffles the resting grid.
+    // so drawing a path never reshuffles the resting grid. Adjacent cells'
+    // sub-seeds differ by small deltas and an LCG's first draws correlate
+    // across them, so each stream burns two draws before use.
     const impactRng = makeRandom(subSeed(seed, sq.index) + 17);
+    impactRng();
+    impactRng();
     const hatchRng = makeRandom(subSeed(seed, sq.index) + 41);
+    hatchRng();
+    hatchRng();
 
     const r = field
-      ? squareResponse(field, sq.centre.x, sq.centre.y, radius, o.impactStrength, o.shatter, impactRng)
+      ? squareResponse(
+          field,
+          sq.centre.x,
+          sq.centre.y,
+          sq.half,
+          radius,
+          o.impactStrength,
+          o.shatter,
+          impactRng
+        )
       : null;
     const f = r?.f ?? 0;
     const half = sq.half * (r?.scale ?? 1);
     const rotation = sq.rotation + (r?.theta ?? 0);
 
     const hatchAngle = rotation + Math.PI / 4 + (2 * hatchRng() - 1) * (15 * Math.PI / 180);
-    const hatchSpacing = lerp(5 * o.penWidth, 2.5 * o.penWidth, f);
+    const fillSpacing = lerp(4 * o.penWidth, 2.5 * o.penWidth, f);
+    const fillPoly = (poly: Point[]): Point[][] =>
+      o.fillStyle === 'hatch'
+        ? hatchConvex(poly, hatchAngle, fillSpacing, o.penWidth)
+        : o.fillStyle === 'concentric'
+          ? concentricFill(poly, fillSpacing, o.penWidth)
+          : [];
+
+    // Region-committed fill: this cell's neighbourhood reads solid when the
+    // noise field sits below the fill amount. Shards additionally darken by
+    // proximity to the line (rubble inherits mass toward the scar).
+    const regionFilled =
+      o.fill > 0 &&
+      fillNoise.noise2D(sq.centre.x * 0.008, sq.centre.y * 0.008) * 0.5 + 0.5 < o.fill;
 
     if (r?.shattered) {
       const resting = squareAt(sq.centre, half, rotation);
@@ -149,6 +205,10 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           shatter: o.shatter,
           scatter: o.scatter,
           debris: o.debris,
+          crush: o.crush,
+          sweep: o.sweep,
+          tx: hit.tx,
+          ty: hit.ty,
           d: hit.d,
           penWidth: o.penWidth,
         },
@@ -156,8 +216,8 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       );
       for (const shard of shards) {
         lines.push({ points: densify(shard, wobbleStep), pen: 'fine', layer: 'shard' });
-        if (hatchRng() < (o.fill > 0 ? clamp01(o.fill + 0.6 * f) : 0)) {
-          for (const span of hatchConvex(shard, hatchAngle, hatchSpacing, o.penWidth)) {
+        if (regionFilled || (o.fill > 0 && hatchRng() < 0.6 * f)) {
+          for (const span of fillPoly(shard)) {
             lines.push({ points: densify(span, wobbleStep), pen: 'fine', layer: 'fill' });
           }
         }
@@ -166,12 +226,19 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       const centre = { x: sq.centre.x + (r?.dx ?? 0), y: sq.centre.y + (r?.dy ?? 0) };
       const ring = squareAt(centre, half, rotation);
       lines.push({ points: densify(ring, wobbleStep), pen: 'fine', layer: 'grid' });
-      if (hatchRng() < o.fill * 0.6 + 0.6 * f * clamp01(o.fill * 4)) {
-        for (const span of hatchConvex(ring, hatchAngle, hatchSpacing, o.penWidth)) {
+      if (regionFilled) {
+        for (const span of fillPoly(ring)) {
           lines.push({ points: densify(span, wobbleStep), pen: 'fine', layer: 'fill' });
         }
       }
     }
+  }
+
+  // The wandering line itself, inked on request — smoothed so raw drag
+  // points read as one confident stroke.
+  if (o.inkPath && field) {
+    const stroke = smoothPolyline(field.points, 2);
+    if (stroke.length >= 2) lines.push({ points: stroke, pen: 'fine', layer: 'path' });
   }
 
   // Hand finish: the wobble every generator gets, shaking harder near the
@@ -182,7 +249,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       amplitude: o.wobble,
       wavelength: 30,
       seed,
-      layerAmplitude: { fill: 0.5 },
+      layerAmplitude: { fill: 0.5, path: 0.6 },
       amplitudeScale: field
         ? (x, y) => 1 + o.impactStrength * field.falloff(field.nearest(x, y).d)
         : undefined,

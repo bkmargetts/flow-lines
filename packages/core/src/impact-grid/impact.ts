@@ -13,11 +13,17 @@ export interface PathHit {
    *  the cross product of segment direction × offset is positive). Drives the
    *  brushed-past torque so squares rotate opposite ways across the path. */
   side: number;
+  /** Unit tangent of the nearest segment, in the path's direction of travel
+   *  — the sweep direction rubble drags along. */
+  tx: number;
+  ty: number;
 }
 
 export interface PathField {
   nearest(x: number, y: number): PathHit;
   falloff(d: number): number;
+  /** The prepared (thinned + densified) centreline — what `inkPath` draws. */
+  points: Point[];
 }
 
 /** Longest segment list we'll query against — a slow careful drag can carry
@@ -54,6 +60,8 @@ export function preparePath(path: Point[] | undefined, radius: number): PathFiel
     let bqx = pts[0].x;
     let bqy = pts[0].y;
     let bside = 1;
+    let btx = 1;
+    let bty = 0;
     for (let i = 1; i < pts.length; i++) {
       const ax = pts[i - 1].x;
       const ay = pts[i - 1].y;
@@ -70,12 +78,15 @@ export function preparePath(path: Point[] | undefined, radius: number): PathFiel
         bqx = qx;
         bqy = qy;
         bside = dx * (y - ay) - dy * (x - ax) >= 0 ? 1 : -1;
+        const len = Math.sqrt(len2) || 1;
+        btx = dx / len;
+        bty = dy / len;
       }
     }
-    return { d: Math.sqrt(best), qx: bqx, qy: bqy, side: bside };
+    return { d: Math.sqrt(best), qx: bqx, qy: bqy, side: bside, tx: btx, ty: bty };
   };
 
-  return { nearest, falloff: (d) => smoothstep(clamp01(1 - d / radius)) };
+  return { nearest, falloff: (d) => smoothstep(clamp01(1 - d / radius)), points: pts };
 }
 
 /** Everything the render stage needs to know about one square's impact
@@ -117,13 +128,14 @@ export function squareResponse(
   field: PathField,
   cx: number,
   cy: number,
+  half: number,
   radius: number,
   strength: number,
   shatter: number,
   rng: () => number
 ): SquareResponse {
   const hit = field.nearest(cx, cy);
-  if (hit.d >= radius) return UNTOUCHED;
+  if (hit.d >= radius && hit.d >= half) return UNTOUCHED;
   const f = field.falloff(hit.d);
   let ux: number;
   let uy: number;
@@ -136,11 +148,17 @@ export function squareResponse(
     uy = Math.sin(a);
   }
   const push = strength * 0.5 * radius * f * f;
+  // Both torque terms scale with strength: at 0 (crush-in-place) intact
+  // squares near the path sit perfectly still — order right up to the band.
   const theta =
-    hit.side * strength * (35 * Math.PI / 180) * f + (2 * rng() - 1) * (10 * Math.PI / 180) * f;
+    strength * (hit.side * (35 * Math.PI / 180) + (2 * rng() - 1) * (10 * Math.PI / 180)) * f;
+  // A cell the line physically crosses always shatters ("smashes everything
+  // in its path"); the probabilistic halo widens with `shatter` around it.
   const shatterRadius = radius * (0.2 + 0.5 * shatter);
+  const crossed = hit.d < half;
   const shattered =
-    hit.d < shatterRadius && rng() < shatter * smoothstep(1 - hit.d / shatterRadius);
+    shatter > 0 &&
+    (crossed || (hit.d < shatterRadius && rng() < shatter * smoothstep(1 - hit.d / shatterRadius)));
   return {
     f,
     ux,

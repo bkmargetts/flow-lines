@@ -58,6 +58,13 @@ export interface FragmentOptions {
   shatter: number;
   scatter: number;
   debris: number;
+  /** 0..1 rubble fineness — subdivision depth, scaled up near the line. */
+  crush: number;
+  /** 0..1 drift along the line's direction of travel. */
+  sweep: number;
+  /** Path tangent (unit, direction of travel) at the nearest point. */
+  tx: number;
+  ty: number;
   /** Distance from the parent centre to the path, px. */
   d: number;
   penWidth: number;
@@ -77,7 +84,10 @@ export function shatterSquare(
   o: FragmentOptions,
   rng: () => number
 ): Point[][] {
-  const cuts = Math.min(3, 1 + Math.floor(rng() * 2 + o.shatter * 1.5));
+  // Rubble is finest tightest to the line: crush sets the base subdivision
+  // depth and the falloff deepens it, so the band grades from coarse cracked
+  // squares at its edge to fine tumbled rubble on the stroke.
+  const cuts = Math.max(1, Math.min(5, 1 + Math.floor(o.crush * (1.5 + 2.5 * o.f) + rng() * 0.5)));
   let fragments: Point[][] = [square];
   const centre = centroidOf(square);
   for (let c = 0; c < cuts; c++) {
@@ -109,17 +119,22 @@ export function shatterSquare(
     const vx = o.ux * cosS - o.uy * sinS;
     const vy = o.ux * sinS + o.uy * cosS;
     const throwDist = o.scatter * 0.4 * o.radius * o.f * o.f * (0.4 + 0.6 * rng());
+    // Sweep drags rubble along the stroke's direction of travel — the line
+    // ploughing through, rather than an outward blast.
+    const sweepDist = o.sweep * 0.25 * o.radius * o.f * o.f * (0.5 + 0.5 * rng());
     const spin = (2 * rng() - 1) * ((20 + 45 * o.shatter) * Math.PI / 180) * o.f;
     const cosR = Math.cos(spin);
     const sinR = Math.sin(spin);
-    const gx = g.x + o.dx + throwDist * vx;
-    const gy = g.y + o.dy + throwDist * vy;
+    // Finer separation gaps near the line, wider cracks at the band edge.
+    const shrink = 0.95 - 0.1 * o.f;
+    const gx = g.x + o.dx + throwDist * vx + sweepDist * o.tx;
+    const gy = g.y + o.dy + throwDist * vy + sweepDist * o.ty;
     out.push(
       frag.map((p) => {
         // Shrink toward the centroid, spin about it, then translate to the
         // scattered position.
-        const lx = (p.x - g.x) * 0.9;
-        const ly = (p.y - g.y) * 0.9;
+        const lx = (p.x - g.x) * shrink;
+        const ly = (p.y - g.y) * shrink;
         return { x: gx + lx * cosR - ly * sinR, y: gy + lx * sinR + ly * cosR };
       })
     );

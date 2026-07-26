@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { generateImpactGrid, type ImpactGridOptions } from './impact-grid/index.js';
 import { layoutSquares, squareAt } from './impact-grid/layout.js';
 import { clipHalfPlane, ringArea, shatterSquare } from './impact-grid/shatter.js';
-import { hatchConvex } from './impact-grid/hatch.js';
+import { concentricFill, hatchConvex } from './impact-grid/hatch.js';
 import { makeRandom } from './lib/rng.js';
 
 const BASE: ImpactGridOptions = { width: 300, height: 400, margin: 20, seed: 7, wobble: 0 };
@@ -57,6 +57,10 @@ describe('clipHalfPlane / shatter geometry', () => {
         shatter: 1,
         scatter: 0.5,
         debris: 0,
+        crush: 0.8,
+        sweep: 0.3,
+        tx: 0,
+        ty: 1,
         d: 30,
         penWidth: 1.2,
       },
@@ -69,6 +73,20 @@ describe('clipHalfPlane / shatter geometry', () => {
       // Slivers below the pen's resolving power were culled (shrink is 0.9,
       // so surviving areas sit above 0.81 × the raw floor).
       expect(ringArea(shard)).toBeGreaterThan((2 * 1.2) * (2 * 1.2) * 0.8);
+    }
+  });
+
+  it('concentricFill rings are closed, nested, and stay inside the polygon', () => {
+    const square = squareAt({ x: 0, y: 0 }, 20, 0.2);
+    const rings = concentricFill(square, 4, 1.2);
+    expect(rings.length).toBeGreaterThan(2);
+    let prevMax = Infinity;
+    for (const ring of rings) {
+      expect(ring[0]).toEqual(ring[ring.length - 1]);
+      const max = Math.max(...ring.map((p) => Math.hypot(p.x, p.y)));
+      expect(max).toBeLessThan(prevMax);
+      expect(max).toBeLessThan(20 * Math.SQRT2);
+      prevMax = max;
     }
   });
 
@@ -99,7 +117,13 @@ describe('generateImpactGrid', () => {
   });
 
   it('pristine default: closed rings inside the margin, full lattice count', () => {
-    const result = generateImpactGrid({ ...BASE, fill: 0 });
+    const grid = {
+      sizeVariation: 0.2,
+      positionJitter: 0.1,
+      rotationJitter: 0.1,
+      gap: 0.15,
+    };
+    const result = generateImpactGrid({ ...BASE, fill: 0, ...grid });
     const placed = layoutSquares({
       width: 300,
       height: 400,
@@ -108,11 +132,8 @@ describe('generateImpactGrid', () => {
       layout: 'grid',
       frameDepth: 3,
       cellSize: 260 / 14,
-      sizeVariation: 0.35,
-      positionJitter: 0.25,
-      rotationJitter: 0.3,
-      gap: 0.15,
       penWidth: 1.2,
+      ...grid,
     });
     expect(result.lines.length).toBe(placed.length);
     const pitch = 260 / 14;
@@ -181,6 +202,7 @@ describe('generateImpactGrid', () => {
       ...BASE,
       shatter: 0,
       fill: 0,
+      impactStrength: 0.7,
       impactRadius: radius,
       positionJitter: 0,
       rotationJitter: 0,
@@ -223,6 +245,75 @@ describe('generateImpactGrid', () => {
     // the plot strictly loses lines.
     const dusted = generateImpactGrid({ ...common, shatter: 1, debris: 1 });
     expect(dusted.lines.length).toBeLessThan(broken.lines.length);
+  });
+
+  it('crush in place: with no push, scatter, or sweep, rubble stays within its cell', () => {
+    const cellSize = 260 / 14;
+    const common = {
+      ...BASE,
+      fill: 0,
+      impactPath: CENTRE_PATH,
+      impactStrength: 0,
+      scatter: 0,
+      sweep: 0,
+      debris: 0,
+      positionJitter: 0,
+      rotationJitter: 0,
+      sizeVariation: 0,
+      optimize: false,
+    };
+    const calm = generateImpactGrid({ ...common, shatter: 0 });
+    const crushed = generateImpactGrid({ ...common, shatter: 1 });
+    // Every crushed point lies within a cell radius of some calm square's
+    // centroid — nothing flew: the band is rubble in place, not a blast.
+    const centres = calm.lines.map((l) => centroid(l.points));
+    const bound = cellSize * Math.SQRT2 * 0.51;
+    for (const line of crushed.lines) {
+      const g = centroid(line.points);
+      const near = centres.some((c) => Math.hypot(c.x - g.x, c.y - g.y) < bound);
+      expect(near).toBe(true);
+    }
+  });
+
+  it('cells the line crosses always shatter', () => {
+    const common = {
+      ...BASE,
+      fill: 0,
+      impactPath: CENTRE_PATH,
+      shatter: 0.5,
+      positionJitter: 0,
+      rotationJitter: 0,
+      sizeVariation: 0,
+      gap: 0,
+      optimize: false,
+    };
+    const calm = generateImpactGrid({ ...common, impactPath: undefined });
+    const struck = generateImpactGrid(common);
+    // Any calm square whose ring straddles x=150 (the path) must not survive
+    // intact: no struck line may share its exact centroid AND be a plain
+    // 4-corner ring of the same size.
+    const struckKeys = new Set(
+      struck.lines.map((l) => {
+        const g = centroid(l.points);
+        return `${g.x.toFixed(3)},${g.y.toFixed(3)},${l.points.length}`;
+      })
+    );
+    let crossed = 0;
+    for (const line of calm.lines) {
+      const xs = line.points.map((p) => p.x);
+      const gy = centroid(line.points).y;
+      // Interior rows only: at the path's endpoints the centre-to-path
+      // distance picks up a y component and the always-shatter rule
+      // (centre within half of the path) deliberately doesn't fire.
+      if (gy > 50 && gy < 350 && Math.min(...xs) < 150 && Math.max(...xs) > 150) {
+        crossed++;
+        const g = centroid(line.points);
+        expect(struckKeys.has(`${g.x.toFixed(3)},${g.y.toFixed(3)},${line.points.length}`)).toBe(
+          false
+        );
+      }
+    }
+    expect(crossed).toBeGreaterThan(5);
   });
 
   it('fill 0 emits outlines only; fill adds hatch that thickens near the impact', () => {

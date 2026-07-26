@@ -35,8 +35,12 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     shatter: state.shatter,
     scatter: state.scatter,
     debris: state.debris,
+    crush: state.crush,
+    sweep: state.sweep,
 
     fill: state.fill,
+    fillStyle: state.fillStyle,
+    inkPath: state.inkPath,
     penWidth: state.penWidthMm * mm,
     wobble: state.wobbleMm * mm,
   };

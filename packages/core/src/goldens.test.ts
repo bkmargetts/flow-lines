@@ -214,9 +214,27 @@ CASES['impact-grid/shatter-heavy/42'] = () =>
     seed: 42,
     impactPath: impactGridPath,
     shatter: 1,
-    scatter: 0.9,
+    crush: 1,
+    sweep: 0.4,
     debris: 0.6,
     fill: 0.4,
+  });
+// The v1 "rip": displacement field + far-flung hatch-filled debris — keeps
+// the push/scatter code path pinned now the defaults crush in place.
+CASES['impact-grid/rip/42'] = () =>
+  generateImpactGrid({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    impactPath: impactGridPath,
+    impactStrength: 0.7,
+    scatter: 0.9,
+    debris: 0.4,
+    shatter: 0.6,
+    fill: 0.2,
+    fillStyle: 'hatch',
+    inkPath: true,
   });
 CASES['marbling/stone/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'stone' });

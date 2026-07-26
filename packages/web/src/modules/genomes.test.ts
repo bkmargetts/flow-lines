@@ -142,13 +142,19 @@ const SPECS: GenomeSpec[] = [
       shatter: [0, 1],
       scatter: [0, 1],
       debris: [0, 1],
+      crush: [0, 1],
+      sweep: [0, 1],
       fill: [0, 1],
     },
     ints: ['frameDepth', 'impactRadiusMm'],
+    bools: ['inkPath'],
     enums: {
       layout: ['grid', 'frame'],
+      fillStyle: ['none', 'hatch', 'concentric'],
     },
     // maskPath / drawMode are user data — the drawn strike survives a reroll.
+    // `look` is the preset label, not a knob — a reroll leaves it stale by
+    // design (same as warp-grid's preset after manual tweaks).
     forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'strokeColor', 'maskPath', 'drawMode'],
   },
   {
