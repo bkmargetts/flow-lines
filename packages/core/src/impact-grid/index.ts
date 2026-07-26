@@ -37,9 +37,10 @@ export interface ImpactGridOptions {
   /** The slab the mosaic occupies: inset 'slab' (default), a central
    *  horizontal 'band', a 'disc', or the 'full' framed page. */
   region?: RegionKind;
-  /** 'grid' packs the region; 'frame' keeps a border band of the grid;
-   *  'bars' builds tall columns of stacked segments with ragged ends. */
-  layout?: 'grid' | 'frame' | 'bars';
+  /** 'mosaic' (default) is the multi-scale patchwork — big panels beside
+   *  clusters of small patches; 'grid' packs even squares; 'frame' keeps a
+   *  border band of the grid; 'bars' builds tall stacked columns. */
+  layout?: 'mosaic' | 'grid' | 'frame' | 'bars';
   /** Cells deep the 'frame' band runs, 1..6. */
   frameDepth?: number;
 
@@ -54,6 +55,9 @@ export interface ImpactGridOptions {
   rotationJitter?: number;
   /** 0..0.6 mean gap between cells as a fraction of pitch. */
   gap?: number;
+  /** 0..1 scale mixture of the 'mosaic' layout: 0 ≈ even panels, 1 ≈ big
+   *  slabs beside clusters of tiny patches. */
+  granularity?: number;
 
   // Impact — inert when the path is missing/short: pristine mosaic.
   /** Impact trajectory in page px (the web layer passes the RAW drawn
@@ -89,6 +93,10 @@ export interface ImpactGridOptions {
   fillStyle?: 'texture' | 'hatch' | 'concentric' | 'none';
   /** 0..1 fraction of the mosaic drawn in the 'accent' pen layer. */
   inkSplit?: number;
+  /** How the accent ink is placed: 'regions' commits large coherent swaths;
+   *  'damage' lets the accent follow the destruction — energised material
+   *  changes pen, the way the blue piece reads. */
+  inkMode?: 'regions' | 'damage';
   /** Ink the trajectory itself as a thin stroke with a terminal dot. */
   inkPath?: boolean;
   penWidth?: number;
@@ -101,23 +109,25 @@ const DEFAULTS: Required<
   Omit<ImpactGridOptions, 'width' | 'height' | 'margin' | 'seed' | 'impactPath' | 'cellSize' | 'impactRadius'>
 > = {
   region: 'slab',
-  layout: 'grid',
+  layout: 'mosaic',
   frameDepth: 3,
   sizeVariation: 0.15,
   positionJitter: 0.03,
   rotationJitter: 0.02,
   gap: 0.06,
-  paneStress: 0.7,
-  energy: 0.7,
+  granularity: 0.6,
+  paneStress: 0.6,
+  energy: 0.6,
   impactStrength: 0,
-  shatter: 0.85,
-  scatter: 0.35,
+  shatter: 0.8,
+  scatter: 0.3,
   debris: 0.25,
   crush: 0.7,
   sweep: 0.7,
   fill: 1,
   fillStyle: 'texture',
   inkSplit: 0.35,
+  inkMode: 'regions',
   inkPath: true,
   penWidth: 1.2,
   wobble: 0,
@@ -130,7 +140,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
   const { width, height, margin } = options;
   const innerMin = Math.min(width - 2 * margin, height - 2 * margin);
   const cellSize = options.cellSize ?? innerMin / 16;
-  const radius = options.impactRadius ?? innerMin * 0.3;
+  const radius = options.impactRadius ?? innerMin * 0.25;
   const channel = Math.max(cellSize * 0.5, radius * 0.12);
   const region = makeRegion(o.region, width, height, margin);
 
@@ -146,6 +156,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     positionJitter: o.positionJitter,
     rotationJitter: o.rotationJitter,
     gap: o.gap,
+    granularity: o.granularity,
     penWidth: o.penWidth,
     region,
   });
@@ -190,16 +201,25 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
         )
       : null;
 
+    // Ink swaths at hemisphere scale (extent-relative, not page-pixel), or —
+    // in 'damage' mode — the accent pen following the destruction itself.
+    const inkK = 0.9 / region.extent;
+    const D0 = dmg?.D ?? 0;
+    const inkNoiseVal = inkNoise.noise2D(cell.centre.x * inkK, cell.centre.y * inkK);
     const ink =
       o.inkSplit > 0 &&
-      inkNoise.noise2D(cell.centre.x * 0.006, cell.centre.y * 0.006) * 0.5 + 0.5 < o.inkSplit
+      (o.inkMode === 'damage'
+        ? D0 + 0.15 * inkNoiseVal > 1 - o.inkSplit
+        : inkNoiseVal * 0.5 + 0.5 < o.inkSplit)
         ? 'accent'
         : 'ink';
+    const fillK = 3 / region.extent;
     const regionFilled =
       o.fill > 0 &&
-      fillNoise.noise2D(cell.centre.x * 0.008, cell.centre.y * 0.008) * 0.5 + 0.5 < o.fill;
+      fillNoise.noise2D(cell.centre.x * fillK, cell.centre.y * fillK) * 0.5 + 0.5 < o.fill;
     const texture = TEXTURES[Math.floor(cellRng() * TEXTURES.length) % TEXTURES.length];
-    const fillSpacing = Math.max(2 * o.penWidth, cellSize * 0.15);
+    // Fine pitch: the fills should read as tone, not as pattern samples.
+    const fillSpacing = Math.max(1.8 * o.penWidth, 2.2);
     const D = dmg?.D ?? 0;
     const fillPoly = (poly: Point[]): Point[][] => {
       switch (o.fillStyle) {
@@ -245,6 +265,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           channel,
           d: dmg.hit.d,
           dust: dmg.zone === 'dust',
+          cone: dmg.downstream,
           penWidth: o.penWidth,
         },
         impactRng
@@ -255,6 +276,9 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       // lodged — hairline gaps and a whisper of rotation, no displacement.
       const resting = rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
       for (const facet of cracks.facet(resting)) {
+        // The occasional facet falls out of the cracked pane — a hole in
+        // the spiderweb, very glass.
+        if (impactRng() < 0.5 * o.debris * D) continue;
         const n = facet.length - 1;
         let gx = 0;
         let gy = 0;

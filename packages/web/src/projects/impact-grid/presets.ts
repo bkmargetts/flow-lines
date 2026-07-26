@@ -34,7 +34,7 @@ export const IMPACT_GRID_LOOKS: Record<
     label: 'Mosaic slab',
     state: {
       region: 'slab',
-      layout: 'grid',
+      layout: 'mosaic',
       sizeVariation: 0.15,
       positionJitter: 0.03,
       rotationJitter: 0.02,
@@ -56,7 +56,7 @@ export const IMPACT_GRID_LOOKS: Record<
     label: 'Disc',
     state: {
       region: 'disc',
-      layout: 'grid',
+      layout: 'mosaic',
       sizeVariation: 0.15,
       positionJitter: 0.03,
       rotationJitter: 0.02,

@@ -29,6 +29,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     positionJitter: state.positionJitter,
     rotationJitter: state.rotationJitter,
     gap: state.gap,
+    granularity: state.granularity,
 
     impactPath: state.maskPath,
     impactRadius: state.impactRadiusMm * mm,
@@ -44,6 +45,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     fill: state.fill,
     fillStyle: state.fillStyle,
     inkSplit: state.inkSplit,
+    inkMode: state.inkMode,
     inkPath: state.inkPath,
     penWidth: state.penWidthMm * mm,
     wobble: state.wobbleMm * mm,

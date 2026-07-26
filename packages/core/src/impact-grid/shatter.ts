@@ -73,6 +73,8 @@ export interface FragmentOptions {
   d: number;
   /** True in the dust zone: finer cuts, smaller survivors, more loss. */
   dust: boolean;
+  /** 0..1 downstream of the strike — the cascade cone widens with it. */
+  cone: number;
   penWidth: number;
 }
 
@@ -124,8 +126,24 @@ export function shatterCell(
   const out: Point[][] = [];
   for (const frag of fragments) {
     if (ringArea(frag) < minArea) continue;
-    // Pulverised: the closest shards lose mass entirely.
-    if ((o.dust || o.d < o.channel) && rng() < debris * Math.max(o.f, 0.6)) continue;
+    // Pulverised: the closest shards lose mass entirely — though some leave
+    // a tiny speck of litter where they would have landed.
+    if ((o.dust || o.d < o.channel) && rng() < debris * Math.max(o.f, 0.6)) {
+      if (rng() < 0.35) {
+        const g0 = centroidOf(frag);
+        const sx = g0.x + o.tx * o.sweep * o.radius * 0.3 * rng();
+        const sy = g0.y + o.ty * o.sweep * o.radius * 0.3 * rng();
+        const r = o.penWidth * (0.6 + 0.8 * rng());
+        const a0 = rng() * Math.PI * 2;
+        out.push([
+          { x: sx + r * Math.cos(a0), y: sy + r * Math.sin(a0) },
+          { x: sx + r * Math.cos(a0 + 2.3), y: sy + r * Math.sin(a0 + 2.3) },
+          { x: sx + r * Math.cos(a0 + 4.4), y: sy + r * Math.sin(a0 + 4.4) },
+          { x: sx + r * Math.cos(a0), y: sy + r * Math.sin(a0) },
+        ]);
+      }
+      continue;
+    }
     const g = centroidOf(frag);
     // Drift along the direction of travel — heavy-tailed so the cascade
     // spreads: most shards travel a moderate way, a few fly far.
@@ -135,9 +153,10 @@ export function shatterCell(
     // its edge, or the stroke wouldn't read as swept clean.
     if (o.d < o.channel) drift += o.sweep * (o.channel - o.d) * (1.5 + rng());
     if (o.dust) drift *= 1.4;
-    // The cascade also sprays radially from the strike, dust hardest.
+    // The cascade also sprays radially from the strike, dust hardest, and
+    // the cone widens downstream of the impact — an explosion, not a pipe.
     const spread =
-      (o.dust ? 0.45 : 0.3) * o.scatter * o.radius * o.f * o.f * rng();
+      (o.dust ? 0.45 : 0.3) * (1 + 0.9 * o.cone) * o.scatter * o.radius * o.f * o.f * rng();
     const gx = g.x + o.dx + drift * o.tx + spread * o.rx;
     const gy = g.y + o.dy + drift * o.ty + spread * o.ry;
     // Shear toward the flow: shards leave aligned with the sweep, plus spin.

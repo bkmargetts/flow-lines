@@ -18,6 +18,8 @@ export interface PathHit {
   ty: number;
   /** Gesture speed at the nearest sample, 0..1 — fast flicks hit harder. */
   speed: number;
+  /** Arc length along the path at the nearest point, px. */
+  arc: number;
 }
 
 /** Where the trajectory actually strikes: the fast, deep sample the
@@ -27,6 +29,8 @@ export interface Epicentre {
   y: number;
   /** Gesture speed at the strike, 0..1. */
   speed: number;
+  /** Arc length along the path at the strike, px. */
+  arc: number;
 }
 
 export interface PathField {
@@ -42,6 +46,7 @@ const MAX_SEGMENTS = 512;
 
 interface Sample extends Point {
   speed: number;
+  arc: number;
 }
 
 /**
@@ -68,10 +73,12 @@ export function preparePath(
 
   // Per-raw-point speed, normalized against a page-relative flick gap.
   const speedRef = 0.06 * innerMin;
+  let rawArc = 0;
   const raw: Sample[] = path.map((p, i) => {
-    if (i === 0) return { x: p.x, y: p.y, speed: 0 };
+    if (i === 0) return { x: p.x, y: p.y, speed: 0, arc: 0 };
     const gap = Math.hypot(p.x - path[i - 1].x, p.y - path[i - 1].y);
-    return { x: p.x, y: p.y, speed: clamp01(gap / speedRef) };
+    rawArc += gap;
+    return { x: p.x, y: p.y, speed: clamp01(gap / speedRef), arc: rawArc };
   });
   if (raw.length >= 2) raw[0].speed = raw[1].speed;
 
@@ -84,7 +91,7 @@ export function preparePath(
     pending = Math.max(pending, raw[i].speed);
     const prev = thinned[thinned.length - 1];
     if (Math.hypot(raw[i].x - prev.x, raw[i].y - prev.y) >= minStep) {
-      thinned.push({ x: raw[i].x, y: raw[i].y, speed: pending });
+      thinned.push({ x: raw[i].x, y: raw[i].y, speed: pending, arc: raw[i].arc });
       pending = 0;
     }
   }
@@ -103,6 +110,7 @@ export function preparePath(
         x: a.x + (b.x - a.x) * t,
         y: a.y + (b.y - a.y) * t,
         speed: a.speed + (b.speed - a.speed) * t,
+        arc: a.arc + (b.arc - a.arc) * t,
       });
     }
   }
@@ -121,7 +129,7 @@ export function preparePath(
     const score = p.speed * p.speed + 0.3 * (region.depth(p.x, p.y) / region.extent);
     if (score > best) {
       best = score;
-      epicentre = { x: p.x, y: p.y, speed: p.speed };
+      epicentre = { x: p.x, y: p.y, speed: p.speed, arc: p.arc };
     }
   }
   if (!epicentre) {
@@ -131,14 +139,14 @@ export function preparePath(
       const d = Math.hypot(p.x - region.centroid.x, p.y - region.centroid.y);
       if (d < bestD) {
         bestD = d;
-        epicentre = { x: p.x, y: p.y, speed: p.speed };
+        epicentre = { x: p.x, y: p.y, speed: p.speed, arc: p.arc };
       }
     }
   }
 
   const nearest = (x: number, y: number): PathHit => {
     let bestD2 = Infinity;
-    let hit: PathHit = { d: 0, qx: pts[0].x, qy: pts[0].y, side: 1, tx: 1, ty: 0, speed: 0 };
+    let hit: PathHit = { d: 0, qx: pts[0].x, qy: pts[0].y, side: 1, tx: 1, ty: 0, speed: 0, arc: 0 };
     for (let i = 1; i < pts.length; i++) {
       const a = pts[i - 1];
       const b = pts[i];
@@ -161,6 +169,7 @@ export function preparePath(
           tx: dx / len,
           ty: dy / len,
           speed: a.speed + (b.speed - a.speed) * t,
+          arc: a.arc + (b.arc - a.arc) * t,
         };
       }
     }
@@ -187,6 +196,9 @@ export interface CellDamage {
   /** Radial direction from the epicentre (unit) — sliver orientation. */
   rx: number;
   ry: number;
+  /** 0..1 how far DOWNSTREAM of the strike (along the travel direction)
+   *  this cell sits — the debris cone widens with it. */
+  downstream: number;
 }
 
 /**
@@ -208,9 +220,18 @@ export function cellDamage(
   shatter: number
 ): CellDamage {
   const hit = field.nearest(cx, cy);
-  const channel =
-    smoothstep(clamp01(1 - hit.d / radius)) * (0.4 + 0.6 * hit.speed) * (0.5 + 0.5 * energy);
   const epi = field.epicentre;
+  // The channel attenuates with arc distance from the strike: the line
+  // passes almost harmlessly through the far tail of its own trajectory —
+  // destruction stays concentrated where it actually hit.
+  const atten = epi
+    ? smoothstep(clamp01(1 - Math.abs(hit.arc - epi.arc) / (2.2 * reach)))
+    : 1;
+  const channel =
+    smoothstep(clamp01(1 - hit.d / radius)) *
+    (0.4 + 0.6 * hit.speed) *
+    (0.5 + 0.5 * energy) *
+    atten;
   let pane = 0;
   let rx = hit.side * -hit.ty;
   let ry = hit.side * hit.tx;
@@ -236,5 +257,6 @@ export function cellDamage(
     zone = D > dustT ? 'dust' : D > cascadeT ? 'cascade' : D > crackT ? 'cracked' : 'intact';
     if (hit.d < extent && zone !== 'dust') zone = 'cascade';
   }
-  return { zone, D, hit, rx, ry };
+  const downstream = epi ? clamp01((hit.arc - epi.arc) / Math.max(reach, 1)) : 0;
+  return { zone, D, hit, rx, ry, downstream };
 }

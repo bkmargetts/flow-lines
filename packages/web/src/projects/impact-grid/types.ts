@@ -13,7 +13,7 @@ export interface ImpactGridState {
   look: 'breakpoint' | 'mosaic' | 'disc' | 'rough' | 'rip';
   seed: number;
   region: 'slab' | 'band' | 'disc' | 'full'; // the shaped pane the mosaic occupies
-  layout: 'grid' | 'frame' | 'bars';
+  layout: 'mosaic' | 'grid' | 'frame' | 'bars';
   frameDepth: number; // cells deep for the frame band
 
   // Mosaic
@@ -22,6 +22,7 @@ export interface ImpactGridState {
   positionJitter: number; // 0..1 centre jitter
   rotationJitter: number; // 0..1 rotation jitter
   gap: number; // 0..0.6 gap fraction of pitch
+  granularity: number; // 0..1 mosaic scale mixture (slabs vs patch clusters)
 
   // Impact
   paneStress: number; // 0..1 pane-wide crack/damage reach from the strike
@@ -38,6 +39,7 @@ export interface ImpactGridState {
   fill: number; // 0..1 fraction of cells filled (region-committed)
   fillStyle: 'texture' | 'hatch' | 'concentric' | 'none';
   inkSplit: number; // 0..1 fraction of cells in the accent ink
+  inkMode: 'regions' | 'damage'; // swaths, or accent follows the destruction
   inkPath: boolean; // draw the trajectory + terminal dot
 
   // Pen / finishing
@@ -60,7 +62,7 @@ export const defaultImpactGridState: ImpactGridState = {
   look: 'breakpoint',
   seed: randomSeed(),
   region: 'slab',
-  layout: 'grid',
+  layout: 'mosaic',
   frameDepth: 3,
 
   cellSizeMm: 7,
@@ -68,13 +70,14 @@ export const defaultImpactGridState: ImpactGridState = {
   positionJitter: 0.03,
   rotationJitter: 0.02,
   gap: 0.06,
+  granularity: 0.6,
 
-  paneStress: 0.7,
-  energy: 0.7,
+  paneStress: 0.6,
+  energy: 0.6,
   impactRadiusMm: 50,
   impactStrength: 0,
-  shatter: 0.85,
-  scatter: 0.35,
+  shatter: 0.8,
+  scatter: 0.3,
   debris: 0.25,
   crush: 0.7,
   sweep: 0.7,
@@ -82,6 +85,7 @@ export const defaultImpactGridState: ImpactGridState = {
   fill: 1,
   fillStyle: 'texture',
   inkSplit: 0.35,
+  inkMode: 'regions',
   inkPath: true,
 
   wobbleMm: 0,
@@ -102,7 +106,7 @@ export const defaultImpactGridState: ImpactGridState = {
  */
 export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridState> {
   const fillStyles: ImpactGridState['fillStyle'][] = ['texture', 'texture', 'hatch', 'concentric', 'none'];
-  const layouts: ImpactGridState['layout'][] = ['grid', 'grid', 'bars', 'frame'];
+  const layouts: ImpactGridState['layout'][] = ['mosaic', 'mosaic', 'grid', 'bars', 'frame'];
   const regions: ImpactGridState['region'][] = ['slab', 'slab', 'band', 'disc', 'full'];
   return {
     region: regions[Math.floor(rng() * regions.length)],
@@ -113,6 +117,7 @@ export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridSta
     positionJitter: Number((rng() * 0.6).toFixed(2)),
     rotationJitter: Number((rng() * 0.7).toFixed(2)),
     gap: Number((rng() * 0.4).toFixed(2)),
+    granularity: Number((rng()).toFixed(2)),
     impactRadiusMm: Math.round(20 + rng() * 100),
     paneStress: Number((0.3 + rng() * 0.7).toFixed(2)),
     energy: Number((0.3 + rng() * 0.7).toFixed(2)),
@@ -125,6 +130,7 @@ export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridSta
     fill: Number((0.3 + rng() * 0.7).toFixed(2)),
     fillStyle: fillStyles[Math.floor(rng() * fillStyles.length)],
     inkSplit: Number((rng() * 0.6).toFixed(2)),
+    inkMode: rng() < 0.7 ? 'regions' : 'damage',
     inkPath: rng() < 0.7,
   };
 }

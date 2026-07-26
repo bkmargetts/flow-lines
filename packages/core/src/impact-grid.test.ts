@@ -7,6 +7,8 @@ import { makeCracks } from './impact-grid/cracks.js';
 import { preparePath } from './impact-grid/impact.js';
 import { makeRandom } from './lib/rng.js';
 
+// The lattice-geometry tests below pin the 'grid' layout explicitly — the
+// module's default is the multi-scale 'mosaic'.
 const BASE: ImpactGridOptions = {
   width: 300,
   height: 400,
@@ -15,6 +17,7 @@ const BASE: ImpactGridOptions = {
   wobble: 0,
   inkPath: false,
   region: 'full',
+  layout: 'grid',
 };
 
 // A path straight down the page centre, used by the impact tests.
@@ -37,6 +40,7 @@ const GRID_ARGS = {
   positionJitter: 0,
   rotationJitter: 0,
   gap: 0.15,
+  granularity: 0.6,
   penWidth: 1.2,
   region: FULL_REGION,
 };
@@ -92,6 +96,7 @@ describe('clipHalfPlane / shatter geometry', () => {
         channel: 10,
         d: 30,
         dust: false,
+        cone: 0,
         penWidth: 1.2,
       },
       makeRandom(9)
@@ -148,6 +153,19 @@ describe('regions and the pane', () => {
     expect(Math.min(...ys)).toBeGreaterThan(20 + 360 * 0.29 - 1e-9);
     expect(Math.max(...ys)).toBeLessThan(380 - 360 * 0.29 + 1e-9);
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(200);
+  });
+
+  it('mosaic layout mixes scales: big panels beside small patches', () => {
+    const cells = layoutCells({ ...GRID_ARGS, layout: 'mosaic', granularity: 0.8 });
+    expect(cells.length).toBeGreaterThan(30);
+    const areas = cells.map((c) => c.hx * c.hy).sort((a, b) => a - b);
+    const small = areas[Math.floor(areas.length * 0.1)];
+    const big = areas[Math.floor(areas.length * 0.95)];
+    // A genuine multi-scale patchwork: the top panels dwarf the small ones.
+    expect(big / small).toBeGreaterThan(6);
+    for (const c of cells) {
+      expect(FULL_REGION.contains(c.centre.x, c.centre.y)).toBe(true);
+    }
   });
 
   it('epicentre lands on the fast segment of the gesture, not the deepest point', () => {

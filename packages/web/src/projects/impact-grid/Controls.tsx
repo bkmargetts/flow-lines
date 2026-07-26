@@ -11,6 +11,7 @@ import { IMPACT_GRID_LOOKS, type ImpactGridLook } from './presets';
 import { randomImpactGridGenome, type ImpactGridState } from './types';
 
 const LAYOUT_LABELS: Record<ImpactGridState['layout'], string> = {
+  mosaic: 'Mosaic',
   grid: 'Grid',
   frame: 'Frame',
   bars: 'Bars',
@@ -25,6 +26,11 @@ const REGION_LABELS: Record<ImpactGridState['region'], string> = {
   band: 'Band',
   disc: 'Disc',
   full: 'Full page',
+};
+
+const INK_MODE_LABELS: Record<ImpactGridState['inkMode'], string> = {
+  regions: 'Swaths',
+  damage: 'Follows damage',
 };
 
 const FILL_STYLE_LABELS: Record<ImpactGridState['fillStyle'], string> = {
@@ -95,6 +101,7 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
       <SeedControl seed={state.seed} onChange={(seed) => update({ seed })} />
 
       <Slider label="Cell size" value={state.cellSizeMm} min={3} max={20} step={0.5} onChange={(v) => update({ cellSizeMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      <Slider label="Granularity" value={state.granularity} min={0} max={1} step={0.01} onChange={(v) => update({ granularity: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.layout !== 'mosaic'} />
       <Slider label="Energy" value={state.energy} min={0} max={1} step={0.01} onChange={(v) => update({ energy: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Pane stress" value={state.paneStress} min={0} max={1} step={0.01} onChange={(v) => update({ paneStress: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Crush" value={state.crush} min={0} max={1} step={0.01} onChange={(v) => update({ crush: v })} format={(v) => `${Math.round(v * 100)}%`} />
@@ -118,6 +125,7 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
         </AdvGroup>
         <AdvGroup title="Marks">
           <PresetPicker label="Fill style" labels={FILL_STYLE_LABELS} value={state.fillStyle} onChange={(fillStyle) => update({ fillStyle })} />
+          <PresetPicker label="Ink mode" labels={INK_MODE_LABELS} value={state.inkMode} onChange={(inkMode) => update({ inkMode })} />
           <Slider label="Ink split" value={state.inkSplit} min={0} max={1} step={0.01} onChange={(v) => update({ inkSplit: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Toggle label="Ink the line" checked={state.inkPath} onChange={(inkPath) => update({ inkPath })} />
           <Slider label="Wobble" value={state.wobbleMm} min={0} max={1} step={0.01} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />

@@ -148,13 +148,15 @@ const SPECS: GenomeSpec[] = [
       inkSplit: [0, 1],
       paneStress: [0, 1],
       energy: [0, 1],
+      granularity: [0, 1],
     },
     ints: ['frameDepth', 'impactRadiusMm'],
     bools: ['inkPath'],
     enums: {
-      layout: ['grid', 'frame', 'bars'],
+      layout: ['mosaic', 'grid', 'frame', 'bars'],
       region: ['slab', 'band', 'disc', 'full'],
       fillStyle: ['texture', 'none', 'hatch', 'concentric'],
+      inkMode: ['regions', 'damage'],
     },
     // maskPath / drawMode are user data — the drawn strike survives a reroll.
     // `look` is the preset label, not a knob — a reroll leaves it stale by

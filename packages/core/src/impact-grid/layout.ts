@@ -24,13 +24,16 @@ export interface LayoutOptions {
   height: number;
   margin: number;
   seed: number;
-  layout: 'grid' | 'frame' | 'bars';
+  layout: 'mosaic' | 'grid' | 'frame' | 'bars';
   frameDepth: number;
   cellSize: number;
   sizeVariation: number;
   positionJitter: number;
   rotationJitter: number;
   gap: number;
+  /** 0..1 scale mixture of the 'mosaic' layout: 0 ≈ even panels, 1 ≈ big
+   *  slabs beside clusters of tiny patches. */
+  granularity: number;
   penWidth: number;
   region: RegionSpec;
 }
@@ -136,6 +139,7 @@ export function layoutCells(o: LayoutOptions): PlacedCell[] {
   const innerH = o.height - 2 * o.margin;
   if (innerW <= 0 || innerH <= 0) return [];
   if (o.layout === 'bars') return layoutBars(o, innerW);
+  if (o.layout === 'mosaic') return layoutMosaic(o);
 
   let pitch = Math.max(2, o.cellSize);
   if ((innerW / pitch) * (innerH / pitch) > MAX_CELLS) {
@@ -173,6 +177,93 @@ export function layoutCells(o: LayoutOptions): PlacedCell[] {
       cells.push({ index, centre: { x: cx, y: cy }, hx: half, hy: half, rotation });
     }
   }
+  return cells;
+}
+
+/**
+ * The multi-scale patchwork: the pane's bounding box is split recursively
+ * into unequal panels; some branches stop early (big slabs), others divide
+ * to the pitch floor (clusters of small patches). `granularity` widens the
+ * scale mixture — the reference compositions' "complex geometry" fabric.
+ */
+function layoutMosaic(o: LayoutOptions): PlacedCell[] {
+  const pitch = Math.max(2, o.cellSize);
+  const rng = makeRandom(subSeed(o.seed, 11));
+  const cells: PlacedCell[] = [];
+  let index = 0;
+
+  // The pane's bbox from its yRange scan (regions are convex).
+  const b = o.region;
+  const cx0 = o.margin;
+  const cx1 = o.width - o.margin;
+  let bx0 = Infinity;
+  let bx1 = -Infinity;
+  let by0 = Infinity;
+  let by1 = -Infinity;
+  for (let x = cx0; x <= cx1; x += 4) {
+    const r = b.yRange(x);
+    if (!r) continue;
+    if (x < bx0) bx0 = x;
+    if (x > bx1) bx1 = x;
+    if (r[0] < by0) by0 = r[0];
+    if (r[1] > by1) by1 = r[1];
+  }
+  if (!(bx1 > bx0)) return [];
+
+  const minSide = pitch * 0.55;
+  const maxSide = pitch * (2.2 + 4 * o.granularity);
+  const emit = (x0: number, y0: number, x1: number, y1: number) => {
+    if (cells.length >= MAX_CELLS) return;
+    const w = x1 - x0;
+    const h = y1 - y0;
+    const cxm = (x0 + x1) / 2;
+    const cym = (y0 + y1) / 2;
+    if (!o.region.contains(cxm, cym)) return;
+    const cellRng = makeRandom(subSeed(o.seed, 200000 + index));
+    const gapPx = o.gap * pitch * 0.5;
+    const jx = o.positionJitter * pitch * 0.2 * (2 * cellRng() - 1);
+    const jy = o.positionJitter * pitch * 0.2 * (2 * cellRng() - 1);
+    const rotation = o.rotationJitter * (Math.PI / 36) * (2 * cellRng() - 1);
+    cells.push({
+      index: 200000 + index,
+      centre: { x: cxm + jx, y: cym + jy },
+      hx: Math.max(o.penWidth, (w - gapPx) / 2),
+      hy: Math.max(o.penWidth, (h - gapPx) / 2),
+      rotation,
+    });
+    index++;
+  };
+
+  const split = (x0: number, y0: number, x1: number, y1: number, depth: number) => {
+    if (cells.length >= MAX_CELLS) return;
+    const w = x1 - x0;
+    const h = y1 - y0;
+    const long = Math.max(w, h);
+    // Below the floor: this rect is a leaf. Above the ceiling it must split;
+    // in between, granularity decides how often a branch stops early and
+    // stays a big slab.
+    if (long < minSide * 2) {
+      emit(x0, y0, x1, y1);
+      return;
+    }
+    if (long < maxSide && rng() < 0.16 + 0.2 * o.granularity * (depth > 1 ? 1 : 0)) {
+      emit(x0, y0, x1, y1);
+      return;
+    }
+    // Split the long axis at an uneven ratio — unequal siblings are what
+    // keeps the patchwork from reading as a halved grid.
+    const t = 0.32 + 0.36 * rng();
+    if (w >= h) {
+      const xm = x0 + w * t;
+      split(x0, y0, xm, y1, depth + 1);
+      split(xm, y0, x1, y1, depth + 1);
+    } else {
+      const ym = y0 + h * t;
+      split(x0, y0, x1, ym, depth + 1);
+      split(x0, ym, x1, y1, depth + 1);
+    }
+  };
+  split(bx0, by0, bx1, by1, 0);
   return cells;
 }
 
