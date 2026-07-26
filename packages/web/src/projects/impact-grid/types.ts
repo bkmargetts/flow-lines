@@ -1,5 +1,6 @@
 import type { Point } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
+import { INK_PALETTES } from './presets';
 
 /**
  * UI state for Impact Grid (mm / 0..1 units). `render.ts` converts it to the
@@ -38,17 +39,17 @@ export interface ImpactGridState {
   // Marks
   fill: number; // 0..1 fraction of cells filled (region-committed)
   fillStyle: 'texture' | 'hatch' | 'concentric' | 'none';
-  inkSplit: number; // 0..1 fraction of cells in the accent ink
-  inkMode: 'regions' | 'damage'; // swaths, or accent follows the destruction
+  inkBalance: number; // 0..1 swath skew: 0.5 = even split across the pens
+  inkMode: 'regions' | 'damage'; // swaths, or inks ordered by destruction
   inkPath: boolean; // draw the trajectory + terminal dot
 
   // Pen / finishing
   wobbleMm: number;
   penWidthMm: number;
 
-  // Inks
-  strokeColor: string;
-  accentColor: string;
+  // Inks — one pen per entry, arbitrarily many; ink count = array length.
+  palette: string; // named INK_PALETTES id, or 'custom' after hand edits
+  inkColors: string[];
   pathColor: string; // the trajectory's own fine pen
 
   // Canvas drawing (DrawableState duck-type — drag-to-draw for free)
@@ -84,15 +85,15 @@ export const defaultImpactGridState: ImpactGridState = {
 
   fill: 1,
   fillStyle: 'texture',
-  inkSplit: 0.35,
+  inkBalance: 0.5,
   inkMode: 'regions',
   inkPath: true,
 
   wobbleMm: 0,
   penWidthMm: 0.35,
 
-  strokeColor: '#26282e',
-  accentColor: '#1766d1',
+  palette: 'blueprint',
+  inkColors: ['#26282e', '#1766d1'],
   pathColor: '#a3b34a',
 
   drawMode: false,
@@ -129,8 +130,16 @@ export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridSta
     sweep: Number((rng()).toFixed(2)),
     fill: Number((0.3 + rng() * 0.7).toFixed(2)),
     fillStyle: fillStyles[Math.floor(rng() * fillStyles.length)],
-    inkSplit: Number((rng() * 0.6).toFixed(2)),
+    inkBalance: Number((0.3 + rng() * 0.4).toFixed(2)),
     inkMode: rng() < 0.7 ? 'regions' : 'damage',
     inkPath: rng() < 0.7,
+    // Palette roll (impact-grid is in PALETTE_ROLLERS): a named pen set,
+    // never custom colours.
+    ...(() => {
+      const ids = Object.keys(INK_PALETTES);
+      const id = ids[Math.floor(rng() * ids.length)];
+      const pal = INK_PALETTES[id];
+      return { palette: id, inkColors: [...pal.inks], pathColor: pal.path };
+    })(),
   };
 }

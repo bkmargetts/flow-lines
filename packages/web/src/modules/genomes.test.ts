@@ -72,7 +72,7 @@ const ART_TREATMENT_BOUNDS: Record<string, [number, number]> = {
  * reads as a decision rather than an oversight, and so a *new* module can't
  * quietly join them.
  */
-const PALETTE_ROLLERS = ['botanical-generator', 'landscape-generator', 'planet-generator'];
+const PALETTE_ROLLERS = ['botanical-generator', 'landscape-generator', 'planet-generator', 'impact-grid'];
 
 const SPECS: GenomeSpec[] = [
   {
@@ -145,7 +145,7 @@ const SPECS: GenomeSpec[] = [
       crush: [0, 1],
       sweep: [0, 1],
       fill: [0, 1],
-      inkSplit: [0, 1],
+      inkBalance: [0, 1],
       paneStress: [0, 1],
       energy: [0, 1],
       granularity: [0, 1],
@@ -158,19 +158,12 @@ const SPECS: GenomeSpec[] = [
       fillStyle: ['texture', 'none', 'hatch', 'concentric'],
       inkMode: ['regions', 'damage'],
     },
-    // maskPath / drawMode are user data — the drawn strike survives a reroll.
-    // `look` is the preset label, not a knob — a reroll leaves it stale by
-    // design (same as warp-grid's preset after manual tweaks).
-    forbidden: [
-      'seed',
-      'penWidthMm',
-      'wobbleMm',
-      'strokeColor',
-      'accentColor',
-      'pathColor',
-      'maskPath',
-      'drawMode',
-    ],
+    // maskPath / drawMode are user data — the drawn strike survives a
+    // reroll. `look` is the preset label, not a knob. Ink fields are absent
+    // from forbidden by design: impact-grid is in PALETTE_ROLLERS and rolls
+    // a NAMED palette (inkColors/pathColor come from the table, never
+    // generated colours).
+    forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'maskPath', 'drawMode'],
   },
   {
     name: 'meander',

@@ -393,6 +393,37 @@ describe('generateImpactGrid', () => {
     expect(crossed).toBeGreaterThan(5);
   });
 
+  it('spreads the mosaic across exactly N ink layers', () => {
+    const result = generateImpactGrid({ ...BASE, inks: 5, fill: 1, optimize: false });
+    const layers = new Set(result.lines.map((l) => l.layer));
+    for (let i = 0; i < 5; i++) expect(layers.has(`ink-${i}`)).toBe(true);
+    for (const layer of layers) expect(layer).toMatch(/^ink-[0-4]$/);
+  });
+
+  it("damage ink mode orders inks by destruction: the last ink runs hottest", () => {
+    const opts = {
+      ...BASE,
+      impactPath: CENTRE_PATH,
+      inks: 3,
+      inkMode: 'damage' as const,
+      fill: 0,
+      optimize: false,
+      shatter: 0.3,
+      paneStress: 0.6,
+    };
+    const result = generateImpactGrid(opts);
+    // Distance from the path is a proxy for damage; the hottest ink's
+    // strokes must sit closer to the strike than ink-0's on average.
+    const meanDist = (layer: string) => {
+      const ls = result.lines.filter((l) => l.layer === layer);
+      expect(ls.length).toBeGreaterThan(0);
+      return (
+        ls.reduce((sum, l) => sum + Math.abs(centroid(l.points).x - 150), 0) / ls.length
+      );
+    };
+    expect(meanDist('ink-2')).toBeLessThan(meanDist('ink-0'));
+  });
+
   it('fill 0 emits outlines only; fill adds texture that thickens the plot', () => {
     const common = { ...BASE, impactPath: CENTRE_PATH, optimize: false };
     const bare = generateImpactGrid({ ...common, fill: 0 });

@@ -24,8 +24,9 @@ import { TEXTURES, textureFill } from './textures.js';
  * intact; the stroke also sweeps its own channel clean, debris cascading
  * along its direction of travel. The gesture's speed drives the violence
  * (fast flicks leave sparse drawn points — that spacing is read as
- * velocity). Two pen layers ('ink'/'accent') in coherent regions; the
- * trajectory itself plots on a 'path' layer with a terminal dot. Plain
+ * velocity). Any number of pen layers ('ink-0' … 'ink-N') split the mosaic
+ * in coherent swaths (or ordered by damage); the trajectory itself plots on
+ * a 'path' layer with a terminal dot. Plain
  * stroked paths, deterministic per seed; no path ⇒ the pristine mosaic.
  */
 export interface ImpactGridOptions {
@@ -91,11 +92,15 @@ export interface ImpactGridOptions {
   /** The fill vocabulary: 'texture' draws each cell in one of eight fill
    *  patterns; 'hatch' / 'concentric' are single-style; 'none' outlines. */
   fillStyle?: 'texture' | 'hatch' | 'concentric' | 'none';
-  /** 0..1 fraction of the mosaic drawn in the 'accent' pen layer. */
-  inkSplit?: number;
-  /** How the accent ink is placed: 'regions' commits large coherent swaths;
-   *  'damage' lets the accent follow the destruction — energised material
-   *  changes pen, the way the blue piece reads. */
+  /** How many mosaic pen layers, ≥1 — cells plot on layers 'ink-0' …
+   *  'ink-(n-1)' and the web/export side maps each to its own colour. */
+  inks?: number;
+  /** 0..1 skew of the swath split: 0.5 shares the pane evenly, lower
+   *  favours the first inks, higher the last. */
+  inkBalance?: number;
+  /** How the inks are placed: 'regions' commits large coherent swaths;
+   *  'damage' orders them by destruction — ink 0 is calm material, the
+   *  last ink the hottest zone, the way the blue piece reads. */
   inkMode?: 'regions' | 'damage';
   /** Ink the trajectory itself as a thin stroke with a terminal dot. */
   inkPath?: boolean;
@@ -126,7 +131,8 @@ const DEFAULTS: Required<
   sweep: 0.7,
   fill: 1,
   fillStyle: 'texture',
-  inkSplit: 0.35,
+  inks: 2,
+  inkBalance: 0.5,
   inkMode: 'regions',
   inkPath: true,
   penWidth: 1.2,
@@ -201,18 +207,19 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
         )
       : null;
 
-    // Ink swaths at hemisphere scale (extent-relative, not page-pixel), or —
-    // in 'damage' mode — the accent pen following the destruction itself.
+    // Ink assignment: hemisphere-scale swaths quantised into `inks` bins
+    // (extent-relative noise through a balance curve), or — in 'damage'
+    // mode — inks ordered by destruction, calm material first.
+    const inkCount = Math.max(1, Math.round(o.inks));
     const inkK = 0.9 / region.extent;
     const D0 = dmg?.D ?? 0;
     const inkNoiseVal = inkNoise.noise2D(cell.centre.x * inkK, cell.centre.y * inkK);
-    const ink =
-      o.inkSplit > 0 &&
-      (o.inkMode === 'damage'
-        ? D0 + 0.15 * inkNoiseVal > 1 - o.inkSplit
-        : inkNoiseVal * 0.5 + 0.5 < o.inkSplit)
-        ? 'accent'
-        : 'ink';
+    const gamma = Math.pow(4, 2 * (0.5 - clamp01(o.inkBalance)));
+    const inkT =
+      o.inkMode === 'damage'
+        ? clamp01(D0 * 1.15 + 0.12 * inkNoiseVal)
+        : Math.pow(clamp01(inkNoiseVal * 0.5 + 0.5), gamma);
+    const ink = `ink-${Math.min(inkCount - 1, Math.floor(inkT * inkCount))}`;
     const fillK = 3 / region.extent;
     const regionFilled =
       o.fill > 0 &&

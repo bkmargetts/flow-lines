@@ -1,5 +1,22 @@
 import type { ImpactGridState } from './types';
 
+/** Named pen sets — applying one sets `inkColors` + `pathColor` and stamps
+ *  `palette`; editing any colour flips the state back to 'custom'. The
+ *  mosaic supports arbitrarily many pens: a palette is just an array. */
+export const INK_PALETTES: Record<string, { label: string; inks: string[]; path: string }> = {
+  blueprint: { label: 'Blueprint', inks: ['#26282e', '#1766d1'], path: '#a3b34a' },
+  'navy-orange': { label: 'Navy & orange', inks: ['#1d2f6f', '#e2571b'], path: '#8a8f3c' },
+  'violet-silver': { label: 'Violet & silver', inks: ['#5b45c0', '#9aa0a8'], path: '#b8952e' },
+  archival: { label: 'Archival', inks: ['#2b2620', '#8a5a2b'], path: '#6f6a5e' },
+  mono: { label: 'Mono', inks: ['#26282e'], path: '#26282e' },
+  riso: { label: 'Riso', inks: ['#0078bf', '#ff48b0', '#f6a800'], path: '#26282e' },
+  'field-notes': {
+    label: 'Field notes',
+    inks: ['#26282e', '#4a6741', '#a34a28', '#5a6b7a'],
+    path: '#8a8f3c',
+  },
+};
+
 export type ImpactGridLook = 'breakpoint' | 'mosaic' | 'disc' | 'rough' | 'rip';
 
 /** Named looks spanning the module's range. Each is a state patch — seed,
@@ -25,7 +42,6 @@ export const IMPACT_GRID_LOOKS: Record<
       sweep: 0.7,
       fill: 1,
       fillStyle: 'texture',
-      inkSplit: 0.35,
       inkPath: true,
       wobbleMm: 0,
     },
@@ -47,7 +63,6 @@ export const IMPACT_GRID_LOOKS: Record<
       sweep: 0.7,
       fill: 1,
       fillStyle: 'texture',
-      inkSplit: 0.35,
       inkPath: true,
       wobbleMm: 0,
     },
@@ -69,7 +84,6 @@ export const IMPACT_GRID_LOOKS: Record<
       sweep: 0.7,
       fill: 1,
       fillStyle: 'texture',
-      inkSplit: 0.35,
       inkPath: true,
       wobbleMm: 0,
     },
@@ -91,7 +105,6 @@ export const IMPACT_GRID_LOOKS: Record<
       sweep: 0.2,
       fill: 0,
       fillStyle: 'none',
-      inkSplit: 0,
       inkPath: false,
       wobbleMm: 0.25,
     },
@@ -113,7 +126,6 @@ export const IMPACT_GRID_LOOKS: Record<
       sweep: 0,
       fill: 0.2,
       fillStyle: 'hatch',
-      inkSplit: 0,
       inkPath: false,
       wobbleMm: 0.25,
     },

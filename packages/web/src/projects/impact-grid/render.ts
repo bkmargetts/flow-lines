@@ -44,7 +44,8 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
 
     fill: state.fill,
     fillStyle: state.fillStyle,
-    inkSplit: state.inkSplit,
+    inks: state.inkColors.length,
+    inkBalance: state.inkBalance,
     inkMode: state.inkMode,
     inkPath: state.inkPath,
     penWidth: state.penWidthMm * mm,
@@ -60,16 +61,15 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     page.heightPx - marginPx
   );
 
+  const layerColors: Record<string, string> = { path: state.pathColor };
+  state.inkColors.forEach((c, i) => {
+    layerColors[`ink-${i}`] = c;
+  });
+
   return {
     lines,
-    strokeColor: state.strokeColor,
+    strokeColor: state.inkColors[0] ?? '#26282e',
     strokeWidthPx: state.penWidthMm * mm,
-    // Two pens: the mosaic's accent regions plot as their own layer, the
-    // trajectory rides with the base ink.
-    layerColors: {
-      ink: state.strokeColor,
-      accent: state.accentColor,
-      path: state.pathColor,
-    },
+    layerColors,
   };
 }
