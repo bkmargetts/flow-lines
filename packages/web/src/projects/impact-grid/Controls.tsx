@@ -13,6 +13,7 @@ import { randomImpactGridGenome, type ImpactGridState } from './types';
 const LAYOUT_LABELS: Record<ImpactGridState['layout'], string> = {
   grid: 'Grid',
   frame: 'Frame',
+  bars: 'Bars',
 };
 
 const LOOK_LABELS = Object.fromEntries(
@@ -20,6 +21,7 @@ const LOOK_LABELS = Object.fromEntries(
 ) as Record<ImpactGridLook, string>;
 
 const FILL_STYLE_LABELS: Record<ImpactGridState['fillStyle'], string> = {
+  texture: 'Textures',
   none: 'None',
   hatch: 'Hatch',
   concentric: 'Concentric',
@@ -99,6 +101,7 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
         </AdvGroup>
         <AdvGroup title="Marks">
           <PresetPicker label="Fill style" labels={FILL_STYLE_LABELS} value={state.fillStyle} onChange={(fillStyle) => update({ fillStyle })} />
+          <Slider label="Ink split" value={state.inkSplit} min={0} max={1} step={0.01} onChange={(v) => update({ inkSplit: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Toggle label="Ink the line" checked={state.inkPath} onChange={(inkPath) => update({ inkPath })} />
           <Slider label="Wobble" value={state.wobbleMm} min={0} max={1} step={0.01} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
         </AdvGroup>
@@ -106,6 +109,7 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
 
       <Slider label="Pen width" value={state.penWidthMm} min={0.05} max={0.8} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
       <ColorField label="Ink" value={state.strokeColor} onChange={(strokeColor) => update({ strokeColor })} />
+      <ColorField label="Accent ink" value={state.accentColor} onChange={(accentColor) => update({ accentColor })} />
     </div>
   );
 }

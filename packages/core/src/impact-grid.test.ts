@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { generateImpactGrid, type ImpactGridOptions } from './impact-grid/index.js';
-import { layoutSquares, squareAt } from './impact-grid/layout.js';
-import { clipHalfPlane, ringArea, shatterSquare } from './impact-grid/shatter.js';
+import { layoutCells, squareAt } from './impact-grid/layout.js';
+import { clipHalfPlane, ringArea, shatterCell } from './impact-grid/shatter.js';
 import { concentricFill, hatchConvex } from './impact-grid/hatch.js';
 import { makeRandom } from './lib/rng.js';
 
-const BASE: ImpactGridOptions = { width: 300, height: 400, margin: 20, seed: 7, wobble: 0 };
+const BASE: ImpactGridOptions = { width: 300, height: 400, margin: 20, seed: 7, wobble: 0, inkPath: false };
 
 // A path straight down the page centre, used by the impact tests.
 const CENTRE_PATH = [
@@ -42,9 +42,9 @@ describe('clipHalfPlane / shatter geometry', () => {
     }
   });
 
-  it('shatterSquare emits closed shards and drops sub-pen-width slivers', () => {
+  it('shatterCell emits closed shards and drops sub-pen-width slivers', () => {
     const square = squareAt({ x: 100, y: 100 }, 15, 0);
-    const shards = shatterSquare(
+    const shards = shatterCell(
       square,
       15,
       {
@@ -61,6 +61,7 @@ describe('clipHalfPlane / shatter geometry', () => {
         sweep: 0.3,
         tx: 0,
         ty: 1,
+        channel: 10,
         d: 30,
         penWidth: 1.2,
       },
@@ -123,8 +124,8 @@ describe('generateImpactGrid', () => {
       rotationJitter: 0.1,
       gap: 0.15,
     };
-    const result = generateImpactGrid({ ...BASE, fill: 0, ...grid });
-    const placed = layoutSquares({
+    const result = generateImpactGrid({ ...BASE, fill: 0, cellSize: 260 / 14, ...grid });
+    const placed = layoutCells({
       width: 300,
       height: 400,
       margin: 20,
@@ -159,7 +160,7 @@ describe('generateImpactGrid', () => {
 
   it('frame layout keeps only the border band', () => {
     const depth = 2;
-    const all = layoutSquares({
+    const all = layoutCells({
       width: 300,
       height: 400,
       margin: 20,
@@ -173,7 +174,7 @@ describe('generateImpactGrid', () => {
       gap: 0.15,
       penWidth: 1.2,
     });
-    const band = layoutSquares({
+    const band = layoutCells({
       width: 300,
       height: 400,
       margin: 20,

@@ -1,36 +1,59 @@
 import type { ImpactGridState } from './types';
 
-export type ImpactGridLook = 'breakpoint' | 'rough' | 'rip';
+export type ImpactGridLook = 'breakpoint' | 'mosaic' | 'rough' | 'rip';
 
-/** Named looks spanning the module's range: the ordered crush-in-place
- *  default, the hand-ruled organic grid, and the explosive displacement
- *  field. Each is a state patch — seed, pen/ink, and the drawn path are
- *  never touched. */
+/** Named looks spanning the module's range. Each is a state patch — seed,
+ *  pens/inks, and the drawn trajectory are never touched. */
 export const IMPACT_GRID_LOOKS: Record<
   ImpactGridLook,
   { label: string; state: Partial<ImpactGridState> }
 > = {
   breakpoint: {
-    label: 'Breakpoint',
+    label: 'Breakpoint bars',
     state: {
-      sizeVariation: 0.1,
-      positionJitter: 0.06,
-      rotationJitter: 0.05,
-      gap: 0.12,
+      layout: 'bars',
+      sizeVariation: 0.25,
+      positionJitter: 0.03,
+      rotationJitter: 0.02,
+      gap: 0.1,
       impactStrength: 0,
       shatter: 0.85,
-      scatter: 0.1,
-      debris: 0.15,
-      crush: 0.8,
-      sweep: 0.15,
-      fill: 0.6,
-      fillStyle: 'concentric',
-      wobbleMm: 0.15,
+      scatter: 0.35,
+      debris: 0.25,
+      crush: 0.7,
+      sweep: 0.7,
+      fill: 1,
+      fillStyle: 'texture',
+      inkSplit: 0.35,
+      inkPath: true,
+      wobbleMm: 0,
+    },
+  },
+  mosaic: {
+    label: 'Mosaic',
+    state: {
+      layout: 'grid',
+      sizeVariation: 0.15,
+      positionJitter: 0.03,
+      rotationJitter: 0.02,
+      gap: 0.06,
+      impactStrength: 0,
+      shatter: 0.85,
+      scatter: 0.35,
+      debris: 0.25,
+      crush: 0.7,
+      sweep: 0.7,
+      fill: 1,
+      fillStyle: 'texture',
+      inkSplit: 0.35,
+      inkPath: true,
+      wobbleMm: 0,
     },
   },
   rough: {
     label: 'Rough grid',
     state: {
+      layout: 'grid',
       sizeVariation: 0.35,
       positionJitter: 0.25,
       rotationJitter: 0.3,
@@ -43,12 +66,15 @@ export const IMPACT_GRID_LOOKS: Record<
       sweep: 0.2,
       fill: 0,
       fillStyle: 'none',
+      inkSplit: 0,
+      inkPath: false,
       wobbleMm: 0.25,
     },
   },
   rip: {
     label: 'Rip',
     state: {
+      layout: 'grid',
       sizeVariation: 0.35,
       positionJitter: 0.25,
       rotationJitter: 0.3,
@@ -61,6 +87,8 @@ export const IMPACT_GRID_LOOKS: Record<
       sweep: 0,
       fill: 0.2,
       fillStyle: 'hatch',
+      inkSplit: 0,
+      inkPath: false,
       wobbleMm: 0.25,
     },
   },

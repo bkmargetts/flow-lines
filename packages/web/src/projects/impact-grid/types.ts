@@ -4,18 +4,18 @@ import { randomSeed } from '../../lib/random';
 /**
  * UI state for Impact Grid (mm / 0..1 units). `render.ts` converts it to the
  * core's `ImpactGridOptions` in px. `drawMode` + `maskPath` follow the
- * canvas DrawableState contract — the drawn path (page px) is the impact
- * centreline the grid is struck along.
+ * canvas DrawableState contract — the drawn path (page px) is the trajectory
+ * the mosaic is struck along.
  */
 export interface ImpactGridState {
   /** Last-picked look preset — a label for the picker; the knobs below are
    *  the actual state. */
-  look: 'breakpoint' | 'rough' | 'rip';
+  look: 'breakpoint' | 'mosaic' | 'rough' | 'rip';
   seed: number;
-  layout: 'grid' | 'frame';
+  layout: 'grid' | 'frame' | 'bars';
   frameDepth: number; // cells deep for the frame band
 
-  // Grid
+  // Mosaic
   cellSizeMm: number; // mean cell pitch
   sizeVariation: number; // 0..1 per-cell size jitter
   positionJitter: number; // 0..1 centre jitter
@@ -24,32 +24,34 @@ export interface ImpactGridState {
 
   // Impact
   impactRadiusMm: number; // falloff radius
-  impactStrength: number; // 0..1 push / torque / compression (0 = crush in place)
+  impactStrength: number; // 0..1 radial push (0 = mosaic stands still)
   shatter: number; // 0..1 shatter zone width
-  scatter: number; // 0..1 fragment throw distance
+  scatter: number; // 0..1 sideways cascade spread
   debris: number; // 0..1 pulverised-core dropout
-  crush: number; // 0..1 rubble fineness near the line
-  sweep: number; // 0..1 rubble drift along the stroke's travel
+  crush: number; // 0..1 shard fineness near the line
+  sweep: number; // 0..1 drift along the stroke / channel clearing
 
   // Marks
-  fill: number; // 0..1 fill amount (region-committed)
-  fillStyle: 'none' | 'hatch' | 'concentric';
-  inkPath: boolean; // draw the strike line itself
+  fill: number; // 0..1 fraction of cells filled (region-committed)
+  fillStyle: 'texture' | 'hatch' | 'concentric' | 'none';
+  inkSplit: number; // 0..1 fraction of cells in the accent ink
+  inkPath: boolean; // draw the trajectory + terminal dot
 
   // Pen / finishing
   wobbleMm: number;
   penWidthMm: number;
 
-  // Ink
+  // Inks
   strokeColor: string;
+  accentColor: string;
 
   // Canvas drawing (DrawableState duck-type — drag-to-draw for free)
   drawMode: boolean;
-  maskPath: Point[]; // impact centreline, page px
+  maskPath: Point[]; // trajectory, page px
 }
 
-// Breakpoint-look defaults: a calm near-ordered system, one line crushing
-// what it touches in place, region-committed concentric solids.
+// Breakpoint-look defaults: a dense, near-ordered, fully textured mosaic;
+// the drawn line sweeps its channel clean, crisp pen, two inks.
 export const defaultImpactGridState: ImpactGridState = {
   look: 'breakpoint',
   seed: randomSeed(),
@@ -57,41 +59,44 @@ export const defaultImpactGridState: ImpactGridState = {
   frameDepth: 3,
 
   cellSizeMm: 7,
-  sizeVariation: 0.1,
-  positionJitter: 0.06,
-  rotationJitter: 0.05,
-  gap: 0.12,
+  sizeVariation: 0.15,
+  positionJitter: 0.03,
+  rotationJitter: 0.02,
+  gap: 0.06,
 
   impactRadiusMm: 50,
   impactStrength: 0,
   shatter: 0.85,
-  scatter: 0.1,
-  debris: 0.15,
-  crush: 0.8,
-  sweep: 0.15,
+  scatter: 0.35,
+  debris: 0.25,
+  crush: 0.7,
+  sweep: 0.7,
 
-  fill: 0.6,
-  fillStyle: 'concentric',
-  inkPath: false,
+  fill: 1,
+  fillStyle: 'texture',
+  inkSplit: 0.35,
+  inkPath: true,
 
-  wobbleMm: 0.15,
+  wobbleMm: 0,
   penWidthMm: 0.35,
 
-  strokeColor: '#1f1f1c',
+  strokeColor: '#26282e',
+  accentColor: '#1766d1',
 
   drawMode: false,
   maskPath: [],
 };
 
 /**
- * "Surprise me" genome: a fresh grid character and impact response within the
- * sliders' ranges. Never touches the seed, pen/ink, or the user's drawn
- * impact path.
+ * "Surprise me" genome: a fresh mosaic and impact response within the
+ * sliders' ranges. Never touches the seed, pens/inks, or the user's drawn
+ * trajectory.
  */
 export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridState> {
-  const fillStyles: ImpactGridState['fillStyle'][] = ['none', 'hatch', 'concentric'];
+  const fillStyles: ImpactGridState['fillStyle'][] = ['texture', 'texture', 'hatch', 'concentric', 'none'];
+  const layouts: ImpactGridState['layout'][] = ['grid', 'grid', 'bars', 'frame'];
   return {
-    layout: rng() < 0.75 ? 'grid' : 'frame',
+    layout: layouts[Math.floor(rng() * layouts.length)],
     frameDepth: 1 + Math.floor(rng() * 5),
     cellSizeMm: Number((4 + rng() * 12).toFixed(1)),
     sizeVariation: Number((rng() * 0.7).toFixed(2)),
@@ -104,9 +109,10 @@ export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridSta
     scatter: Number((rng() * 0.7).toFixed(2)),
     debris: Number((rng() * 0.6).toFixed(2)),
     crush: Number((0.2 + rng() * 0.8).toFixed(2)),
-    sweep: Number((rng() * 0.8).toFixed(2)),
-    fill: Number((rng() * 0.9).toFixed(2)),
+    sweep: Number((rng()).toFixed(2)),
+    fill: Number((0.3 + rng() * 0.7).toFixed(2)),
     fillStyle: fillStyles[Math.floor(rng() * fillStyles.length)],
-    inkPath: rng() < 0.25,
+    inkSplit: Number((rng() * 0.6).toFixed(2)),
+    inkPath: rng() < 0.7,
   };
 }

@@ -145,17 +145,26 @@ const SPECS: GenomeSpec[] = [
       crush: [0, 1],
       sweep: [0, 1],
       fill: [0, 1],
+      inkSplit: [0, 1],
     },
     ints: ['frameDepth', 'impactRadiusMm'],
     bools: ['inkPath'],
     enums: {
-      layout: ['grid', 'frame'],
-      fillStyle: ['none', 'hatch', 'concentric'],
+      layout: ['grid', 'frame', 'bars'],
+      fillStyle: ['texture', 'none', 'hatch', 'concentric'],
     },
     // maskPath / drawMode are user data — the drawn strike survives a reroll.
     // `look` is the preset label, not a knob — a reroll leaves it stale by
     // design (same as warp-grid's preset after manual tweaks).
-    forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'strokeColor', 'maskPath', 'drawMode'],
+    forbidden: [
+      'seed',
+      'penWidthMm',
+      'wobbleMm',
+      'strokeColor',
+      'accentColor',
+      'maskPath',
+      'drawMode',
+    ],
   },
   {
     name: 'meander',

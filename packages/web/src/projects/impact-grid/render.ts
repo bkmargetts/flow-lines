@@ -40,6 +40,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
 
     fill: state.fill,
     fillStyle: state.fillStyle,
+    inkSplit: state.inkSplit,
     inkPath: state.inkPath,
     penWidth: state.penWidthMm * mm,
     wobble: state.wobbleMm * mm,
@@ -58,5 +59,12 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     lines,
     strokeColor: state.strokeColor,
     strokeWidthPx: state.penWidthMm * mm,
+    // Two pens: the mosaic's accent regions plot as their own layer, the
+    // trajectory rides with the base ink.
+    layerColors: {
+      ink: state.strokeColor,
+      accent: state.accentColor,
+      path: state.strokeColor,
+    },
   };
 }

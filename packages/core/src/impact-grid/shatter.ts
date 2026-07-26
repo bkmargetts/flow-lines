@@ -46,12 +46,12 @@ function centroidOf(poly: Point[]): Point {
 }
 
 export interface FragmentOptions {
-  /** Falloff at the parent square's centre (0..1). */
+  /** Falloff at the parent cell's centre (0..1). */
   f: number;
-  /** Parent push direction (unit). */
+  /** Radial push direction (unit, away from the path). */
   ux: number;
   uy: number;
-  /** Parent centre displacement — fragments inherit it before scattering. */
+  /** Parent centre displacement — fragments inherit it before drifting. */
   dx: number;
   dy: number;
   radius: number;
@@ -60,39 +60,39 @@ export interface FragmentOptions {
   debris: number;
   /** 0..1 rubble fineness — subdivision depth, scaled up near the line. */
   crush: number;
-  /** 0..1 drift along the line's direction of travel. */
+  /** 0..1 drift along the line's direction of travel; also how hard the
+   *  channel itself is swept clean. */
   sweep: number;
   /** Path tangent (unit, direction of travel) at the nearest point. */
   tx: number;
   ty: number;
+  /** Half-width of the swept-clean channel, px. */
+  channel: number;
   /** Distance from the parent centre to the path, px. */
   d: number;
   penWidth: number;
 }
 
 /**
- * Break one square (already a closed ring in page space, at its final resting
- * pose *before* the parent displacement is applied) into convex fragments and
- * scatter them as debris: 1..3 random interior-biased chords split the square,
- * each shard shrinks a little toward its centroid (gaps open — broken, not
- * just cracked), flies outward along the push direction with jitter, and
- * spins. The innermost shards may be dropped entirely — pulverised.
+ * Break one cell into convex shards and carry them off along the stroke:
+ * 1..N chords split the cell (deeper near the line), then each shard drifts
+ * predominantly ALONG the path's direction of travel — far enough, inside
+ * the channel, to vacate it entirely (the line wipes its path clean, debris
+ * cascades down the flow and piles along the flanks). Shards shear toward
+ * the flow direction; the innermost may be pulverised away.
  */
-export function shatterSquare(
-  square: Point[],
-  half: number,
+export function shatterCell(
+  cell: Point[],
+  extent: number,
   o: FragmentOptions,
   rng: () => number
 ): Point[][] {
-  // Rubble is finest tightest to the line: crush sets the base subdivision
-  // depth and the falloff deepens it, so the band grades from coarse cracked
-  // squares at its edge to fine tumbled rubble on the stroke.
   const cuts = Math.max(1, Math.min(5, 1 + Math.floor(o.crush * (1.5 + 2.5 * o.f) + rng() * 0.5)));
-  let fragments: Point[][] = [square];
-  const centre = centroidOf(square);
+  let fragments: Point[][] = [cell];
+  const centre = centroidOf(cell);
   for (let c = 0; c < cuts; c++) {
-    const px = centre.x + (2 * rng() - 1) * 0.5 * half;
-    const py = centre.y + (2 * rng() - 1) * 0.5 * half;
+    const px = centre.x + (2 * rng() - 1) * 0.5 * extent;
+    const py = centre.y + (2 * rng() - 1) * 0.5 * extent;
     const alpha = rng() * Math.PI;
     const n = { x: -Math.sin(alpha), y: Math.cos(alpha) };
     const next: Point[][] = [];
@@ -106,33 +106,34 @@ export function shatterSquare(
   }
 
   const minArea = (2 * o.penWidth) * (2 * o.penWidth);
-  const shatterRadius = o.radius * (0.2 + 0.5 * o.shatter);
   const out: Point[][] = [];
   for (const frag of fragments) {
     if (ringArea(frag) < minArea) continue;
-    // Pulverised core: the closest shards lose mass entirely.
-    if (o.d < 0.35 * shatterRadius && rng() < o.debris * o.f) continue;
+    // Pulverised: the closest shards lose mass entirely.
+    if (o.d < o.channel && rng() < o.debris * o.f) continue;
     const g = centroidOf(frag);
-    const swing = (2 * rng() - 1) * (30 * Math.PI / 180);
-    const cosS = Math.cos(swing);
-    const sinS = Math.sin(swing);
-    const vx = o.ux * cosS - o.uy * sinS;
-    const vy = o.ux * sinS + o.uy * cosS;
-    const throwDist = o.scatter * 0.4 * o.radius * o.f * o.f * (0.4 + 0.6 * rng());
-    // Sweep drags rubble along the stroke's direction of travel — the line
-    // ploughing through, rather than an outward blast.
-    const sweepDist = o.sweep * 0.25 * o.radius * o.f * o.f * (0.5 + 0.5 * rng());
-    const spin = (2 * rng() - 1) * ((20 + 45 * o.shatter) * Math.PI / 180) * o.f;
+    // Drift along the direction of travel — heavy-tailed so the cascade
+    // spreads: most shards travel a moderate way, a few fly far.
+    const r1 = rng();
+    let drift = o.sweep * o.radius * Math.pow(o.f, 1.5) * (0.2 + 0.8 * r1 * r1);
+    // Channel clearing: shards born inside the channel must at least reach
+    // its edge, or the stroke wouldn't read as swept clean.
+    if (o.d < o.channel) drift += o.sweep * (o.channel - o.d) * (1.5 + rng());
+    // A light radial component spreads the cascade off the centreline.
+    const spread = o.scatter * 0.3 * o.radius * o.f * o.f * rng();
+    const gx = g.x + o.dx + drift * o.tx + spread * o.ux;
+    const gy = g.y + o.dy + drift * o.ty + spread * o.uy;
+    // Shear toward the flow: shards leave aligned with the sweep, plus spin.
+    const flowAngle = Math.atan2(o.ty, o.tx);
+    const shearTo = ((flowAngle % Math.PI) + Math.PI) % Math.PI;
+    const spin =
+      (shearTo - Math.PI / 2) * 0.35 * o.sweep * o.f +
+      (2 * rng() - 1) * ((15 + 40 * o.shatter) * Math.PI / 180) * o.f;
     const cosR = Math.cos(spin);
     const sinR = Math.sin(spin);
-    // Finer separation gaps near the line, wider cracks at the band edge.
     const shrink = 0.95 - 0.1 * o.f;
-    const gx = g.x + o.dx + throwDist * vx + sweepDist * o.tx;
-    const gy = g.y + o.dy + throwDist * vy + sweepDist * o.ty;
     out.push(
       frag.map((p) => {
-        // Shrink toward the centroid, spin about it, then translate to the
-        // scattered position.
         const lx = (p.x - g.x) * shrink;
         const ly = (p.y - g.y) * shrink;
         return { x: gx + lx * cosR - ly * sinR, y: gy + lx * sinR + ly * cosR };
