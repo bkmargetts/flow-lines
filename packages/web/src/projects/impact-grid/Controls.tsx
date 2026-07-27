@@ -139,6 +139,7 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
           <PresetPicker label="Ink mode" labels={INK_MODE_LABELS} value={state.inkMode} onChange={(inkMode) => update({ inkMode })} />
           <Slider label="Ink balance" value={state.inkBalance} min={0} max={1} step={0.01} onChange={(v) => update({ inkBalance: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Toggle label="Ink the line" checked={state.inkPath} onChange={(inkPath) => update({ inkPath })} />
+          <Toggle label="Hide covered lines" checked={state.occlude} onChange={(occlude) => update({ occlude })} />
           <Slider label="Wobble" value={state.wobbleMm} min={0} max={1} step={0.01} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
         </AdvGroup>
       </AdvancedSection>

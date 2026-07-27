@@ -51,6 +51,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     inkBalance: state.inkBalance,
     inkMode: state.inkMode,
     inkPath: state.inkPath,
+    occlude: state.occlude,
     penWidth: state.penWidthMm * mm,
     wobble: state.wobbleMm * mm,
   };

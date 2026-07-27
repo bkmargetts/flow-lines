@@ -11,7 +11,15 @@ import { preparePath } from './impact.js';
 import { cellDamage } from './impact.js';
 import { makeDrift, warpPolyline } from './drift.js';
 import { makeCracks, type CrackNetwork } from './cracks.js';
-import { shatterCell } from './shatter.js';
+import { channelSplit, shatterCell } from './shatter.js';
+import {
+  boundsOf,
+  clipLineOutside,
+  convexHull,
+  makeOccluder,
+  type Bounds,
+  type Occluder,
+} from './occlude.js';
 import { concentricFill, hatchConvex } from './hatch.js';
 import { TEXTURES, textureFill } from './textures.js';
 
@@ -117,6 +125,10 @@ export interface ImpactGridOptions {
   inkMode?: 'regions' | 'damage';
   /** Ink the trajectory itself as a thin stroke with a terminal dot. */
   inkPath?: boolean;
+  /** Hidden-line removal (default true): displaced material hides the lines
+   *  beneath it, with a paper hold-off. Off ⇒ overlaps overprint — the
+   *  multi-pen riso look. */
+  occlude?: boolean;
   penWidth?: number;
   wobble?: number;
   /** Reorder strokes to cut pen-up travel (default true) */
@@ -151,6 +163,7 @@ const DEFAULTS: Required<
   inkBalance: 0.5,
   inkMode: 'regions',
   inkPath: true,
+  occlude: true,
   penWidth: 1.2,
   wobble: 0,
   optimize: true,
@@ -204,6 +217,20 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
   const push = (points: Point[], layer: string) => {
     lines.push({ points: o.wobble > 0 ? densify(points, wobbleStep) : points, pen: 'fine', layer });
   };
+
+  // Every drawn shape is buffered as a piece so displaced material can
+  // OCCLUDE what it comes to rest over: shards land on top of the pane,
+  // drifted cells slide over their static neighbours, and the lines
+  // beneath stop at the shape above (with a paper hold-off) instead of
+  // printing through it.
+  interface Piece {
+    z: number;
+    layer: string;
+    occ: Occluder | null;
+    bounds: Bounds;
+    lines: Point[][];
+  }
+  const pieces: Piece[] = [];
 
   for (const cell of cells) {
     const extent = Math.max(cell.hx, cell.hy);
@@ -296,9 +323,28 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     // `warped` geometry is filled at rest, then outline and spans are bent
     // through the drift field together — fills must be computed on the
     // convex resting shape, never on the warped (possibly concave) one.
-    const emit = (poly: Point[], filled: boolean, warped = false) => {
-      push(warped ? bend(poly) : poly, ink);
-      if (filled) for (const span of fillPoly(poly)) push(warped ? bend(span) : span, ink);
+    // `occludes` marks material that MOVED, so it hides what it lies over.
+    const addPiece = (
+      poly: Point[],
+      filled: boolean,
+      opts: { warped?: boolean; z: number; occludes: boolean }
+    ) => {
+      const drawn = opts.warped ? bend(poly) : poly;
+      if (drawn.length < 2) return;
+      const pls: Point[][] = [drawn];
+      if (filled) {
+        for (const span of fillPoly(poly)) {
+          const s = opts.warped ? bend(span) : span;
+          if (s.length >= 2) pls.push(s);
+        }
+      }
+      pieces.push({
+        z: opts.z,
+        layer: ink,
+        occ: opts.occludes ? makeOccluder(opts.warped ? convexHull(drawn) : drawn) : null,
+        bounds: boundsOf(drawn),
+        lines: pls,
+      });
     };
 
     if (dmg && (dmg.zone === 'dust' || dmg.zone === 'cascade')) {
@@ -328,86 +374,202 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
         },
         impactRng
       );
-      for (const shard of shards) emit(shard, regionFilled);
-    } else if (dmg && dmg.zone === 'cracked' && cracks) {
-      // Cracked in place: the shared spiderweb facets this cell; facets stay
-      // lodged — hairline gaps and a whisper of rotation, no displacement
-      // beyond what the drift field drags through the whole pane.
-      for (const facet of cracks.facet(resting)) {
-        // The occasional facet falls out of the cracked pane — a hole in
-        // the spiderweb, very glass.
-        if (impactRng() < 0.5 * o.debris * D) continue;
-        const n = facet.length - 1;
-        let gx = 0;
-        let gy = 0;
-        for (let i = 0; i < n; i++) {
-          gx += facet[i].x;
-          gy += facet[i].y;
-        }
-        gx /= n;
-        gy /= n;
-        const rot = (2 * impactRng() - 1) * 0.05 * D;
-        const cos = Math.cos(rot);
-        const sin = Math.sin(rot);
-        emit(
-          facet.map((p) => {
-            const lx = (p.x - gx) * 0.985;
-            const ly = (p.y - gy) * 0.985;
-            return { x: gx + lx * cos - ly * sin, y: gy + lx * sin + ly * cos };
-          }),
-          regionFilled,
-          true
-        );
-      }
+      // Flying material lands ON TOP of the pane: always above whole cells.
+      for (const shard of shards) addPiece(shard, regionFilled, { z: 1 + D, occludes: true });
     } else {
-      // Intact — optionally leaned on by the strike (impactStrength > 0)
-      // and settled toward the flow where the drift field shears past; the
-      // displacement itself comes from the point-wise warp in `emit`.
-      let dx = 0;
-      let dy = 0;
-      let dRot = 0;
-      let scale = 1;
-      if (dmg && o.impactStrength > 0 && dmg.hit.d < radius) {
-        const f = smoothstep(clamp01(1 - dmg.hit.d / radius));
-        const d = dmg.hit.d;
-        const ux = d > 1e-6 ? (cell.centre.x - dmg.hit.qx) / d : dmg.rx;
-        const uy = d > 1e-6 ? (cell.centre.y - dmg.hit.qy) / d : dmg.ry;
-        const pushDist = o.impactStrength * 0.5 * radius * f * f;
-        dx += pushDist * ux;
-        dy += pushDist * uy;
-        dRot +=
-          o.impactStrength *
-          (dmg.hit.side * (35 * Math.PI / 180) + (2 * impactRng() - 1) * (10 * Math.PI / 180)) *
-          f;
-        scale = 1 - 0.35 * o.impactStrength * f;
+      // A surviving cell the stroke touches is SLICED by it first: clean
+      // cuts along the local travel direction at both channel rims, the
+      // in-channel strip nudged out to the flanks — the line cuts through,
+      // it never drapes a shape around itself.
+      let bodies: Point[][] = [resting];
+      // shatter 0 = the pane refuses to break at all — no slicing either.
+      if (dmg && o.shatter > 0 && dmg.hit.d < channel + Math.hypot(cell.hx, cell.hy)) {
+        const nHat = { x: -dmg.hit.ty, y: dmg.hit.tx };
+        const q = { x: dmg.hit.qx, y: dmg.hit.qy };
+        const split = channelSplit(resting, q, nHat, channel);
+        if (split.strip.length > 0) {
+          bodies = split.outside;
+          for (const strip of split.strip) {
+            const n = strip.length - 1;
+            let gx = 0;
+            let gy = 0;
+            for (let i = 0; i < n; i++) {
+              gx += strip[i].x;
+              gy += strip[i].y;
+            }
+            gx /= n;
+            gy /= n;
+            const sFrag = nHat.x * (gx - q.x) + nHat.y * (gy - q.y);
+            const sideF = Math.abs(sFrag) > 1e-6 ? Math.sign(sFrag) : dmg.hit.side;
+            const shift =
+              (channel - Math.abs(sFrag)) * (1.1 + 0.5 * impactRng()) + o.penWidth;
+            const rot = (2 * impactRng() - 1) * 0.15;
+            const cos = Math.cos(rot);
+            const sin = Math.sin(rot);
+            addPiece(
+              strip.map((p) => {
+                const lx = p.x - gx;
+                const ly = p.y - gy;
+                return {
+                  x: gx + nHat.x * sideF * shift + lx * cos - ly * sin,
+                  y: gy + nHat.y * sideF * shift + lx * sin + ly * cos,
+                };
+              }),
+              regionFilled,
+              { z: D + 0.4, occludes: true }
+            );
+          }
+        }
       }
-      if (anchor && anchor.f > 0) {
-        // Sheared material settles toward the travel direction.
-        let toFlow = Math.atan2(anchor.ty, anchor.tx) - cell.rotation;
-        while (toFlow > Math.PI / 2) toFlow -= Math.PI;
-        while (toFlow < -Math.PI / 2) toFlow += Math.PI;
-        dRot += toFlow * 0.3 * anchor.f + (2 * impactRng() - 1) * 0.08 * anchor.f;
-      }
-      if (dx === 0 && dy === 0 && dRot === 0 && scale === 1) {
-        emit(resting, regionFilled, true);
+      const moving = anchor !== null && anchor.f > 0.02;
+      if (dmg && dmg.zone === 'cracked' && cracks) {
+        // Cracked in place: the shared spiderweb facets this cell; facets
+        // stay lodged — hairline gaps and a whisper of rotation, no
+        // displacement beyond what the drift field drags through the pane.
+        for (const body of bodies) {
+          const facetLines: Point[][] = [];
+          for (const facet of cracks.facet(body)) {
+            // The occasional facet falls out of the cracked pane — a hole
+            // in the spiderweb, very glass.
+            if (impactRng() < 0.5 * o.debris * D) continue;
+            const n = facet.length - 1;
+            let gx = 0;
+            let gy = 0;
+            for (let i = 0; i < n; i++) {
+              gx += facet[i].x;
+              gy += facet[i].y;
+            }
+            gx /= n;
+            gy /= n;
+            const rot = (2 * impactRng() - 1) * 0.05 * D;
+            const cos = Math.cos(rot);
+            const sin = Math.sin(rot);
+            const moved = facet.map((p) => {
+              const lx = (p.x - gx) * 0.985;
+              const ly = (p.y - gy) * 0.985;
+              return { x: gx + lx * cos - ly * sin, y: gy + lx * sin + ly * cos };
+            });
+            facetLines.push(bend(moved));
+            if (regionFilled) for (const span of fillPoly(moved)) facetLines.push(bend(span));
+          }
+          if (facetLines.length === 0) continue;
+          // One piece per body: the facets share the pane's fate, and the
+          // body's hull is the occluder — cracks inside it stay visible.
+          const outline = bend(body);
+          pieces.push({
+            z: D,
+            layer: ink,
+            occ: moving ? makeOccluder(convexHull(outline)) : null,
+            bounds: boundsOf(outline),
+            lines: facetLines,
+          });
+        }
       } else {
+        // Intact — optionally leaned on by the strike (impactStrength > 0)
+        // and settled toward the flow where the drift field shears past;
+        // the displacement itself comes from the point-wise warp.
+        let dx = 0;
+        let dy = 0;
+        let dRot = 0;
+        let scale = 1;
+        if (dmg && o.impactStrength > 0 && dmg.hit.d < radius) {
+          const f = smoothstep(clamp01(1 - dmg.hit.d / radius));
+          const d = dmg.hit.d;
+          const ux = d > 1e-6 ? (cell.centre.x - dmg.hit.qx) / d : dmg.rx;
+          const uy = d > 1e-6 ? (cell.centre.y - dmg.hit.qy) / d : dmg.ry;
+          const pushDist = o.impactStrength * 0.5 * radius * f * f;
+          dx += pushDist * ux;
+          dy += pushDist * uy;
+          dRot +=
+            o.impactStrength *
+            (dmg.hit.side * (35 * Math.PI / 180) + (2 * impactRng() - 1) * (10 * Math.PI / 180)) *
+            f;
+          scale = 1 - 0.35 * o.impactStrength * f;
+        }
+        if (anchor && anchor.f > 0) {
+          // Sheared material settles toward the travel direction.
+          let toFlow = Math.atan2(anchor.ty, anchor.tx) - cell.rotation;
+          while (toFlow > Math.PI / 2) toFlow -= Math.PI;
+          while (toFlow < -Math.PI / 2) toFlow += Math.PI;
+          dRot += toFlow * 0.3 * anchor.f + (2 * impactRng() - 1) * 0.08 * anchor.f;
+        }
+        const rigid = dx !== 0 || dy !== 0 || dRot !== 0 || scale !== 1;
         const cos = Math.cos(dRot);
         const sin = Math.sin(dRot);
-        emit(
-          resting.map((p) => {
-            const lx = (p.x - cell.centre.x) * scale;
-            const ly = (p.y - cell.centre.y) * scale;
-            return {
-              x: cell.centre.x + dx + lx * cos - ly * sin,
-              y: cell.centre.y + dy + lx * sin + ly * cos,
-            };
-          }),
-          regionFilled,
-          true
-        );
+        for (const body of bodies) {
+          const moved = rigid
+            ? body.map((p) => {
+                const lx = (p.x - cell.centre.x) * scale;
+                const ly = (p.y - cell.centre.y) * scale;
+                return {
+                  x: cell.centre.x + dx + lx * cos - ly * sin,
+                  y: cell.centre.y + dy + lx * sin + ly * cos,
+                };
+              })
+            : body;
+          addPiece(moved, regionFilled, {
+            warped: true,
+            z: D,
+            occludes: moving || rigid,
+          });
+        }
       }
     }
   }
+
+  // Hidden-line removal: every piece's lines are clipped against every
+  // STRICTLY-higher-z occluder overlapping it (with a paper hold-off), so
+  // landed shards and drifted cells read as sitting in front of the pane
+  // instead of printing through it. Equal-z pieces (shards of one cell)
+  // overlap freely, like real debris ink.
+  const occluders = o.occlude ? pieces.filter((p) => p.occ !== null) : [];
+  if (occluders.length > 0) {
+    const outset = 0.7 * o.penWidth;
+    const gridStep = Math.max(48, cellSize * 2);
+    const grid = new Map<string, number[]>();
+    occluders.forEach((oc, i) => {
+      const b = oc.occ!.bounds;
+      for (let ix = Math.floor((b.x0 - outset) / gridStep); ix <= Math.floor((b.x1 + outset) / gridStep); ix++) {
+        for (let iy = Math.floor((b.y0 - outset) / gridStep); iy <= Math.floor((b.y1 + outset) / gridStep); iy++) {
+          const key = ix + ':' + iy;
+          let bucket = grid.get(key);
+          if (!bucket) {
+            bucket = [];
+            grid.set(key, bucket);
+          }
+          bucket.push(i);
+        }
+      }
+    });
+    const overlaps = (a: Bounds, b: Bounds) =>
+      a.x0 <= b.x1 + outset && a.x1 >= b.x0 - outset && a.y0 <= b.y1 + outset && a.y1 >= b.y0 - outset;
+    for (const piece of pieces) {
+      const b = piece.bounds;
+      const seen = new Set<number>();
+      let ls = piece.lines;
+      for (let ix = Math.floor(b.x0 / gridStep); ix <= Math.floor(b.x1 / gridStep) && ls.length > 0; ix++) {
+        for (let iy = Math.floor(b.y0 / gridStep); iy <= Math.floor(b.y1 / gridStep) && ls.length > 0; iy++) {
+          const bucket = grid.get(ix + ':' + iy);
+          if (!bucket) continue;
+          for (const i of bucket) {
+            if (seen.has(i)) continue;
+            seen.add(i);
+            const oc = occluders[i];
+            if (oc === piece || oc.z <= piece.z || !overlaps(oc.occ!.bounds, b)) continue;
+            const next: Point[][] = [];
+            for (const l of ls) {
+              if (overlaps(oc.occ!.bounds, boundsOf(l))) next.push(...clipLineOutside(l, oc.occ!, outset));
+              else next.push(l);
+            }
+            ls = next;
+            if (ls.length === 0) break;
+          }
+        }
+      }
+      piece.lines = ls;
+    }
+  }
+  for (const piece of pieces) for (const l of piece.lines) push(l, piece.layer);
 
   if (o.inkPath && field) {
     const stroke = smoothPolyline(field.points, 2);

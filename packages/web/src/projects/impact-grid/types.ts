@@ -45,6 +45,7 @@ export interface ImpactGridState {
   inkBalance: number; // 0..1 swath skew: 0.5 = even split across the pens
   inkMode: 'regions' | 'damage'; // swaths, or inks ordered by destruction
   inkPath: boolean; // draw the trajectory + terminal dot
+  occlude: boolean; // displaced material hides lines beneath (off = overprint)
 
   // Pen / finishing
   wobbleMm: number;
@@ -94,6 +95,7 @@ export const defaultImpactGridState: ImpactGridState = {
   inkBalance: 0.5,
   inkMode: 'regions',
   inkPath: true,
+  occlude: true,
 
   wobbleMm: 0,
   penWidthMm: 0.35,

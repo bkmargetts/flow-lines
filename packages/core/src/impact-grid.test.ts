@@ -301,6 +301,7 @@ describe('generateImpactGrid', () => {
       fill: 0,
       paneStress: 0,
       drift: 0,
+      occlude: false,
       impactStrength: 0.7,
       impactRadius: radius,
       positionJitter: 0,
@@ -431,7 +432,9 @@ describe('generateImpactGrid', () => {
     const common = { ...BASE, impactPath: CENTRE_PATH, optimize: false };
     const bare = generateImpactGrid({ ...common, fill: 0 });
     for (const line of bare.lines) {
-      expect(line.points.length).toBeGreaterThanOrEqual(4);
+      // Occlusion may open a ring where a landed shard hides part of it —
+      // every stroke must still be drawable.
+      expect(line.points.length).toBeGreaterThanOrEqual(2);
     }
     const toned = generateImpactGrid({ ...common, fill: 0.6 });
     expect(toned.lines.length).toBeGreaterThan(bare.lines.length);
