@@ -103,10 +103,10 @@ describe('clipHalfPlane / shatter geometry', () => {
       makeRandom(9)
     );
     expect(shards.length).toBeGreaterThan(1);
-    for (const shard of shards) {
-      expect(shard.length).toBeGreaterThanOrEqual(4);
-      expect(shard[0]).toEqual(shard[shard.length - 1]);
-      expect(ringArea(shard)).toBeGreaterThan((2 * 1.2) * (2 * 1.2) * 0.8);
+    for (const { ring } of shards) {
+      expect(ring.length).toBeGreaterThanOrEqual(4);
+      expect(ring[0]).toEqual(ring[ring.length - 1]);
+      expect(ringArea(ring)).toBeGreaterThan((2 * 1.2) * (2 * 1.2) * 0.8);
     }
   });
 

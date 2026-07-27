@@ -11,7 +11,7 @@ import { preparePath } from './impact.js';
 import { cellDamage } from './impact.js';
 import { applyRigid, makeDrift, rigidFit } from './drift.js';
 import { makeCracks, type CrackNetwork } from './cracks.js';
-import { channelSplit, clipHalfPlane, shatterCell } from './shatter.js';
+import { channelSplit, clipHalfPlane, ringArea, shatterCell } from './shatter.js';
 import {
   boundsOf,
   clipLineOutside,
@@ -302,8 +302,36 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     const D = dmg?.D ?? 0;
     const fillPoly = (poly: Point[], rotOffset = 0): Point[][] => {
       switch (o.fillStyle) {
-        case 'texture':
-          return textureFill(poly, texture, fillSpacing, o.penWidth, cellRng);
+        case 'texture': {
+          if (rotOffset === 0) return textureFill(poly, texture, fillSpacing, o.penWidth, cellRng);
+          // The pattern is ON the glass: a spun plate carries its fill
+          // rotated with it — fill in the plate's frame, rotate back. This
+          // is also what keeps a landed shard legible on top of a
+          // same-texture neighbour instead of camouflaging into it.
+          const n = poly.length - 1;
+          let gx = 0;
+          let gy = 0;
+          for (let i = 0; i < n; i++) {
+            gx += poly[i].x;
+            gy += poly[i].y;
+          }
+          gx /= n;
+          gy /= n;
+          const cosB = Math.cos(-rotOffset);
+          const sinB = Math.sin(-rotOffset);
+          const local = poly.map((p) => {
+            const lx = p.x - gx;
+            const ly = p.y - gy;
+            return { x: gx + lx * cosB - ly * sinB, y: gy + lx * sinB + ly * cosB };
+          });
+          return textureFill(local, texture, fillSpacing, o.penWidth, cellRng).map((span) =>
+            span.map((p) => {
+              const lx = p.x - gx;
+              const ly = p.y - gy;
+              return { x: gx + lx * cosB + ly * sinB, y: gy - lx * sinB + ly * cosB };
+            })
+          );
+        }
         case 'hatch':
           return hatchConvex(
             poly,
@@ -320,18 +348,47 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     // Pieces are FINAL rigid geometry — convex rings — so the fill is
     // computed on the ring as drawn and the ring itself is the occluder.
     // `occludes` marks material that MOVED, so it hides what it lies over.
+    // z is banded by HOW the material moved (shards over strips over
+    // plates, farther-travelled plates over near-static ones) with a tiny
+    // per-piece epsilon so every overlapping pair is strictly ordered —
+    // near-tie damage must never decide visibility by luck. Specks are too
+    // small to occlude: as occluders they'd just pinhole the fills below.
     const addPiece = (
       poly: Point[],
       filled: boolean,
       opts: { z: number; occludes: boolean; rotOffset?: number }
     ) => {
       if (poly.length < 4) return;
+      const area = ringArea(poly);
+      let maxEdge = 0;
+      for (let i = 0; i < poly.length - 1; i++) {
+        const e = Math.hypot(poly[i + 1].x - poly[i].x, poly[i + 1].y - poly[i].y);
+        if (e > maxEdge) maxEdge = e;
+      }
+      // Degenerate slivers — long but thinner than the pen — would print as
+      // stray scratch lines across whatever they landed on (their fill is
+      // empty and they're too small to occlude). A plotter can't draw a
+      // shape thinner than its pen; deliberate specks stay (short edges).
+      if (maxEdge > 6 * o.penWidth && area / maxEdge < 0.9 * o.penWidth) return;
       const pls: Point[][] = [poly];
       if (filled) for (const span of fillPoly(poly, opts.rotOffset ?? 0)) pls.push(span);
+      // Same fate for any long, elongated shape too thin to carry a single
+      // fill span: an empty outline slashed across the material below reads
+      // as a scratch, not a shard.
+      if (
+        filled &&
+        pls.length === 1 &&
+        maxEdge > 8 * o.penWidth &&
+        area < 0.2 * maxEdge * maxEdge
+      ) {
+        return;
+      }
+      const occludes =
+        opts.occludes && area > 2.5 * o.penWidth * (2.5 * o.penWidth);
       pieces.push({
-        z: opts.z,
+        z: opts.z + pieces.length * 1e-6,
         layer: ink,
-        occ: opts.occludes ? makeOccluder(poly) : null,
+        occ: occludes ? makeOccluder(poly) : null,
         bounds: boundsOf(poly),
         lines: pls,
       });
@@ -365,7 +422,9 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
         impactRng
       );
       // Flying material lands ON TOP of the pane: always above whole cells.
-      for (const shard of shards) addPiece(shard, regionFilled, { z: 1 + D, occludes: true });
+      for (const shard of shards) {
+        addPiece(shard.ring, regionFilled, { z: 5 + D, occludes: true, rotOffset: shard.rot });
+      }
     } else {
       // A surviving cell the stroke touches is SLICED by it first: clean
       // cuts along the local travel direction at both channel rims, the
@@ -406,7 +465,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
                 };
               }),
               regionFilled,
-              { z: D + 0.4, occludes: true }
+              { z: 4 + D, occludes: true, rotOffset: rot }
             );
           }
         }
@@ -440,9 +499,14 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
             });
             const fit = nearDrift ? rigidFit(seated, driftField!) : null;
             const moved = fit ? seated.map((p) => applyRigid(fit, p)) : seated;
+            // Moved material always sits in a band ABOVE the static pane —
+            // a plate that slid onto a neighbour must beat it regardless of
+            // their damage — and farther-travelled stacks higher.
+            const disp = fit ? Math.hypot(fit.dx, fit.dy) : 0;
+            const moving = disp > 0.6 * o.penWidth;
             addPiece(moved, regionFilled, {
-              z: D,
-              occludes: (fit?.f ?? 0) > 0.02,
+              z: moving ? 1.5 + 0.5 * D + 0.9 * clamp01(disp / (0.5 * radius)) : D,
+              occludes: moving,
               rotOffset: rot + (fit ? Math.atan2(fit.sin, fit.cos) : 0),
             });
           }
@@ -477,7 +541,11 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
         const ride = (ring: Point[], depth: number): void => {
           const fit = nearDrift ? rigidFit(ring, driftField!) : null;
           if (!fit) {
-            addPiece(ring, regionFilled, { z: D, occludes: rigid, rotOffset: dRot });
+            addPiece(ring, regionFilled, {
+              z: rigid ? 1.5 + 0.5 * D : D,
+              occludes: rigid,
+              rotOffset: dRot,
+            });
             return;
           }
           const n = ring.length - 1;
@@ -513,9 +581,14 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           const jitter = depth > 0 ? (2 * impactRng() - 1) * 0.06 : 0;
           const theta = Math.atan2(fit.sin, fit.cos) + jitter;
           const spun = { ...fit, cos: Math.cos(theta), sin: Math.sin(theta) };
+          // Moved material always sits in a band ABOVE the static pane — a
+          // plate that slid onto a neighbour must beat it regardless of
+          // their damage — and farther-travelled stacks higher.
+          const disp = Math.hypot(fit.dx, fit.dy);
+          const moving = rigid || depth > 0 || disp > 0.6 * o.penWidth;
           addPiece(ring.map((p) => applyRigid(spun, p)), regionFilled, {
-            z: D,
-            occludes: rigid || fit.f > 0.02 || depth > 0,
+            z: moving ? 1.5 + 0.5 * D + 0.9 * clamp01(disp / (0.5 * radius)) : D,
+            occludes: moving,
             rotOffset: dRot + theta,
           });
         };
@@ -537,13 +610,16 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
   }
 
   // Hidden-line removal: every piece's lines are clipped against every
-  // STRICTLY-higher-z occluder overlapping it (with a paper hold-off), so
-  // landed shards and drifted cells read as sitting in front of the pane
-  // instead of printing through it. Equal-z pieces (shards of one cell)
-  // overlap freely, like real debris ink.
+  // higher-z occluder overlapping it (with a paper hold-off), so landed
+  // shards and drifted cells read as sitting in front of the pane instead
+  // of printing through it. The per-piece z epsilon makes every pair
+  // strictly ordered — any two overlapping pieces resolve one way.
   const occluders = o.occlude ? pieces.filter((p) => p.occ !== null) : [];
   if (occluders.length > 0) {
-    const outset = 0.7 * o.penWidth;
+    // Wide enough to READ as reserved paper: with a sub-pen gap, two
+    // stacked plates sharing a fill direction fuse into one mass and the
+    // upper plate's edges read as stray scratch lines across it.
+    const outset = 2 * o.penWidth;
     const gridStep = Math.max(48, cellSize * 2);
     const grid = new Map<string, number[]>();
     occluders.forEach((oc, i) => {

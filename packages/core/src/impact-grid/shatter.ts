@@ -110,14 +110,16 @@ export interface FragmentOptions {
  * predominantly ALONG the path's direction of travel — far enough, inside
  * the channel, to vacate it entirely (the line wipes its path clean, debris
  * cascades down the flow and piles along the flanks). Shards shear toward
- * the flow direction; the innermost may be pulverised away.
+ * the flow direction; the innermost may be pulverised away. Each shard
+ * reports its spin so the renderer can rotate the fill pattern with it —
+ * the pattern is on the glass.
  */
 export function shatterCell(
   cell: Point[],
   extent: number,
   o: FragmentOptions,
   rng: () => number
-): Point[][] {
+): { ring: Point[]; rot: number }[] {
   const cuts = Math.max(
     1,
     Math.min(7, 1 + (o.dust ? 2 : 0) + Math.floor(o.crush * (1.5 + 2.5 * o.f) + rng() * 0.5))
@@ -172,7 +174,7 @@ export function shatterCell(
     ? (1.2 * o.penWidth) * (1.2 * o.penWidth)
     : (2 * o.penWidth) * (2 * o.penWidth);
   const debris = o.dust ? Math.min(1, o.debris + 0.35) : o.debris;
-  const out: Point[][] = [];
+  const out: { ring: Point[]; rot: number }[] = [];
   for (const frag of fragments) {
     if (ringArea(frag) < minArea) continue;
     const g = centroidOf(frag);
@@ -196,12 +198,15 @@ export function shatterCell(
         const sy = g.y + o.ty * along + o.tx * aside;
         const r = o.penWidth * (0.5 + 0.6 * rng());
         const a0 = rng() * Math.PI * 2;
-        out.push([
-          { x: sx + r * Math.cos(a0), y: sy + r * Math.sin(a0) },
-          { x: sx + r * Math.cos(a0 + 2.3), y: sy + r * Math.sin(a0 + 2.3) },
-          { x: sx + r * Math.cos(a0 + 4.4), y: sy + r * Math.sin(a0 + 4.4) },
-          { x: sx + r * Math.cos(a0), y: sy + r * Math.sin(a0) },
-        ]);
+        out.push({
+          ring: [
+            { x: sx + r * Math.cos(a0), y: sy + r * Math.sin(a0) },
+            { x: sx + r * Math.cos(a0 + 2.3), y: sy + r * Math.sin(a0 + 2.3) },
+            { x: sx + r * Math.cos(a0 + 4.4), y: sy + r * Math.sin(a0 + 4.4) },
+            { x: sx + r * Math.cos(a0), y: sy + r * Math.sin(a0) },
+          ],
+          rot: 0,
+        });
       }
       continue;
     }
@@ -235,8 +240,8 @@ export function shatterCell(
     const streak = dFrag < o.radius * 0.8 ? o.sweep * o.f : 0;
     const et = 1 + 0.35 * streak;
     const en = 1 - 0.22 * streak;
-    out.push(
-      frag.map((p) => {
+    out.push({
+      ring: frag.map((p) => {
         const lx = (p.x - g.x) * shrink;
         const ly = (p.y - g.y) * shrink;
         const tc = (lx * o.tx + ly * o.ty) * et;
@@ -244,8 +249,9 @@ export function shatterCell(
         const sx = tc * o.tx - nc * o.ty;
         const sy = tc * o.ty + nc * o.tx;
         return { x: gx + sx * cosR - sy * sinR, y: gy + sx * sinR + sy * cosR };
-      })
-    );
+      }),
+      rot: spin,
+    });
   }
   return out;
 }
