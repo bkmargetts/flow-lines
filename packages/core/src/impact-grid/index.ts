@@ -9,6 +9,7 @@ import { smoothPolyline } from '../lib/polyline.js';
 import { layoutCells, makeRegion, rectAt, type RegionKind } from './layout.js';
 import { preparePath } from './impact.js';
 import { cellDamage } from './impact.js';
+import { makeDrift, warpPolyline } from './drift.js';
 import { makeCracks, type CrackNetwork } from './cracks.js';
 import { shatterCell } from './shatter.js';
 import { concentricFill, hatchConvex } from './hatch.js';
@@ -71,6 +72,14 @@ export interface ImpactGridOptions {
   paneStress?: number;
   /** 0..1 overall impact violence, scaling the gesture's speed. */
   energy?: number;
+  /** 0..1 how concentrated the carve is at the strike: 1 keeps destruction
+   *  in one crater around the epicentre, 0 lets the whole trajectory sweep
+   *  its channel end to end (the reference plates). */
+  focus?: number;
+  /** 0..1 bulk advection: how far the stroke drags the surrounding material
+   *  along its direction of travel — intact cells ride a smooth shared
+   *  field (laminar drifts, bending panels), not per-cell scatter. */
+  drift?: number;
   /** 0..1 radial push / torque of intact cells near the channel (0 = the
    *  pane stands still outside its damage zones). */
   impactStrength?: number;
@@ -89,6 +98,10 @@ export interface ImpactGridOptions {
   // Marks
   /** 0..1 fraction of cells carrying fill marks (region-committed). */
   fill?: number;
+  /** 0..1 tonal spread of the fills: 0 draws every cell at one pitch, 1
+   *  commits regions to tiers from near-solid dark to sparse near-paper —
+   *  the deliberate value design of the reference plates. */
+  toneRange?: number;
   /** The fill vocabulary: 'texture' draws each cell in one of eight fill
    *  patterns; 'hatch' / 'concentric' are single-style; 'none' outlines. */
   fillStyle?: 'texture' | 'hatch' | 'concentric' | 'none';
@@ -123,6 +136,8 @@ const DEFAULTS: Required<
   granularity: 0.6,
   paneStress: 0.6,
   energy: 0.6,
+  focus: 0.35,
+  drift: 0.55,
   impactStrength: 0,
   shatter: 0.8,
   scatter: 0.3,
@@ -130,6 +145,7 @@ const DEFAULTS: Required<
   crush: 0.7,
   sweep: 0.7,
   fill: 1,
+  toneRange: 0.65,
   fillStyle: 'texture',
   inks: 2,
   inkBalance: 0.5,
@@ -175,6 +191,11 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     : 0;
   const cracks: CrackNetwork | null =
     epi && o.paneStress > 0 ? makeCracks(epi, reach, region, seed) : null;
+  const driftField =
+    field && o.drift > 0
+      ? makeDrift(field, radius, { drift: o.drift, energy: o.energy, seed: subSeed(seed, 5) })
+      : null;
+  const warpStep = Math.max(2.5, o.penWidth * 2.5);
 
   const fillNoise = createNoise(subSeed(seed, 2));
   const inkNoise = createNoise(subSeed(seed, 4));
@@ -203,9 +224,23 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           reach,
           o.energy,
           o.paneStress,
-          o.shatter
+          o.shatter,
+          o.focus
         )
       : null;
+    const resting = cell.ring ?? rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
+    // Whole cells (intact + cracked) ride the drift field point-wise: one
+    // mapping both displaces AND bends — neighbouring cells stay coherent
+    // and a big panel's fill lines curve with the dragged material. Shards
+    // inherit the field at their parent's centre instead (shatterCell owns
+    // their ballistics), so nothing is displaced twice.
+    const nearDrift =
+      driftField !== null && dmg !== null && dmg.hit.d - extent < driftField.range;
+    const anchor = nearDrift ? driftField!.at(cell.centre.x, cell.centre.y) : null;
+    const bend = (pts: Point[]): Point[] =>
+      anchor
+        ? warpPolyline(pts, driftField!, warpStep, anchor.dx, anchor.dy, 0.6 * extent)
+        : pts;
 
     // Ink assignment: hemisphere-scale swaths quantised into `inks` bins
     // (extent-relative noise through a balance curve), or — in 'damage'
@@ -226,7 +261,20 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       fillNoise.noise2D(cell.centre.x * fillK, cell.centre.y * fillK) * 0.5 + 0.5 < o.fill;
     const texture = TEXTURES[Math.floor(cellRng() * TEXTURES.length) % TEXTURES.length];
     // Fine pitch: the fills should read as tone, not as pattern samples.
-    const fillSpacing = Math.max(1.8 * o.penWidth, 2.2);
+    // `toneRange` spreads that one pitch into committed regional tiers —
+    // near-solid darks through sparse near-paper — posterized so the value
+    // design reads as decided, not dithered.
+    const toneK = 2.2 / region.extent;
+    const tone =
+      Math.floor(
+        clamp01(0.5 + 0.5 * fillNoise.noise2D(cell.centre.x * toneK + 37, cell.centre.y * toneK - 91)) *
+          3.999
+      ) / 3;
+    const tierMul = lerp(0.55, 2.6, Math.pow(tone, 1.1)) * (0.92 + 0.16 * cellRng());
+    const fillSpacing = Math.max(
+      1.15 * o.penWidth,
+      Math.max(1.8 * o.penWidth, 2.2) * lerp(1, tierMul, clamp01(o.toneRange))
+    );
     const D = dmg?.D ?? 0;
     const fillPoly = (poly: Point[]): Point[][] => {
       switch (o.fillStyle) {
@@ -245,20 +293,22 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           return [];
       }
     };
-    const emit = (poly: Point[], filled: boolean) => {
-      push(poly, ink);
-      if (filled) for (const span of fillPoly(poly)) push(span, ink);
+    // `warped` geometry is filled at rest, then outline and spans are bent
+    // through the drift field together — fills must be computed on the
+    // convex resting shape, never on the warped (possibly concave) one.
+    const emit = (poly: Point[], filled: boolean, warped = false) => {
+      push(warped ? bend(poly) : poly, ink);
+      if (filled) for (const span of fillPoly(poly)) push(warped ? bend(span) : span, ink);
     };
 
     if (dmg && (dmg.zone === 'dust' || dmg.zone === 'cascade')) {
-      const resting = rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
       const shards = shatterCell(
         resting,
         extent,
         {
           f: D,
-          dx: 0,
-          dy: 0,
+          dx: anchor?.dx ?? 0,
+          dy: anchor?.dy ?? 0,
           radius,
           shatter: o.shatter,
           scatter: o.scatter,
@@ -267,6 +317,7 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           sweep: o.sweep,
           tx: dmg.hit.tx,
           ty: dmg.hit.ty,
+          side: dmg.hit.side,
           rx: dmg.rx,
           ry: dmg.ry,
           channel,
@@ -280,8 +331,8 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       for (const shard of shards) emit(shard, regionFilled);
     } else if (dmg && dmg.zone === 'cracked' && cracks) {
       // Cracked in place: the shared spiderweb facets this cell; facets stay
-      // lodged — hairline gaps and a whisper of rotation, no displacement.
-      const resting = rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
+      // lodged — hairline gaps and a whisper of rotation, no displacement
+      // beyond what the drift field drags through the whole pane.
       for (const facet of cracks.facet(resting)) {
         // The occasional facet falls out of the cracked pane — a hole in
         // the spiderweb, very glass.
@@ -304,30 +355,57 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
             const ly = (p.y - gy) * 0.985;
             return { x: gx + lx * cos - ly * sin, y: gy + lx * sin + ly * cos };
           }),
-          regionFilled
+          regionFilled,
+          true
         );
       }
     } else {
-      // Intact — optionally leaned on by the strike (impactStrength > 0).
-      let cx = cell.centre.x;
-      let cy = cell.centre.y;
-      let rotation = cell.rotation;
+      // Intact — optionally leaned on by the strike (impactStrength > 0)
+      // and settled toward the flow where the drift field shears past; the
+      // displacement itself comes from the point-wise warp in `emit`.
+      let dx = 0;
+      let dy = 0;
+      let dRot = 0;
       let scale = 1;
       if (dmg && o.impactStrength > 0 && dmg.hit.d < radius) {
         const f = smoothstep(clamp01(1 - dmg.hit.d / radius));
         const d = dmg.hit.d;
-        const ux = d > 1e-6 ? (cx - dmg.hit.qx) / d : dmg.rx;
-        const uy = d > 1e-6 ? (cy - dmg.hit.qy) / d : dmg.ry;
+        const ux = d > 1e-6 ? (cell.centre.x - dmg.hit.qx) / d : dmg.rx;
+        const uy = d > 1e-6 ? (cell.centre.y - dmg.hit.qy) / d : dmg.ry;
         const pushDist = o.impactStrength * 0.5 * radius * f * f;
-        cx += pushDist * ux;
-        cy += pushDist * uy;
-        rotation +=
+        dx += pushDist * ux;
+        dy += pushDist * uy;
+        dRot +=
           o.impactStrength *
           (dmg.hit.side * (35 * Math.PI / 180) + (2 * impactRng() - 1) * (10 * Math.PI / 180)) *
           f;
         scale = 1 - 0.35 * o.impactStrength * f;
       }
-      emit(rectAt({ x: cx, y: cy }, cell.hx * scale, cell.hy * scale, rotation), regionFilled);
+      if (anchor && anchor.f > 0) {
+        // Sheared material settles toward the travel direction.
+        let toFlow = Math.atan2(anchor.ty, anchor.tx) - cell.rotation;
+        while (toFlow > Math.PI / 2) toFlow -= Math.PI;
+        while (toFlow < -Math.PI / 2) toFlow += Math.PI;
+        dRot += toFlow * 0.3 * anchor.f + (2 * impactRng() - 1) * 0.08 * anchor.f;
+      }
+      if (dx === 0 && dy === 0 && dRot === 0 && scale === 1) {
+        emit(resting, regionFilled, true);
+      } else {
+        const cos = Math.cos(dRot);
+        const sin = Math.sin(dRot);
+        emit(
+          resting.map((p) => {
+            const lx = (p.x - cell.centre.x) * scale;
+            const ly = (p.y - cell.centre.y) * scale;
+            return {
+              x: cell.centre.x + dx + lx * cos - ly * sin,
+              y: cell.centre.y + dy + lx * sin + ly * cos,
+            };
+          }),
+          regionFilled,
+          true
+        );
+      }
     }
   }
 

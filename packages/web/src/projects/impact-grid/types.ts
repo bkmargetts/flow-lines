@@ -28,6 +28,8 @@ export interface ImpactGridState {
   // Impact
   paneStress: number; // 0..1 pane-wide crack/damage reach from the strike
   energy: number; // 0..1 impact violence, scales the gesture's speed
+  focus: number; // 0..1 carve concentration: 1 = one crater, 0 = whole path
+  drift: number; // 0..1 bulk advection along the stroke (laminar drag)
   impactRadiusMm: number; // channel falloff radius
   impactStrength: number; // 0..1 radial push (0 = mosaic stands still)
   shatter: number; // 0..1 shatter zone width
@@ -38,6 +40,7 @@ export interface ImpactGridState {
 
   // Marks
   fill: number; // 0..1 fraction of cells filled (region-committed)
+  toneRange: number; // 0..1 tonal spread: one pitch → near-solid…near-paper tiers
   fillStyle: 'texture' | 'hatch' | 'concentric' | 'none';
   inkBalance: number; // 0..1 swath skew: 0.5 = even split across the pens
   inkMode: 'regions' | 'damage'; // swaths, or inks ordered by destruction
@@ -75,6 +78,8 @@ export const defaultImpactGridState: ImpactGridState = {
 
   paneStress: 0.6,
   energy: 0.6,
+  focus: 0.35,
+  drift: 0.55,
   impactRadiusMm: 50,
   impactStrength: 0,
   shatter: 0.8,
@@ -84,6 +89,7 @@ export const defaultImpactGridState: ImpactGridState = {
   sweep: 0.7,
 
   fill: 1,
+  toneRange: 0.65,
   fillStyle: 'texture',
   inkBalance: 0.5,
   inkMode: 'regions',
@@ -122,6 +128,8 @@ export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridSta
     impactRadiusMm: Math.round(20 + rng() * 100),
     paneStress: Number((0.3 + rng() * 0.7).toFixed(2)),
     energy: Number((0.3 + rng() * 0.7).toFixed(2)),
+    focus: Number((rng()).toFixed(2)),
+    drift: Number((0.2 + rng() * 0.65).toFixed(2)),
     impactStrength: Number((rng() * rng()).toFixed(2)),
     shatter: Number((0.4 + rng() * 0.6).toFixed(2)),
     scatter: Number((rng() * 0.7).toFixed(2)),
@@ -129,6 +137,7 @@ export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridSta
     crush: Number((0.2 + rng() * 0.8).toFixed(2)),
     sweep: Number((rng()).toFixed(2)),
     fill: Number((0.3 + rng() * 0.7).toFixed(2)),
+    toneRange: Number((rng()).toFixed(2)),
     fillStyle: fillStyles[Math.floor(rng() * fillStyles.length)],
     inkBalance: Number((0.3 + rng() * 0.4).toFixed(2)),
     inkMode: rng() < 0.7 ? 'regions' : 'damage',

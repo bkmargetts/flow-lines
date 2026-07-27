@@ -35,6 +35,8 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     impactRadius: state.impactRadiusMm * mm,
     paneStress: state.paneStress,
     energy: state.energy,
+    focus: state.focus,
+    drift: state.drift,
     impactStrength: state.impactStrength,
     shatter: state.shatter,
     scatter: state.scatter,
@@ -43,6 +45,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     sweep: state.sweep,
 
     fill: state.fill,
+    toneRange: state.toneRange,
     fillStyle: state.fillStyle,
     inks: state.inkColors.length,
     inkBalance: state.inkBalance,
