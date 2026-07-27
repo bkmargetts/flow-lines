@@ -9,13 +9,12 @@ import { smoothPolyline } from '../lib/polyline.js';
 import { layoutCells, makeRegion, rectAt, type RegionKind } from './layout.js';
 import { preparePath } from './impact.js';
 import { cellDamage } from './impact.js';
-import { makeDrift, warpPolyline } from './drift.js';
+import { applyRigid, makeDrift, rigidFit } from './drift.js';
 import { makeCracks, type CrackNetwork } from './cracks.js';
-import { channelSplit, shatterCell } from './shatter.js';
+import { channelSplit, clipHalfPlane, shatterCell } from './shatter.js';
 import {
   boundsOf,
   clipLineOutside,
-  convexHull,
   makeOccluder,
   type Bounds,
   type Occluder,
@@ -85,8 +84,9 @@ export interface ImpactGridOptions {
    *  its channel end to end (the reference plates). */
   focus?: number;
   /** 0..1 bulk advection: how far the stroke drags the surrounding material
-   *  along its direction of travel — intact cells ride a smooth shared
-   *  field (laminar drifts, bending panels), not per-cell scatter. */
+   *  along its direction of travel — whole cells ride a smooth shared field
+   *  as RIGID plates (laminar drifts; plates that can't ride rigidly
+   *  fracture), never per-cell scatter, never bending. */
   drift?: number;
   /** 0..1 radial push / torque of intact cells near the channel (0 = the
    *  pane stands still outside its damage zones). */
@@ -208,7 +208,6 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
     field && o.drift > 0
       ? makeDrift(field, radius, { drift: o.drift, energy: o.energy, seed: subSeed(seed, 5) })
       : null;
-  const warpStep = Math.max(2.5, o.penWidth * 2.5);
 
   const fillNoise = createNoise(subSeed(seed, 2));
   const inkNoise = createNoise(subSeed(seed, 4));
@@ -256,18 +255,16 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
         )
       : null;
     const resting = cell.ring ?? rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
-    // Whole cells (intact + cracked) ride the drift field point-wise: one
-    // mapping both displaces AND bends — neighbouring cells stay coherent
-    // and a big panel's fill lines curve with the dragged material. Shards
-    // inherit the field at their parent's centre instead (shatterCell owns
-    // their ballistics), so nothing is displaced twice.
+    // Whole cells (intact + cracked) ride the drift field RIGIDLY: the
+    // best-fit translation + rotation of the field over their vertices —
+    // glass never bends, so every edge and fill line stays dead straight.
+    // Where the field's gradient disagrees with rigidity, the plate
+    // fractures into smaller rigid plates instead (below). Shards inherit
+    // the field at their parent's centre (shatterCell owns their
+    // ballistics), so nothing is displaced twice.
     const nearDrift =
       driftField !== null && dmg !== null && dmg.hit.d - extent < driftField.range;
     const anchor = nearDrift ? driftField!.at(cell.centre.x, cell.centre.y) : null;
-    const bend = (pts: Point[]): Point[] =>
-      anchor
-        ? warpPolyline(pts, driftField!, warpStep, anchor.dx, anchor.dy, 0.6 * extent)
-        : pts;
 
     // Ink assignment: hemisphere-scale swaths quantised into `inks` bins
     // (extent-relative noise through a balance curve), or — in 'damage'
@@ -303,14 +300,14 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
       Math.max(1.8 * o.penWidth, 2.2) * lerp(1, tierMul, clamp01(o.toneRange))
     );
     const D = dmg?.D ?? 0;
-    const fillPoly = (poly: Point[]): Point[][] => {
+    const fillPoly = (poly: Point[], rotOffset = 0): Point[][] => {
       switch (o.fillStyle) {
         case 'texture':
           return textureFill(poly, texture, fillSpacing, o.penWidth, cellRng);
         case 'hatch':
           return hatchConvex(
             poly,
-            cell.rotation + Math.PI / 4,
+            cell.rotation + rotOffset + Math.PI / 4,
             lerp(4 * o.penWidth, 2.5 * o.penWidth, D),
             o.penWidth
           );
@@ -320,29 +317,22 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           return [];
       }
     };
-    // `warped` geometry is filled at rest, then outline and spans are bent
-    // through the drift field together — fills must be computed on the
-    // convex resting shape, never on the warped (possibly concave) one.
+    // Pieces are FINAL rigid geometry — convex rings — so the fill is
+    // computed on the ring as drawn and the ring itself is the occluder.
     // `occludes` marks material that MOVED, so it hides what it lies over.
     const addPiece = (
       poly: Point[],
       filled: boolean,
-      opts: { warped?: boolean; z: number; occludes: boolean }
+      opts: { z: number; occludes: boolean; rotOffset?: number }
     ) => {
-      const drawn = opts.warped ? bend(poly) : poly;
-      if (drawn.length < 2) return;
-      const pls: Point[][] = [drawn];
-      if (filled) {
-        for (const span of fillPoly(poly)) {
-          const s = opts.warped ? bend(span) : span;
-          if (s.length >= 2) pls.push(s);
-        }
-      }
+      if (poly.length < 4) return;
+      const pls: Point[][] = [poly];
+      if (filled) for (const span of fillPoly(poly, opts.rotOffset ?? 0)) pls.push(span);
       pieces.push({
         z: opts.z,
         layer: ink,
-        occ: opts.occludes ? makeOccluder(opts.warped ? convexHull(drawn) : drawn) : null,
-        bounds: boundsOf(drawn),
+        occ: opts.occludes ? makeOccluder(poly) : null,
+        bounds: boundsOf(poly),
         lines: pls,
       });
     };
@@ -421,13 +411,12 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
           }
         }
       }
-      const moving = anchor !== null && anchor.f > 0.02;
       if (dmg && dmg.zone === 'cracked' && cracks) {
-        // Cracked in place: the shared spiderweb facets this cell; facets
-        // stay lodged — hairline gaps and a whisper of rotation, no
-        // displacement beyond what the drift field drags through the pane.
+        // Cracked in place: the shared spiderweb facets this cell — and the
+        // facets ARE the fracture. Each rides the drift field with its own
+        // best-fit rigid motion (edges always straight) on top of the
+        // hairline gap and whisper of rotation that read as a cracked pane.
         for (const body of bodies) {
-          const facetLines: Point[][] = [];
           for (const facet of cracks.facet(body)) {
             // The occasional facet falls out of the cracked pane — a hole
             // in the spiderweb, very glass.
@@ -444,30 +433,26 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
             const rot = (2 * impactRng() - 1) * 0.05 * D;
             const cos = Math.cos(rot);
             const sin = Math.sin(rot);
-            const moved = facet.map((p) => {
+            const seated = facet.map((p) => {
               const lx = (p.x - gx) * 0.985;
               const ly = (p.y - gy) * 0.985;
               return { x: gx + lx * cos - ly * sin, y: gy + lx * sin + ly * cos };
             });
-            facetLines.push(bend(moved));
-            if (regionFilled) for (const span of fillPoly(moved)) facetLines.push(bend(span));
+            const fit = nearDrift ? rigidFit(seated, driftField!) : null;
+            const moved = fit ? seated.map((p) => applyRigid(fit, p)) : seated;
+            addPiece(moved, regionFilled, {
+              z: D,
+              occludes: (fit?.f ?? 0) > 0.02,
+              rotOffset: rot + (fit ? Math.atan2(fit.sin, fit.cos) : 0),
+            });
           }
-          if (facetLines.length === 0) continue;
-          // One piece per body: the facets share the pane's fate, and the
-          // body's hull is the occluder — cracks inside it stay visible.
-          const outline = bend(body);
-          pieces.push({
-            z: D,
-            layer: ink,
-            occ: moving ? makeOccluder(convexHull(outline)) : null,
-            bounds: boundsOf(outline),
-            lines: facetLines,
-          });
         }
       } else {
-        // Intact — optionally leaned on by the strike (impactStrength > 0)
-        // and settled toward the flow where the drift field shears past;
-        // the displacement itself comes from the point-wise warp.
+        // Intact — optionally leaned on by the strike (impactStrength > 0),
+        // then riding the drift field rigidly. Where the field's gradient
+        // fights rigidity (the fit residual), the plate FRACTURES along the
+        // local travel direction into smaller rigid plates — glass crackle
+        // near the cuts, never curvature.
         let dx = 0;
         let dy = 0;
         let dRot = 0;
@@ -486,32 +471,66 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
             f;
           scale = 1 - 0.35 * o.impactStrength * f;
         }
-        if (anchor && anchor.f > 0) {
-          // Sheared material settles toward the travel direction.
-          let toFlow = Math.atan2(anchor.ty, anchor.tx) - cell.rotation;
-          while (toFlow > Math.PI / 2) toFlow -= Math.PI;
-          while (toFlow < -Math.PI / 2) toFlow += Math.PI;
-          dRot += toFlow * 0.3 * anchor.f + (2 * impactRng() - 1) * 0.08 * anchor.f;
-        }
         const rigid = dx !== 0 || dy !== 0 || dRot !== 0 || scale !== 1;
-        const cos = Math.cos(dRot);
-        const sin = Math.sin(dRot);
+        const cosS = Math.cos(dRot);
+        const sinS = Math.sin(dRot);
+        const ride = (ring: Point[], depth: number): void => {
+          const fit = nearDrift ? rigidFit(ring, driftField!) : null;
+          if (!fit) {
+            addPiece(ring, regionFilled, { z: D, occludes: rigid, rotOffset: dRot });
+            return;
+          }
+          const n = ring.length - 1;
+          let gx = 0;
+          let gy = 0;
+          for (let i = 0; i < n; i++) {
+            gx += ring[i].x;
+            gy += ring[i].y;
+          }
+          gx /= n;
+          gy /= n;
+          let ext = 0;
+          for (let i = 0; i < n; i++) {
+            const d2 = Math.hypot(ring[i].x - gx, ring[i].y - gy);
+            if (d2 > ext) ext = d2;
+          }
+          const tol = Math.max(2.5 * o.penWidth, 0.18 * ext) * (1.25 - 0.6 * o.crush);
+          if (fit.residual > tol && depth < 3 && ext > 4 * o.penWidth) {
+            // Crack along the local travel direction, like the channel cuts.
+            const u = driftField!.at(gx, gy);
+            const nHat = { x: -u.ty, y: u.tx };
+            const off = (2 * impactRng() - 1) * 0.25 * ext;
+            const a = { x: gx + nHat.x * off, y: gy + nHat.y * off };
+            const lo = clipHalfPlane(ring, a, nHat);
+            const hi = clipHalfPlane(ring, a, { x: -nHat.x, y: -nHat.y });
+            if (lo.length >= 4 && hi.length >= 4) {
+              ride(lo, depth + 1);
+              ride(hi, depth + 1);
+              return;
+            }
+          }
+          // Hairline extra spin on fractured plates — crackle, not pattern.
+          const jitter = depth > 0 ? (2 * impactRng() - 1) * 0.06 : 0;
+          const theta = Math.atan2(fit.sin, fit.cos) + jitter;
+          const spun = { ...fit, cos: Math.cos(theta), sin: Math.sin(theta) };
+          addPiece(ring.map((p) => applyRigid(spun, p)), regionFilled, {
+            z: D,
+            occludes: rigid || fit.f > 0.02 || depth > 0,
+            rotOffset: dRot + theta,
+          });
+        };
         for (const body of bodies) {
-          const moved = rigid
+          const seated = rigid
             ? body.map((p) => {
                 const lx = (p.x - cell.centre.x) * scale;
                 const ly = (p.y - cell.centre.y) * scale;
                 return {
-                  x: cell.centre.x + dx + lx * cos - ly * sin,
-                  y: cell.centre.y + dy + lx * sin + ly * cos,
+                  x: cell.centre.x + dx + lx * cosS - ly * sinS,
+                  y: cell.centre.y + dy + lx * sinS + ly * cosS,
                 };
               })
             : body;
-          addPiece(moved, regionFilled, {
-            warped: true,
-            z: D,
-            occludes: moving || rigid,
-          });
+          ride(seated, 0);
         }
       }
     }

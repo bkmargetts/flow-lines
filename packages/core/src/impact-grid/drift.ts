@@ -69,50 +69,93 @@ export function makeDrift(
   return { at, range };
 }
 
-/**
- * Map a polyline through the field point-wise, densifying first so straight
- * spans can genuinely bend. This is how big panels near the channel warp —
- * their hatch lines curving with the dragged material — instead of rigidly
- * rotating. Callers skip it entirely for geometry far outside `range`.
- *
- * The anchor (ax, ay) is the field at the parent cell's centre; each point
- * moves by anchor + a SOFT-CLAMPED deviation, so a cell bends by at most
- * ~`maxDev` beyond its rigid ride. Without the clamp, cells straddling the
- * path's medial axis (where the nearest segment — and so the advect
- * direction — flips) smear into taffy ribbons.
- */
-export function warpPolyline(
-  points: Point[],
-  drift: DriftField,
-  step: number,
-  ax: number,
-  ay: number,
-  maxDev: number
-): Point[] {
-  const out: Point[] = [];
-  const pushWarped = (p: Point) => {
-    const u = drift.at(p.x, p.y);
-    let devX = u.dx - ax;
-    let devY = u.dy - ay;
-    const dev = Math.hypot(devX, devY);
-    if (dev > 1e-9) {
-      const s = 1 / (1 + dev / maxDev);
-      devX *= s;
-      devY *= s;
-    }
-    out.push({ x: p.x + ax + devX, y: p.y + ay + devY });
+/** The best rigid motion (translation + rotation) fitting the field over a
+ *  ring, plus how badly the field wanted to deviate from it. */
+export interface RigidFit {
+  /** Rest centroid. */
+  cx: number;
+  cy: number;
+  /** Translation of the centroid. */
+  dx: number;
+  dy: number;
+  cos: number;
+  sin: number;
+  /** Worst vertex misfit, px — how much the field disagreed with rigidity. */
+  residual: number;
+  /** Mean field strength over the vertices, 0..1. */
+  f: number;
+}
+
+/** Map one point through a rigid fit. */
+export function applyRigid(fit: RigidFit, p: Point): Point {
+  const lx = p.x - fit.cx;
+  const ly = p.y - fit.cy;
+  return {
+    x: fit.cx + fit.dx + lx * fit.cos - ly * fit.sin,
+    y: fit.cy + fit.dy + lx * fit.sin + ly * fit.cos,
   };
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
-    pushWarped(a);
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    const n = Math.floor(len / step);
-    for (let j = 1; j <= n; j++) {
-      const t = j / (n + 1);
-      pushWarped({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-    }
+}
+
+/**
+ * Fit the least-squares RIGID motion (2D Kabsch: mean translation, rotation
+ * from the cross/dot sums of centred pairs) of the drift field sampled at a
+ * ring's vertices. Glass never bends: a plate rides the field with this
+ * transform — translating and rotating with the flow's shear, every edge
+ * dead straight — and the `residual` tells the caller how hard the field
+ * wanted to deform it, i.e. when the plate must FRACTURE instead.
+ * Returns null when the field is dead across the ring.
+ */
+export function rigidFit(ring: Point[], drift: DriftField): RigidFit | null {
+  const n = ring.length - 1;
+  if (n < 3) return null;
+  const ux: number[] = [];
+  const uy: number[] = [];
+  let f = 0;
+  let any = false;
+  for (let i = 0; i < n; i++) {
+    const u = drift.at(ring[i].x, ring[i].y);
+    ux.push(u.dx);
+    uy.push(u.dy);
+    f += u.f;
+    if (u.f > 0) any = true;
   }
-  pushWarped(points[points.length - 1]);
-  return out;
+  if (!any) return null;
+  f /= n;
+  let cx = 0;
+  let cy = 0;
+  let mx = 0;
+  let my = 0;
+  for (let i = 0; i < n; i++) {
+    cx += ring[i].x;
+    cy += ring[i].y;
+    mx += ux[i];
+    my += uy[i];
+  }
+  cx /= n;
+  cy /= n;
+  mx /= n;
+  my /= n;
+  let sCross = 0;
+  let sDot = 0;
+  for (let i = 0; i < n; i++) {
+    const px = ring[i].x - cx;
+    const py = ring[i].y - cy;
+    const qx = px + ux[i] - mx;
+    const qy = py + uy[i] - my;
+    sCross += px * qy - py * qx;
+    sDot += px * qx + py * qy;
+  }
+  const theta = Math.atan2(sCross, sDot);
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  let residual = 0;
+  for (let i = 0; i < n; i++) {
+    const px = ring[i].x - cx;
+    const py = ring[i].y - cy;
+    const rx = cx + mx + px * cos - py * sin - (ring[i].x + ux[i]);
+    const ry = cy + my + px * sin + py * cos - (ring[i].y + uy[i]);
+    const r = Math.hypot(rx, ry);
+    if (r > residual) residual = r;
+  }
+  return { cx, cy, dx: mx, dy: my, cos, sin, residual, f };
 }
