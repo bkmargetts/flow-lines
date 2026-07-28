@@ -22,6 +22,7 @@ import { randomMeanderGenome } from '../projects/meander/Controls';
 import { randomCoralGenome } from '../projects/coral/Controls';
 import { randomWarpGridGenome } from '../projects/warp-grid/presets';
 import { randomImpactGridGenome } from '../projects/impact-grid/types';
+import { randomShardRainGenome } from '../projects/shard-rain/types';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
 import { randomPlanetGenome } from '../projects/planet-generator/presets';
@@ -72,7 +73,13 @@ const ART_TREATMENT_BOUNDS: Record<string, [number, number]> = {
  * reads as a decision rather than an oversight, and so a *new* module can't
  * quietly join them.
  */
-const PALETTE_ROLLERS = ['botanical-generator', 'landscape-generator', 'planet-generator', 'impact-grid'];
+const PALETTE_ROLLERS = [
+  'botanical-generator',
+  'landscape-generator',
+  'planet-generator',
+  'impact-grid',
+  'shard-rain',
+];
 
 const SPECS: GenomeSpec[] = [
   {
@@ -167,6 +174,48 @@ const SPECS: GenomeSpec[] = [
     // from forbidden by design: impact-grid is in PALETTE_ROLLERS and rolls
     // a NAMED palette (inkColors/pathColor come from the table, never
     // generated colours).
+    forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'maskPath', 'drawMode'],
+  },
+  {
+    name: 'shard-rain',
+    genome: randomShardRainGenome,
+    bounds: {
+      paneScale: [0.2, 0.7],
+      frameDepth: [1, 6],
+      cellSizeMm: [3, 20],
+      sizeVariation: [0, 1],
+      positionJitter: [0, 1],
+      rotationJitter: [0, 1],
+      gap: [0, 0.6],
+      granularity: [0, 1],
+      impacts: [0, 12],
+      impactRadiusMm: [10, 70],
+      radiusVariation: [0, 1],
+      energy: [0, 1],
+      moment: [0, 1],
+      pinSpread: [0, 1],
+      tilt: [0, 1],
+      shatter: [0, 1],
+      scatter: [0, 1],
+      debris: [0, 1],
+      crush: [0, 1],
+      sag: [0, 1],
+      fill: [0, 1],
+      toneRange: [0, 1],
+      inkBalance: [0, 1],
+    },
+    ints: ['frameDepth', 'impacts', 'impactRadiusMm'],
+    bools: ['markImpacts'],
+    enums: {
+      layout: ['mosaic', 'grid', 'frame', 'bars'],
+      paneShape: ['slab', 'disc'],
+      fillStyle: ['texture', 'none', 'hatch', 'concentric'],
+      inkMode: ['regions', 'damage'],
+    },
+    // maskPath / drawMode are user data — the drawn drop zone survives a
+    // reroll. `look` is the preset label, not a knob. Ink fields are absent
+    // from forbidden by design: shard-rain is in PALETTE_ROLLERS and rolls
+    // a NAMED palette, same as impact-grid.
     forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'maskPath', 'drawMode'],
   },
   {

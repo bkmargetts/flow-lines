@@ -27,6 +27,7 @@ import { meanderModule } from '../projects/meander';
 import { coralModule } from '../projects/coral';
 import { warpGridModule } from '../projects/warp-grid';
 import { impactGridModule } from '../projects/impact-grid';
+import { shardRainModule } from '../projects/shard-rain';
 
 /**
  * Every module, in panel order — the one flat registry the layer stack draws
@@ -64,6 +65,7 @@ export const MODULES: Module<any>[] = [
   coralModule,
   warpGridModule,
   impactGridModule,
+  shardRainModule,
   classicTexture,
   gratingTexture,
   blankTexture,

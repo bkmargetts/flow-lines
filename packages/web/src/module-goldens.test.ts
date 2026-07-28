@@ -60,6 +60,15 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
       { x: 180, y: 340 },
     ],
   },
+  'shard-rain': {
+    // The settled aftermath: full drop played out to the rubble pile, pins
+    // marked. First key is the case's display name — keep it a scalar.
+    moment: 1,
+    impacts: 7,
+    energy: 0.8,
+    crush: 0.8,
+    markImpacts: true,
+  },
   'reaction-diffusion': { preset: 'coral' },
   lenia: { preset: 'cells' },
   physarum: { preset: 'veins' },
