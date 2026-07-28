@@ -247,6 +247,16 @@ CASES['impact-grid/rip/42'] = () =>
     fillStyle: 'hatch',
     inkPath: true,
   });
+CASES['impact-grid/strikes/42'] = () =>
+  generateImpactGrid({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    strikes: 8,
+    energy: 0.8,
+    inkMode: 'damage',
+  });
 CASES['marbling/stone/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'stone' });
 CASES['marbling/feather/42'] = () =>

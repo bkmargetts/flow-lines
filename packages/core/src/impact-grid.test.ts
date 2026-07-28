@@ -441,6 +441,47 @@ describe('generateImpactGrid', () => {
   });
 });
 
+describe('point-strike mode (strikes)', () => {
+  it('strikes default off: options without strikes are byte-identical', () => {
+    const plain = generateImpactGrid({ ...BASE });
+    const explicit = generateImpactGrid({ ...BASE, strikes: 0 });
+    expect(explicit).toEqual(plain);
+  });
+
+  it('a drawn path always wins over strikes', () => {
+    const pathOnly = generateImpactGrid({ ...BASE, impactPath: CENTRE_PATH });
+    const both = generateImpactGrid({ ...BASE, impactPath: CENTRE_PATH, strikes: 8 });
+    expect(both).toEqual(pathOnly);
+  });
+
+  it('strikes without a path shatter the pane', () => {
+    const pristine = generateImpactGrid({ ...BASE, fillStyle: 'none' });
+    const struck = generateImpactGrid({ ...BASE, fillStyle: 'none', strikes: 6, debris: 0 });
+    expect(struck.lines.length).toBeGreaterThan(pristine.lines.length);
+    // Sequential re-shatter: more strikes keep breaking the broken.
+    const heavier = generateImpactGrid({ ...BASE, fillStyle: 'none', strikes: 16, debris: 0 });
+    expect(heavier.lines.length).toBeGreaterThan(struck.lines.length);
+  });
+
+  it('explicit strikePoints land where aimed and inkPath marks them', () => {
+    const r = generateImpactGrid({
+      ...BASE,
+      strikePoints: [{ x: 150, y: 200 }],
+      inkPath: true,
+      fillStyle: 'none',
+    });
+    const layers = new Set(r.lines.map((l) => l.layer));
+    expect(layers.has('path')).toBe(true);
+    const silent = generateImpactGrid({
+      ...BASE,
+      strikePoints: [{ x: 150, y: 200 }],
+      inkPath: false,
+      fillStyle: 'none',
+    });
+    expect(new Set(silent.lines.map((l) => l.layer)).has('path')).toBe(false);
+  });
+});
+
 function centroid(points: { x: number; y: number }[]): { x: number; y: number } {
   const last = points[points.length - 1];
   const n =
