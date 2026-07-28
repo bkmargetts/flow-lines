@@ -9,6 +9,8 @@ export const ribbonWeaveModule: PureModule<RibbonWeaveState> = {
   kind: 'pure',
   id: 'ribbon-weave',
   label: 'Ribbon Weave',
+  category: 'textures',
+  description: 'Celtic knotwork / woven lattices',
   defaultState: () => ({ ...defaultRibbonWeaveState }),
   Controls: RibbonWeaveControls,
   render: renderRibbonWeave,

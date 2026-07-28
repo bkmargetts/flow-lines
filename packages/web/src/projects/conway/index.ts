@@ -7,6 +7,8 @@ export const conwayModule: PureModule<ConwayState> = {
   kind: 'pure',
   id: 'conway',
   label: 'Conway Long Exposure',
+  category: 'simulations',
+  description: 'Game of Life history as comet trails',
   defaultState: () => ({ ...defaultConwayState }),
   Controls: ConwayControls,
   render: renderConway,

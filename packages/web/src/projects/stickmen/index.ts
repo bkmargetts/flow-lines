@@ -7,6 +7,8 @@ export const stickmenModule: PureModule<StickmenState> = {
   kind: 'pure',
   id: 'stickmen',
   label: 'Stick Men',
+  category: 'scenes',
+  description: 'Isometric stick figures with a pose library',
   defaultState: () => ({ ...defaultStickmenState }),
   Controls: StickmenControls,
   render: renderStickmen,

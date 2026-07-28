@@ -7,6 +7,8 @@ export const coralModule: PureModule<CoralState> = {
   kind: 'pure',
   id: 'coral',
   label: 'Coral',
+  category: 'simulations',
+  description: 'Differential-growth organisms',
   defaultState: () => ({ ...defaultCoralState }),
   Controls: CoralControls,
   render: renderCoral,

@@ -9,6 +9,8 @@ export const gestureModule: PureModule<GestureState> = {
   kind: 'pure',
   id: 'gesture',
   label: 'Gestural Ink',
+  category: 'flow',
+  description: 'Kline/Hartung/sumi gestural abstractions',
   defaultState: () => ({ ...defaultGestureState }),
   Controls: GestureControls,
   render: renderGesture,

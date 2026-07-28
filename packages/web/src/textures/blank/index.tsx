@@ -20,6 +20,8 @@ export const blankTexture: PureModule<BlankParams> = {
   kind: 'pure',
   id: 'blank',
   label: 'Blank (template)',
+  category: 'textures',
+  description: 'Empty module, the template for new ones',
   defaultState: () => ({}),
   Controls: BlankControls,
   render: renderBlankTexture,

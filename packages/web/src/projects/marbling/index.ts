@@ -9,6 +9,8 @@ export const marblingModule: PureModule<MarblingState> = {
   kind: 'pure',
   id: 'marbling',
   label: 'Marbling',
+  category: 'flow',
+  description: 'Suminagashi / ebru paper marbling',
   defaultState: () => ({ ...defaultMarblingState }),
   Controls: MarblingControls,
   render: renderMarbling,

@@ -13,6 +13,8 @@ function stripe(id: string, color: string, y: number, x1 = 10, x2 = 200): PureMo
     kind: 'pure',
     id,
     label: id,
+    category: 'textures',
+    description: 'test fixture module for compositing',
     defaultState: () => ({}),
     Controls: () => null,
     render: () => ({
@@ -73,6 +75,8 @@ describe('composite', () => {
       kind: 'pure',
       id: 'top',
       label: 'top',
+      category: 'textures',
+      description: 'test fixture module for compositing',
       defaultState: () => ({}),
       Controls: () => null,
       render: () => ({
@@ -108,6 +112,8 @@ describe('composite', () => {
       kind: 'pure',
       id,
       label: id,
+      category: 'textures',
+      description: 'test fixture module for compositing',
       defaultState: () => ({}),
       Controls: () => null,
       render: () => ({
@@ -133,6 +139,8 @@ describe('composite', () => {
       kind: 'live' as const,
       id: 'ink',
       label: 'ink',
+      category: 'image' as const,
+      description: 'test fixture module for compositing',
       defaultState: () => ({}),
       Controls: () => null,
       useInstance: () => {},
@@ -141,6 +149,8 @@ describe('composite', () => {
       kind: 'pure',
       id: 'top',
       label: 'top',
+      category: 'textures',
+      description: 'test fixture module for compositing',
       defaultState: () => ({}),
       Controls: () => null,
       render: () => ({

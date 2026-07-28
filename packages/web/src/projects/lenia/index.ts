@@ -7,6 +7,8 @@ export const leniaModule: PureModule<LeniaState> = {
   kind: 'pure',
   id: 'lenia',
   label: 'Lenia',
+  category: 'simulations',
+  description: 'Continuous cellular automata',
   defaultState: () => ({ ...defaultLeniaState }),
   Controls: LeniaControls,
   render: renderLenia,

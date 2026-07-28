@@ -7,6 +7,8 @@ export const reactionDiffusionModule: PureModule<RDState> = {
   kind: 'pure',
   id: 'reaction-diffusion',
   label: 'Reaction–Diffusion',
+  category: 'simulations',
+  description: 'Gray–Scott patterns as strokes',
   defaultState: () => ({ ...defaultRDState }),
   Controls: RDControls,
   render: renderReactionDiffusion,

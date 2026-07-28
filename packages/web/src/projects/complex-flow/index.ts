@@ -7,6 +7,8 @@ export const complexFlowModule: PureModule<ComplexFlowState> = {
   kind: 'pure',
   id: 'complex-flow',
   label: 'Complex Flow',
+  category: 'flow',
+  description: 'Complex rational-function flow fields',
   defaultState: () => ({ ...defaultComplexFlowState }),
   Controls: ComplexFlowControls,
   render: renderComplexFlow,

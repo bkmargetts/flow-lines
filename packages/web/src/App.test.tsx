@@ -8,9 +8,14 @@ describe('Module registry', () => {
   });
 
   it('every module is a well-formed pure or live module', () => {
+    const CATEGORIES = ['image', 'scenes', 'flow', 'simulations', 'textures'];
     for (const mod of MODULES) {
       expect(mod.id).toMatch(/^[a-z0-9-]+$/);
       expect(typeof mod.label).toBe('string');
+      expect(CATEGORIES).toContain(mod.category);
+      expect(typeof mod.description).toBe('string');
+      expect(mod.description.length).toBeGreaterThan(10);
+      expect(mod.description.length).toBeLessThanOrEqual(110);
       expect(typeof mod.defaultState).toBe('function');
       expect(typeof mod.Controls).toBe('function');
       expect(mod.kind === 'pure' || mod.kind === 'live').toBe(true);

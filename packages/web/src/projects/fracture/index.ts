@@ -7,6 +7,8 @@ export const fractureModule: PureModule<FractureState> = {
   kind: 'pure',
   id: 'fracture',
   label: 'Fracture',
+  category: 'simulations',
+  description: 'Crack propagation — mud cracks, glaze crazing',
   defaultState: () => ({ ...defaultFractureState }),
   Controls: FractureControls,
   render: renderFracture,

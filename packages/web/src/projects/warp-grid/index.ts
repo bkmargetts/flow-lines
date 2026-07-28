@@ -9,6 +9,8 @@ export const warpGridModule: PureModule<WarpGridState> = {
   kind: 'pure',
   id: 'warp-grid',
   label: 'Warp Grid',
+  category: 'flow',
+  description: 'Op-art gratings deformed by hidden relief',
   defaultState: () => ({ ...defaultWarpGridState }),
   Controls: WarpGridControls,
   render: renderWarpGrid,

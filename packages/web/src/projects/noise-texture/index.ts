@@ -7,6 +7,8 @@ export const noiseTextureModule: PureModule<NoiseTextureState> = {
   kind: 'pure',
   id: 'noise-texture',
   label: 'Noise Texture',
+  category: 'flow',
+  description: 'Noise-modulated line fields',
   defaultState: () => ({ ...defaultNoiseTextureState }),
   Controls: NoiseTextureControls,
   render: renderNoiseTexture,

@@ -9,6 +9,8 @@ export const classicTexture: PureModule<ClassicParams> = {
   kind: 'pure',
   id: 'classic',
   label: 'Pattern (hatch, grid, dots…)',
+  category: 'textures',
+  description: 'Background hatch / grid / dot textures',
   defaultState: () => ({ ...defaultClassicParams }),
   Controls: ClassicControls,
   render: renderClassicTexture,
