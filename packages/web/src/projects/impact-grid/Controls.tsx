@@ -111,12 +111,14 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
       <Slider label="Cell size" value={state.cellSizeMm} min={3} max={20} step={0.5} onChange={(v) => update({ cellSizeMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Granularity" value={state.granularity} min={0} max={1} step={0.01} onChange={(v) => update({ granularity: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.layout !== 'mosaic'} />
       <Slider label="Energy" value={state.energy} min={0} max={1} step={0.01} onChange={(v) => update({ energy: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      <Slider label="Drift" value={state.drift} min={0} max={1} step={0.01} onChange={(v) => update({ drift: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Pane stress" value={state.paneStress} min={0} max={1} step={0.01} onChange={(v) => update({ paneStress: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Crush" value={state.crush} min={0} max={1} step={0.01} onChange={(v) => update({ crush: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Shatter" value={state.shatter} min={0} max={1} step={0.01} onChange={(v) => update({ shatter: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Impact strength" value={state.impactStrength} min={0} max={1} step={0.01} onChange={(v) => update({ impactStrength: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Impact radius" value={state.impactRadiusMm} min={10} max={150} step={1} onChange={(v) => update({ impactRadiusMm: v })} format={(v) => `${Math.round(v)}mm`} />
       <Slider label="Fill" value={state.fill} min={0} max={1} step={0.01} onChange={(v) => update({ fill: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      <Slider label="Tone range" value={state.toneRange} min={0} max={1} step={0.01} onChange={(v) => update({ toneRange: v })} format={(v) => `${Math.round(v * 100)}%`} />
 
       <AdvancedSection>
         <AdvGroup title="Grid character">
@@ -130,12 +132,14 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
           <Slider label="Scatter" value={state.scatter} min={0} max={1} step={0.01} onChange={(v) => update({ scatter: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Sweep" value={state.sweep} min={0} max={1} step={0.01} onChange={(v) => update({ sweep: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Debris" value={state.debris} min={0} max={1} step={0.01} onChange={(v) => update({ debris: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Focus" value={state.focus} min={0} max={1} step={0.01} onChange={(v) => update({ focus: v })} format={(v) => `${Math.round(v * 100)}%`} />
         </AdvGroup>
         <AdvGroup title="Marks">
           <PresetPicker label="Fill style" labels={FILL_STYLE_LABELS} value={state.fillStyle} onChange={(fillStyle) => update({ fillStyle })} />
           <PresetPicker label="Ink mode" labels={INK_MODE_LABELS} value={state.inkMode} onChange={(inkMode) => update({ inkMode })} />
           <Slider label="Ink balance" value={state.inkBalance} min={0} max={1} step={0.01} onChange={(v) => update({ inkBalance: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Toggle label="Ink the line" checked={state.inkPath} onChange={(inkPath) => update({ inkPath })} />
+          <Toggle label="Hide covered lines" checked={state.occlude} onChange={(occlude) => update({ occlude })} />
           <Slider label="Wobble" value={state.wobbleMm} min={0} max={1} step={0.01} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
         </AdvGroup>
       </AdvancedSection>

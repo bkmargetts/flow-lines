@@ -2,6 +2,7 @@ import type { Point } from '../flow-lines.js';
 import { clamp } from '../lib/math.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { createNoise } from '../noise.js';
+import { clipHalfPlane, ringArea } from './shatter.js';
 
 /** One placed cell, before any impact: the layout stage's whole output.
  *  The impact stage perturbs these; the render stage draws them — keeping
@@ -17,6 +18,10 @@ export interface PlacedCell {
   hy: number;
   /** Resting rotation, radians. */
   rotation: number;
+  /** Resting shape when the cell is shaved to the region boundary (rim
+   *  cells of the disc); absent ⇒ the plain rect. Always a closed convex
+   *  ring. */
+  ring?: Point[];
 }
 
 export interface LayoutOptions {
@@ -51,6 +56,11 @@ export interface RegionSpec {
   depth(x: number, y: number): number;
   /** Vertical extent of the region at column x, or null if outside. */
   yRange(x: number): [number, number] | null;
+  /** Shave a convex closed ring to the region boundary. Returns the SAME
+   *  array when nothing pokes out, a new (still convex, closed) ring when
+   *  clipped, [] when nothing survives — so rim cells end at the region's
+   *  silhouette instead of overflowing it. */
+  clip(ring: Point[]): Point[];
   centroid: Point;
   /** Half-diagonal — the pane-stress reach is scaled from this. */
   extent: number;
@@ -69,6 +79,25 @@ export function makeRegion(
     depth: (x, y) =>
       Math.max(0, Math.min(x - x0, x1 - x, y - y0, y1 - y)),
     yRange: (x) => (x >= x0 && x <= x1 ? [y0, y1] : null),
+    clip: (ring) => {
+      let out = ring;
+      let bx0 = Infinity;
+      let by0 = Infinity;
+      let bx1 = -Infinity;
+      let by1 = -Infinity;
+      for (const p of ring) {
+        if (p.x < bx0) bx0 = p.x;
+        if (p.y < by0) by0 = p.y;
+        if (p.x > bx1) bx1 = p.x;
+        if (p.y > by1) by1 = p.y;
+      }
+      if (bx0 >= x0 && bx1 <= x1 && by0 >= y0 && by1 <= y1) return ring;
+      if (bx0 < x0) out = clipHalfPlane(out, { x: x0, y: y0 }, { x: -1, y: 0 });
+      if (out.length >= 4 && bx1 > x1) out = clipHalfPlane(out, { x: x1, y: y0 }, { x: 1, y: 0 });
+      if (out.length >= 4 && by0 < y0) out = clipHalfPlane(out, { x: x0, y: y0 }, { x: 0, y: -1 });
+      if (out.length >= 4 && by1 > y1) out = clipHalfPlane(out, { x: x0, y: y1 }, { x: 0, y: 1 });
+      return out.length >= 4 ? out : [];
+    },
     centroid: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 },
     extent: Math.hypot(x1 - x0, y1 - y0) / 2,
   });
@@ -102,6 +131,31 @@ export function makeRegion(
           const h = Math.sqrt(r * r - dx * dx);
           return [cy - h, cy + h];
         },
+        clip: (ring) => {
+          // Shave by tangent chords at the rim: each pass cuts at the
+          // farthest-outside vertex's radial. A few chords approximate the
+          // arc well below cell scale — the disc silhouette stays crisp.
+          let out = ring;
+          for (let pass = 0; pass < 4; pass++) {
+            let worst = 0;
+            let wx = 0;
+            let wy = 0;
+            for (const p of out) {
+              const d = Math.hypot(p.x - cx, p.y - cy);
+              if (d > worst) {
+                worst = d;
+                wx = p.x;
+                wy = p.y;
+              }
+            }
+            if (worst <= r + 1e-6) return pass === 0 ? ring : out;
+            const ux = (wx - cx) / worst;
+            const uy = (wy - cy) / worst;
+            out = clipHalfPlane(out, { x: cx + ux * r, y: cy + uy * r }, { x: ux, y: uy });
+            if (out.length < 4) return [];
+          }
+          return out;
+        },
         centroid: { x: cx, y: cy },
         extent: r,
       };
@@ -125,6 +179,16 @@ export function rectAt(centre: Point, hx: number, hy: number, rotation: number):
 /** Square convenience wrapper kept for the square-cell layouts. */
 export function squareAt(centre: Point, half: number, rotation: number): Point[] {
   return rectAt(centre, half, half, rotation);
+}
+
+/** Shave a placed cell to the region boundary, or null when nothing usable
+ *  survives. Untouched cells come back as-is (no `ring`). */
+function shaved(cell: PlacedCell, region: RegionSpec, penWidth: number): PlacedCell | null {
+  const ring = rectAt(cell.centre, cell.hx, cell.hy, cell.rotation);
+  const cut = region.clip(ring);
+  if (cut === ring) return cell;
+  if (cut.length < 4 || ringArea(cut) < 2 * penWidth * (2 * penWidth)) return null;
+  return { ...cell, ring: cut };
 }
 
 /**
@@ -174,7 +238,12 @@ export function layoutCells(o: LayoutOptions): PlacedCell[] {
       half *= 1 + 0.12 * drift.fbm(cx * 0.01, cy * 0.01, 2, 0.5, 2);
       half = clamp(half, o.penWidth, pitch);
       const rotation = o.rotationJitter * (Math.PI / 18) * (2 * rng() - 1);
-      cells.push({ index, centre: { x: cx, y: cy }, hx: half, hy: half, rotation });
+      const cell = shaved(
+        { index, centre: { x: cx, y: cy }, hx: half, hy: half, rotation },
+        o.region,
+        o.penWidth
+      );
+      if (cell) cells.push(cell);
     }
   }
   return cells;
@@ -224,13 +293,18 @@ function layoutMosaic(o: LayoutOptions): PlacedCell[] {
     const jx = o.positionJitter * pitch * 0.2 * (2 * cellRng() - 1);
     const jy = o.positionJitter * pitch * 0.2 * (2 * cellRng() - 1);
     const rotation = o.rotationJitter * (Math.PI / 36) * (2 * cellRng() - 1);
-    cells.push({
-      index: 200000 + index,
-      centre: { x: cxm + jx, y: cym + jy },
-      hx: Math.max(o.penWidth, (w - gapPx) / 2),
-      hy: Math.max(o.penWidth, (h - gapPx) / 2),
-      rotation,
-    });
+    const cell = shaved(
+      {
+        index: 200000 + index,
+        centre: { x: cxm + jx, y: cym + jy },
+        hx: Math.max(o.penWidth, (w - gapPx) / 2),
+        hy: Math.max(o.penWidth, (h - gapPx) / 2),
+        rotation,
+      },
+      o.region,
+      o.penWidth
+    );
+    if (cell) cells.push(cell);
     index++;
   };
 
@@ -300,13 +374,18 @@ function layoutBars(o: LayoutOptions, innerW: number): PlacedCell[] {
       const cx = x + w / 2 + o.positionJitter * pitch * 0.2 * (2 * rng() - 1);
       const cy = y + h / 2 + o.positionJitter * pitch * 0.2 * (2 * rng() - 1);
       const rotation = o.rotationJitter * (Math.PI / 36) * (2 * rng() - 1);
-      cells.push({
-        index: 100000 + index,
-        centre: { x: cx, y: cy },
-        hx: Math.max(o.penWidth, (w - gapPx) / 2),
-        hy: Math.max(o.penWidth, (h - gapPx) / 2),
-        rotation,
-      });
+      const cell = shaved(
+        {
+          index: 100000 + index,
+          centre: { x: cx, y: cy },
+          hx: Math.max(o.penWidth, (w - gapPx) / 2),
+          hy: Math.max(o.penWidth, (h - gapPx) / 2),
+          rotation,
+        },
+        o.region,
+        o.penWidth
+      );
+      if (cell) cells.push(cell);
       index++;
       y += h;
     }

@@ -1,5 +1,5 @@
 import type { Point } from '../flow-lines.js';
-import { clamp01 } from '../lib/math.js';
+import { clamp01, lerp } from '../lib/math.js';
 import { smoothstep } from '../lib/spatial.js';
 import type { RegionSpec } from './layout.js';
 
@@ -217,18 +217,24 @@ export function cellDamage(
   reach: number,
   energy: number,
   paneStress: number,
-  shatter: number
+  shatter: number,
+  focus: number
 ): CellDamage {
   const hit = field.nearest(cx, cy);
   const epi = field.epicentre;
-  // The channel attenuates with arc distance from the strike: the line
-  // passes almost harmlessly through the far tail of its own trajectory —
-  // destruction stays concentrated where it actually hit.
-  const atten = epi
+  // `focus` concentrates the channel by arc distance from the strike: at 1
+  // the line passes almost harmlessly through the far tail of its own
+  // trajectory (a single crater); at 0 the whole trajectory carves with
+  // equal appetite — the reference plates' end-to-end swept channel.
+  const arcAtten = epi
     ? smoothstep(clamp01(1 - Math.abs(hit.arc - epi.arc) / (2.2 * reach)))
     : 1;
+  const atten = lerp(1, arcAtten, clamp01(focus));
+  // The channel narrows where the gesture crawled: local speed sets the
+  // carve width as well as its intensity.
+  const rEff = radius * (0.55 + 0.45 * hit.speed);
   const channel =
-    smoothstep(clamp01(1 - hit.d / radius)) *
+    smoothstep(clamp01(1 - hit.d / rEff)) *
     (0.4 + 0.6 * hit.speed) *
     (0.5 + 0.5 * energy) *
     atten;
@@ -251,9 +257,11 @@ export function cellDamage(
   // shatter widens every zone; at 0 the pane refuses to break at all.
   let zone: DamageZone = 'intact';
   if (shatter > 0) {
-    const dustT = 0.92 - 0.3 * shatter;
-    const cascadeT = 0.62 - 0.28 * shatter;
-    const crackT = 0.32 - 0.2 * shatter;
+    // A wider cracked band than dust/cascade: the reference grades intact →
+    // cracked → shards over a broad annulus rather than a cliff.
+    const dustT = 0.93 - 0.28 * shatter;
+    const cascadeT = 0.66 - 0.26 * shatter;
+    const crackT = 0.3 - 0.22 * shatter;
     zone = D > dustT ? 'dust' : D > cascadeT ? 'cascade' : D > crackT ? 'cracked' : 'intact';
     if (hit.d < extent && zone !== 'dust') zone = 'cascade';
   }

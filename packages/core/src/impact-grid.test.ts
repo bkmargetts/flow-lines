@@ -91,6 +91,7 @@ describe('clipHalfPlane / shatter geometry', () => {
         sweep: 0.3,
         tx: 0,
         ty: 1,
+        side: 1,
         rx: 1,
         ry: 0,
         channel: 10,
@@ -102,10 +103,10 @@ describe('clipHalfPlane / shatter geometry', () => {
       makeRandom(9)
     );
     expect(shards.length).toBeGreaterThan(1);
-    for (const shard of shards) {
-      expect(shard.length).toBeGreaterThanOrEqual(4);
-      expect(shard[0]).toEqual(shard[shard.length - 1]);
-      expect(ringArea(shard)).toBeGreaterThan((2 * 1.2) * (2 * 1.2) * 0.8);
+    for (const { ring } of shards) {
+      expect(ring.length).toBeGreaterThanOrEqual(4);
+      expect(ring[0]).toEqual(ring[ring.length - 1]);
+      expect(ringArea(ring)).toBeGreaterThan((2 * 1.2) * (2 * 1.2) * 0.8);
     }
   });
 
@@ -299,6 +300,8 @@ describe('generateImpactGrid', () => {
       shatter: 0,
       fill: 0,
       paneStress: 0,
+      drift: 0,
+      occlude: false,
       impactStrength: 0.7,
       impactRadius: radius,
       positionJitter: 0,
@@ -340,6 +343,7 @@ describe('generateImpactGrid', () => {
       impactStrength: 0,
       scatter: 0,
       sweep: 0,
+      drift: 0,
       debris: 0,
       positionJitter: 0,
       rotationJitter: 0,
@@ -428,7 +432,9 @@ describe('generateImpactGrid', () => {
     const common = { ...BASE, impactPath: CENTRE_PATH, optimize: false };
     const bare = generateImpactGrid({ ...common, fill: 0 });
     for (const line of bare.lines) {
-      expect(line.points.length).toBeGreaterThanOrEqual(4);
+      // Occlusion may open a ring where a landed shard hides part of it —
+      // every stroke must still be drawable.
+      expect(line.points.length).toBeGreaterThanOrEqual(2);
     }
     const toned = generateImpactGrid({ ...common, fill: 0.6 });
     expect(toned.lines.length).toBeGreaterThan(bare.lines.length);
