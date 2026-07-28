@@ -9,6 +9,8 @@ export const machineModule: PureModule<MachineState> = {
   kind: 'pure',
   id: 'machine',
   label: 'Machine',
+  category: 'scenes',
+  description: 'Meshing gear trains, belts, ropes, weights',
   defaultState: () => ({ ...defaultMachineState }),
   Controls: MachineControls,
   render: renderMachine,

@@ -9,6 +9,8 @@ export const cityGeneratorModule: PureModule<CityState> = {
   kind: 'pure',
   id: 'city-generator',
   label: 'City Generator',
+  category: 'scenes',
+  description: 'Isometric cities with an order/chaos slider',
   defaultState: () => ({ ...defaultCityState }),
   Controls: CityGeneratorControls,
   render: renderCity,

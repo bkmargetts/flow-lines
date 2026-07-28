@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { MODULES, getModule, DEFAULT_MODULE_ID } from '../modules/registry';
+import { getModule } from '../modules/registry';
 import { useLayerStore, MAX_LAYERS } from '../LayerStore';
+import { ModulePicker } from './ModulePicker';
 
 /**
  * The per-layer hold-off (halo) field. A bare controlled number input can't be
@@ -55,7 +56,7 @@ export function LayerStackPanel() {
     setHoldOff,
     canAdd,
   } = useLayerStore();
-  const [pick, setPick] = useState(DEFAULT_MODULE_ID);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
     <div className="layer-stack">
@@ -167,23 +168,25 @@ export function LayerStackPanel() {
       </div>
 
       <div className="layer-add">
-        <select value={pick} onChange={(e) => setPick(e.target.value)}>
-          {MODULES.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
         <button
           type="button"
-          className="secondary"
+          className="secondary layer-add-btn"
           disabled={!canAdd}
           title={canAdd ? 'Add a layer' : `At most ${MAX_LAYERS} layers`}
-          onClick={() => addLayer(pick)}
+          onClick={() => setPickerOpen(true)}
         >
           + Add layer
         </button>
       </div>
+      {pickerOpen && (
+        <ModulePicker
+          onPick={(id) => {
+            addLayer(id);
+            setPickerOpen(false);
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -9,6 +9,8 @@ export const gratingTexture: PureModule<GratingParams> = {
   kind: 'pure',
   id: 'grating',
   label: 'Grating (multi-ink)',
+  category: 'textures',
+  description: 'Interleaved multi-pen gratings',
   defaultState: () => ({ ...defaultGratingParams, seed: 7 }),
   Controls: GratingTextureControls,
   render: renderGratingTexture,

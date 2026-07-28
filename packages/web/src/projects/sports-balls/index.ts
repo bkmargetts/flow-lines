@@ -7,6 +7,8 @@ export const sportsBallsModule: PureModule<SportsBallsState> = {
   kind: 'pure',
   id: 'sports-balls',
   label: 'Sports Balls',
+  category: 'scenes',
+  description: 'Shaded polyhedral ball studies',
   defaultState: () => ({
     ...defaultSportsBallsState,
     mix: { ...defaultSportsBallsState.mix },

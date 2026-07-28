@@ -77,9 +77,24 @@ export interface ControlsProps<S> {
   selected: boolean;
 }
 
+/** Picker taxonomy — the browse-all overlay groups modules under these
+ *  headings. Display order and labels live in modules/categories.ts. */
+export type ModuleCategory =
+  | 'image'
+  | 'scenes'
+  | 'flow'
+  | 'simulations'
+  | 'textures';
+
 interface ModuleBase<S> {
   id: string;
   label: string;
+  /** Which picker section this module appears under. Required — every new
+   *  module self-registers into the browse-all overlay. */
+  category: ModuleCategory;
+  /** One-line card blurb for the picker (~≤110 chars, sentence fragment,
+   *  no trailing period — matches the README module table voice). */
+  description: string;
   /** Fresh per-instance state — a function, not a value, because N independent
    *  layer instances each need their own copy. */
   defaultState: () => S;

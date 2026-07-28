@@ -7,6 +7,8 @@ export const flowFieldModule: PureModule<FlowState> = {
   kind: 'pure',
   id: 'flow-field',
   label: 'Flow Field',
+  category: 'flow',
+  description: 'Noise-driven flow lines',
   defaultState: () => ({ ...defaultFlowState }),
   Controls: FlowFieldControls,
   render: renderFlowField,

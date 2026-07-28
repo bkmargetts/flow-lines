@@ -7,6 +7,8 @@ export const botanicalGeneratorModule: PureModule<BotanicalState> = {
   kind: 'pure',
   id: 'botanical-generator',
   label: 'Botanical Generator',
+  category: 'scenes',
+  description: 'Grown, lit botanical illustrations',
   defaultState: () => ({ ...defaultBotanicalState, maskPath: [] }),
   Controls: BotanicalGeneratorControls,
   render: renderBotanicalGenerator,

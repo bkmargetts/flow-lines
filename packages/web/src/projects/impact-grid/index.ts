@@ -10,6 +10,8 @@ export const impactGridModule: PureModule<ImpactGridState> = {
   kind: 'pure',
   id: 'impact-grid',
   label: 'Impact Grid',
+  category: 'simulations',
+  description: 'A hand-ruled grid struck along a drawn path — displaced, torqued, shattered',
   defaultState: () => ({ ...defaultImpactGridState, maskPath: [] }),
   Controls: ImpactGridControls,
   render: renderImpactGrid,

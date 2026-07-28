@@ -38,3 +38,7 @@ botanical-gallery/
 # Working artifacts from scripts/hash-baseline.mjs — a local before/after
 # manifest, not a committed baseline.
 cli-hash-baseline.json
+
+# Intermediate SVGs from the picker-thumbnail pipeline (`pnpm previews`);
+# only the rasterized PNGs in packages/web/src/modules/previews/ are committed.
+packages/web/.preview-svgs/

@@ -7,6 +7,8 @@ export const colorFieldModule: PureModule<ColorFieldState> = {
   kind: 'pure',
   id: 'color-field',
   label: 'Colour Field',
+  category: 'flow',
+  description: 'Atmospheric multi-ink gradients',
   defaultState: () => ({ ...defaultColorFieldState }),
   Controls: ColorFieldControls,
   render: renderColorField,

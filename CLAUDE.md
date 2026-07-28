@@ -255,7 +255,16 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
   `modules/render-registry.ts`; a parity test enforces it) or `live`
   (owns its workers/ML and publishes lines — image-ink). Each module dir
   has `types.ts` (state + defaults), `render.ts`, `Controls.tsx`, and an
-  `index` exporting the `Module`. Controls are built from the shared
+  `index` exporting the `Module` — which must declare a `category`
+  (`ModuleCategory`) and one-line `description`: the add-layer UI is a
+  browse-all overlay (`components/ModulePicker.tsx`) that groups module
+  cards under the category headings with a real rendered thumbnail and
+  the blurb on each card. Thumbnails are committed PNGs in
+  `modules/previews/`, regenerated with `pnpm previews` (repo root:
+  an `UPDATE_PREVIEWS=1` vitest pass renders each pure module at seed 42,
+  then `scripts/render-module-previews.mjs` rasterizes; eyeball before
+  committing) — `module-previews.test.ts` fails if a registered module
+  has no preview PNG, so new modules must run it once. Controls are built from the shared
   atoms in `components/controls/` (`Slider`, `Toggle`, `SeedControl`,
   `AdvancedSection`/`AdvGroup`, `PresetPicker`) — don't hand-roll those
   rows. **Every generator module's Controls opens with the shared

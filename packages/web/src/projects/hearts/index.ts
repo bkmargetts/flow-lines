@@ -7,6 +7,8 @@ export const heartsModule: PureModule<HeartsState> = {
   kind: 'pure',
   id: 'hearts',
   label: 'Hearts',
+  category: 'scenes',
+  description: 'Love hearts in four pen-and-ink styles',
   defaultState: () => ({
     ...defaultHeartsState,
     mix: { ...defaultHeartsState.mix },
