@@ -200,6 +200,10 @@ export type { HeartsOptions, HeartStyle, HeartsRegion } from './hearts/index.js'
 export { generateImpactGrid } from './impact-grid/index.js';
 export type { ImpactGridOptions } from './impact-grid/index.js';
 
+// Shard rain (a pane dropped onto scattered invisible impact points, shattered in sequence)
+export { generateShardRain } from './shard-rain/index.js';
+export type { ShardRainOptions } from './shard-rain/index.js';
+
 // Ribbon weave / knotwork (interlaced bands, tangle → Celtic lattice)
 export { generateRibbonWeave } from './ribbons/index.js';
 export type { RibbonWeaveOptions, RibbonEdgeMode, RibbonStyle } from './ribbons/index.js';

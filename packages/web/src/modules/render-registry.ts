@@ -23,6 +23,7 @@ import { renderMeander } from '../projects/meander/render';
 import { renderCoral } from '../projects/coral/render';
 import { renderWarpGrid } from '../projects/warp-grid/render';
 import { renderImpactGrid } from '../projects/impact-grid/render';
+import { renderShardRain } from '../projects/shard-rain/render';
 import { renderClassicTexture } from '../textures/classic/render';
 import { renderGratingTexture } from '../textures/grating/render';
 import { renderBlankTexture } from '../textures/blank/render';
@@ -75,6 +76,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   coral: entry(renderCoral),
   'warp-grid': entry(renderWarpGrid),
   'impact-grid': entry(renderImpactGrid),
+  'shard-rain': entry(renderShardRain),
   classic: entry(renderClassicTexture, true),
   grating: entry(renderGratingTexture, true),
   blank: entry(renderBlankTexture, true),

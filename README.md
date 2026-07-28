@@ -94,6 +94,7 @@ lives in a collapsed Advanced group.
 | Coral | pure | Differential-growth organisms |
 | Warp Grid | pure | Op-art gratings deformed by hidden relief |
 | Impact Grid | pure | A hand-ruled grid struck along a drawn path — displaced, torqued, shattered |
+| Shard Rain | pure | A plate dropped onto invisible pins — shards rain down, shattering again as they fall |
 | Pattern | pure | Background hatch / grid / dot textures |
 | Grating (multi-ink) | pure | Interleaved multi-pen gratings |
 | Blank (template) | pure | Empty module, the template for new ones |

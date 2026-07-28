@@ -20,6 +20,7 @@ import { generateStickmen } from './stickmen/index.js';
 import { generateSportsBalls } from './sports-balls/index.js';
 import { generateHearts } from './hearts/index.js';
 import { generateImpactGrid } from './impact-grid/index.js';
+import { generateShardRain } from './shard-rain/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateMeander } from './meander/index.js';
@@ -157,6 +158,8 @@ for (const seed of SEEDS) {
     generateHearts({ width: 300, height: 400, margin: 20, seed });
   CASES[`impact-grid/default/${seed}`] = () =>
     generateImpactGrid({ width: 300, height: 400, margin: 20, seed });
+  CASES[`shard-rain/default/${seed}`] = () =>
+    generateShardRain({ width: 300, height: 400, margin: 20, seed });
   CASES[`ribbons/default/${seed}`] = () =>
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
   CASES[`gesture/default/${seed}`] = () =>
@@ -246,6 +249,43 @@ CASES['impact-grid/rip/42'] = () =>
     fill: 0.2,
     fillStyle: 'hatch',
     inkPath: true,
+  });
+CASES['shard-rain/settled/42'] = () =>
+  generateShardRain({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    moment: 1,
+    impacts: 7,
+    energy: 0.8,
+    crush: 0.8,
+    markImpacts: true,
+  });
+CASES['shard-rain/saucer/42'] = () =>
+  generateShardRain({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    paneShape: 'disc',
+    impacts: 7,
+    moment: 0.6,
+    pinSpread: 0.7,
+  });
+CASES['shard-rain/drawn-pins/42'] = () =>
+  generateShardRain({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    impactPoints: [
+      { x: 150, y: 150 },
+      { x: 150, y: 260 },
+      { x: 195, y: 310 },
+    ],
+    moment: 0.8,
+    scatter: 0.5,
   });
 CASES['impact-grid/strikes/42'] = () =>
   generateImpactGrid({
