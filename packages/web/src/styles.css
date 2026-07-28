@@ -948,15 +948,137 @@ button.secondary:hover {
   gap: 6px;
 }
 
-.layer-add select {
+.layer-add-btn {
   flex: 1 1 auto;
-  padding: 8px;
+}
+
+/* ── Browse-all module picker overlay ──────────────────────────────────
+   Portal-rendered on document.body (like the InfoTip bubble) so the
+   sidebar scroll container and the mobile bottom sheet never clip it. */
+.module-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900; /* over the mobile sheet (20), under tooltips (1000) */
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.module-picker {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-paper);
+  width: min(880px, 100%);
+  max-height: min(80vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.module-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.module-picker-head input {
+  flex: 1 1 auto;
+  padding: 8px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--bg-inset);
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+}
+
+.module-picker-close {
+  border: none;
+  background: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  color: var(--text-secondary);
   cursor: pointer;
+  padding: 4px 8px;
+}
+
+.module-picker-close:hover {
+  color: var(--text-primary);
+}
+
+.module-picker-body {
+  overflow-y: auto;
+  padding: 4px 16px 20px;
+}
+
+.module-picker-body .section-title {
+  margin-top: 16px;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.module-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  gap: 4px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-inset);
+  cursor: pointer;
+  font: inherit;
+}
+
+.module-card:hover {
+  background: var(--bg-inset-strong);
+  border-color: var(--border-strong);
+}
+
+.module-card img {
+  width: 100%;
+  aspect-ratio: 210 / 297; /* A4 portrait, matching the preview renders */
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.module-card-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.module-card-desc {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .module-picker-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .module-picker {
+    width: 100%;
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .module-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
 }
 
 /* The shared page frame, sitting under the tabs and above per-project controls */

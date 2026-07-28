@@ -56,6 +56,10 @@ const PREVIEW_STATES: Record<string, Record<string, unknown>> = {
   meander: { preset: 'young', iterations: 150, migration: 0.5, traces: 7, flowLines: 3 },
   coral: { preset: 'bloom', seedShape: 'polygon', iterations: 300, rings: 26 },
   gesture: { preset: 'kline' },
+  // The grating shares its renderer with noise-texture — at plain defaults the
+  // two previews would be byte-identical. The blob mask is the grating's own
+  // showcase (same variant the goldens pin).
+  grating: { maskMode: 'blob', maskIrregularity: 0.6 },
 };
 
 function stateFor(mod: PureModule<Record<string, unknown>>) {
