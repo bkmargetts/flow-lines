@@ -30,7 +30,7 @@ export function registerVentHoses(program: Command) {
     .option('--light-angle <degrees>', 'Light direction in degrees', '315')
     .option('--shadow-hatch <number>', 'Contact-shadow strength at under-crossings 0-1', '0.6')
     .option('--weave-bias <number>', 'Fraction 0-1 of crossings where the fatter duct just lies on top', '0.35')
-    .option('--gap-mm <number>', 'Reserved paper at crossings in mm', '0.8')
+    .option('--gap-mm <number>', 'Reserved paper at crossings in mm', '0.45')
     .option('--wobble <number>', 'Hand-drawn wobble amplitude in px', '0.8')
     .option('--stroke-color <color>', 'SVG stroke color', '#000000')
     .option('--stroke-width <number>', 'SVG stroke width (without --paper)', '1.35')

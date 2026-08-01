@@ -89,7 +89,7 @@ const DEFAULTS: Required<Omit<VentHosesOptions, 'width' | 'height' | 'margin' | 
   lightAngle: -2.35,
   shadowHatch: 0.6,
   weaveBias: 0.35,
-  gap: 2.5,
+  gap: 1.2,
   penWidth: 1.35,
   wobble: 0.8,
   optimize: true,
@@ -112,13 +112,15 @@ export function generateVentHoses(options: VentHosesOptions): FlowLinesResult {
 
   const radiusMin = Math.max(3, Math.min(o.radiusMin, o.radiusMax));
   const radiusMax = Math.max(radiusMin, o.radiusMax);
-  const gap = Math.max(o.gap, 1.5 * o.penWidth);
+  const gap = Math.max(o.gap, 0.9 * o.penWidth);
 
   // The occlusion margin must cover the finish pass's peak displacement
   // (wobble amplitude + whole-stroke misregistration), or the hand pass
-  // bends erased strokes back into the reserved gaps.
+  // bends erased strokes back into the reserved gaps. The 0.7 base covers
+  // the pen's own half-width; anything more is pure moat — the halo must
+  // read as a held-off sliver, not a channel.
   const finishReach = o.wobble * 1.6;
-  const inflatePx = 1.0 + finishReach;
+  const inflatePx = 0.7 + finishReach;
 
   // 1. Grow the centerlines, then relax parallel hoses apart. The pushes can
   // locally re-tighten a bend past the growth cap, so re-clamp and smooth

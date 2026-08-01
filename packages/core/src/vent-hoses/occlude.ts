@@ -479,11 +479,13 @@ export function occludeMarks(
     // Long marks: walk segments, micro-sampling only where an occluder's
     // bbox is near, and emit the surviving runs. A stub of shade with its
     // tube erased around it reads as dirt — shade survivors must be
-    // substantial; a ring survivor must keep a real fraction of its sweep
-    // (the c-stubs poking out from under an overlying hose are exactly what
-    // real ink shows on an exposed sliver, but a shard reads as dirt);
-    // edges may stay short (the sliver between two adjacent crossings is
-    // real pile anatomy).
+    // substantial. Ring survivors are attachment-aware: a stub that still
+    // reaches one of the ring's original endpoints reads as corrugation
+    // peeking out from under the over hose and may stay short — it's what
+    // carries the corrugation right up to the reserved gap — while a
+    // mid-fragment cut at both ends is a floating smile and must keep most
+    // of the sweep to live. Edges may stay short (the sliver between two
+    // adjacent crossings is real pile anatomy).
     let origLen = 0;
     for (let i = 1; i < mark.points.length; i++) {
       origLen += Math.hypot(
@@ -491,29 +493,37 @@ export function occludeMarks(
         mark.points[i].y - mark.points[i - 1].y
       );
     }
-    const minLen =
+    const minLenFor = (attached: boolean): number =>
       mark.layer === 'shade'
         ? Math.max(minRun, 1.2 * r)
         : mark.layer === 'ring'
-          ? Math.max(4.5, 0.45 * origLen)
+          ? Math.max(4.5, (attached ? 0.25 : 0.6) * origLen)
           : minRun;
     let runPts: Point[] = [];
     let runArcs: number[] = [];
+    let anyFlushedCovered = false;
+    let runStartsAtMarkStart = true;
+    let runEndsAtMarkEnd = false;
     const flush = () => {
       if (runPts.length >= 2) {
         let len = 0;
         for (let i = 1; i < runPts.length; i++) {
           len += Math.hypot(runPts[i].x - runPts[i - 1].x, runPts[i].y - runPts[i - 1].y);
         }
-        if (len >= minLen)
+        const attached =
+          (runStartsAtMarkStart && !anyFlushedCovered) || runEndsAtMarkEnd;
+        if (len >= minLenFor(attached))
           out.push({ points: runPts, arcs: runArcs, layer: mark.layer, strand: mark.strand });
       }
       runPts = [];
       runArcs = [];
+      runStartsAtMarkStart = false;
     };
     const push = (p: Point, arc: number, isCovered: boolean) => {
-      if (isCovered) flush();
-      else {
+      if (isCovered) {
+        flush();
+        anyFlushedCovered = true;
+      } else {
         runPts.push(p);
         runArcs.push(arc);
       }
@@ -550,6 +560,8 @@ export function occludeMarks(
         push(p, arc, covered(p.x, p.y, arc, mark.strand, occs, pad));
       }
     }
+    // The closing run (if any) reaches the mark's original end point.
+    runEndsAtMarkEnd = true;
     flush();
   }
   return out;

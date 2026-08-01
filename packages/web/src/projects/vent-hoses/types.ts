@@ -48,7 +48,7 @@ export const defaultVentHosesState: VentHosesState = {
   lightAngleDeg: 315,
   shadowHatch: 0.6,
   weaveBias: 0.35,
-  gapMm: 0.8,
+  gapMm: 0.45,
 
   penWidthMm: 0.4,
   wobbleMm: 0.25,

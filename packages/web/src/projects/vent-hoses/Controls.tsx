@@ -221,7 +221,7 @@ export function VentHosesControls({ state, update }: ControlsProps<VentHosesStat
               </span>
             }
             value={state.gapMm}
-            min={0.3}
+            min={0.2}
             max={2.5}
             step={0.1}
             onChange={(v) => update({ gapMm: v })}
