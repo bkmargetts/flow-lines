@@ -1,13 +1,13 @@
 import type { Command } from 'commander';
-import { generateVentHoses, type VentHosesOptions, type SVGOptions } from '@flow-lines/core';
+import { generateTangles, type TanglesOptions, type SVGOptions } from '@flow-lines/core';
 import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
-export function registerVentHoses(program: Command) {
-  addTileOptions(addSketchOptions(program.command('vent-hoses')))
+export function registerTangles(program: Command) {
+  addTileOptions(addSketchOptions(program.command('tangles')))
     .description(
-      'Render a pile of corrugated vent hoses worming across the page, ' +
-        'weaving over and under with reserved-paper crossings'
+      'Render a tangle of corrugated vent hoses or shoelaces worming across ' +
+        'the page, weaving over and under with reserved-paper crossings'
     )
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '1000')
@@ -17,15 +17,17 @@ export function registerVentHoses(program: Command) {
     .option('--pen-width-mm <number>', 'Plotted pen width in mm (with --paper)', '0.3')
     .option('--resolution <number>', 'Render density in px per mm (with --paper)', '3')
     .option('-m, --margin <number>', 'Margin from canvas edges in px (without --paper)', '28')
-    .option('-s, --seed <number>', 'Seed: hose layout, weave bias and wobble')
-    .option('--count <number>', 'Number of hoses', '7')
-    .option('--radius-min-mm <number>', 'Thinnest hose radius in mm (px at 3px/mm without --paper)', '3')
-    .option('--radius-max-mm <number>', 'Fattest hose radius in mm (px at 3px/mm without --paper)', '8')
+    .option('-s, --seed <number>', 'Seed: strand layout, weave bias and wobble')
+    .option('--material <m>', 'Strand material: hose (corrugated duct) or lace (flat shoelace)', 'hose')
+    .option('--count <number>', 'Number of strands', '7')
+    .option('--radius-min-mm <number>', 'Thinnest strand radius in mm (px at 3px/mm without --paper)', '3')
+    .option('--radius-max-mm <number>', 'Fattest strand radius in mm (px at 3px/mm without --paper)', '8')
     .option('--wander <number>', 'Curvature energy 0-1: drifts at 0, coils at 1', '0.55')
-    .option('--cuff-chance <number>', 'Chance 0-1 a hose end terminates on-page with an open cuff', '0.25')
-    .option('--clearance-mm <number>', 'Extra paper between parallel hoses in mm', '1.5')
+    .option('--cuff-chance <number>', 'Chance 0-1 a strand ends on-page (hose cuff / lace aglet)', '0.25')
+    .option('--clearance-mm <number>', 'Extra paper between parallel strands in mm', '1.5')
     .option('--ring-density <number>', 'Corrugation ring pitch 0-1 (pitch scales with radius)', '0.6')
     .option('--ring-curve <number>', 'Ring ellipse bulge 0-1 — the wrap-the-cylinder cue', '0.6')
+    .option('--twists <number>', 'Lace twist-flip frequency 0-1 (material lace)', '0.5')
     .option('--shading <number>', 'Shadow-side longitudinal hatch strength 0-1', '0.45')
     .option('--light-angle <degrees>', 'Light direction in degrees', '315')
     .option('--shadow-hatch <number>', 'Contact-shadow strength at under-crossings 0-1', '0.6')
@@ -37,7 +39,7 @@ export function registerVentHoses(program: Command) {
     .option('--background', 'Include background rectangle')
     .option('--background-color <color>', 'Background color', '#ffffff')
     .option('--no-optimize', 'Skip pen-travel ordering')
-    .option('-o, --output <file>', 'Output file path', 'vent-hoses.svg')
+    .option('-o, --output <file>', 'Output file path', 'tangles.svg')
     .action((options) => {
       const frame = resolvePageFrame(options);
       const { width, height, marginPx, paperSvg, paperStrokeWidth } = frame;
@@ -51,11 +53,12 @@ export function registerVentHoses(program: Command) {
         ? Math.max(1, (frame.page.widthMm * frame.page.heightMm) / (210 * 297))
         : 1;
 
-      const hoseOptions: VentHosesOptions = {
+      const hoseOptions: TanglesOptions = {
         width,
         height,
         margin: marginPx,
         seed: options.seed ? parseInt(options.seed, 10) : undefined,
+        material: options.material === 'lace' ? 'lace' : 'hose',
         count: Math.max(1, Math.round(parseInt(options.count, 10) * sheetFactor)),
         radiusMin: parseFloat(options.radiusMinMm) * mm,
         radiusMax: parseFloat(options.radiusMaxMm) * mm,
@@ -64,6 +67,7 @@ export function registerVentHoses(program: Command) {
         clearance: parseFloat(options.clearanceMm) * mm,
         ringDensity: parseFloat(options.ringDensity),
         ringCurve: parseFloat(options.ringCurve),
+        twists: parseFloat(options.twists),
         shading: parseFloat(options.shading),
         lightAngle: (parseFloat(options.lightAngle) * Math.PI) / 180,
         shadowHatch: parseFloat(options.shadowHatch),
@@ -74,12 +78,12 @@ export function registerVentHoses(program: Command) {
         optimize: options.optimize,
       };
 
-      console.log('Rendering vent hoses...');
+      console.log('Rendering tangles...');
       console.log(`  Size: ${width}x${height}`);
-      console.log(`  Hoses: ${hoseOptions.count}`);
+      console.log(`  Strands: ${hoseOptions.count} (${hoseOptions.material})`);
 
       const result = applySketchFromFlags(
-        generateVentHoses(hoseOptions),
+        generateTangles(hoseOptions),
         options,
         sketchScale(options)
       );

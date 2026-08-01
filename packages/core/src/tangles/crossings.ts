@@ -1,4 +1,4 @@
-import { sampleAtOpen, type HoseStrand } from './strand.js';
+import { sampleAtOpen, type TangleStrand } from './strand.js';
 
 /**
  * Geometric crossing detection, adapted from the ribbons module for open
@@ -45,7 +45,7 @@ interface RawHit {
   ang: number;
 }
 
-export function findHoseCrossings(strands: HoseStrand[], maxCrossings: number): Crossing[] {
+export function findHoseCrossings(strands: TangleStrand[], maxCrossings: number): Crossing[] {
   // Global bounds for the hash grid.
   let minX = Infinity;
   let minY = Infinity;
@@ -187,7 +187,7 @@ export function findHoseCrossings(strands: HoseStrand[], maxCrossings: number): 
 
   /** Min distance from a point to strand `s` within an arc window. */
   const distNear = (
-    s: HoseStrand,
+    s: TangleStrand,
     p: { x: number; y: number },
     arc: number,
     win: number

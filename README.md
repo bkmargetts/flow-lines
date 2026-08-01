@@ -79,7 +79,7 @@ lives in a collapsed Advanced group.
 | Sports Balls | pure | Shaded polyhedral ball studies |
 | Hearts | pure | Love hearts in four pen-and-ink styles |
 | Ribbon Weave | pure | Celtic knotwork / woven lattices |
-| Vent Hoses | pure | Corrugated ducts worming over and under |
+| Tangles | pure | Corrugated ducts or shoelaces worming over and under |
 | Gestural Ink | pure | Kline/Hartung/sumi gestural abstractions |
 | Machine | pure | Meshing gear trains, belts, ropes, weights |
 | Conway Long Exposure | pure | Game of Life history as comet trails |
@@ -215,7 +215,7 @@ Run `flow-lines <command> --help` for the full, authoritative flag list.
 | `meander` | River-migration cartography |
 | `coral` | Differential-growth organisms |
 | `warp-grid` | Op-art gratings deformed by hidden relief |
-| `vent-hoses` | Corrugated ducts weaving over and under |
+| `tangles` | Corrugated ducts or shoelaces weaving over and under |
 
 Several generators are currently reachable only from the web app — Reaction–
 Diffusion, Lenia, Physarum, Colour Field, City, Stick Men, Sports Balls, Hearts,

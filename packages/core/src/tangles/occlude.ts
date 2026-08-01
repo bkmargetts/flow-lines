@@ -1,7 +1,7 @@
 import type { Point } from '../flow-lines.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { outlineFromEdges } from '../lib/spatial.js';
-import { sampleAtOpen, type HoseStrand } from './strand.js';
+import { sampleAtOpen, type TangleStrand } from './strand.js';
 import type { Crossing } from './crossings.js';
 import type { Mark } from './hose.js';
 
@@ -38,10 +38,13 @@ export interface OccludeOptions {
   inflatePx: number;
   penWidth: number;
   shadowHatch: number;
+  /** Lace mode: contact shadows soften — a full-width tick that blends in
+   *  among a hose's corrugation rings reads as a staple on a clean ribbon. */
+  lace?: boolean;
 }
 
 export function buildOccluders(
-  strands: HoseStrand[],
+  strands: TangleStrand[],
   crossings: Crossing[],
   aOnTop: boolean[],
   o: OccludeOptions
@@ -71,7 +74,7 @@ export function buildOccluders(
   /** Greedy point-to-polyline distance descent: walk `idx` on `s` towards
    *  the local minimum distance to `p`, bounded to stay near `homeArc`. */
   const localDist = (
-    s: HoseStrand,
+    s: TangleStrand,
     p: Point,
     idx: number,
     homeArc: number,
@@ -197,7 +200,7 @@ export function buildOccluders(
  * the reserved paper between the two windows.
  */
 export function buildGrazeOccluders(
-  strands: HoseStrand[],
+  strands: TangleStrand[],
   crossings: Crossing[],
   aOnTop: boolean[],
   byStrand: Occluder[][],
@@ -351,7 +354,7 @@ export function buildGrazeOccluders(
   }
 }
 
-function bboxesNear(a: HoseStrand, b: HoseStrand, pad: number): boolean {
+function bboxesNear(a: TangleStrand, b: TangleStrand, pad: number): boolean {
   let aMinX = Infinity;
   let aMinY = Infinity;
   let aMaxX = -Infinity;
@@ -378,7 +381,7 @@ function bboxesNear(a: HoseStrand, b: HoseStrand, pad: number): boolean {
 }
 
 function occluderFromWindow(
-  s: HoseStrand,
+  s: TangleStrand,
   strandIdx: number,
   arc0: number,
   arc1: number,
@@ -437,7 +440,7 @@ function covered(
  */
 export function occludeMarks(
   marks: Mark[],
-  strands: HoseStrand[],
+  strands: TangleStrand[],
   occludersByStrand: Occluder[][],
   o: OccludeOptions
 ): Mark[] {
@@ -573,14 +576,15 @@ export function occludeMarks(
  * classic ink cue that the under-pass sits in the over-pass's shade.
  */
 export function contactShadows(
-  strands: HoseStrand[],
+  strands: TangleStrand[],
   crossings: Crossing[],
   aOnTop: boolean[],
   o: OccludeOptions
 ): Mark[] {
   const marks: Mark[] = [];
   if (o.shadowHatch <= 0.02) return marks;
-  const nT = Math.round(1 + o.shadowHatch * 3);
+  const nT = o.lace ? 1 : Math.round(1 + o.shadowHatch * 3);
+  const reachFrac = o.lace ? 0.45 : 0.8;
 
   // Candidate tick arcs per under-strand. Two guards against tangle scribble:
   // shallow (osculating) crossings get no ticks — their geometric cover
@@ -616,7 +620,7 @@ export function contactShadows(
       if (arc - last < minSpacing) continue;
       last = arc;
       const smp = sampleAtOpen(s, arc);
-      const reach = s.r * 0.8;
+      const reach = s.r * reachFrac;
       const pts: Point[] = [];
       const arcs: number[] = [];
       for (let q = 0; q < 3; q++) {

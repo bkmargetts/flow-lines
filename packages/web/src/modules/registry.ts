@@ -11,7 +11,7 @@ import { cityGeneratorModule } from '../projects/city-generator';
 import { stickmenModule } from '../projects/stickmen';
 import { sportsBallsModule } from '../projects/sports-balls';
 import { heartsModule } from '../projects/hearts';
-import { ventHosesModule } from '../projects/vent-hoses';
+import { tanglesModule } from '../projects/tangles';
 import { ribbonWeaveModule } from '../projects/ribbon-weave';
 import { gestureModule } from '../projects/gesture';
 import { machineModule } from '../projects/machine';
@@ -49,7 +49,7 @@ export const MODULES: Module<any>[] = [
   stickmenModule,
   sportsBallsModule,
   heartsModule,
-  ventHosesModule,
+  tanglesModule,
   ribbonWeaveModule,
   gestureModule,
   machineModule,

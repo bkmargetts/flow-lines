@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { generateVentHoses, type VentHosesOptions } from './vent-hoses/index.js';
-import { growHoses } from './vent-hoses/centerline.js';
-import { findHoseCrossings } from './vent-hoses/crossings.js';
-import { solveHoseWeave } from './vent-hoses/weave.js';
-import { finalizeOpen, sampleAtOpen } from './vent-hoses/strand.js';
+import { generateTangles, type TanglesOptions } from './tangles/index.js';
+import { growHoses } from './tangles/centerline.js';
+import { findHoseCrossings } from './tangles/crossings.js';
+import { solveHoseWeave } from './tangles/weave.js';
+import { finalizeOpen, sampleAtOpen } from './tangles/strand.js';
 
-const BASE: VentHosesOptions = { width: 300, height: 400, margin: 20, seed: 7 };
+const BASE: TanglesOptions = { width: 300, height: 400, margin: 20, seed: 7 };
 
 function totalLength(lines: { points: { x: number; y: number }[] }[]): number {
   let len = 0;
@@ -17,21 +17,21 @@ function totalLength(lines: { points: { x: number; y: number }[] }[]): number {
   return len;
 }
 
-describe('generateVentHoses', () => {
+describe('generateTangles', () => {
   it('is deterministic per seed', () => {
-    const a = generateVentHoses(BASE);
-    const b = generateVentHoses(BASE);
+    const a = generateTangles(BASE);
+    const b = generateTangles(BASE);
     expect(a).toEqual(b);
   });
 
   it('emits more ink as the count rises', () => {
-    const sparse = generateVentHoses({ ...BASE, count: 2 });
-    const dense = generateVentHoses({ ...BASE, count: 10 });
+    const sparse = generateTangles({ ...BASE, count: 2 });
+    const dense = generateTangles({ ...BASE, count: 10 });
     expect(totalLength(dense.lines)).toBeGreaterThan(totalLength(sparse.lines));
   });
 
   it('keeps every point finite and inside the margin frame', () => {
-    const res = generateVentHoses({ ...BASE, count: 10, shading: 0.9 });
+    const res = generateTangles({ ...BASE, count: 10, shading: 0.9 });
     for (const line of res.lines) {
       for (const p of line.points) {
         expect(Number.isFinite(p.x)).toBe(true);
@@ -46,21 +46,21 @@ describe('generateVentHoses', () => {
 
   it('reserves more paper as the crossing gap widens', () => {
     // Occlusion has no off switch — a wider reserved gap must erase more ink.
-    const tight = generateVentHoses({ ...BASE, count: 9, gap: 2, wobble: 0, optimize: false });
-    const wide = generateVentHoses({ ...BASE, count: 9, gap: 9, wobble: 0, optimize: false });
+    const tight = generateTangles({ ...BASE, count: 9, gap: 2, wobble: 0, optimize: false });
+    const wide = generateTangles({ ...BASE, count: 9, gap: 9, wobble: 0, optimize: false });
     expect(totalLength(wide.lines)).toBeLessThan(totalLength(tight.lines));
   });
 
   it('splits edge outlines at crossings', () => {
     // With crossings present there must be more edge runs than the two
     // unbroken outlines every hose starts with.
-    const res = generateVentHoses({ ...BASE, count: 9, wobble: 0, optimize: false });
+    const res = generateTangles({ ...BASE, count: 9, wobble: 0, optimize: false });
     const edgeRuns = res.lines.filter((l) => l.layer === 'edge').length;
     expect(edgeRuns).toBeGreaterThan(2 * 9);
   });
 
   it('draws corrugation rings', () => {
-    const res = generateVentHoses({ ...BASE, wobble: 0, optimize: false });
+    const res = generateTangles({ ...BASE, wobble: 0, optimize: false });
     const rings = res.lines.filter((l) => l.layer === 'ring');
     expect(rings.length).toBeGreaterThan(20);
   });
@@ -69,8 +69,8 @@ describe('generateVentHoses', () => {
     // Same seed, different shading: the edge outlines must be byte-identical
     // (wobble off — the finish pass varies with stroke count; optimize off —
     // reordering shuffles the comparison).
-    const flat = generateVentHoses({ ...BASE, shading: 0, wobble: 0, optimize: false });
-    const shaded = generateVentHoses({ ...BASE, shading: 1, wobble: 0, optimize: false });
+    const flat = generateTangles({ ...BASE, shading: 0, wobble: 0, optimize: false });
+    const shaded = generateTangles({ ...BASE, shading: 1, wobble: 0, optimize: false });
     const edges = (res: typeof flat): string =>
       JSON.stringify(res.lines.filter((l) => l.layer === 'edge'));
     expect(edges(flat)).toBe(edges(shaded));
@@ -78,13 +78,52 @@ describe('generateVentHoses', () => {
   });
 
   it('echoes the resolved seed', () => {
-    expect(generateVentHoses(BASE).seed).toBe(7);
-    expect(Number.isFinite(generateVentHoses({ ...BASE, seed: undefined }).seed)).toBe(true);
+    expect(generateTangles(BASE).seed).toBe(7);
+    expect(Number.isFinite(generateTangles({ ...BASE, seed: undefined }).seed)).toBe(true);
   });
 
   it('produces a non-trivial drawing (golden guard)', () => {
-    const res = generateVentHoses({ ...BASE, seed: 42 });
+    const res = generateTangles({ ...BASE, seed: 42 });
     expect(JSON.stringify(res).length).toBeGreaterThan(500);
+  });
+});
+
+describe('lace material', () => {
+  it('emits no corrugation rings and no cylinder shade', () => {
+    const res = generateTangles({ ...BASE, material: 'lace', wobble: 0, optimize: false });
+    expect(res.lines.some((l) => l.layer === 'ring')).toBe(false);
+    expect(res.lines.some((l) => l.layer === 'shade')).toBe(false);
+    expect(res.lines.filter((l) => l.layer === 'edge').length).toBeGreaterThan(0);
+  });
+
+  it('differs from hose output at the same seed', () => {
+    const hose = generateTangles({ ...BASE, wobble: 0, optimize: false });
+    const lace = generateTangles({ ...BASE, material: 'lace', wobble: 0, optimize: false });
+    expect(JSON.stringify(lace.lines)).not.toBe(JSON.stringify(hose.lines));
+  });
+
+  it('twists reshape the lace edges', () => {
+    const flat = generateTangles({ ...BASE, material: 'lace', twists: 0, wobble: 0, optimize: false });
+    const twisty = generateTangles({ ...BASE, material: 'lace', twists: 1, wobble: 0, optimize: false });
+    expect(JSON.stringify(twisty.lines)).not.toBe(JSON.stringify(flat.lines));
+  });
+
+  it('is deterministic per seed', () => {
+    const a = generateTangles({ ...BASE, material: 'lace' });
+    const b = generateTangles({ ...BASE, material: 'lace' });
+    expect(a).toEqual(b);
+  });
+
+  it('stays inside the margin frame', () => {
+    const res = generateTangles({ ...BASE, material: 'lace', count: 9, cuffChance: 0.6 });
+    for (const line of res.lines) {
+      for (const pt of line.points) {
+        expect(pt.x).toBeGreaterThanOrEqual(20);
+        expect(pt.x).toBeLessThanOrEqual(280);
+        expect(pt.y).toBeGreaterThanOrEqual(20);
+        expect(pt.y).toBeLessThanOrEqual(380);
+      }
+    }
   });
 });
 
@@ -94,6 +133,7 @@ describe('growHoses', () => {
     y0: 20,
     x1: 280,
     y1: 380,
+    material: 'hose' as const,
     count: 6,
     radiusMin: 8,
     radiusMax: 20,
@@ -141,7 +181,7 @@ describe('growHoses', () => {
           Math.atan2(t0.x * t1.y - t0.y * t1.x, t0.x * t1.x + t0.y * t1.y)
         );
         const kappa = turn / (2 * dd);
-        expect(kappa).toBeLessThan(1.35 / (1.6 * h.r));
+        expect(kappa).toBeLessThan(1.35 / (1.8 * h.r));
       }
     }
   });
@@ -154,6 +194,7 @@ describe('weave', () => {
       y0: 20,
       x1: 280,
       y1: 380,
+      material: 'hose',
       count: 8,
       radiusMin: 6,
       radiusMax: 18,

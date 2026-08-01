@@ -6,21 +6,36 @@ import { smoothPolyline } from '../lib/polyline.js';
 import { clamp, lerp } from '../lib/math.js';
 
 /**
- * Hose centerlines: a heading integrated with noise-modulated curvature —
- * the gesture spine's "ballistic pen" idea, but sign-changing so the hose
+ * Strand centerlines: a heading integrated with noise-modulated curvature —
+ * the gesture spine's "ballistic pen" idea, but sign-changing so the strand
  * wanders instead of committing to one arc. No control-point splines (they
  * read as CAD curves).
  *
  * The one hard invariant is the curvature cap: the tube edges are the
  * centerline offset by ±r along the normals, and a naive normal offset folds
  * into a cusp once κ·r ≥ 1. Growth clamps every per-step heading change
- * (noise + steering combined) to κmax = 1/(BEND_FACTOR·r), so the fattest
- * hose still bends on a radius comfortably larger than its own.
+ * (noise + steering combined) to the material's κmax, so the fattest strand
+ * still bends on a radius comfortably larger than its own half-width.
+ *
+ * Materials: a HOSE is stiff — its minimum bend radius scales with its
+ * radius (BEND_FACTOR·r) and it wanders in long confident arcs. A LACE is
+ * floppy — its minimum bend is a few of its own half-widths with a small
+ * absolute floor, its wander is higher-frequency crinkle, and it runs
+ * longer.
  */
 
-// 1.8 keeps the inside of the tightest bend at 0.8r — rings fan through it
-// without converging into a sunburst hub (they do below ~0.7r).
+// 1.8 keeps the inside of a hose's tightest bend at 0.8r — rings fan
+// through it without converging into a sunburst hub (they do below ~0.7r).
 export const BEND_FACTOR = 1.8;
+
+export type TangleMaterial = 'hose' | 'lace';
+
+/** The material's curvature cap for a strand of half-width `r`. A real lace
+ *  can fold on itself, but loops tighter than a few pen widths plot as
+ *  scribble — the floor keeps the crinkle drawable. */
+export function kappaMaxFor(material: TangleMaterial, r: number): number {
+  return material === 'lace' ? 1 / Math.max(3.2 * r, 16) : 1 / (BEND_FACTOR * r);
+}
 
 export interface GrowOptions {
   /** Drawable box (the margin frame). */
@@ -28,14 +43,16 @@ export interface GrowOptions {
   y0: number;
   x1: number;
   y1: number;
+  material: TangleMaterial;
   count: number;
   radiusMin: number;
   radiusMax: number;
   /** 0..1 curvature energy + wander frequency. */
   wander: number;
-  /** 0..1 probability each hose end terminates on-page with an open cuff. */
+  /** 0..1 probability each strand end terminates on-page with an open end
+   *  (a hose cuff / a lace aglet). */
   cuffChance: number;
-  /** Extra reserved paper between parallel hoses, px. */
+  /** Extra reserved paper between parallel strands, px. */
   clearance: number;
   /** Finish-pass displacement reach — pads every placement margin. */
   pad: number;
@@ -200,11 +217,14 @@ export function growHoses(o: GrowOptions): GrownHose[] {
       theta += (headJitter - 0.5) * 1.3;
     }
 
-    const targetLen = diag * (0.55 + 0.9 * lenRoll);
-    const ds = 3.5;
-    const kappaMax = 1 / (BEND_FACTOR * r);
+    // Laces are long and floppy: more length, tighter bends allowed, and a
+    // higher-frequency wander (crinkle, not sweep).
+    const lace = o.material === 'lace';
+    const targetLen = diag * (0.55 + 0.9 * lenRoll) * (lace ? 1.3 : 1);
+    const ds = lace ? Math.max(2, Math.min(3.5, 2.5 * r)) : 3.5;
+    const kappaMax = kappaMaxFor(o.material, r);
     const kAmp = kappaMax * (0.3 + 0.7 * o.wander);
-    const wanderScale = lerp(240, 70, o.wander);
+    const wanderScale = lace ? lerp(140, 40, o.wander) : lerp(240, 70, o.wander);
     const maxTurn = kappaMax * ds;
     const exitOvershoot = r + o.pad + 4;
     const cuffInsetX = Math.min(2.2 * r + o.pad, boxW * 0.35);

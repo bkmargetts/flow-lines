@@ -1,7 +1,7 @@
 import type { Point } from '../flow-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import type { SimplexNoise } from '../noise.js';
-import { sampleAtOpen, type HoseStrand } from './strand.js';
+import { sampleAtOpen, type TangleStrand } from './strand.js';
 
 /**
  * Hose construction: each centerline is swept to a constant-radius tube
@@ -45,7 +45,7 @@ export interface HoseMarkOptions {
 export const CUFF_REACH = 1.1;
 
 export function buildHoseMarks(
-  strand: HoseStrand,
+  strand: TangleStrand,
   k: number,
   cuffStart: boolean,
   cuffEnd: boolean,
@@ -167,7 +167,7 @@ export function buildHoseMarks(
  *  `reach` across the tube, semi-minor `bow` along it. */
 function emitRing(
   marks: Mark[],
-  strand: HoseStrand,
+  strand: TangleStrand,
   k: number,
   a: number,
   reach: number,
@@ -197,7 +197,7 @@ function emitRing(
  * should split, not vanish; the ticks are 'shadow' and drop whole.
  */
 function cuffMarks(
-  strand: HoseStrand,
+  strand: TangleStrand,
   k: number,
   end: 'start' | 'end',
   o: HoseMarkOptions

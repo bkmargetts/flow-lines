@@ -1,5 +1,4 @@
 import type { Point } from '../flow-lines.js';
-import { BEND_FACTOR } from './centerline.js';
 
 /**
  * Separation relaxation, adapted from the ribbons module: two hoses running
@@ -131,8 +130,7 @@ function approxStep(pts: Point[]): number {
  * ±r edge offsets into cusps. Vertices whose turn exceeds the cap are eased
  * toward their neighbours' midpoint; a couple of sweeps settles it.
  */
-export function clampCurvature(pts: Point[], r: number, sweeps: number): void {
-  const kappaMax = 1 / (BEND_FACTOR * r);
+export function clampCurvature(pts: Point[], kappaMax: number, sweeps: number): void {
   for (let s = 0; s < sweeps; s++) {
     for (let i = 1; i < pts.length - 1; i++) {
       const ax = pts[i].x - pts[i - 1].x;

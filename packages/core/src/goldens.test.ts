@@ -21,7 +21,7 @@ import { generateSportsBalls } from './sports-balls/index.js';
 import { generateHearts } from './hearts/index.js';
 import { generateImpactGrid } from './impact-grid/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
-import { generateVentHoses } from './vent-hoses/index.js';
+import { generateTangles } from './tangles/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateMeander } from './meander/index.js';
 import { generateCoral } from './coral/index.js';
@@ -160,8 +160,8 @@ for (const seed of SEEDS) {
     generateImpactGrid({ width: 300, height: 400, margin: 20, seed });
   CASES[`ribbons/default/${seed}`] = () =>
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
-  CASES[`vent-hoses/default/${seed}`] = () =>
-    generateVentHoses({ width: 300, height: 400, margin: 20, seed });
+  CASES[`tangles/default/${seed}`] = () =>
+    generateTangles({ width: 300, height: 400, margin: 20, seed });
   CASES[`gesture/default/${seed}`] = () =>
     generateGesture({ width: 300, height: 400, margin: 20, seed });
   CASES[`marbling/nonpareil/${seed}`] = () =>
@@ -393,8 +393,17 @@ CASES['city/brutalist/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'brutalist' });
 CASES['city/mixed/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'mixed' });
-CASES['vent-hoses/fat/42'] = () =>
-  generateVentHoses({
+CASES['tangles/laces/42'] = () =>
+  generateTangles({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    material: 'lace',
+    cuffChance: 0.5,
+  });
+CASES['tangles/fat/42'] = () =>
+  generateTangles({
     width: 300,
     height: 400,
     margin: 20,
@@ -403,10 +412,10 @@ CASES['vent-hoses/fat/42'] = () =>
     radiusMin: 18,
     radiusMax: 34,
   });
-CASES['vent-hoses/cuffs/42'] = () =>
-  generateVentHoses({ width: 300, height: 400, margin: 20, seed: 42, cuffChance: 0.85 });
-CASES['vent-hoses/plain/42'] = () =>
-  generateVentHoses({
+CASES['tangles/cuffs/42'] = () =>
+  generateTangles({ width: 300, height: 400, margin: 20, seed: 42, cuffChance: 0.85 });
+CASES['tangles/plain/42'] = () =>
+  generateTangles({
     width: 300,
     height: 400,
     margin: 20,

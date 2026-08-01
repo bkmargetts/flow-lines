@@ -1,5 +1,5 @@
 import { makeRandom, subSeed } from '../lib/rng.js';
-import type { HoseStrand } from './strand.js';
+import type { TangleStrand } from './strand.js';
 import type { Crossing } from './crossings.js';
 
 /**
@@ -32,7 +32,7 @@ interface Edge {
 }
 
 export function solveHoseWeave(
-  strands: HoseStrand[],
+  strands: TangleStrand[],
   crossings: Crossing[],
   weaveBias: number,
   seed: number

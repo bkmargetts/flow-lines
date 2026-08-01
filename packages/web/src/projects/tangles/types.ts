@@ -1,15 +1,17 @@
+import type { TangleMaterial } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /**
- * UI state for the Vent Hoses generator (mm / 0..1 / deg units). `render.ts`
- * converts it to the core's `VentHosesOptions` in px. Corrugated flexible
- * ducts of mixed diameters worming across the page, weaving over and under
- * with reserved-paper crossings.
+ * UI state for the Tangles generator (mm / 0..1 / deg units). `render.ts`
+ * converts it to the core's `TanglesOptions` in px. Strands of one material
+ * — corrugated vent hoses or flat shoelaces — worming across the page,
+ * weaving over and under with reserved-paper crossings.
  */
-export interface VentHosesState {
+export interface TanglesState {
   seed: number;
 
   // Scene
+  material: TangleMaterial;
   count: number;
   radiusMinMm: number;
   radiusMaxMm: number;
@@ -18,8 +20,9 @@ export interface VentHosesState {
   clearanceMm: number; // extra paper between parallel hoses
 
   // Marks
-  ringDensity: number; // 0..1 corrugation pitch
-  ringCurve: number; // 0..1 ring ellipse bulge
+  ringDensity: number; // 0..1 corrugation pitch (hose)
+  ringCurve: number; // 0..1 ring ellipse bulge (hose)
+  twists: number; // 0..1 flip frequency (lace)
   shading: number; // 0..1 shadow-side hatch
   lightAngleDeg: number;
   shadowHatch: number; // 0..1 contact shadows at crossings
@@ -32,9 +35,10 @@ export interface VentHosesState {
   strokeColor: string;
 }
 
-export const defaultVentHosesState: VentHosesState = {
+export const defaultTanglesState: TanglesState = {
   seed: randomSeed(),
 
+  material: 'hose',
   count: 7,
   radiusMinMm: 3,
   radiusMaxMm: 8,
@@ -44,6 +48,7 @@ export const defaultVentHosesState: VentHosesState = {
 
   ringDensity: 0.6,
   ringCurve: 0.6,
+  twists: 0.5,
   shading: 0.45,
   lightAngleDeg: 315,
   shadowHatch: 0.6,

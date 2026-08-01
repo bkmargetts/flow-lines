@@ -1,7 +1,7 @@
-import { generateVentHoses, type VentHosesOptions } from '@flow-lines/core';
+import { generateTangles, type TanglesOptions } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
 import { sheetAreaFactor } from '../../lib/sheet-scale';
-import type { VentHosesState } from './types';
+import type { TanglesState } from './types';
 import { clipLinesToRect } from '../stickmen/clip';
 
 const DEG = Math.PI / 180;
@@ -13,18 +13,19 @@ const DEG = Math.PI / 180;
  * hoses bleed off the frame by design and the core already clips, but
  * wobble can nudge a point past the margin.
  */
-export function renderVentHoses(state: VentHosesState, env: RenderEnv): LayerOutput {
+export function renderTangles(state: TanglesState, env: RenderEnv): LayerOutput {
   const { page, marginPx } = env;
   const mm = page.pxPerMm;
 
-  const options: VentHosesOptions = {
+  const options: TanglesOptions = {
     width: page.widthPx,
     height: page.heightPx,
     margin: marginPx,
     seed: state.seed,
 
-    // Pile density holds on big sheets: more hoses at the same physical
+    // Pile density holds on big sheets: more strands at the same physical
     // diameter (×1 at A4 and below — goldens untouched).
+    material: state.material,
     count: Math.round(state.count * sheetAreaFactor(page)),
     radiusMin: state.radiusMinMm * mm,
     radiusMax: Math.max(state.radiusMinMm, state.radiusMaxMm) * mm,
@@ -34,6 +35,7 @@ export function renderVentHoses(state: VentHosesState, env: RenderEnv): LayerOut
 
     ringDensity: state.ringDensity,
     ringCurve: state.ringCurve,
+    twists: state.twists,
     shading: state.shading,
     lightAngle: state.lightAngleDeg * DEG,
     shadowHatch: state.shadowHatch,
@@ -44,7 +46,7 @@ export function renderVentHoses(state: VentHosesState, env: RenderEnv): LayerOut
     wobble: state.wobbleMm * mm,
   };
 
-  const result = generateVentHoses(options);
+  const result = generateTangles(options);
   const lines = clipLinesToRect(
     result.lines,
     marginPx,

@@ -10,7 +10,7 @@ import { normalsOf } from '../lib/spatial.js';
  * ribbons module's single global band width.
  */
 
-export interface HoseStrand {
+export interface TangleStrand {
   /** Densified centerline; open — the ends are real hose ends. */
   pts: Point[];
   /** Unit normals per point (clamped central differences). */
@@ -23,7 +23,7 @@ export interface HoseStrand {
   r: number;
 }
 
-export function finalizeOpen(pts: Point[], r: number): HoseStrand {
+export function finalizeOpen(pts: Point[], r: number): TangleStrand {
   const n = pts.length;
   const arc: number[] = new Array(n);
   arc[0] = 0;
@@ -43,7 +43,7 @@ export interface StrandSample {
 
 /** Interpolated point / normal / tangent at arc position `a` (clamped to the
  *  open run — no wrap). */
-export function sampleAtOpen(s: HoseStrand, a: number): StrandSample {
+export function sampleAtOpen(s: TangleStrand, a: number): StrandSample {
   const n = s.pts.length;
   const arc = Math.max(0, Math.min(s.len, a));
   // Binary search for the last index with arc[i] <= arc.

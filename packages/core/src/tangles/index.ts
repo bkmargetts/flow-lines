@@ -4,12 +4,13 @@ import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { clipPolylineToRect, smoothPolyline } from '../lib/polyline.js';
 import { orderPlot } from '../optimize.js';
-import { growHoses } from './centerline.js';
+import { growHoses, kappaMaxFor, type TangleMaterial } from './centerline.js';
 import { clampCurvature, separateHoses } from './separate.js';
-import { finalizeOpen, type HoseStrand } from './strand.js';
+import { finalizeOpen, type TangleStrand } from './strand.js';
 import { findHoseCrossings } from './crossings.js';
 import { solveHoseWeave } from './weave.js';
 import { buildHoseMarks, type Mark } from './hose.js';
+import { buildLaceMarks } from './lace.js';
 import {
   buildGrazeOccluders,
   buildOccluders,
@@ -17,47 +18,56 @@ import {
   occludeMarks,
 } from './occlude.js';
 
+export type { TangleMaterial } from './centerline.js';
+
 /**
- * Vent hoses: corrugated flexible ducts of mixed diameters worming across
- * the page, passing over and under one another with proper hidden-line
- * removal — a pile of dryer hose drawn in pen and ink. Most hoses run off
- * the page edges (the frame clip cuts them mid-run, the bleed reading);
- * some terminate on-page with an open cuff showing the mouth ellipse.
+ * Tangles: strands of one material worming across the page, passing over
+ * and under one another with proper hidden-line removal. Material 'hose'
+ * is corrugated flexible duct — stiff arcs, elliptical corrugation rings,
+ * cylinder shading, open cuff mouths. Material 'lace' is flat shoelace —
+ * floppy crinkle, clean ribbon edges with occasional twist flips, aglet
+ * tips. Most strands run off the page edges (the frame clip cuts them
+ * mid-run, the bleed reading); some terminate on-page with an open end.
  *
  * The machinery is an open-path, mixed-radius adaptation of the ribbon
  * weave: centerlines grow by noise-steered heading integration with a
- * curvature cap tied to the radius (so the ±r edge offsets can never fold),
- * a relaxation pass keeps parallel hoses a physical distance apart,
+ * material curvature cap (so the ±r edge offsets can never fold), a
+ * relaxation pass keeps parallel strands a physical distance apart,
  * crossings are detected geometrically, over/under is solved as an
- * alternation constraint graph — then biased so fat ducts sometimes just
+ * alternation constraint graph — then biased so fat strands sometimes just
  * lie on top (a pile, not a basket) — and every crossing reserves a clean
- * sliver of paper around the over hose.
+ * sliver of paper around the over strand.
  *
  * Everything is single-pen stroked polylines, deterministic per seed.
  */
 
-export interface VentHosesOptions {
+export interface TanglesOptions {
   width: number;
   height: number;
   margin: number;
   seed?: number;
 
-  /** Number of hoses. */
+  /** What the tangle is made of: corrugated vent hoses or flat shoelaces. */
+  material?: TangleMaterial;
+  /** Number of strands. */
   count?: number;
-  /** Hose radius range, px. */
+  /** Strand thickness range, px (hose radius; laces render ~45% of it). */
   radiusMin?: number;
   radiusMax?: number;
-  /** 0..1 curvature energy — how hard the hoses worm. */
+  /** 0..1 curvature energy — how hard the strands worm. */
   wander?: number;
-  /** 0..1 probability a hose end terminates on-page with an open cuff. */
+  /** 0..1 probability a strand end terminates on-page with an open end
+   *  (hose cuff mouth / lace aglet). */
   cuffChance?: number;
-  /** Extra reserved paper between parallel hoses, px. */
+  /** Extra reserved paper between parallel strands, px. */
   clearance?: number;
 
-  /** 0..1 corrugation ring pitch (pitch ∝ radius). */
+  /** 0..1 corrugation ring pitch (pitch ∝ radius; hoses only). */
   ringDensity?: number;
-  /** 0..1 ellipse bulge on the rings — the wrap-the-cylinder cue. */
+  /** 0..1 ellipse bulge on the rings — the wrap-the-cylinder cue (hoses). */
   ringCurve?: number;
+  /** 0..1 twist-flip frequency (laces only). */
+  twists?: number;
   /** 0..1 shadow-side longitudinal hatch strength. */
   shading?: number;
   /** Light direction, radians (default upper-left). */
@@ -76,7 +86,8 @@ export interface VentHosesOptions {
   optimize?: boolean;
 }
 
-const DEFAULTS: Required<Omit<VentHosesOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
+const DEFAULTS: Required<Omit<TanglesOptions, 'width' | 'height' | 'margin' | 'seed'>> = {
+  material: 'hose',
   count: 7,
   radiusMin: 10,
   radiusMax: 26,
@@ -85,6 +96,7 @@ const DEFAULTS: Required<Omit<VentHosesOptions, 'width' | 'height' | 'margin' | 
   clearance: 6,
   ringDensity: 0.6,
   ringCurve: 0.6,
+  twists: 0.5,
   shading: 0.45,
   lightAngle: -2.35,
   shadowHatch: 0.6,
@@ -98,10 +110,10 @@ const DEFAULTS: Required<Omit<VentHosesOptions, 'width' | 'height' | 'margin' | 
 const MAX_CROSSINGS = 4000;
 
 /**
- * Generate a vent-hose drawing. Returns plain stroked polylines tagged by
+ * Generate a tangle drawing. Returns plain stroked polylines tagged by
  * layer (`edge` / `ring` / `shade` / `shadow`), deterministic per seed.
  */
-export function generateVentHoses(options: VentHosesOptions): FlowLinesResult {
+export function generateTangles(options: TanglesOptions): FlowLinesResult {
   const o = { ...DEFAULTS, ...options };
   const seed = options.seed ?? randomSeed();
   const { width, height, margin } = options;
@@ -110,8 +122,11 @@ export function generateVentHoses(options: VentHosesOptions): FlowLinesResult {
   const x1 = width - margin;
   const y1 = height - margin;
 
-  const radiusMin = Math.max(3, Math.min(o.radiusMin, o.radiusMax));
-  const radiusMax = Math.max(radiusMin, o.radiusMax);
+  // The thickness sliders keep their meaning across materials: a lace is a
+  // flat ribbon roughly half as wide as the hose the same setting would give.
+  const matScale = o.material === 'lace' ? 0.55 : 1;
+  const radiusMin = Math.max(o.material === 'lace' ? 1.5 : 3, Math.min(o.radiusMin, o.radiusMax) * matScale);
+  const radiusMax = Math.max(radiusMin, o.radiusMax * matScale);
   const gap = Math.max(o.gap, 0.9 * o.penWidth);
 
   // The occlusion margin must cover the finish pass's peak displacement
@@ -130,6 +145,7 @@ export function generateVentHoses(options: VentHosesOptions): FlowLinesResult {
     y0,
     x1,
     y1,
+    material: o.material,
     count: Math.max(1, Math.round(o.count)),
     radiusMin,
     radiusMax,
@@ -142,8 +158,8 @@ export function generateVentHoses(options: VentHosesOptions): FlowLinesResult {
   const paths = grown.map((g) => g.pts);
   const radii = grown.map((g) => g.r);
   separateHoses(paths, radii, o.clearance, 6);
-  const strands: HoseStrand[] = grown.map((g, k) => {
-    clampCurvature(paths[k], g.r, 4);
+  const strands: TangleStrand[] = grown.map((g, k) => {
+    clampCurvature(paths[k], kappaMaxFor(o.material, g.r), 4);
     return finalizeOpen(smoothPolyline(paths[k], 1), g.r);
   });
 
@@ -151,25 +167,52 @@ export function generateVentHoses(options: VentHosesOptions): FlowLinesResult {
   const crossings = findHoseCrossings(strands, MAX_CROSSINGS);
   const weave = solveHoseWeave(strands, crossings, o.weaveBias, seed);
 
-  // 3. Hose marks.
-  const markOpts = {
-    ringDensity: o.ringDensity,
-    ringCurve: o.ringCurve,
-    shading: o.shading,
-    lightAngle: o.lightAngle,
-    penWidth: o.penWidth,
-    seed,
-  };
+  // 3. Material marks: corrugated tubes or flat twisting laces.
   const shadeNoise = createNoise(subSeed(seed, 7));
   let marks: Mark[] = [];
-  for (let k = 0; k < strands.length; k++) {
-    marks.push(
-      ...buildHoseMarks(strands[k], k, grown[k].cuffStart, grown[k].cuffEnd, shadeNoise, markOpts)
-    );
+  if (o.material === 'lace') {
+    const crossingArcsByStrand: number[][] = strands.map(() => []);
+    for (const c of crossings) {
+      crossingArcsByStrand[c.a.strand].push(c.a.arc);
+      crossingArcsByStrand[c.b.strand].push(c.b.arc);
+    }
+    const laceOpts = { twists: o.twists, penWidth: o.penWidth, seed };
+    for (let k = 0; k < strands.length; k++) {
+      marks.push(
+        ...buildLaceMarks(
+          strands[k],
+          k,
+          grown[k].cuffStart,
+          grown[k].cuffEnd,
+          crossingArcsByStrand[k],
+          laceOpts
+        )
+      );
+    }
+  } else {
+    const markOpts = {
+      ringDensity: o.ringDensity,
+      ringCurve: o.ringCurve,
+      shading: o.shading,
+      lightAngle: o.lightAngle,
+      penWidth: o.penWidth,
+      seed,
+    };
+    for (let k = 0; k < strands.length; k++) {
+      marks.push(
+        ...buildHoseMarks(strands[k], k, grown[k].cuffStart, grown[k].cuffEnd, shadeNoise, markOpts)
+      );
+    }
   }
 
   // 4. Hidden-line removal + contact shadows.
-  const occOpts = { gap, inflatePx, penWidth: o.penWidth, shadowHatch: o.shadowHatch };
+  const occOpts = {
+    gap,
+    inflatePx,
+    penWidth: o.penWidth,
+    shadowHatch: o.shadowHatch,
+    lace: o.material === 'lace',
+  };
   const occluders = buildOccluders(strands, crossings, weave.aOnTop, occOpts);
   buildGrazeOccluders(strands, crossings, weave.aOnTop, occluders, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));

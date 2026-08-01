@@ -15,7 +15,7 @@ import { randomColorFieldGenome } from '../projects/color-field/Controls';
 import { randomStickmenGenome } from '../projects/stickmen/Controls';
 import { randomSportsBallsGenome } from '../projects/sports-balls/Controls';
 import { randomHeartsGenome } from '../projects/hearts/Controls';
-import { randomVentHosesGenome } from '../projects/vent-hoses/Controls';
+import { randomTanglesGenome } from '../projects/tangles/Controls';
 import { randomImageInkGenome } from '../projects/image-ink/genome';
 import { randomGratingGenome } from '../textures/grating/shared';
 import { randomMarblingGenome } from '../projects/marbling/presets';
@@ -608,8 +608,8 @@ const SPECS: GenomeSpec[] = [
     forbidden: ['seed', 'mix', 'penWidthMm', 'strokeColor', 'wobble', 'zoom'],
   },
   {
-    name: 'vent-hoses',
-    genome: randomVentHosesGenome,
+    name: 'tangles',
+    genome: randomTanglesGenome,
     bounds: {
       count: [1, 16],
       radiusMinMm: [2, 8],
@@ -623,8 +623,10 @@ const SPECS: GenomeSpec[] = [
       lightAngleDeg: [0, 360],
       shadowHatch: [0, 1],
       weaveBias: [0, 1],
+      twists: [0, 1],
     },
     ints: ['count', 'lightAngleDeg'],
+    enums: { material: ['hose', 'lace'] },
     forbidden: ['seed', 'penWidthMm', 'strokeColor', 'wobbleMm', 'wobble', 'gapMm', 'zoom'],
   },
   {
@@ -865,9 +867,9 @@ describe('module-specific genome invariants', () => {
     }
   });
 
-  it('vent-hoses always rolls the thinnest hose thinner than the fattest', () => {
+  it('tangles always rolls the thinnest hose thinner than the fattest', () => {
     for (let i = 0; i < ROLLS; i++) {
-      const g = randomVentHosesGenome(Math.random);
+      const g = randomTanglesGenome(Math.random);
       expect(g.radiusMinMm!).toBeLessThan(g.radiusMaxMm!);
     }
   });
