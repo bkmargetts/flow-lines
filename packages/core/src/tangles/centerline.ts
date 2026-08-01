@@ -91,6 +91,8 @@ interface FieldPoint {
   ty: number;
   /** Arc position along the owning hose (own-tail fields only). */
   arc?: number;
+  /** Owning strand index (cross-strand fields only). */
+  id?: number;
 }
 
 /**
@@ -159,6 +161,38 @@ class HoseField {
     }
     return best ? { p: best, d: bestD } : null;
   }
+
+  /**
+   * How crowded is the neighbourhood of (x, y): the number of DISTINCT
+   * strands with any point within `within`, and the centroid of those
+   * points. Two strands already there means a third entrant makes a
+   * 3-deep hub — the pile depth where per-pair hidden-line removal stops
+   * telling a coherent story.
+   */
+  crowd(x: number, y: number, within: number): { n: number; cx: number; cy: number } {
+    const cx0 = Math.floor(x / this.cell);
+    const cy0 = Math.floor(y / this.cell);
+    const reach = Math.max(1, Math.ceil(within / this.cell));
+    const ids = new Set<number>();
+    let sx = 0;
+    let sy = 0;
+    let m = 0;
+    for (let gy = cy0 - reach; gy <= cy0 + reach; gy++) {
+      for (let gx = cx0 - reach; gx <= cx0 + reach; gx++) {
+        const arr = this.buckets.get(`${gx},${gy}`);
+        if (!arr) continue;
+        for (const q of arr) {
+          if (q.id === undefined) continue;
+          if (Math.hypot(q.x - x, q.y - y) > within) continue;
+          ids.add(q.id);
+          sx += q.x;
+          sy += q.y;
+          m++;
+        }
+      }
+    }
+    return m ? { n: ids.size, cx: sx / m, cy: sy / m } : { n: 0, cx: x, cy: y };
+  }
 }
 
 export function growHoses(o: GrowOptions): GrownHose[] {
@@ -166,6 +200,21 @@ export function growHoses(o: GrowOptions): GrownHose[] {
   const boxW = o.x1 - o.x0;
   const boxH = o.y1 - o.y0;
   const diag = Math.hypot(boxW, boxH);
+  // Sheet scale, anchored to the strand radius (the physical unit) so it is
+  // resolution-invariant: ~1 on an A4-ish sheet, ~4 on A0. PATH-SHAPE
+  // geometry (wander wavelength, curl radius, fold spacing, containment
+  // zone) follows the sheet, or big plots writhe at small-sheet scale and
+  // pile into 3+-deep border mats — exactly where per-pair occlusion stops
+  // being able to tell a coherent story. Material-scale marks (radius,
+  // rings, ticks) stay physical. Clamped at 1 below the anchor so small
+  // test canvases are untouched.
+  const sheetScale = clamp(diag / (45 * o.radiusMax), 1, 5);
+  // Crowd avoidance only exists on big sheets: at A4 a 3-deep hub IS the
+  // composition (there is nowhere else to go), and gain 0 keeps every
+  // small-sheet drawing byte-identical. From ~A2 up there is room to
+  // spread, so the tip veers off neighbourhoods that two other strands
+  // already occupy instead of stacking a mush hub on top of them.
+  const crowdGain = 0.45 * clamp(sheetScale - 1, 0, 1);
   const cx = (o.x0 + o.x1) / 2;
   const cy = (o.y0 + o.y1) / 2;
   const hoses: GrownHose[] = [];
@@ -234,17 +283,23 @@ export function growHoses(o: GrowOptions): GrownHose[] {
     const targetLen = diag * (0.55 + 0.9 * lenRoll) * (lace ? 1.35 : 1);
     const ds = 3.5;
     const foldRadius = foldRadiusFor(r);
-    const loopRadius = lerp(95, 42, o.wander);
+    // Curl radius, curvature energy, and wander wavelength all follow the
+    // sheet (sub-linearly — features should grow with the page, not merely
+    // tile it): a lace curls at page scale, a hose sweeps in page-scale
+    // arcs. The lace wanderScale rides loopRadius, so it scales along.
+    const loopRadius = lerp(95, 42, o.wander) * Math.pow(sheetScale, 0.7);
     const kappaMax = lace ? 1 / loopRadius : kappaMaxFor(o.material, r);
-    const kAmp = kappaMax * (0.3 + 0.7 * o.wander);
-    const wanderScale = lace ? 2.2 * (2 * Math.PI * loopRadius) : lerp(240, 70, o.wander);
+    const kAmp = (kappaMax * (0.3 + 0.7 * o.wander)) * (lace ? 1 : Math.pow(sheetScale, -0.5));
+    const wanderScale = lace
+      ? 2.2 * (2 * Math.PI * loopRadius)
+      : lerp(240, 70, o.wander) * Math.pow(sheetScale, 0.8);
     const maxTurn = kappaMax * ds;
     const foldMaxTurn = (1 / foldRadius) * ds;
 
     // Fold and curl-sign schedules: a fixed number of rolls regardless of
     // use, so knob changes never re-roll the layout. Folds are rare
     // accents; sign flips land roughly once per loop circumference.
-    const foldMean = lerp(950, 380, o.wander);
+    const foldMean = lerp(950, 380, o.wander) * Math.pow(sheetScale, 0.6);
     const folds: { arc: number; turn: number; dir: 1 | -1 }[] = [];
     {
       let acc = foldMean * (0.5 + 0.8 * rand());
@@ -284,7 +339,7 @@ export function growHoses(o: GrowOptions): GrownHose[] {
     const exitOvershoot = r + o.pad + 4;
     const cuffInsetX = Math.min(2.2 * r + o.pad, boxW * 0.35);
     const cuffInsetY = Math.min(2.2 * r + o.pad, boxH * 0.35);
-    const borderZone = 2.5 * r + 24;
+    const borderZone = (2.5 * r + 24) * Math.pow(sheetScale, 0.4);
     const maxSteps = Math.ceil((targetLen / ds) * 2.5) + 500;
 
     const pts: Point[] = [{ x, y }];
@@ -329,6 +384,23 @@ export function growHoses(o: GrowOptions): GrownHose[] {
 
       let evade = 0;
       let want: number;
+      // Just past a fold, nothing may pry the hairpin open — no avoidance
+      // of any kind until the calm zone ends.
+      const calm = arcPos < foldCalmUntil;
+      // A nudge, not a force field: only bend the path while it is heading
+      // INTO the crowd. Persistent repulsion (the reverted exit-avoidance
+      // experiment) makes tips mill in place against containment and grind
+      // a mush wad exactly where it meant to prevent one.
+      const crowdSteer = () => {
+        if (crowdGain <= 0 || calm) return;
+        const c = field.crowd(x, y, 2 * (r + o.radiusMax) + o.clearance);
+        if (c.n < 2) return;
+        const dxs = c.cx - x;
+        const dys = c.cy - y;
+        if (Math.cos(theta) * dxs + Math.sin(theta) * dys <= 0) return;
+        const away = Math.atan2(-dys, -dxs);
+        want = steer(want, away, crowdGain * Math.min(1, (c.n - 1) / 2));
+      };
       if (lace) {
         // Curl: same-sign curvature breathing between 45% and 100% of the
         // loop rate; the sign flips at scheduled arcs (the cursive joints).
@@ -368,7 +440,9 @@ export function growHoses(o: GrowOptions): GrownHose[] {
           const m = Math.min(dl, dr, dt, db);
           target = m === dl ? Math.PI : m === dr ? 0 : m === dt ? -Math.PI / 2 : Math.PI / 2;
         }
-        want = steer(want, target, 0.2);
+        // Softened with the sheet: a page-scale exit run converging on one
+        // heading reads as a ruler line at A0.
+        want = steer(want, target, 0.2 / Math.sqrt(sheetScale));
       } else {
         // Feel the pile: veer off a neighbour we're running along; leave a
         // transversal approach alone — that's a crossing in the making. The
@@ -381,9 +455,8 @@ export function growHoses(o: GrowOptions): GrownHose[] {
         const thr = (q: FieldPoint) => r + q.r + o.clearance + 4;
         // Laces drape: side-by-side runs are the material's nature, so the
         // veer-off softens — the separation pass still holds physical
-        // spacing. And just past a fold, nothing may pry the hairpin open.
+        // spacing.
         const veerScale = lace ? 0.8 : 1;
-        const calm = arcPos < foldCalmUntil;
         const veerOff = (p: FieldPoint, d: number) => {
           const t = thr(p);
           const away = Math.atan2(y - p.y, x - p.x);
@@ -405,6 +478,7 @@ export function growHoses(o: GrowOptions): GrownHose[] {
             (q) => arcPos - (q.arc ?? 0) < selfGap
           );
           if (nearSelf) veerOff(nearSelf.p, nearSelf.d);
+          crowdSteer();
         }
         // Containment: ease back toward the page centre as the tip nears the
         // frame, hard once it strays past it — mid-run strands stay on-page.
@@ -457,7 +531,7 @@ export function growHoses(o: GrowOptions): GrownHose[] {
       const tx = ahead.x - behind.x;
       const ty = ahead.y - behind.y;
       const tl = Math.hypot(tx, ty) || 1;
-      field.add({ x: dense[i].x, y: dense[i].y, r, tx: tx / tl, ty: ty / tl });
+      field.add({ x: dense[i].x, y: dense[i].y, r, tx: tx / tl, ty: ty / tl, id: k });
     }
     hoses.push({ pts: dense, r, cuffStart, cuffEnd, foldArcs });
   }
