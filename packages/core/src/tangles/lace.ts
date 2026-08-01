@@ -25,6 +25,8 @@ import type { Mark } from './hose.js';
 export interface LaceMarkOptions {
   /** 0..1 twist-flip frequency. */
   twists: number;
+  /** 0..1 woven-fabric texture density. */
+  shading: number;
   penWidth: number;
   seed: number;
 }
@@ -91,7 +93,7 @@ export function buildLaceMarks(
     }
     gaps.sort((p, q) => q.half - p.half || p.center - q.center);
     const target =
-      flips.length + Math.max(0, Math.round((o.twists * strand.len) / (20 * width)));
+      flips.length + Math.max(0, Math.round((o.twists * strand.len) / (14 * width)));
     for (const g of gaps) {
       if (flips.length >= target) break;
       let clear = true;
@@ -165,6 +167,38 @@ export function buildLaceMarks(
           x: waist.x + (edgePt.x - waist.x) * u,
           y: waist.y + (edgePt.y - waist.y) * u,
         });
+        arcs.push(a);
+      }
+      marks.push({ points: pts, arcs, layer: 'shadow', strand: k });
+    }
+  }
+
+  // --- Weave texture -----------------------------------------------------
+  // The fabric read: short diagonal ticks alternating ±40° to the axis —
+  // herringbone braid — in hand-sized noise-gated patches, driven by the
+  // shading knob. 'shadow' layer: a tick touched by an occluder drops
+  // whole (a clipped weave tick reads as dirt).
+  if (o.shading > 0.05) {
+    const step = Math.max(2.1 * o.penWidth, 0.34 * width);
+    let alt = 1;
+    for (let a = 0.4 * step; a < strand.len - 0.4 * step; a += step, alt = -alt) {
+      if (cuffStart && a < 2.4 * r) continue;
+      if (cuffEnd && a > strand.len - 2.4 * r) continue;
+      const gate = drapeNoise.noise2D(a / (7 * width), 7.1 + k * 11.3);
+      if (gate > o.shading * 1.3 - 0.42) continue;
+      let mv = 1;
+      for (const t of flips) mv *= twistRamp(a - t.arc, t.win);
+      if (Math.abs(mv) < 0.55) continue;
+      const smp = sampleAtOpen(strand, a);
+      const halfLen = 0.4 * width * Math.abs(mv);
+      const ang = 0.72 * alt;
+      const dx = smp.t.x * Math.cos(ang) + smp.n.x * Math.sin(ang);
+      const dy = smp.t.y * Math.cos(ang) + smp.n.y * Math.sin(ang);
+      const pts: Point[] = [];
+      const arcs: number[] = [];
+      for (let j = 0; j < 3; j++) {
+        const u = j / 2 - 0.5;
+        pts.push({ x: smp.p.x + dx * halfLen * 2 * u, y: smp.p.y + dy * halfLen * 2 * u });
         arcs.push(a);
       }
       marks.push({ points: pts, arcs, layer: 'shadow', strand: k });

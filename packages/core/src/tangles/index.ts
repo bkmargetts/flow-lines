@@ -12,6 +12,7 @@ import { solveHoseWeave } from './weave.js';
 import { buildHoseMarks, type Mark } from './hose.js';
 import { buildLaceMarks } from './lace.js';
 import {
+  buildEndOccluders,
   buildGrazeOccluders,
   buildOccluders,
   contactShadows,
@@ -124,7 +125,7 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
 
   // The thickness sliders keep their meaning across materials: a lace is a
   // flat ribbon roughly half as wide as the hose the same setting would give.
-  const matScale = o.material === 'lace' ? 0.55 : 1;
+  const matScale = o.material === 'lace' ? 0.6 : 1;
   const radiusMin = Math.max(o.material === 'lace' ? 1.5 : 3, Math.min(o.radiusMin, o.radiusMax) * matScale);
   const radiusMax = Math.max(radiusMin, o.radiusMax * matScale);
   const gap = Math.max(o.gap, 0.9 * o.penWidth);
@@ -176,7 +177,7 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
       crossingArcsByStrand[c.a.strand].push(c.a.arc);
       crossingArcsByStrand[c.b.strand].push(c.b.arc);
     }
-    const laceOpts = { twists: o.twists, penWidth: o.penWidth, seed };
+    const laceOpts = { twists: o.twists, shading: o.shading, penWidth: o.penWidth, seed };
     for (let k = 0; k < strands.length; k++) {
       marks.push(
         ...buildLaceMarks(
@@ -217,6 +218,7 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   };
   const occluders = buildOccluders(strands, crossings, weave.aOnTop, occOpts);
   buildGrazeOccluders(strands, crossings, weave.aOnTop, occluders, occOpts);
+  buildEndOccluders(strands, grown, occluders, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));
   marks = occludeMarks(marks, strands, occluders, occOpts);
 

@@ -410,6 +410,76 @@ function occluderFromWindow(
   return { poly, minX, minY, maxX, maxY, strand: strandIdx, arcMin: arc0, arcMax: arc1 };
 }
 
+/**
+ * End-hardware occluders: a cuff mouth or an aglet is a solid object lying
+ * on the pile, but the hardware reaches PAST the centerline's end where no
+ * crossing window can exist — without these, other strands X-ray straight
+ * through the mouth opening or the aglet capsule. Convention: end hardware
+ * always sits on top; the strand's own end-zone marks are exempt via the
+ * usual arc-window rule.
+ */
+export function buildEndOccluders(
+  strands: TangleStrand[],
+  ends: { cuffStart: boolean; cuffEnd: boolean }[],
+  byStrand: Occluder[][],
+  o: OccludeOptions
+): void {
+  for (let k = 0; k < strands.length; k++) {
+    const s = strands[k];
+    if (s.len < 4 * s.r) continue;
+    for (const end of ['start', 'end'] as const) {
+      if (end === 'start' ? !ends[k].cuffStart : !ends[k].cuffEnd) continue;
+      const r = s.r;
+      const endArc = end === 'start' ? 0 : s.len;
+      const smp = sampleAtOpen(s, endArc);
+      const tOut = end === 'start' ? { x: -smp.t.x, y: -smp.t.y } : smp.t;
+      // Hose: the mouth ellipse leans 0.34r past the end. Lace: the aglet
+      // capsule runs ~5r past it.
+      const reach = o.lace ? 0.6 * r : 1.5 * r;
+      const ext = (o.lace ? 5.4 * r : 0.6 * r) + o.gap + o.inflatePx;
+      const half = (o.lace ? 0.85 * r : r) + o.gap + o.inflatePx;
+
+      const left: Point[] = [];
+      const right: Point[] = [];
+      const SAMPLES = 4;
+      for (let j = 0; j <= SAMPLES; j++) {
+        const a =
+          end === 'start'
+            ? reach - (reach * j) / SAMPLES
+            : s.len - reach + (reach * j) / SAMPLES;
+        const p = sampleAtOpen(s, a);
+        left.push({ x: p.p.x + p.n.x * half, y: p.p.y + p.n.y * half });
+        right.push({ x: p.p.x - p.n.x * half, y: p.p.y - p.n.y * half });
+      }
+      const tip = { x: smp.p.x + tOut.x * ext, y: smp.p.y + tOut.y * ext };
+      left.push({ x: tip.x + smp.n.x * half, y: tip.y + smp.n.y * half });
+      right.push({ x: tip.x - smp.n.x * half, y: tip.y - smp.n.y * half });
+      const poly = outlineFromEdges(left, right);
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const p of poly) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      }
+      const occ: Occluder = {
+        poly,
+        minX,
+        minY,
+        maxX,
+        maxY,
+        strand: k,
+        arcMin: end === 'start' ? 0 : s.len - reach,
+        arcMax: end === 'start' ? reach : s.len,
+      };
+      for (let j = 0; j < strands.length; j++) byStrand[j].push(occ);
+    }
+  }
+}
+
 function covered(
   x: number,
   y: number,
