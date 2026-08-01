@@ -21,6 +21,7 @@ import { generateSportsBalls } from './sports-balls/index.js';
 import { generateHearts } from './hearts/index.js';
 import { generateImpactGrid } from './impact-grid/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
+import { generateVentHoses } from './vent-hoses/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateMeander } from './meander/index.js';
 import { generateCoral } from './coral/index.js';
@@ -159,6 +160,8 @@ for (const seed of SEEDS) {
     generateImpactGrid({ width: 300, height: 400, margin: 20, seed });
   CASES[`ribbons/default/${seed}`] = () =>
     generateRibbonWeave({ width: 300, height: 400, margin: 20, seed });
+  CASES[`vent-hoses/default/${seed}`] = () =>
+    generateVentHoses({ width: 300, height: 400, margin: 20, seed });
   CASES[`gesture/default/${seed}`] = () =>
     generateGesture({ width: 300, height: 400, margin: 20, seed });
   CASES[`marbling/nonpareil/${seed}`] = () =>
@@ -390,6 +393,28 @@ CASES['city/brutalist/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'brutalist' });
 CASES['city/mixed/42'] = () =>
   generateCity({ width: 300, height: 400, margin: 20, seed: 42, style: 'mixed' });
+CASES['vent-hoses/fat/42'] = () =>
+  generateVentHoses({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    count: 4,
+    radiusMin: 18,
+    radiusMax: 34,
+  });
+CASES['vent-hoses/cuffs/42'] = () =>
+  generateVentHoses({ width: 300, height: 400, margin: 20, seed: 42, cuffChance: 0.85 });
+CASES['vent-hoses/plain/42'] = () =>
+  generateVentHoses({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    shading: 0,
+    shadowHatch: 0,
+    weaveBias: 0,
+  });
 CASES['ribbons/plait/42'] = () =>
   generateRibbonWeave({ width: 300, height: 400, margin: 20, seed: 42, order: 1, breaks: 0, wobble: 0 });
 CASES['ribbons/tangle/42'] = () =>
