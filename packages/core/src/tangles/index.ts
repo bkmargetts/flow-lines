@@ -209,12 +209,20 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   }
 
   // 4. Hidden-line removal + contact shadows.
+  const endReach = (r: number) => (o.material === 'lace' ? 0.6 * r : 1.5 * r);
+  const endZones: [number, number][][] = strands.map((s, k) => {
+    const zones: [number, number][] = [];
+    if (grown[k].cuffStart) zones.push([0, endReach(s.r)]);
+    if (grown[k].cuffEnd) zones.push([s.len - endReach(s.r), s.len]);
+    return zones;
+  });
   const occOpts = {
     gap,
     inflatePx,
     penWidth: o.penWidth,
     shadowHatch: o.shadowHatch,
     lace: o.material === 'lace',
+    endZones,
   };
   const occluders = buildOccluders(strands, crossings, weave.aOnTop, occOpts);
   buildGrazeOccluders(strands, crossings, weave.aOnTop, occluders, occOpts);

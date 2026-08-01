@@ -31,6 +31,8 @@ export interface Occluder {
   strand: number;
   arcMin: number;
   arcMax: number;
+  /** End-hardware occluder (cuff mouth / aglet capsule). */
+  end?: boolean;
 }
 
 export interface OccludeOptions {
@@ -41,6 +43,11 @@ export interface OccludeOptions {
   /** Lace mode: contact shadows soften — a full-width tick that blends in
    *  among a hose's corrugation rings reads as a staple on a clean ribbon. */
   lace?: boolean;
+  /** Per-strand end-hardware arc zones ([lo, hi] per open end). Marks whose
+   *  own arc lies in their strand's zone are exempt from OTHER strands'
+   *  end-hardware occluders — two overlapping aglets must overdraw, not
+   *  mutually shred. */
+  endZones?: [number, number][][];
 }
 
 export function buildOccluders(
@@ -232,7 +239,11 @@ export function buildGrazeOccluders(
     for (let kb = ka + 1; kb < strands.length; kb++) {
       const sa = strands[ka];
       const sb = strands[kb];
-      const thr = sa.r + sb.r + o.gap + o.inflatePx;
+      // Detection fires on TRUE overlap only (centerlines closer than the
+      // summed half-widths). Firing on mere proximity shaved the loser's
+      // near edge lengthwise wherever two strands drape side by side —
+      // erasure must always mean "something is physically on top".
+      const thr = sa.r + sb.r;
       // Coarse bbox rejection.
       if (!bboxesNear(sa, sb, thr)) continue;
 
@@ -474,6 +485,7 @@ export function buildEndOccluders(
         strand: k,
         arcMin: end === 'start' ? 0 : s.len - reach,
         arcMax: end === 'start' ? reach : s.len,
+        end: true,
       };
       for (let j = 0; j < strands.length; j++) byStrand[j].push(occ);
     }
@@ -486,11 +498,15 @@ function covered(
   arc: number,
   strandIdx: number,
   occs: Occluder[],
-  pad: number
+  pad: number,
+  ownEndZones?: [number, number][]
 ): boolean {
   for (const occ of occs) {
     if (x < occ.minX || x > occ.maxX || y < occ.minY || y > occ.maxY) continue;
     if (occ.strand === strandIdx && arc >= occ.arcMin - pad && arc <= occ.arcMax + pad)
+      continue;
+    // Hardware vs hardware: end marks survive another end's occluder.
+    if (occ.end && ownEndZones && ownEndZones.some(([lo, hi]) => arc >= lo && arc <= hi))
       continue;
     if (pointInPolygon(occ.poly, x, y)) return true;
   }
@@ -525,12 +541,29 @@ export function occludeMarks(
     }
     const r = strands[mark.strand].r;
     const pad = 2 * r;
-    const minRun = Math.max(4.5, 0.35 * r);
+    // Edge fragments: a hose keeps short slivers (real anatomy between
+    // adjacent crossings); a lace fragment shorter than about a width reads
+    // as dirt — the wad zones were full of 5px edge crumbs.
+    const minRun = Math.max(4.5, (o.lace ? 2.2 : 0.35) * r);
+    const ownEndZones = o.endZones?.[mark.strand];
 
     const isCrossMark = mark.layer === 'shadow';
     if (isCrossMark) {
-      // Sample finely along the whole (short) mark; any hit drops it.
+      // Any hit drops the whole tick. A tick also dies when the strand's
+      // CENTERLINE is covered anywhere within ~1.5 widths of it: edges
+      // vanish by fragment-length while ticks vanish by coverage, so a
+      // buried stretch (edges chopped below the fragment floor) would
+      // otherwise leave its tick chain floating on bare paper.
+      const sMark = strands[mark.strand];
       let hit = false;
+      for (const da of [-3 * r, 0, 3 * r]) {
+        const a = Math.max(0, Math.min(sMark.len, mark.arcs[0] + da));
+        const centre = sampleAtOpen(sMark, a).p;
+        if (covered(centre.x, centre.y, a, mark.strand, occs, pad, ownEndZones)) {
+          hit = true;
+          break;
+        }
+      }
       outer: for (let i = 0; i < mark.points.length - 1 && !hit; i++) {
         const a = mark.points[i];
         const b = mark.points[i + 1];
@@ -539,7 +572,7 @@ export function occludeMarks(
         for (let j = 0; j <= steps; j++) {
           const t = j / steps;
           const arc = mark.arcs[i] + (mark.arcs[i + 1] - mark.arcs[i]) * t;
-          if (covered(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, arc, mark.strand, occs, pad)) {
+          if (covered(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, arc, mark.strand, occs, pad, ownEndZones)) {
             hit = true;
             break outer;
           }
@@ -616,7 +649,7 @@ export function occludeMarks(
     };
 
     const p0 = mark.points[0];
-    push(p0, mark.arcs[0], covered(p0.x, p0.y, mark.arcs[0], mark.strand, occs, pad));
+    push(p0, mark.arcs[0], covered(p0.x, p0.y, mark.arcs[0], mark.strand, occs, pad, ownEndZones));
     for (let i = 0; i < mark.points.length - 1; i++) {
       const a = mark.points[i];
       const b = mark.points[i + 1];
@@ -630,7 +663,7 @@ export function occludeMarks(
         const t = j / steps;
         const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
         const arc = mark.arcs[i] + (mark.arcs[i + 1] - mark.arcs[i]) * t;
-        push(p, arc, covered(p.x, p.y, arc, mark.strand, occs, pad));
+        push(p, arc, covered(p.x, p.y, arc, mark.strand, occs, pad, ownEndZones));
       }
     }
     // The closing run (if any) reaches the mark's original end point.

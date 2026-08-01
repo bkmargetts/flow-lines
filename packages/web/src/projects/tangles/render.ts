@@ -24,9 +24,11 @@ export function renderTangles(state: TanglesState, env: RenderEnv): LayerOutput 
     seed: state.seed,
 
     // Pile density holds on big sheets: more strands at the same physical
-    // diameter (×1 at A4 and below — goldens untouched).
+    // diameter, scaled by the SQUARE ROOT of the area growth — strand
+    // length already grows with the sheet diagonal (×1 at A4 and below —
+    // goldens untouched).
     material: state.material,
-    count: Math.round(state.count * sheetAreaFactor(page)),
+    count: Math.round(state.count * Math.sqrt(sheetAreaFactor(page))),
     radiusMin: state.radiusMinMm * mm,
     radiusMax: Math.max(state.radiusMinMm, state.radiusMaxMm) * mm,
     wander: state.wander,

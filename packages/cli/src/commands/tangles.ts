@@ -47,10 +47,12 @@ export function registerTangles(program: Command) {
       // mm flags convert at the sheet's density; pixel-frame renders (no
       // --paper) use the base 3 px/mm so the same flags read sensibly.
       const mm = frame.page ? frame.page.pxPerMm : 3;
-      // More hoses on big sheets at the same physical diameter (mirrors the
-      // web app's sheetAreaFactor; ×1 at A4 and below).
+      // More strands on big sheets at the same physical diameter — but by
+      // the SQUARE ROOT of the area growth: strand length already scales
+      // with the sheet diagonal, so area-linear counts over-fill the page
+      // and drown the weave in collisions. ×1 at A4 and below.
       const sheetFactor = frame.page
-        ? Math.max(1, (frame.page.widthMm * frame.page.heightMm) / (210 * 297))
+        ? Math.sqrt(Math.max(1, (frame.page.widthMm * frame.page.heightMm) / (210 * 297)))
         : 1;
 
       const hoseOptions: TanglesOptions = {

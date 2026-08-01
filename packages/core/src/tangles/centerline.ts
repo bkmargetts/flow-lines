@@ -274,11 +274,13 @@ export function growHoses(o: GrowOptions): GrownHose[] {
       }
     }
     let signIdx = 0;
-    // Same-sign rotation budget: a curl may close at most ~0.85 of a full
-    // turn before the sign is forced to flip — open curls and c-shapes are
-    // the lace vocabulary; multi-turn concentric spirals are a ball of
-    // yarn, and a trapped spiral is the worst wad this material can form.
-    let sameSignTurn = 0;
+    // Same-sign rotation budget on the ACTUAL applied turn (curl intent
+    // plus steering): a strand may close at most ~0.9 of a full turn in one
+    // direction before the curl sign is forced away — open curls and
+    // c-shapes are the lace vocabulary; multi-turn concentric spirals are a
+    // ball of yarn, and a pocket-trapped orbit (steering-driven, which an
+    // intent-only budget never sees) is the worst wad this material forms.
+    let turnAccum = 0;
     const exitOvershoot = r + o.pad + 4;
     const cuffInsetX = Math.min(2.2 * r + o.pad, boxW * 0.35);
     const cuffInsetY = Math.min(2.2 * r + o.pad, boxH * 0.35);
@@ -330,20 +332,18 @@ export function growHoses(o: GrowOptions): GrownHose[] {
       if (lace) {
         // Curl: same-sign curvature breathing between 45% and 100% of the
         // loop rate; the sign flips at scheduled arcs (the cursive joints).
-        let flip = false;
         while (signIdx < signFlips.length && arcPos >= signFlips[signIdx]) {
-          flip = true;
+          curlSign = curlSign === 1 ? -1 : 1;
+          turnAccum = 0;
           signIdx++;
         }
-        if (sameSignTurn > 2 * Math.PI * 0.85) flip = true;
-        if (flip) {
-          curlSign = curlSign === 1 ? -1 : 1;
-          sameSignTurn = 0;
+        if (Math.abs(turnAccum) > 2 * Math.PI * 0.9) {
+          curlSign = turnAccum > 0 ? -1 : 1;
+          turnAccum = 0;
         }
         const breathe =
           0.45 + 0.55 * (0.5 + 0.5 * noise.noise2D(arcPos / wanderScale, k * 13.7 + 0.5));
         want = theta + curlSign * kappaMax * breathe * ds;
-        sameSignTurn += kappaMax * breathe * ds;
       } else {
         want = theta + kAmp * noise.noise2D(arcPos / wanderScale, k * 13.7 + 0.5) * ds;
       }
@@ -422,7 +422,11 @@ export function growHoses(o: GrowOptions): GrownHose[] {
       // fold rate: the deflection kink where one strand shoulders off
       // another is physical, and losing the dodge means centerlines fused.
       const turnCap = lace && evade > 0 ? Math.min(foldMaxTurn, maxTurn * (1 + 4 * evade)) : maxTurn;
-      theta += clamp(wrapAngle(want - theta), -turnCap, turnCap);
+      const dTheta = clamp(wrapAngle(want - theta), -turnCap, turnCap);
+      theta += dTheta;
+      // Actual-turn accumulator: same-direction turning adds up; any
+      // counter-turn restarts the count.
+      turnAccum = Math.sign(dTheta) === Math.sign(turnAccum) ? turnAccum + dTheta : dTheta;
       x += Math.cos(theta) * ds;
       y += Math.sin(theta) * ds;
       arcPos += ds;
