@@ -102,6 +102,8 @@ export function separateHoses(
       // the topology and shake the strand into wiggles; the occluder pass
       // owns crossings.
       const W = Math.max(3, Math.ceil(selfSep / (4 * stepLen)));
+      const apX = new Float64Array(n);
+      const apY = new Float64Array(n);
       for (let i = PIN; i < n - PIN; i++) {
         if (!isFinite(dist[i])) continue;
         let flip = false;
@@ -109,8 +111,36 @@ export function separateHoses(
           if (isFinite(dist[j]) && side[j] !== side[i]) flip = true;
         }
         if (flip) continue;
-        pts[i].x += pushX[i];
-        pts[i].y += pushY[i];
+        // The raw push magnitude is (minSep−d)/d — it explodes as d→0, and
+        // one giant displacement is a guaranteed kink. Deep violations get
+        // out over a few iterations instead.
+        const m = Math.hypot(pushX[i], pushY[i]);
+        const cap = 0.6 * stepLen + 1.5;
+        const sc = m > cap ? cap / m : 1;
+        apX[i] = pushX[i] * sc;
+        apY[i] = pushY[i] * sc;
+      }
+      // Smooth the applied-push field along the strand (two 1-2-1 passes):
+      // per-point independent pushes — neighbours pushed by different
+      // foreign strands, or a mask boundary switching the push off — write
+      // a sawtooth into the centerline that the curvature clamp then has
+      // to fight point by point. A coherent push field bends instead of
+      // kinking.
+      for (let pass = 0; pass < 2; pass++) {
+        let prevX = apX[0];
+        let prevY = apY[0];
+        for (let i = 1; i < n - 1; i++) {
+          const curX = apX[i];
+          const curY = apY[i];
+          apX[i] = 0.25 * prevX + 0.5 * curX + 0.25 * apX[i + 1];
+          apY[i] = 0.25 * prevY + 0.5 * curY + 0.25 * apY[i + 1];
+          prevX = curX;
+          prevY = curY;
+        }
+      }
+      for (let i = PIN; i < n - PIN; i++) {
+        pts[i].x += apX[i];
+        pts[i].y += apY[i];
       }
     }
   }
@@ -130,6 +160,71 @@ function approxStep(pts: Point[]): number {
  * ±r edge offsets into cusps. Vertices whose turn exceeds the cap are eased
  * toward their neighbours' midpoint; a couple of sweeps settles it.
  */
+/**
+ * Hard curvature enforcement by turn redistribution: walk the polyline,
+ * clamp each vertex's heading change to the cap, and carry the excess
+ * turn into the following vertices until it is spent. Total winding is
+ * preserved, so nothing downstream rotates — a spike relaxes into a legal
+ * arc in place. The tiny endpoint drift that remains is folded back as a
+ * linear ramp along the arc (which adds ~zero curvature), keeping exits
+ * and cuff mouths exactly where they were placed.
+ *
+ * This exists because the eased-midpoint clamp below is curve-shortening
+ * flow: enough sweeps to kill a hard spike also contract the section into
+ * a hairball. Redistribution cannot contract — segment lengths are kept.
+ */
+export function enforceCurvature(pts: Point[], kappaMax: number): void {
+  const n = pts.length;
+  if (n < 3) return;
+  const lens = new Float64Array(n - 1);
+  const heads = new Float64Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    const dx = pts[i + 1].x - pts[i].x;
+    const dy = pts[i + 1].y - pts[i].y;
+    lens[i] = Math.hypot(dx, dy);
+    heads[i] = Math.atan2(dy, dx);
+  }
+  const endX = pts[n - 1].x;
+  const endY = pts[n - 1].y;
+  const wrap = (a: number): number => {
+    while (a > Math.PI) a -= 2 * Math.PI;
+    while (a < -Math.PI) a += 2 * Math.PI;
+    return a;
+  };
+  // Clamped heading pursuit: the rebuilt heading chases the original
+  // per-segment headings at a bounded turn rate. After a clamp the lag
+  // θ−heads carries the un-spent excess implicitly, so the following
+  // vertices keep turning at the cap until the path realigns — the spike
+  // relaxes into a legal arc and the downstream shape is untouched.
+  let theta = heads[0];
+  let x = pts[0].x + Math.cos(theta) * lens[0];
+  let y = pts[0].y + Math.sin(theta) * lens[0];
+  pts[1].x = x;
+  pts[1].y = y;
+  for (let i = 1; i < n - 1; i++) {
+    const want = wrap(heads[i] - theta);
+    const maxTurn = kappaMax * ((lens[i - 1] + lens[i]) / 2);
+    const d = Math.max(-maxTurn, Math.min(maxTurn, want));
+    theta += d;
+    x += Math.cos(theta) * lens[i];
+    y += Math.sin(theta) * lens[i];
+    pts[i + 1].x = x;
+    pts[i + 1].y = y;
+  }
+  const ex = endX - x;
+  const ey = endY - y;
+  let total = 0;
+  for (let i = 0; i < n - 1; i++) total += lens[i];
+  if (total > 1e-9) {
+    let acc = 0;
+    for (let i = 1; i < n; i++) {
+      acc += lens[i - 1];
+      pts[i].x += (ex * acc) / total;
+      pts[i].y += (ey * acc) / total;
+    }
+  }
+}
+
 export function clampCurvature(pts: Point[], kappaMax: number, sweeps: number): void {
   for (let s = 0; s < sweeps; s++) {
     for (let i = 1; i < pts.length - 1; i++) {

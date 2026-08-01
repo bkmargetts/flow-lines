@@ -1,11 +1,13 @@
 import { FlowLine, FlowLinesResult } from '../flow-lines.js';
 import { createNoise } from '../noise.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
+import { clamp } from '../lib/math.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
+import { resampleUniform } from '../lib/spatial.js';
 import { clipPolylineToRect, smoothPolyline } from '../lib/polyline.js';
 import { orderPlot } from '../optimize.js';
 import { growHoses, kappaMaxFor, type TangleMaterial } from './centerline.js';
-import { clampCurvature, separateHoses } from './separate.js';
+import { enforceCurvature, separateHoses } from './separate.js';
 import { finalizeOpen, type TangleStrand } from './strand.js';
 import { findHoseCrossings } from './crossings.js';
 import { solveHoseWeave } from './weave.js';
@@ -158,10 +160,29 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   });
   const paths = grown.map((g) => g.pts);
   const radii = grown.map((g) => g.r);
-  separateHoses(paths, radii, o.clearance, 6);
+  // Interleave: clamp after EVERY relaxation iteration, not once at the
+  // end. Each iteration's pushes add fresh kinks; six iterations of
+  // compounding them left spikes far past what a final clamp could ease
+  // out (κ·r in the tens — the ±r edges fold into loops there, which is
+  // most of what reads as "occlusion artifacts" in a dense pile).
+  for (let round = 0; round < 6; round++) {
+    separateHoses(paths, radii, o.clearance, 1);
+    // Redistribution, NOT diffusive easing: eased-midpoint sweeps are
+    // curve-shortening flow, and interleaved with pushes they contract a
+    // stubborn contact into a micro-loop hairball whose winding then
+    // poisons everything downstream. Redistribution keeps segment
+    // lengths, so a push-kink relaxes into a legal arc in place.
+    for (let k = 0; k < paths.length; k++) {
+      enforceCurvature(paths[k], kappaMaxFor(o.material, radii[k]));
+    }
+  }
+  // Resample to uniform spacing (the pushes compress vertices into
+  // micro-segments whose spike angles carry huge curvature), then enforce
+  // the cap exactly by turn redistribution.
   const strands: TangleStrand[] = grown.map((g, k) => {
-    clampCurvature(paths[k], kappaMaxFor(o.material, g.r), 4);
-    return finalizeOpen(smoothPolyline(paths[k], 1), g.r);
+    const resampled = resampleUniform(paths[k], clamp(g.r / 3, 2, 6));
+    enforceCurvature(resampled, kappaMaxFor(o.material, g.r));
+    return finalizeOpen(smoothPolyline(resampled, 1), g.r);
   });
 
   // 2. Crossings + the weave (with the fat-duct-lies-on-top bias).
