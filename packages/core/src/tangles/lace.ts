@@ -1,20 +1,25 @@
 import type { Point } from '../flow-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
+import type { SimplexNoise } from '../noise.js';
+import { foldRadiusFor } from './centerline.js';
 import { sampleAtOpen, type TangleStrand } from './strand.js';
 import type { Mark } from './hose.js';
 
 /**
  * Shoelace construction: a lace is a FLAT ribbon, not a tube — two clean
- * edges, no corrugation, no cylinder shade. Its character comes from three
- * things: twist flips (the ribbon turns over — a width envelope pinches to
- * a point and back, the bow-tie silhouette, borrowed from the ribbon-weave
- * module's twists), aglets (the stiff little capsule tips) on on-page
- * ends, and the crinkly wander the growth pass already gave it.
+ * edges, no corrugation, no cylinder shade. Its character comes from
+ * flatness made visible three ways:
  *
- * Twists sit at the centres of the largest crossing-free gaps along the
- * strand — a flip under an over-pass reads as mud — and at each pinch one
- * edge (alternating sides) lifts for a short gap so the flip reads as the
- * ribbon turning over, not as an X.
+ * - every hairpin FOLD the growth pass produced is a face flip — the
+ *   ribbon shows its edge through the fold, so the width envelope pinches
+ *   through zero there (the bow-tie silhouette);
+ * - the `twists` knob adds extra mid-run flips, placed in the largest
+ *   crossing-free gaps (a flip under an over-pass reads as mud);
+ * - a whisper of silk-style drape modulates the apparent width with the
+ *   travel direction (the ribbon-weave module's silk idiom) — floored high
+ *   at 0.85: any more at lace width reads as lumpy edges, not flatness.
+ *
+ * Aglets (the stiff little capsule tips) mark on-page ends.
  */
 
 export interface LaceMarkOptions {
@@ -37,15 +42,20 @@ export function buildLaceMarks(
   cuffStart: boolean,
   cuffEnd: boolean,
   crossingArcs: number[],
+  foldArcs: number[],
+  drapeNoise: SimplexNoise,
   o: LaceMarkOptions
 ): Mark[] {
   const marks: Mark[] = [];
   const n = strand.pts.length;
   const r = strand.r;
   const width = 2 * r;
-  // A drawn flip stretches over a few widths — compressed flips vanish
-  // into the wobble at lace scale.
+  // A mid-run flip stretches over a few widths — compressed flips vanish
+  // into the wobble. A FOLD flip must complete inside the hairpin's bend,
+  // or the pinched envelope spans both legs and the whole fold collapses
+  // into a needle.
   const window = 2.5 * width;
+  const foldWindow = Math.max(0.9 * width, 0.5 * Math.PI * foldRadiusFor(r));
 
   // Per-lace genome, drawn unconditionally in fixed order.
   const rand = makeRandom(subSeed(o.seed, 5) + k * 17);
@@ -54,8 +64,21 @@ export function buildLaceMarks(
   rand(); // parity with the hose stream (doubles roll)
 
   // --- Twist placement -------------------------------------------------------
-  // Largest crossing-free gaps first; open strand, so an odd count is fine.
-  const twistArcs: number[] = [];
+  // Every fold is a flip — the ribbon turns over through a hairpin. The
+  // knob adds extra mid-run flips in the largest crossing-free gaps.
+  interface Flip {
+    arc: number;
+    win: number;
+    fold: boolean;
+  }
+  // A fold's face flip only draws when the fold has clear paper: pinching
+  // the width where other strands cross shreds into crumbs under the
+  // occlusion pass. The hairpin geometry itself stays either way.
+  const flipClear = foldWindow + width;
+  const flips: Flip[] = foldArcs
+    .filter((a) => a > 2 * r + foldWindow && a < strand.len - (2 * r + foldWindow))
+    .filter((a) => !crossingArcs.some((c) => Math.abs(c - a) < flipClear))
+    .map((a) => ({ arc: a, win: foldWindow, fold: true }));
   if (o.twists > 0.02 && strand.len > 8 * window) {
     const sorted = [...crossingArcs].sort((p, q) => p - q);
     const gaps: { center: number; half: number }[] = [];
@@ -67,25 +90,35 @@ export function buildLaceMarks(
       if (b - a > 2 * window) gaps.push({ center: (a + b) / 2, half: (b - a) / 2 });
     }
     gaps.sort((p, q) => q.half - p.half || p.center - q.center);
-    const target = Math.max(1, Math.round((o.twists * strand.len) / (14 * width)));
+    const target =
+      flips.length + Math.max(0, Math.round((o.twists * strand.len) / (20 * width)));
     for (const g of gaps) {
-      if (twistArcs.length >= target) break;
+      if (flips.length >= target) break;
       let clear = true;
-      for (const t of twistArcs) {
-        if (Math.abs(g.center - t) <= 5 * window) {
+      for (const t of flips) {
+        if (Math.abs(g.center - t.arc) <= 5 * window) {
           clear = false;
           break;
         }
       }
-      if (clear) twistArcs.push(g.center + (jitterA - 0.5) * 0.5 * g.half);
+      if (clear)
+        flips.push({ arc: g.center + (jitterA - 0.5) * 0.5 * g.half, win: window, fold: false });
     }
   }
 
-  // Signed width envelope: +1 sweeping through −1 across each twist.
+  // Signed width envelope: +1 sweeping through −1 across each flip, times
+  // the silk drape — apparent width follows travel direction, with the
+  // drape axis drifting slowly across the page so the modulation reads as
+  // cloth resting, not a mechanical rule.
   const m: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
     let v = 1;
-    for (const t of twistArcs) v *= twistRamp(strand.arc[i] - t, window);
+    for (const t of flips) v *= twistRamp(strand.arc[i] - t.arc, t.win);
+    const nn = strand.normals[i];
+    const theta = Math.atan2(-nn.x, nn.y);
+    const drift = drapeNoise.noise2D(strand.pts[i].x / 320, strand.pts[i].y / 320);
+    const axis = -Math.PI / 4 + drift * 0.7;
+    v *= 0.85 + 0.15 * Math.pow(Math.abs(Math.sin(theta - axis)), 0.9);
     m[i] = v;
   }
 
@@ -108,16 +141,19 @@ export function buildLaceMarks(
     marks.push({ points: pts, arcs, layer: 'edge', strand: k });
   }
 
-  // Fold shadow: two short ticks converging on the waist inside the
-  // "after" triangle — the cue that turns an X into a fold. 'shadow'
+  // Fold shadow on MID-RUN flips only: two short ticks converging on the
+  // waist inside the "after" triangle — the cue that turns an X into a
+  // fold. A hairpin fold needs no help (the turn itself tells the story,
+  // and extra ticks inside a tight apex read as scratches). 'shadow'
   // layer so a touched tick drops whole.
-  for (const t of twistArcs) {
-    const waist = sampleAtOpen(strand, t).p;
+  for (const t of flips) {
+    if (t.fold) continue;
+    const waist = sampleAtOpen(strand, t.arc).p;
     for (const frac of [0.45, 0.8]) {
-      const a = t + frac * window;
+      const a = t.arc + frac * t.win;
       if (a > strand.len) continue;
       const s2 = sampleAtOpen(strand, a);
-      const mv = twistArcs.reduce((v, tt) => v * twistRamp(a - tt, window), 1);
+      const mv = flips.reduce((v, tt) => v * twistRamp(a - tt.arc, tt.win), 1);
       const edgePt = {
         x: s2.p.x + s2.n.x * r * mv,
         y: s2.p.y + s2.n.y * r * mv,

@@ -185,6 +185,8 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
           grown[k].cuffStart,
           grown[k].cuffEnd,
           crossingArcsByStrand[k],
+          grown[k].foldArcs,
+          shadeNoise,
           laceOpts
         )
       );
