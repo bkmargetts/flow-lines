@@ -18,7 +18,9 @@ import { clamp, lerp } from '../lib/math.js';
  * hose still bends on a radius comfortably larger than its own.
  */
 
-export const BEND_FACTOR = 1.6;
+// 1.8 keeps the inside of the tightest bend at 0.8r — rings fan through it
+// without converging into a sunburst hub (they do below ~0.7r).
+export const BEND_FACTOR = 1.8;
 
 export interface GrowOptions {
   /** Drawable box (the margin frame). */
@@ -61,6 +63,8 @@ interface FieldPoint {
   /** Unit travel direction at this point. */
   tx: number;
   ty: number;
+  /** Arc position along the owning hose (own-tail fields only). */
+  arc?: number;
 }
 
 /**
@@ -88,19 +92,39 @@ class HoseField {
     arr.push(p);
   }
 
-  nearest(x: number, y: number, within: number): { p: FieldPoint; d: number } | null {
+  /**
+   * The deepest ALONG-RUNNING violation near (x, y): among field points
+   * within `within` whose travel direction is near-parallel to `(hx, hy)`,
+   * the one with the largest `threshold(q) - distance` deficit. Transversal
+   * points never count — a crossing in the making must not mask (or be
+   * masked by) a parallel neighbour behind it.
+   */
+  worstAlong(
+    x: number,
+    y: number,
+    within: number,
+    hx: number,
+    hy: number,
+    threshold: (q: FieldPoint) => number,
+    skip?: (q: FieldPoint) => boolean
+  ): { p: FieldPoint; d: number } | null {
     const cx = Math.floor(x / this.cell);
     const cy = Math.floor(y / this.cell);
     const reach = Math.max(1, Math.ceil(within / this.cell));
     let best: FieldPoint | null = null;
-    let bestD = within;
+    let bestD = 0;
+    let bestDeficit = 0;
     for (let gy = cy - reach; gy <= cy + reach; gy++) {
       for (let gx = cx - reach; gx <= cx + reach; gx++) {
         const arr = this.buckets.get(`${gx},${gy}`);
         if (!arr) continue;
         for (const q of arr) {
+          if (skip && skip(q)) continue;
+          if (Math.abs(hx * q.tx + hy * q.ty) <= 0.72) continue;
           const d = Math.hypot(q.x - x, q.y - y);
-          if (d < bestD) {
+          const deficit = threshold(q) - d;
+          if (deficit > bestDeficit) {
+            bestDeficit = deficit;
             bestD = d;
             best = q;
           }
@@ -189,6 +213,7 @@ export function growHoses(o: GrowOptions): GrownHose[] {
     const maxSteps = Math.ceil((targetLen / ds) * 2.5) + 500;
 
     const pts: Point[] = [{ x, y }];
+    const own = new HoseField(Math.max(8, 2.5 * r));
     let arcPos = 0;
     for (let step = 0; step < maxSteps; step++) {
       const exitPhase = !cuffEnd && arcPos >= 0.72 * targetLen;
@@ -205,20 +230,32 @@ export function growHoses(o: GrowOptions): GrownHose[] {
         want = steer(want, target, 0.2);
       } else {
         // Feel the pile: veer off a neighbour we're running along; leave a
-        // transversal approach alone — that's a crossing in the making.
-        const near = field.nearest(x, y, r + o.radiusMax + o.clearance + 6);
-        if (near) {
-          const thr = r + near.p.r + o.clearance + 4;
-          if (near.d < thr) {
-            const hx = Math.cos(theta);
-            const hy = Math.sin(theta);
-            const along = Math.abs(hx * near.p.tx + hy * near.p.ty);
-            if (along > 0.72) {
-              const away = Math.atan2(y - near.p.y, x - near.p.x);
-              want = steer(want, away, 0.4 * Math.min(1, (thr - near.d) / thr + 0.35));
-            }
-          }
-        }
+        // transversal approach alone — that's a crossing in the making. The
+        // hose's OWN tail counts as a neighbour too (ignoring the last few
+        // radii behind the tip): a wanderer that coils back onto itself
+        // osculates its own earlier pass, and self-hugs are the one overlap
+        // the downstream occlusion machinery genuinely can't tell a clean
+        // story about.
+        const hx = Math.cos(theta);
+        const hy = Math.sin(theta);
+        const thr = (q: FieldPoint) => r + q.r + o.clearance + 4;
+        const veerOff = (p: FieldPoint, d: number) => {
+          const t = thr(p);
+          const away = Math.atan2(y - p.y, x - p.x);
+          want = steer(want, away, 0.4 * Math.min(1, (t - d) / t + 0.35));
+        };
+        const near = field.worstAlong(x, y, r + o.radiusMax + o.clearance + 6, hx, hy, thr);
+        if (near) veerOff(near.p, near.d);
+        const nearSelf = own.worstAlong(
+          x,
+          y,
+          2 * r + o.clearance + 6,
+          hx,
+          hy,
+          thr,
+          (q) => arcPos - (q.arc ?? 0) < 5 * r
+        );
+        if (nearSelf) veerOff(nearSelf.p, nearSelf.d);
         // Containment: ease back toward the page centre as the tip nears the
         // frame, hard once it strays past it — mid-run hoses stay on-page.
         const d = Math.min(x - o.x0, o.x1 - x, y - o.y0, o.y1 - y);
@@ -236,6 +273,7 @@ export function growHoses(o: GrowOptions): GrownHose[] {
       y += Math.sin(theta) * ds;
       arcPos += ds;
       pts.push({ x, y });
+      own.add({ x, y, r, tx: Math.cos(theta), ty: Math.sin(theta), arc: arcPos });
 
       if (exitPhase) {
         const outBy = Math.max(o.x0 - x, x - o.x1, o.y0 - y, y - o.y1);

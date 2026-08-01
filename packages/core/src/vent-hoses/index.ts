@@ -169,7 +169,7 @@ export function generateVentHoses(options: VentHosesOptions): FlowLinesResult {
   // 4. Hidden-line removal + contact shadows.
   const occOpts = { gap, inflatePx, penWidth: o.penWidth, shadowHatch: o.shadowHatch };
   const occluders = buildOccluders(strands, crossings, weave.aOnTop, occOpts);
-  buildGrazeOccluders(strands, crossings, occluders, occOpts);
+  buildGrazeOccluders(strands, crossings, weave.aOnTop, occluders, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));
   marks = occludeMarks(marks, strands, occluders, occOpts);
 

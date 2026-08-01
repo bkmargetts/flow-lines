@@ -179,37 +179,51 @@ export function buildOccluders(
 }
 
 /**
- * Graze occluders: two hoses can run close enough to overlap visually
- * WITHOUT their centerlines ever intersecting — no crossing, no occluder,
- * and one hose's rings float across the other's face, the worst artifact a
- * packed pile can produce. The separation pass keeps grazes rare, but a
- * genuinely over-full sheet can't resolve them all geometrically, so any
- * remaining contact run gets the physical treatment: the fatter hose simply
- * lies on top along that stretch, and the run is occluded exactly like a
- * crossing window.
+ * Pair-contact occluders. Two hoses can overlap visually along a RUN, not
+ * just at a crossing point: a graze whose centerlines never intersect, or
+ * the stretch between two nearby crossings of the same pair — the
+ * per-crossing walk windows are deliberately capped short of each other so
+ * alternating crossings don't erase both passes, which leaves the middle of
+ * a deep overlap covered by neither. Un-occluded overlap is the worst
+ * artifact this module can produce: both tubes draw and the rings of one
+ * float across the face of the other.
+ *
+ * So every contact run (centerline distance inside rA+rB+gap+reach) gets
+ * resolved end to end. Runs with no crossing get the physical treatment —
+ * the fatter hose simply lies on top. Runs containing crossings are split
+ * at the midpoints between consecutive crossings, and each segment's top
+ * hose is whoever the weave put on top at its nearest crossing, so the
+ * over/under story stays exactly the solved weave and the swap lands in
+ * the reserved paper between the two windows.
  */
 export function buildGrazeOccluders(
   strands: HoseStrand[],
   crossings: Crossing[],
+  aOnTop: boolean[],
   byStrand: Occluder[][],
   o: OccludeOptions
 ): void {
-  // Per ordered pair, the crossing arcs on each side — a graze run adjacent
-  // to a genuine crossing is that crossing's window, already handled.
+  // Per ordered pair: crossing arcs on each side plus who won, sorted by
+  // the arc along the pair's first strand.
   const pairKey = (a: number, b: number) => a * strands.length + b;
-  const crossArcs = new Map<number, { a: number[]; b: number[] }>();
+  const crossArcs = new Map<number, { a: number; b: number; top: number }[]>();
   for (const c of crossings) {
+    if (c.a.strand === c.b.strand) continue; // self pairs stay walk-window-only
     const lo = Math.min(c.a.strand, c.b.strand);
     const hi = Math.max(c.a.strand, c.b.strand);
     const key = pairKey(lo, hi);
     let entry = crossArcs.get(key);
     if (!entry) {
-      entry = { a: [], b: [] };
+      entry = [];
       crossArcs.set(key, entry);
     }
-    entry.a.push(c.a.strand === lo ? c.a.arc : c.b.arc);
-    entry.b.push(c.a.strand === lo ? c.b.arc : c.a.arc);
+    entry.push({
+      a: c.a.strand === lo ? c.a.arc : c.b.arc,
+      b: c.a.strand === lo ? c.b.arc : c.a.arc,
+      top: aOnTop[c.id] ? c.a.strand : c.b.strand,
+    });
   }
+  for (const entry of crossArcs.values()) entry.sort((p, q) => p.a - q.a);
 
   for (let ka = 0; ka < strands.length; ka++) {
     for (let kb = ka + 1; kb < strands.length; kb++) {
@@ -256,16 +270,47 @@ export function buildGrazeOccluders(
         nearB[i] = bestIdx;
       }
 
-      // Contact runs along A, kept clear of this pair's crossings.
+      // Contact runs along A, each resolved end to end.
       const pairBand = sa.r + sb.r;
-      const entry = crossArcs.get(pairKey(ka, kb));
-      const clearOfCrossings = (a0: number, a1: number): boolean => {
-        if (!entry) return true;
-        for (const ca of entry.a) {
-          if (ca > a0 - 2 * pairBand && ca < a1 + 2 * pairBand) return false;
+      const entry = crossArcs.get(pairKey(ka, kb)) ?? [];
+
+      /** Emit one resolved segment [from..to] (A indices) with `top` on top. */
+      const emitSegment = (from: number, to: number, top: number, endPad: number) => {
+        const segA0 = sa.arc[from];
+        const segA1 = sa.arc[to];
+        if (segA1 - segA0 < 0.5 * pairBand) return;
+        const aWins = top === ka;
+        const winner = aWins ? sa : sb;
+        const winnerIdx = aWins ? ka : kb;
+        const loserIdx = aWins ? kb : ka;
+        let w0 = segA0;
+        let w1 = segA1;
+        if (!aWins) {
+          // Map the segment onto B via the nearest-point correspondence.
+          let bLo = Infinity;
+          let bHi = -Infinity;
+          for (let j = from; j <= to; j++) {
+            const bj = nearB[j];
+            if (bj < 0) continue;
+            const arcJ = sb.arc[bj];
+            if (arcJ < bLo) bLo = arcJ;
+            if (arcJ > bHi) bHi = arcJ;
+          }
+          if (!isFinite(bLo)) return;
+          w0 = bLo;
+          w1 = bHi;
         }
-        return true;
+        byStrand[loserIdx].push(
+          occluderFromWindow(
+            winner,
+            winnerIdx,
+            Math.max(0, w0 - endPad),
+            Math.min(winner.len, w1 + endPad),
+            winner.r + o.gap + o.inflatePx
+          )
+        );
       };
+
       let runStart = -1;
       for (let i = 0; i <= na; i++) {
         const inContact = i < na && nearB[i] >= 0;
@@ -277,39 +322,29 @@ export function buildGrazeOccluders(
           const a0 = sa.arc[from];
           const a1 = sa.arc[to];
           if (a1 - a0 < 1.5 * pairBand) continue;
-          if (!clearOfCrossings(a0, a1)) continue;
-          // The fatter hose lies on top (tie: the earlier strand).
-          const aWins = sa.r >= sb.r;
-          const winner = aWins ? sa : sb;
-          const winnerIdx = aWins ? ka : kb;
-          const loserIdx = aWins ? kb : ka;
-          let w0 = a0;
-          let w1 = a1;
-          if (!aWins) {
-            // Map the run onto B via the nearest-point correspondence.
-            let bLo = Infinity;
-            let bHi = -Infinity;
-            for (let j = from; j <= to; j++) {
-              const bj = nearB[j];
-              if (bj < 0) continue;
-              const arcJ = sb.arc[bj];
-              if (arcJ < bLo) bLo = arcJ;
-              if (arcJ > bHi) bHi = arcJ;
-            }
-            if (!isFinite(bLo)) continue;
-            w0 = bLo;
-            w1 = bHi;
+
+          // Crossings of this pair inside (or hard against) the run.
+          const inRun = entry.filter((c) => c.a > a0 - pairBand && c.a < a1 + pairBand);
+          if (inRun.length === 0) {
+            // Pure graze: the fatter hose lies on top (tie: earlier strand).
+            emitSegment(from, to, sa.r >= sb.r ? ka : kb, 0.75 * pairBand);
+            continue;
           }
-          const pad = 0.75 * pairBand;
-          byStrand[loserIdx].push(
-            occluderFromWindow(
-              winner,
-              winnerIdx,
-              Math.max(0, w0 - pad),
-              Math.min(winner.len, w1 + pad),
-              winner.r + o.gap + o.inflatePx
-            )
-          );
+
+          // Split the run at midpoints between consecutive crossings; each
+          // segment continues its own crossing's winner.
+          let segFrom = from;
+          for (let ci = 0; ci < inRun.length; ci++) {
+            const boundary =
+              ci + 1 < inRun.length ? (inRun[ci].a + inRun[ci + 1].a) / 2 : Infinity;
+            let segTo = to;
+            if (isFinite(boundary)) {
+              segTo = segFrom;
+              while (segTo + 1 <= to && sa.arc[segTo + 1] <= boundary) segTo++;
+            }
+            emitSegment(segFrom, segTo, inRun[ci].top, 0.35 * pairBand);
+            segFrom = Math.min(segTo + 1, to);
+          }
         }
       }
     }
@@ -460,7 +495,7 @@ export function occludeMarks(
       mark.layer === 'shade'
         ? Math.max(minRun, 1.2 * r)
         : mark.layer === 'ring'
-          ? Math.max(4.5, 0.32 * origLen)
+          ? Math.max(4.5, 0.45 * origLen)
           : minRun;
     let runPts: Point[] = [];
     let runArcs: number[] = [];
