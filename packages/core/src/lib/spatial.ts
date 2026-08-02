@@ -174,6 +174,42 @@ export function densify(points: Point[], step: number): Point[] {
   return out;
 }
 
+/**
+ * Resample a polyline at UNIFORM arc-length spacing (endpoints kept).
+ * Unlike `densify` (which only subdivides), this also merges runs of
+ * near-coincident points — relaxation passes compress vertices together,
+ * and micro-segments carry wild vertex angles that no curvature clamp can
+ * ease out (the eased midpoint is a micro-step away).
+ */
+export function resampleUniform(points: Point[], step: number): Point[] {
+  if (points.length < 2) return points.map((p) => ({ x: p.x, y: p.y }));
+  const s = Math.max(0.5, step);
+  const out: Point[] = [{ x: points[0].x, y: points[0].y }];
+  let carry = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (segLen < 1e-9) continue;
+    let along = s - carry;
+    while (along <= segLen) {
+      const t = along / segLen;
+      out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      along += s;
+    }
+    carry = segLen - (along - s);
+  }
+  const last = points[points.length - 1];
+  const tail = out[out.length - 1];
+  if (Math.hypot(last.x - tail.x, last.y - tail.y) > 0.25 * s) {
+    out.push({ x: last.x, y: last.y });
+  } else {
+    tail.x = last.x;
+    tail.y = last.y;
+  }
+  return out;
+}
+
 /** Per-point unit normals (perpendicular to the local tangent). */
 export function normalsOf(points: Point[]): Point[] {
   const out: Point[] = new Array(points.length);

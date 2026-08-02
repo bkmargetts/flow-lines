@@ -13,6 +13,7 @@ import { registerMachine } from './commands/machine.js';
 import { registerFracture } from './commands/fracture.js';
 import { registerMarbling } from './commands/marbling.js';
 import { registerMeander } from './commands/meander.js';
+import { registerTangles } from './commands/tangles.js';
 import { registerCoral } from './commands/coral.js';
 import { registerWarpGrid } from './commands/warp-grid.js';
 
@@ -37,6 +38,7 @@ registerMachine(program);
 registerFracture(program);
 registerMarbling(program);
 registerMeander(program);
+registerTangles(program);
 registerCoral(program);
 registerWarpGrid(program);
 

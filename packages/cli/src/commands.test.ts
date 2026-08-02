@@ -16,6 +16,7 @@ import { registerMachine } from './commands/machine.js';
 import { registerFracture } from './commands/fracture.js';
 import { registerMarbling } from './commands/marbling.js';
 import { registerMeander } from './commands/meander.js';
+import { registerTangles } from './commands/tangles.js';
 import { registerCoral } from './commands/coral.js';
 import { registerWarpGrid } from './commands/warp-grid.js';
 
@@ -45,6 +46,7 @@ const REGISTRARS = [
   registerMeander,
   registerCoral,
   registerWarpGrid,
+  registerTangles,
 ];
 
 const EXPECTED_COMMANDS = [
@@ -62,6 +64,7 @@ const EXPECTED_COMMANDS = [
   'meander',
   'coral',
   'warp-grid',
+  'tangles',
 ];
 
 function buildProgram(): Command {

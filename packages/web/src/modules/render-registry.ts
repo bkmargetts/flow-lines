@@ -7,6 +7,7 @@ import { renderCity } from '../projects/city-generator/render';
 import { renderStickmen } from '../projects/stickmen/render';
 import { renderSportsBalls } from '../projects/sports-balls/render';
 import { renderHearts } from '../projects/hearts/render';
+import { renderTangles } from '../projects/tangles/render';
 import { renderRibbonWeave } from '../projects/ribbon-weave/render';
 import { renderGesture } from '../projects/gesture/render';
 import { renderMachine } from '../projects/machine/render';
@@ -59,6 +60,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   stickmen: entry(renderStickmen),
   'sports-balls': entry(renderSportsBalls),
   hearts: entry(renderHearts),
+  'tangles': entry(renderTangles),
   'ribbon-weave': entry(renderRibbonWeave),
   gesture: entry(renderGesture),
   machine: entry(renderMachine),

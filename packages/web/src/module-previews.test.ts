@@ -50,6 +50,7 @@ const PREVIEW_STATES: Record<string, Record<string, unknown>> = {
     ],
   },
   'reaction-diffusion': { preset: 'coral' },
+  'tangles': { count: 6, radiusMinMm: 4, radiusMaxMm: 10, wander: 0.45 },
   lenia: { preset: 'cells', seedPattern: 'soup', seedSpots: 9, style: 'dual' },
   physarum: { preset: 'veins' },
   marbling: { preset: 'feather', drops: 75, swirl: 0.6 },
