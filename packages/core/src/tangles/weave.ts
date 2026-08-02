@@ -107,5 +107,86 @@ export function solveHoseWeave(
     if (roll < weaveBias) aOnTop[i] = fatOnTop(c);
   }
 
+  // Cycle-breaking pass: three tubes mutually overlapping in one spot with
+  // a cyclic order (A over B, B over C, C over A) is an Escher knot — the
+  // pairwise occluders then hide ALL THREE, and the deepest mats dissolve
+  // into washed-out paper patches. For every triangle of co-located
+  // crossings covering three strands, re-stamp a consistent local order:
+  // fattest on top (ties: lower strand index) — the same physics as the
+  // bias pass.
+  const cellSz = 120;
+  const grid = new Map<string, number[]>();
+  for (let i = 0; i < n; i++) {
+    const key = `${Math.floor(crossings[i].x / cellSz)},${Math.floor(crossings[i].y / cellSz)}`;
+    let arr = grid.get(key);
+    if (!arr) {
+      arr = [];
+      grid.set(key, arr);
+    }
+    arr.push(i);
+  }
+  const topOf = (i: number): number =>
+    aOnTop[i] ? crossings[i].a.strand : crossings[i].b.strand;
+  const underOf = (i: number): number =>
+    aOnTop[i] ? crossings[i].b.strand : crossings[i].a.strand;
+  const order = (p: number, q: number): boolean =>
+    strands[p].r > strands[q].r + 1e-9 || (Math.abs(strands[p].r - strands[q].r) <= 1e-9 && p < q);
+  for (let i = 0; i < n; i++) {
+    // Neighbours from the surrounding 3x3 cells so triangles straddling a
+    // cell boundary are still seen; id ordering dedupes.
+    const cx = Math.floor(crossings[i].x / cellSz);
+    const cy = Math.floor(crossings[i].y / cellSz);
+    const near: number[] = [];
+    for (let gy = cy - 1; gy <= cy + 1; gy++) {
+      for (let gx = cx - 1; gx <= cx + 1; gx++) {
+        const arr = grid.get(`${gx},${gy}`);
+        if (!arr) continue;
+        for (const id of arr) if (id > i) near.push(id);
+      }
+    }
+    near.sort((p, q) => p - q);
+    {
+      for (let v = 0; v < near.length; v++) {
+        for (let w = v + 1; w < near.length; w++) {
+          const [j, k] = [near[v], near[w]];
+          const ci = crossings[i];
+          const cj = crossings[j];
+          const ck = crossings[k];
+          const S = new Set([
+            ci.a.strand,
+            ci.b.strand,
+            cj.a.strand,
+            cj.b.strand,
+            ck.a.strand,
+            ck.b.strand,
+          ]);
+          if (S.size !== 3) continue;
+          const reach =
+            2.5 *
+            Math.max(
+              strands[ci.a.strand].r + strands[ci.b.strand].r,
+              strands[cj.a.strand].r + strands[cj.b.strand].r,
+              strands[ck.a.strand].r + strands[ck.b.strand].r
+            );
+          if (
+            Math.hypot(ci.x - cj.x, ci.y - cj.y) > reach ||
+            Math.hypot(cj.x - ck.x, cj.y - ck.y) > reach ||
+            Math.hypot(ci.x - ck.x, ci.y - ck.y) > reach
+          )
+            continue;
+          // Cyclic iff every strand is on top exactly once.
+          const tops = [topOf(i), topOf(j), topOf(k)];
+          const unders = [underOf(i), underOf(j), underOf(k)];
+          if (new Set(tops).size !== 3 || new Set(unders).size !== 3) continue;
+          for (const id of [i, j, k]) {
+            const c = crossings[id];
+            if (c.a.strand === c.b.strand) continue;
+            aOnTop[id] = order(c.a.strand, c.b.strand);
+          }
+        }
+      }
+    }
+  }
+
   return { aOnTop, violations };
 }

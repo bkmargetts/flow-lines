@@ -238,7 +238,34 @@ export function findHoseCrossings(strands: TangleStrand[], maxCrossings: number)
         const midArcB = (prev.arcB + h.arcB) / 2;
         merge = distNear(strands[h.sb], smp.p, midArcB, 2 * pairBand) < 1.2 * pairBand;
       }
+      // Contact connectivity — the physical test, and the last word: if the
+      // centerlines NEVER separate beyond the pair band between the two
+      // hits, this is one overlap event (a dive through the fatter tube's
+      // lens, entry and exit) and alternating over/under inside it is
+      // impossible geometry. One crossing, one winner, and the occluder
+      // walk then covers the whole lens. Angle and arc-distance gates don't
+      // apply — a dive can be steep and hundreds of arcs long.
+      if (!merge && h.sa !== h.sb && dA < 40 * pairBand) {
+        const bLo = Math.min(prev.arcB, h.arcB);
+        const bHi = Math.max(prev.arcB, h.arcB);
+        const bMid = (bLo + bHi) / 2;
+        const bWin = (bHi - bLo) / 2 + 2 * pairBand;
+        let connected = true;
+        const step = pairBand / 2;
+        for (let a = Math.min(prev.arcA, h.arcA); a <= Math.max(prev.arcA, h.arcA); a += step) {
+          const smp = sampleAtOpen(strands[h.sa], a);
+          if (distNear(strands[h.sb], smp.p, bMid, bWin) >= pairBand) {
+            connected = false;
+            break;
+          }
+        }
+        merge = connected;
+      }
       if (merge) {
+        // The merged crossing sits mid-lens so the occluder walk reaches
+        // both ends of the contact from it.
+        prev.arcA = (prev.arcA + h.arcA) / 2;
+        prev.arcB = (prev.arcB + h.arcB) / 2;
         prev.x = (prev.x + h.x) / 2;
         prev.y = (prev.y + h.y) / 2;
         continue;

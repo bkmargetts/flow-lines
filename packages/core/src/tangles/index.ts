@@ -19,6 +19,7 @@ import {
   buildOccluders,
   contactShadows,
   occludeMarks,
+  repairOcclusion,
 } from './occlude.js';
 
 export type { TangleMaterial } from './centerline.js';
@@ -165,7 +166,11 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   // compounding them left spikes far past what a final clamp could ease
   // out (κ·r in the tens — the ±r edges fold into loops there, which is
   // most of what reads as "occlusion artifacts" in a dense pile).
-  for (let round = 0; round < 6; round++) {
+  // 10 rounds: the pushes are magnitude-capped (a giant displacement is a
+  // guaranteed kink), so a deep A0-pile overlap needs the extra rounds to
+  // fully resolve — under-converged separation leaves true overlaps that
+  // read as X-ray crossings.
+  for (let round = 0; round < 10; round++) {
     separateHoses(paths, radii, o.clearance, 1);
     // Redistribution, NOT diffusive easing: eased-midpoint sweeps are
     // curve-shortening flow, and interleaved with pushes they contract a
@@ -250,6 +255,9 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   buildEndOccluders(strands, grown, occluders, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));
   marks = occludeMarks(marks, strands, occluders, occOpts);
+  // Belt-and-braces: geometrically verify the survivors and erase any ink
+  // still printing inside a tube that is on top of it (see repairOcclusion).
+  marks = repairOcclusion(marks, strands, crossings, weave.aOnTop, occluders, occOpts);
 
   // 5. Plain stroked polylines, layer-tagged for multi-pen export.
   const lines: FlowLine[] = marks.map((m) => ({ points: m.points, layer: m.layer }));

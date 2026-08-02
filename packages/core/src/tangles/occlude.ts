@@ -1,6 +1,4 @@
 import type { Point } from '../flow-lines.js';
-import { pointInPolygon } from '../lib/polyline.js';
-import { outlineFromEdges } from '../lib/spatial.js';
 import { sampleAtOpen, type TangleStrand } from './strand.js';
 import type { Crossing } from './crossings.js';
 import type { Mark } from './hose.js';
@@ -21,8 +19,25 @@ import type { Mark } from './hose.js';
  * must not erase the very pass that's on top of itself.
  */
 
+/**
+ * An occluder is a DISTANCE FIELD, not a polygon: a point is covered when
+ * it lies within `half` of the over strand's centerline restricted to
+ * [arcMin, arcMax] (indices [i0, i1]), or within `half` of the optional
+ * capsule segment (end hardware reaching past the strand's tip). The
+ * first version used offset-strip polygons; a window a strand sweeps
+ * through at its curvature cap folds the strip into a self-intersecting
+ * polygon, and the even-odd test then reports points INSIDE the tube as
+ * outside — X-ray holes exactly where the pile is densest.
+ */
 export interface Occluder {
-  poly: Point[];
+  /** The over strand's polyline (for the distance scan). */
+  pts: Point[];
+  i0: number;
+  i1: number;
+  half: number;
+  /** Capsule segment past the strand tip (end hardware only). */
+  segA?: Point;
+  segB?: Point;
   minX: number;
   minY: number;
   maxX: number;
@@ -33,6 +48,79 @@ export interface Occluder {
   arcMax: number;
   /** End-hardware occluder (cuff mouth / aglet capsule). */
   end?: boolean;
+}
+
+/** Occluder over `s`'s tube along [arc0, arc1], inflated to `half`. */
+function occluderFromWindow(
+  s: TangleStrand,
+  strandIdx: number,
+  arc0: number,
+  arc1: number,
+  half: number
+): Occluder {
+  const n = s.pts.length;
+  let lo = 0;
+  let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (s.arc[mid] < arc0) lo = mid + 1;
+    else hi = mid;
+  }
+  const i0 = Math.max(0, lo - 1);
+  lo = i0;
+  hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (s.arc[mid] <= arc1) lo = mid + 1;
+    else hi = mid;
+  }
+  const i1 = Math.min(n - 1, lo);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let i = i0; i <= i1; i++) {
+    const p = s.pts[i];
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return {
+    pts: s.pts,
+    i0,
+    i1,
+    half,
+    minX: minX - half,
+    minY: minY - half,
+    maxX: maxX + half,
+    maxY: maxY + half,
+    strand: strandIdx,
+    arcMin: arc0,
+    arcMax: arc1,
+  };
+}
+
+/** Is (x, y) within the occluder's distance field? */
+function occluderHits(occ: Occluder, x: number, y: number): boolean {
+  const h2 = occ.half * occ.half;
+  for (let i = occ.i0; i <= occ.i1; i++) {
+    const dx = occ.pts[i].x - x;
+    const dy = occ.pts[i].y - y;
+    if (dx * dx + dy * dy < h2) return true;
+  }
+  if (occ.segA && occ.segB) {
+    const ax = occ.segA.x;
+    const ay = occ.segA.y;
+    const bx = occ.segB.x - ax;
+    const by = occ.segB.y - ay;
+    const len2 = bx * bx + by * by;
+    const t = len2 > 1e-12 ? Math.max(0, Math.min(1, ((x - ax) * bx + (y - ay) * by) / len2)) : 0;
+    const dx = ax + bx * t - x;
+    const dy = ay + by * t - y;
+    if (dx * dx + dy * dy < h2) return true;
+  }
+  return false;
 }
 
 export interface OccludeOptions {
@@ -58,18 +146,37 @@ export function buildOccluders(
 ): Occluder[][] {
   const byStrand: Occluder[][] = strands.map(() => []);
 
-  // Where each strand goes UNDER, sorted by arc. A hose beneath another hose
-  // cannot occlude anything past that point, so over-windows are capped at
-  // just over half-way to the nearest under-crossing — this is what stops two
-  // close alternating crossings from erasing BOTH passes between them.
-  const underArcs: number[][] = strands.map(() => []);
+  // Where each strand goes under EACH SPECIFIC NEIGHBOUR, sorted by arc.
+  // An over-window is capped at just over half-way to the nearest crossing
+  // where the SAME PAIR flips — that is what stops two close alternating
+  // crossings from erasing BOTH passes between them. The cap must be
+  // per-pair: layering is pairwise, so strand A ducking under some THIRD
+  // strand does not stop A being on top of B — capping on any-strand
+  // under-crossings chopped every window in a dense pile to a sliver and
+  // left the rest of each overlap lens printing both tubes.
+  const underArcsPair = new Map<number, number[]>();
+  const pairIdx = (underStrand: number, overStrand: number): number =>
+    underStrand * strands.length + overStrand;
   for (const c of crossings) {
+    const over = aOnTop[c.id] ? c.a : c.b;
     const under = aOnTop[c.id] ? c.b : c.a;
-    underArcs[under.strand].push(under.arc);
+    const key = pairIdx(under.strand, over.strand);
+    let arr = underArcsPair.get(key);
+    if (!arr) {
+      arr = [];
+      underArcsPair.set(key, arr);
+    }
+    arr.push(under.arc);
   }
-  for (const arr of underArcs) arr.sort((p, q) => p - q);
-  const distToUnder = (strand: number, fromArc: number, dir: 1 | -1): number => {
-    const arr = underArcs[strand];
+  for (const arr of underArcsPair.values()) arr.sort((p, q) => p - q);
+  const distToUnder = (
+    strand: number,
+    otherStrand: number,
+    fromArc: number,
+    dir: 1 | -1
+  ): number => {
+    const arr = underArcsPair.get(pairIdx(strand, otherStrand));
+    if (!arr) return Infinity;
     let best = Infinity;
     for (const u of arr) {
       const fwd = dir === 1 ? u - fromArc : fromArc - u;
@@ -134,7 +241,7 @@ export function buildOccluders(
     const extend = (dir: 1 | -1): number => {
       const underCap = Math.max(
         0.6 * pairBand,
-        0.55 * distToUnder(over.strand, over.arc, dir)
+        0.55 * distToUnder(over.strand, under.strand, over.arc, dir)
       );
       const cap = Math.min(extCap, underCap);
       let ext = Math.min(pairBand * 0.75, cap);
@@ -153,37 +260,9 @@ export function buildOccluders(
 
     const arc0 = Math.max(0, over.arc - extend(-1));
     const arc1 = Math.min(s.len, over.arc + extend(1));
-    const half = s.r + o.gap + o.inflatePx;
-    const left: Point[] = [];
-    const right: Point[] = [];
-    const stepCount = Math.max(6, Math.ceil((arc1 - arc0) / Math.max(2, pairBand / 3)));
-    for (let j = 0; j <= stepCount; j++) {
-      const a = arc0 + ((arc1 - arc0) * j) / stepCount;
-      const smp = sampleAtOpen(s, a);
-      left.push({ x: smp.p.x + smp.n.x * half, y: smp.p.y + smp.n.y * half });
-      right.push({ x: smp.p.x - smp.n.x * half, y: smp.p.y - smp.n.y * half });
-    }
-    const poly = outlineFromEdges(left, right);
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const p of poly) {
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
-    }
-    byStrand[under.strand].push({
-      poly,
-      minX,
-      minY,
-      maxX,
-      maxY,
-      strand: over.strand,
-      arcMin: arc0,
-      arcMax: arc1,
-    });
+    byStrand[under.strand].push(
+      occluderFromWindow(s, over.strand, arc0, arc1, s.r + o.gap + o.inflatePx)
+    );
   }
   return byStrand;
 }
@@ -297,32 +376,48 @@ export function buildGrazeOccluders(
         const winner = aWins ? sa : sb;
         const winnerIdx = aWins ? ka : kb;
         const loserIdx = aWins ? kb : ka;
-        let w0 = segA0;
-        let w1 = segA1;
-        if (!aWins) {
+        const windows: [number, number][] = [];
+        if (aWins) {
+          windows.push([segA0, segA1]);
+        } else {
           // Map the segment onto B via the nearest-point correspondence.
-          let bLo = Infinity;
-          let bHi = -Infinity;
+          // One min/max interval is NOT enough: B can loop through the
+          // contact zone, visiting it at several disjoint arc ranges — an
+          // interval spanning them would be roughly right, but nearest-
+          // point aliasing can also UNDER-cover (the deepest loser ink
+          // projects onto a B arc outside [min,max]). Cluster the mapped
+          // arcs and emit one window per cluster, so every visited stretch
+          // of B is covered and nothing between clusters is over-erased.
+          const mapped: number[] = [];
           for (let j = from; j <= to; j++) {
             const bj = nearB[j];
             if (bj < 0) continue;
-            const arcJ = sb.arc[bj];
-            if (arcJ < bLo) bLo = arcJ;
-            if (arcJ > bHi) bHi = arcJ;
+            mapped.push(sb.arc[bj]);
           }
-          if (!isFinite(bLo)) return;
-          w0 = bLo;
-          w1 = bHi;
+          if (mapped.length === 0) return;
+          mapped.sort((p, q) => p - q);
+          let w0 = mapped[0];
+          let w1 = mapped[0];
+          for (let mi = 1; mi < mapped.length; mi++) {
+            if (mapped[mi] - w1 > 4 * pairBand) {
+              windows.push([w0, w1]);
+              w0 = mapped[mi];
+            }
+            w1 = mapped[mi];
+          }
+          windows.push([w0, w1]);
         }
-        byStrand[loserIdx].push(
-          occluderFromWindow(
-            winner,
-            winnerIdx,
-            Math.max(0, w0 - endPad),
-            Math.min(winner.len, w1 + endPad),
-            winner.r + o.gap + o.inflatePx
-          )
-        );
+        for (const [w0, w1] of windows) {
+          byStrand[loserIdx].push(
+            occluderFromWindow(
+              winner,
+              winnerIdx,
+              Math.max(0, w0 - endPad),
+              Math.min(winner.len, w1 + endPad),
+              winner.r + o.gap + o.inflatePx
+            )
+          );
+        }
       };
 
       let runStart = -1;
@@ -335,7 +430,13 @@ export function buildGrazeOccluders(
           runStart = -1;
           const a0 = sa.arc[from];
           const a1 = sa.arc[to];
-          if (a1 - a0 < 1.5 * pairBand) continue;
+          // Even a SHORT true-overlap pinch must be resolved: the relaxation
+          // pass cannot always separate a kiss between two pinning
+          // crossings, and when the contact is too glancing to register as
+          // a crossing, nothing else covers it — both tubes print, the
+          // X-ray tell. Detection is true-overlap-only, so firing here is
+          // always physically justified.
+          if (a1 - a0 < 0.5 * pairBand) continue;
 
           // Crossings of this pair inside (or hard against) the run.
           const inRun = entry.filter((c) => c.a > a0 - pairBand && c.a < a1 + pairBand);
@@ -391,36 +492,6 @@ function bboxesNear(a: TangleStrand, b: TangleStrand, pad: number): boolean {
   );
 }
 
-function occluderFromWindow(
-  s: TangleStrand,
-  strandIdx: number,
-  arc0: number,
-  arc1: number,
-  half: number
-): Occluder {
-  const left: Point[] = [];
-  const right: Point[] = [];
-  const stepCount = Math.max(6, Math.ceil((arc1 - arc0) / Math.max(2, s.r / 2)));
-  for (let j = 0; j <= stepCount; j++) {
-    const a = arc0 + ((arc1 - arc0) * j) / stepCount;
-    const smp = sampleAtOpen(s, a);
-    left.push({ x: smp.p.x + smp.n.x * half, y: smp.p.y + smp.n.y * half });
-    right.push({ x: smp.p.x - smp.n.x * half, y: smp.p.y - smp.n.y * half });
-  }
-  const poly = outlineFromEdges(left, right);
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const p of poly) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return { poly, minX, minY, maxX, maxY, strand: strandIdx, arcMin: arc0, arcMax: arc1 };
-}
-
 /**
  * End-hardware occluders: a cuff mouth or an aglet is a solid object lying
  * on the pile, but the hardware reaches PAST the centerline's end where no
@@ -450,43 +521,23 @@ export function buildEndOccluders(
       const ext = (o.lace ? 5.4 * r : 0.6 * r) + o.gap + o.inflatePx;
       const half = (o.lace ? 0.85 * r : r) + o.gap + o.inflatePx;
 
-      const left: Point[] = [];
-      const right: Point[] = [];
-      const SAMPLES = 4;
-      for (let j = 0; j <= SAMPLES; j++) {
-        const a =
-          end === 'start'
-            ? reach - (reach * j) / SAMPLES
-            : s.len - reach + (reach * j) / SAMPLES;
-        const p = sampleAtOpen(s, a);
-        left.push({ x: p.p.x + p.n.x * half, y: p.p.y + p.n.y * half });
-        right.push({ x: p.p.x - p.n.x * half, y: p.p.y - p.n.y * half });
-      }
+      // The hardware = the strand's own tube over the reach window, plus a
+      // capsule reaching `ext` past the tip.
       const tip = { x: smp.p.x + tOut.x * ext, y: smp.p.y + tOut.y * ext };
-      left.push({ x: tip.x + smp.n.x * half, y: tip.y + smp.n.y * half });
-      right.push({ x: tip.x - smp.n.x * half, y: tip.y - smp.n.y * half });
-      const poly = outlineFromEdges(left, right);
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      for (const p of poly) {
-        if (p.x < minX) minX = p.x;
-        if (p.y < minY) minY = p.y;
-        if (p.x > maxX) maxX = p.x;
-        if (p.y > maxY) maxY = p.y;
-      }
-      const occ: Occluder = {
-        poly,
-        minX,
-        minY,
-        maxX,
-        maxY,
-        strand: k,
-        arcMin: end === 'start' ? 0 : s.len - reach,
-        arcMax: end === 'start' ? reach : s.len,
-        end: true,
-      };
+      const occ = occluderFromWindow(
+        s,
+        k,
+        end === 'start' ? 0 : s.len - reach,
+        end === 'start' ? reach : s.len,
+        half
+      );
+      occ.segA = { x: smp.p.x, y: smp.p.y };
+      occ.segB = tip;
+      occ.minX = Math.min(occ.minX, tip.x - half);
+      occ.minY = Math.min(occ.minY, tip.y - half);
+      occ.maxX = Math.max(occ.maxX, tip.x + half);
+      occ.maxY = Math.max(occ.maxY, tip.y + half);
+      occ.end = true;
       for (let j = 0; j < strands.length; j++) byStrand[j].push(occ);
     }
   }
@@ -508,9 +559,279 @@ function covered(
     // Hardware vs hardware: end marks survive another end's occluder.
     if (occ.end && ownEndZones && ownEndZones.some(([lo, hi]) => arc >= lo && arc <= hi))
       continue;
-    if (pointInPolygon(occ.poly, x, y)) return true;
+    if (occluderHits(occ, x, y)) return true;
   }
   return false;
+}
+
+/**
+ * Verify-and-repair: the crossing walks, graze runs, and end hardware
+ * SHOULD cover every overlap between two tubes, but each has geometric
+ * edge cases (window caps, correspondence mapping, merged-crossing
+ * placement) and any seam they leave prints both tubes — the X-ray tell.
+ * So after the main erase pass, directly test the surviving ink: any
+ * point sitting strictly inside another strand's tube is an intrusion.
+ * Intrusions are clustered per strand pair, each cluster gets ONE winner —
+ * the weave's decision at the pair's nearest crossing, falling back to
+ * fatter-lies-on-top for crossing-less grazes — and the loser's intruding
+ * ink is erased by a synthesized occluder window. Deterministic, and by
+ * construction it closes whatever seam produced the leak.
+ */
+export function repairOcclusion(
+  marks: Mark[],
+  strands: TangleStrand[],
+  crossings: Crossing[],
+  aOnTop: boolean[],
+  baseOccluders: Occluder[][],
+  o: OccludeOptions
+): Mark[] {
+  // Spatial grid of centerline points for point-in-tube tests.
+  let maxR = 0;
+  for (const s of strands) maxR = Math.max(maxR, s.r);
+  const cell = Math.max(8, 2 * maxR);
+  const grid = new Map<string, [number, number][]>();
+  for (let k = 0; k < strands.length; k++) {
+    const s = strands[k];
+    for (let i = 0; i < s.pts.length; i++) {
+      const key = `${Math.floor(s.pts[i].x / cell)},${Math.floor(s.pts[i].y / cell)}`;
+      let arr = grid.get(key);
+      if (!arr) {
+        arr = [];
+        grid.set(key, arr);
+      }
+      arr.push([k, i]);
+    }
+  }
+
+  // Directed intrusions: ink of `j` strictly inside the tube of `i`.
+  interface Intrusion {
+    j: number;
+    i: number;
+    iArc: number;
+    x: number;
+    y: number;
+  }
+  const intrusions: Intrusion[] = [];
+  for (const m of marks) {
+    for (let pi = 0; pi < m.points.length; pi++) {
+      const p = m.points[pi];
+      const cx = Math.floor(p.x / cell);
+      const cy = Math.floor(p.y / cell);
+      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+        for (let gx = cx - 1; gx <= cx + 1; gx++) {
+          const arr = grid.get(`${gx},${gy}`);
+          if (!arr) continue;
+          for (const [k, i] of arr) {
+            if (k === m.strand) continue;
+            const s = strands[k];
+            const dx = s.pts[i].x - p.x;
+            const dy = s.pts[i].y - p.y;
+            // Strictly inside: a mark kissing the silhouette is legitimate.
+            if (dx * dx + dy * dy < (s.r - 1.25) * (s.r - 1.25)) {
+              intrusions.push({ j: m.strand, i: k, iArc: s.arc[i], x: p.x, y: p.y });
+            }
+          }
+        }
+      }
+    }
+  }
+  if (intrusions.length === 0) return marks;
+
+  // Zone the intrusions per UNORDERED pair by position — both directions
+  // of the same contact must land in one zone so they get ONE winner. Two
+  // directed clusters deciding independently can disagree (their centroids
+  // sit near different crossings of the pair) and a disagreement keeps
+  // both sides' ink: the exact conflict this pass exists to remove.
+  intrusions.sort(
+    (a, b) =>
+      Math.min(a.i, a.j) - Math.min(b.i, b.j) ||
+      Math.max(a.i, a.j) - Math.max(b.i, b.j) ||
+      a.x - b.x ||
+      a.y - b.y
+  );
+  const repair: Occluder[][] = strands.map(() => []);
+  const zones: Intrusion[][] = [];
+  {
+    let zone: Intrusion[] = [];
+    const samePair = (a: Intrusion, b: Intrusion): boolean =>
+      Math.min(a.i, a.j) === Math.min(b.i, b.j) && Math.max(a.i, a.j) === Math.max(b.i, b.j);
+    for (const t of intrusions) {
+      if (zone.length === 0 || !samePair(zone[0], t)) {
+        if (zone.length) zones.push(zone);
+        zone = [t];
+        continue;
+      }
+      const band = strands[t.i].r + strands[t.j].r;
+      let near = false;
+      for (const z of zone) {
+        if (Math.hypot(z.x - t.x, z.y - t.y) < 3 * band) {
+          near = true;
+          break;
+        }
+      }
+      if (near) zone.push(t);
+      else {
+        zones.push(zone);
+        zone = [t];
+      }
+    }
+    if (zone.length) zones.push(zone);
+  }
+  for (const zone of zones) {
+    const i = Math.min(zone[0].i, zone[0].j);
+    const j = Math.max(zone[0].i, zone[0].j);
+    let sx = 0;
+    let sy = 0;
+    for (const t of zone) {
+      sx += t.x;
+      sy += t.y;
+    }
+    const mx = sx / zone.length;
+    const my = sy / zone.length;
+    // One winner per zone: the weave's call at the pair's nearest
+    // crossing; pure grazes fall back to the fatter tube (tie: lower
+    // index), matching the graze pass's convention.
+    let top = -1;
+    let bestD = 6 * (strands[i].r + strands[j].r);
+    for (const c of crossings) {
+      const samePair =
+        (c.a.strand === i && c.b.strand === j) || (c.a.strand === j && c.b.strand === i);
+      if (!samePair) continue;
+      const d = Math.hypot(c.x - mx, c.y - my);
+      if (d < bestD) {
+        bestD = d;
+        top = aOnTop[c.id] ? c.a.strand : c.b.strand;
+      }
+    }
+    if (top < 0) {
+      top =
+        strands[i].r > strands[j].r + 1e-9
+          ? i
+          : strands[j].r > strands[i].r + 1e-9
+            ? j
+            : i;
+    }
+    const loser = top === i ? j : i;
+    // Erase the loser's intruding ink: window along the winner over the
+    // arcs where the loser's ink actually sits inside the winner's tube.
+    let arcLo = Infinity;
+    let arcHi = -Infinity;
+    for (const t of zone) {
+      if (t.i !== top) continue;
+      if (t.iArc < arcLo) arcLo = t.iArc;
+      if (t.iArc > arcHi) arcHi = t.iArc;
+    }
+    if (!isFinite(arcLo)) continue; // only over-ink in this zone: nothing to erase
+    const pad = 1.2 * (strands[i].r + strands[j].r);
+    repair[loser].push(
+      occluderFromWindow(
+        strands[top],
+        top,
+        Math.max(0, arcLo - pad),
+        Math.min(strands[top].len, arcHi + pad),
+        strands[top].r + o.gap + o.inflatePx
+      )
+    );
+  }
+  let any = false;
+  for (const arr of repair) {
+    if (arr.length) {
+      any = true;
+      break;
+    }
+  }
+  const repaired = any ? occludeMarks(marks, strands, repair, o) : marks;
+  return dropSliverPeeks(repaired, strands, baseOccluders, repair, o);
+}
+
+/**
+ * Deep-pile cleanup: in a 4-deep mat a buried strand is legitimately
+ * almost entirely hidden — but the per-mark survival rules let short
+ * peeks through wherever two occluders don't quite meet, and the result
+ * is confetti: an orphan ring arc or a 10px edge stub floating between
+ * tubes. A human inker doesn't draw a sliver of buried tube shorter than
+ * the tube is wide. So: compute each strand's VISIBLE arc intervals (its
+ * centerline outside every occluder), and drop all marks living inside a
+ * visible interval shorter than ~a tube width.
+ */
+function dropSliverPeeks(
+  marks: Mark[],
+  strands: TangleStrand[],
+  base: Occluder[][],
+  repair: Occluder[][],
+  o: OccludeOptions
+): Mark[] {
+  interface DeadRun {
+    lo: number;
+    hi: number;
+  }
+  const dead: DeadRun[][] = strands.map((s, k) => {
+    const occs = [...(base[k] ?? []), ...(repair[k] ?? [])];
+    if (occs.length === 0) return [];
+    const ownEndZones = o.endZones?.[k];
+    const pad = 2 * s.r;
+    const step = Math.max(2, s.r / 4);
+    const runs: DeadRun[] = [];
+    let visStart = 0;
+    let prevCovered = true;
+    let arc = 0;
+    // Sentinel pass over [0, len] marking visible runs; runs shorter than
+    // the threshold become dead intervals.
+    const minPeek = 3 * s.r;
+    for (; arc <= s.len + step; arc += step) {
+      const a = Math.min(arc, s.len);
+      const p = sampleAtOpen(s, a).p;
+      const isCov = covered(p.x, p.y, a, k, occs, pad, ownEndZones);
+      if (prevCovered && !isCov) visStart = a;
+      if (!prevCovered && isCov && a - visStart < minPeek) {
+        runs.push({ lo: visStart, hi: a });
+      }
+      prevCovered = isCov;
+      if (a >= s.len) break;
+    }
+    // A visible run touching either strand END stays: a tube emerging off
+    // the pile edge or into its own cuff is real anatomy, however short.
+    return runs.filter((r) => r.lo > step && r.hi < s.len - step);
+  });
+
+  const kept = marks.filter((m) => {
+    const runs = dead[m.strand];
+    if (!runs || runs.length === 0) return true;
+    const mid = m.arcs[Math.floor(m.arcs.length / 2)];
+    for (const r of runs) {
+      if (mid >= r.lo && mid <= r.hi) return false;
+    }
+    return true;
+  });
+
+  // Edge support: corrugation, shade, and ticks belong to a tube that has
+  // a silhouette there. In a deep pile the survival rules can keep a ring
+  // arc whose edges both died — a floating smile between other tubes, the
+  // most conspicuous confetti a mat produces. Keep interior marks only
+  // within ~a radius of a surviving edge of their own strand.
+  const edgeRuns: [number, number][][] = strands.map(() => []);
+  for (const m of kept) {
+    if (m.layer !== 'edge') continue;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const a of m.arcs) {
+      if (a < lo) lo = a;
+      if (a > hi) hi = a;
+    }
+    edgeRuns[m.strand].push([lo, hi]);
+  }
+  for (const runs of edgeRuns) runs.sort((p, q) => p[0] - q[0]);
+  return kept.filter((m) => {
+    if (m.layer === 'edge') return true;
+    const runs = edgeRuns[m.strand];
+    const r = strands[m.strand].r;
+    const mid = m.arcs[Math.floor(m.arcs.length / 2)];
+    for (const [lo, hi] of runs) {
+      if (mid >= lo - 1.5 * r && mid <= hi + 1.5 * r) return true;
+      if (lo > mid + 1.5 * r) break;
+    }
+    return false;
+  });
 }
 
 /**
