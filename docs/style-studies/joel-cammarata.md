@@ -150,3 +150,61 @@ Items 1–3 landed alongside this study:
    (`sweep` / `centerOut` / `centerIn`); exposed as the module's
    "Plot order (wear)" group and `--plot-order` on the `ink-field` and
    `image` commands.
+
+The implementation was subsequently **generalised away from the
+reference works**: the study keeps the attribution, but the tool ships
+techniques, not signatures — generic ink palette, proof dots opt-in, no
+artist naming in product-facing text. Studying a practice is homage;
+shipping its recognisable gestalt as a default is imitation, and
+imitation can't produce a personal style anyway.
+
+## Toward a native style: hybrid directions
+
+The point of absorbing these techniques is to cross them with what this
+toolbox already does that nobody else's does: **photographic pen-and-ink
+with a compositional value engine** (`valueBands`, `massing`, the
+importance map, semantic labels). His work is abstract and drafted; ours
+reads the world. The hybrids live where material physics meets
+photographic structure — in rough order of promise:
+
+1. **Colour planes from the value plan** (image-ink). The lattice style
+   invents its planes from seeded wedges; the photo pipeline already
+   *computes* better ones — the massing/value-band abstraction of a real
+   scene. Feed the banded value plan in as the plane map: each value
+   band carries an ink-weight vector, and a photograph renders as a
+   committed multi-ink field where the colour geometry *is* the tonal
+   composition. This is the flagship hybrid: material-forward surface,
+   photographic bones.
+2. **Wear-order by importance** (core + image-ink). The sweep modes
+   order strokes spatially; a small extension (an order key computed
+   per stroke) would let plot order follow the *importance map* — the
+   pen freshest on the subject, dulling and depleting into the
+   backgrounds it already dissolves. Physical media doing the job the
+   importance map does digitally.
+3. **Overprint shadow hatch** (image-ink). Deep cross-hatch layers are
+   currently the same ink piling to black. Give layers 2+ a second ink
+   with slight misregistration and overprint: shadows become physically
+   mixed colour — richer than black, and unmistakably plotted.
+4. **Ribbon guides from photographic geometry** (image-ink / core). The
+   offset-band engine is style-agnostic about its centreline. Feed it a
+   long confident contour chain from the edge detector, or a dominant
+   streamline of the orientation field, and a subject's silhouette
+   renders as one braided band — drawing and material study at once.
+5. **Overprint echo as a stack gesture** (web tooling). Duplicate-layer
+   + new seed + misregistration + the ⊗ toggle is already a manual
+   idiom; a one-click "echo as overprint" action on the layer row would
+   make vernier/misregistration effects available to *every* module
+   (flow fields, marbling, conway) with zero per-module work.
+6. **Material drift in existing scene marks** (landscape). Calm water's
+   long broken horizontals and the sky stipple are natural hosts for
+   two-ink stripe drift — tonal features that pick up subtle colour
+   temperature without leaving the scene vocabulary.
+7. **The autonomous studio** (concept-brainstorming). The brief can now
+   spec overprint stacks, wear gradients and per-ink files; ARTWORK.md
+   already documents named inks and hand processes, so the routine can
+   design *for* the physics — and the gallery judges the results.
+
+The through-line: his insight — *let the material do the talking over a
+deliberately simple substrate* — applied to substrates that carry a
+photograph's structure. That combination exists nowhere else, which is
+what makes it a style rather than a borrowing.
