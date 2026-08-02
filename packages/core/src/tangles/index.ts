@@ -20,6 +20,8 @@ import {
   contactShadows,
   occludeMarks,
   repairOcclusion,
+  type OccludeOptions,
+  type Occluder,
 } from './occlude.js';
 
 export type { TangleMaterial } from './centerline.js';
@@ -114,10 +116,19 @@ const DEFAULTS: Required<Omit<TanglesOptions, 'width' | 'height' | 'margin' | 's
 const MAX_CROSSINGS = 4000;
 
 /**
- * Generate a tangle drawing. Returns plain stroked polylines tagged by
- * layer (`edge` / `ring` / `shade` / `shadow`), deterministic per seed.
+ * Stages 1-4: centerlines, weave, marks, and hidden-line removal — the
+ * complete occluded scene before the hand finish. Exported for the
+ * occlusion regression tests (not re-exported from the package barrel).
  */
-export function generateTangles(options: TanglesOptions): FlowLinesResult {
+export function buildTangleScene(options: TanglesOptions): {
+  marks: Mark[];
+  strands: TangleStrand[];
+  occOpts: OccludeOptions;
+  crossings: ReturnType<typeof findHoseCrossings>;
+  aOnTop: boolean[];
+  occluders: Occluder[][];
+  seed: number;
+} {
   const o = { ...DEFAULTS, ...options };
   const seed = options.seed ?? randomSeed();
   const { width, height, margin } = options;
@@ -242,7 +253,7 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
     if (grown[k].cuffEnd) zones.push([s.len - endReach(s.r), s.len]);
     return zones;
   });
-  const occOpts = {
+  const occOpts: OccludeOptions = {
     gap,
     inflatePx,
     penWidth: o.penWidth,
@@ -259,14 +270,38 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   // still printing inside a tube that is on top of it (see repairOcclusion).
   marks = repairOcclusion(marks, strands, crossings, weave.aOnTop, occluders, occOpts);
 
+  return { marks, strands, occOpts, crossings, aOnTop: weave.aOnTop, occluders, seed };
+}
+
+/**
+ * Generate a tangle drawing. Returns plain stroked polylines tagged by
+ * layer (`edge` / `ring` / `shade` / `shadow`), deterministic per seed.
+ */
+export function generateTangles(options: TanglesOptions): FlowLinesResult {
+  const o = { ...DEFAULTS, ...options };
+  const { width, height, margin } = options;
+  const x0 = margin;
+  const y0 = margin;
+  const x1 = width - margin;
+  const y1 = height - margin;
+  const { marks, seed } = buildTangleScene(options);
+
   // 5. Plain stroked polylines, layer-tagged for multi-pen export.
   const lines: FlowLine[] = marks.map((m) => ({ points: m.points, layer: m.layer }));
 
   // 6. Hand finish, then clip and reorder. Occlusion ran before the wobble
-  // and every reserved gap was inflated by its reach.
+  // and every reserved gap was inflated by the finish pass's reach — and
+  // that budget is enforced: wobble plus misregistration can statistically
+  // exceed it, so the finish is capped at exactly the inflated reach or
+  // the tail of the noise bends erased ink back into the reserved gaps.
   const finished = applyHandDrawnStyle(
     { lines, width, height, seed },
-    { amplitude: o.wobble, wavelength: 42, seed: subSeed(seed, 6) }
+    {
+      amplitude: o.wobble,
+      wavelength: 42,
+      seed: subSeed(seed, 6),
+      maxDisplacement: o.wobble * 1.6,
+    }
   ).lines.flatMap((l) =>
     clipPolylineToRect(l.points, x0, y0, x1, y1).map((pts) => ({ ...l, points: pts }))
   );

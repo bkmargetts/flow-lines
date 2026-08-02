@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { generateTangles, type TanglesOptions } from './tangles/index.js';
+import { buildTangleScene, generateTangles, type TanglesOptions } from './tangles/index.js';
 import { growHoses } from './tangles/centerline.js';
-import { findHoseCrossings } from './tangles/crossings.js';
+import { findHoseCrossings, type Crossing } from './tangles/crossings.js';
 import { solveHoseWeave } from './tangles/weave.js';
-import { finalizeOpen, sampleAtOpen } from './tangles/strand.js';
+import { finalizeOpen, sampleAtOpen, type TangleStrand } from './tangles/strand.js';
+import { findIntrusions } from './tangles/occlude.js';
+import { applyHandDrawnStyle } from './hand-drawn.js';
+import type { Mark } from './tangles/hose.js';
 
 const BASE: TanglesOptions = { width: 300, height: 400, margin: 20, seed: 7 };
 
@@ -184,6 +187,124 @@ describe('growHoses', () => {
         expect(kappa).toBeLessThan(1.35 / (1.8 * h.r));
       }
     }
+  });
+});
+
+/**
+ * Weave-aware X-ray detector: a surviving mark point sitting strictly
+ * inside another tube (or another pass of its own strand) is an artifact
+ * ONLY when the ink belongs to the side the weave put UNDER — the winner
+ * legitimately overdraws the loser's tube. Winner lookup mirrors the
+ * repair pass: nearest crossing of the pair in arc space, falling back to
+ * fatter-on-top (pairs) / later-coil-on-top (self).
+ */
+function xrayHits(
+  marks: Mark[],
+  strands: TangleStrand[],
+  crossings: Crossing[],
+  aOnTop: boolean[],
+  endZones: [number, number][][]
+): number {
+  const intrusions = findIntrusions(marks, strands, {
+    gap: 0,
+    inflatePx: 0,
+    penWidth: 2, // inset 1px: only points clearly inside the silhouette
+    shadowHatch: 0,
+    endZones,
+  });
+  let bad = 0;
+  for (const t of intrusions) {
+    if (t.i === t.j) {
+      const s = strands[t.i];
+      const lo = Math.min(t.iArc, t.jArc);
+      const hi = Math.max(t.iArc, t.jArc);
+      let winnerArc = -1;
+      let bestD = 24 * s.r;
+      for (const c of crossings) {
+        if (c.a.strand !== t.i || c.b.strand !== t.i) continue;
+        const d =
+          Math.abs(Math.min(c.a.arc, c.b.arc) - lo) +
+          Math.abs(Math.max(c.a.arc, c.b.arc) - hi);
+        if (d < bestD) {
+          bestD = d;
+          winnerArc = aOnTop[c.id] ? c.a.arc : c.b.arc;
+        }
+      }
+      const hiWins =
+        winnerArc >= 0 ? Math.abs(hi - winnerArc) <= Math.abs(lo - winnerArc) : true;
+      if (t.iArc === (hiWins ? hi : lo)) bad++;
+      continue;
+    }
+    let top = -1;
+    let bestD = 12 * (strands[t.i].r + strands[t.j].r);
+    for (const c of crossings) {
+      const samePair =
+        (c.a.strand === t.i && c.b.strand === t.j) ||
+        (c.a.strand === t.j && c.b.strand === t.i);
+      if (!samePair) continue;
+      const ci = c.a.strand === t.i ? c.a.arc : c.b.arc;
+      const cj = c.a.strand === t.j ? c.a.arc : c.b.arc;
+      const d = Math.abs(ci - t.iArc) + Math.abs(cj - t.jArc);
+      if (d < bestD) {
+        bestD = d;
+        top = aOnTop[c.id] ? c.a.strand : c.b.strand;
+      }
+    }
+    if (top < 0) top = strands[t.i].r >= strands[t.j].r ? t.i : t.j;
+    if (t.i === top) bad++;
+  }
+  return bad;
+}
+
+describe('occlusion', () => {
+  // Coverage: hose defaults, lace defaults, every end a cuff/aglet, and
+  // the wander-heavy few-strand configs whose wads and self-coils broke
+  // the crossing merge, the self exemption, and the repair zoning.
+  const CONFIGS: TanglesOptions[] = [
+    { ...BASE, seed: 7 },
+    { ...BASE, seed: 42, material: 'lace' },
+    { ...BASE, seed: 1, cuffChance: 1 },
+    { ...BASE, seed: 1337, cuffChance: 1 },
+    { width: 420, height: 594, margin: 20, seed: 42, count: 3, wander: 1 },
+    { width: 420, height: 594, margin: 20, seed: 1337, count: 2, wander: 1, material: 'lace' },
+  ];
+
+  for (const cfg of CONFIGS) {
+    it(`leaves no weave-inverted ink inside any tube (${JSON.stringify(cfg)})`, () => {
+      const scene = buildTangleScene(cfg);
+      const bad = xrayHits(
+        scene.marks,
+        scene.strands,
+        scene.crossings,
+        scene.aOnTop,
+        scene.occOpts.endZones ?? scene.strands.map(() => [])
+      );
+      expect(bad).toBe(0);
+    }, 120000);
+  }
+
+  it('caps hand-drawn displacement at maxDisplacement', () => {
+    const line = {
+      points: Array.from({ length: 40 }, (_, i) => ({ x: 10 + i * 5, y: 50 })),
+    };
+    const input = { lines: [line], width: 300, height: 100, seed: 5 };
+    const maxDisplacement = 1.3;
+    const out = applyHandDrawnStyle(input, {
+      amplitude: 4,
+      jitter: 3,
+      seed: 5,
+      maxDisplacement,
+    });
+    let peak = 0;
+    for (let li = 0; li < out.lines.length; li++) {
+      for (let i = 0; i < out.lines[li].points.length; i++) {
+        const a = input.lines[li].points[i];
+        const b = out.lines[li].points[i];
+        peak = Math.max(peak, Math.hypot(b.x - a.x, b.y - a.y));
+      }
+    }
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeLessThanOrEqual(maxDisplacement + 1e-9);
   });
 });
 
