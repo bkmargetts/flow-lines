@@ -13,16 +13,8 @@ import { findHoseCrossings } from './crossings.js';
 import { solveHoseWeave } from './weave.js';
 import { buildHoseMarks, type Mark } from './hose.js';
 import { buildLaceMarks } from './lace.js';
-import {
-  buildEndOccluders,
-  buildGrazeOccluders,
-  buildOccluders,
-  contactShadows,
-  occludeMarks,
-  repairOcclusion,
-  type OccludeOptions,
-  type Occluder,
-} from './occlude.js';
+import { BodyIndex, contactShadows, occludeMarks, type OccludeOptions } from './occlude.js';
+import { buildArcDepths, type ArcTable } from './depth.js';
 
 export type { TangleMaterial } from './centerline.js';
 
@@ -128,7 +120,9 @@ export function buildTangleScene(options: TanglesOptions): {
   occOpts: OccludeOptions;
   crossings: ReturnType<typeof findHoseCrossings>;
   aOnTop: boolean[];
-  occluders: Occluder[][];
+  /** The stacking order the drawing was cut against. */
+  table: ArcTable;
+  index: BodyIndex;
   seed: number;
 } {
   const o = { ...DEFAULTS, ...options };
@@ -302,17 +296,15 @@ export function buildTangleScene(options: TanglesOptions): {
     lace: o.material === 'lace',
     endZones,
   };
-  const occluders = buildOccluders(strands, crossings, weave.aOnTop, occOpts);
-  buildGrazeOccluders(strands, crossings, weave.aOnTop, occluders, occOpts);
-  buildEndOccluders(strands, grown, occluders, occOpts);
+  // Cut the strands into arcs and stack them: one global order, from which
+  // "who is on top here" is a lookup rather than a guess (see depth.ts).
+  const table = buildArcDepths(strands, crossings, weave.aOnTop);
+  const index = new BodyIndex(strands, table, grown, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));
-  // Snapshot the complete un-erased drawing: `findUnexplainedGaps` diffs the
-  // survivors against it to prove every break is caused by something drawn.
+  // Snapshot the un-erased drawing: `findUnexplainedGaps` diffs the survivors
+  // against it to prove every break is caused by a tube stacked above it.
   const marksBefore = marks;
-  marks = occludeMarks(marks, strands, occluders, occOpts);
-  // Belt-and-braces: geometrically verify the survivors and erase any ink
-  // still printing inside a tube that is on top of it (see repairOcclusion).
-  marks = repairOcclusion(marks, strands, crossings, weave.aOnTop, occluders, occOpts);
+  marks = occludeMarks(marks, strands, table, index, occOpts);
 
   return {
     marks,
@@ -321,7 +313,8 @@ export function buildTangleScene(options: TanglesOptions): {
     occOpts,
     crossings,
     aOnTop: weave.aOnTop,
-    occluders,
+    table,
+    index,
     seed,
   };
 }

@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { buildTangleScene, generateTangles, type TanglesOptions } from './tangles/index.js';
 import { growHoses } from './tangles/centerline.js';
-import { findHoseCrossings, type Crossing } from './tangles/crossings.js';
+import { findHoseCrossings } from './tangles/crossings.js';
 import { solveHoseWeave } from './tangles/weave.js';
 import { finalizeOpen, sampleAtOpen, type TangleStrand } from './tangles/strand.js';
 import { findIntrusions, findUnexplainedGaps } from './tangles/occlude.js';
+import { arcAt, type ArcTable } from './tangles/depth.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import type { Mark } from './tangles/hose.js';
 
@@ -191,86 +192,33 @@ describe('growHoses', () => {
 });
 
 /**
- * Weave-aware X-ray detector: a surviving mark point sitting strictly
- * inside another tube (or another pass of its own strand) is an artifact
- * ONLY when the ink belongs to the side the weave put UNDER — the winner
- * legitimately overdraws the loser's tube. Winner lookup mirrors the
- * repair pass: nearest crossing of the pair in arc space, falling back to
- * fatter-on-top (pairs) / later-coil-on-top (self).
+ * X-ray detector, judged by the drawing's own stacking order: a surviving
+ * mark point may not sit inside the body of an arc stacked ABOVE it. That is
+ * the model's whole contract (`depth.ts`), and it is what the reader sees —
+ * two tubes printing through each other. It is deliberately NOT judged
+ * against the nearest crossing's winner any more: a global order sometimes
+ * has to place a pair against their local crossing (to break a cycle, or
+ * because a chain of constraints forces it), and the drawing is still
+ * self-consistent when it does.
  */
 function xrayHits(
   marks: Mark[],
   strands: TangleStrand[],
-  crossings: Crossing[],
-  aOnTop: boolean[],
+  table: ArcTable,
   endZones: [number, number][][]
 ): number {
   const intrusions = findIntrusions(marks, strands, {
     gap: 0,
     inflatePx: 0,
-    penWidth: 2, // inset 1px: only points clearly inside the silhouette
+    penWidth: 2, // inset 1.25px: only points clearly inside the silhouette
     shadowHatch: 0,
     endZones,
   });
-  // An intrusion is only the X-ray ARTIFACT when the winning tube is
-  // actually inked at that spot — that is what makes two tubes print
-  // through each other. Where the winner's own ink is absent (buried, or
-  // culled by the confetti rules) the loser's ink stands on empty paper and
-  // there is nothing to see through; `restoreUnexplainedEdges` deliberately
-  // puts the silhouette back in exactly those places.
-  const inkedNear = (k: number, x: number, y: number, within: number): boolean => {
-    const w2 = within * within;
-    for (const m of marks) {
-      if (m.strand !== k) continue;
-      for (const p of m.points) {
-        const dx = p.x - x;
-        const dy = p.y - y;
-        if (dx * dx + dy * dy < w2) return true;
-      }
-    }
-    return false;
-  };
   let bad = 0;
   for (const t of intrusions) {
-    if (!inkedNear(t.i, t.x, t.y, strands[t.i].r + 2)) continue;
-    if (t.i === t.j) {
-      const s = strands[t.i];
-      const lo = Math.min(t.iArc, t.jArc);
-      const hi = Math.max(t.iArc, t.jArc);
-      let winnerArc = -1;
-      let bestD = 24 * s.r;
-      for (const c of crossings) {
-        if (c.a.strand !== t.i || c.b.strand !== t.i) continue;
-        const d =
-          Math.abs(Math.min(c.a.arc, c.b.arc) - lo) +
-          Math.abs(Math.max(c.a.arc, c.b.arc) - hi);
-        if (d < bestD) {
-          bestD = d;
-          winnerArc = aOnTop[c.id] ? c.a.arc : c.b.arc;
-        }
-      }
-      const hiWins =
-        winnerArc >= 0 ? Math.abs(hi - winnerArc) <= Math.abs(lo - winnerArc) : true;
-      if (t.iArc === (hiWins ? hi : lo)) bad++;
-      continue;
-    }
-    let top = -1;
-    let bestD = 12 * (strands[t.i].r + strands[t.j].r);
-    for (const c of crossings) {
-      const samePair =
-        (c.a.strand === t.i && c.b.strand === t.j) ||
-        (c.a.strand === t.j && c.b.strand === t.i);
-      if (!samePair) continue;
-      const ci = c.a.strand === t.i ? c.a.arc : c.b.arc;
-      const cj = c.a.strand === t.j ? c.a.arc : c.b.arc;
-      const d = Math.abs(ci - t.iArc) + Math.abs(cj - t.jArc);
-      if (d < bestD) {
-        bestD = d;
-        top = aOnTop[c.id] ? c.a.strand : c.b.strand;
-      }
-    }
-    if (top < 0) top = strands[t.i].r >= strands[t.j].r ? t.i : t.j;
-    if (t.i === top) bad++;
+    const over = table.depth[arcAt(table, t.i, t.iArc)];
+    const under = table.depth[arcAt(table, t.j, t.jArc)];
+    if (over > under) bad++;
   }
   return bad;
 }
@@ -289,13 +237,12 @@ describe('occlusion', () => {
   ];
 
   for (const cfg of CONFIGS) {
-    it(`leaves no weave-inverted ink inside any tube (${JSON.stringify(cfg)})`, () => {
+    it(`leaves no ink printing through a tube stacked above it (${JSON.stringify(cfg)})`, () => {
       const scene = buildTangleScene(cfg);
       const bad = xrayHits(
         scene.marks,
         scene.strands,
-        scene.crossings,
-        scene.aOnTop,
+        scene.table,
         scene.occOpts.endZones ?? scene.strands.map(() => [])
       );
       expect(bad).toBe(0);
@@ -320,35 +267,28 @@ describe('occlusion', () => {
     ...over,
   });
 
-  // Ratchets on the worst single break in a duct's OUTLINE, in px. These
-  // are measurements, not aspirations: the confetti rules still delete some
-  // ink standing on open paper, and a deep pile can still bald a duct that
-  // was itself covering another. What they pin is that the conspicuous
-  // failure — a silhouette falling apart across a tube-width or more of
-  // blank paper — does not come back. Interior texture (rings, shade) is
-  // deliberately excluded; a missing ring reads as restraint, a broken
-  // outline as a mistake.
-  for (const [name, over, maxBreakPx] of [
-    ['web defaults', { seed: 42 }, 4],
-    ['web dense', { seed: 1337, count: 16 }, 70],
-    ['web every end cuffed', { seed: 1, cuffChance: 1 }, 20],
-    ['web lace', { seed: 42, material: 'lace' as const }, 30],
+  // A line may only stop where a tube stacked above it covers the paper.
+  // Under the stacking model this is the exact negation of the erase rule,
+  // so it should read ZERO — not a tolerance. What it can still catch is an
+  // implementation slip: a survivor run binned by the short-run floor, or a
+  // fragment the splitter lost.
+  for (const [name, over] of [
+    ['web defaults', { seed: 42 }],
+    ['web dense', { seed: 1337, count: 16 }],
+    ['web every end cuffed', { seed: 1, cuffChance: 1 }],
+    ['web lace', { seed: 42, material: 'lace' as const }],
   ] as const) {
-    it(`never breaks a line with nothing drawn over it (${name})`, () => {
+    it(`never breaks a line with nothing stacked over it (${name})`, () => {
       const scene = buildTangleScene(web(over));
       const gaps = findUnexplainedGaps(
         scene.marks,
         scene.marksBefore,
         scene.strands,
+        scene.table,
+        scene.index,
         scene.occOpts
       );
-      // The silhouette is what reads as "the line": a duct outline may only
-      // stop where another duct is actually inked over it. Interior texture
-      // (rings, shade) is deliberately still thinned in a deep pile, so the
-      // invariant is asserted on `edge` alone.
-      const edgeGaps = gaps.filter((g) => g.layer === 'edge');
-      const worst = edgeGaps.reduce((m, g) => Math.max(m, g.length), 0);
-      expect({ name, tooWide: worst > maxBreakPx }).toEqual({ name, tooWide: false });
+      expect({ name, gaps: gaps.length }).toEqual({ name, gaps: 0 });
     }, 120000);
   }
 
