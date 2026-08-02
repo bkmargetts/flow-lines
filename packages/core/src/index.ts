@@ -243,9 +243,10 @@ export type {
 export type { TextureRegionOptions } from './texture-region.js';
 
 // Plot optimization
-export { optimizePlot, measurePenTravel, limitStrokeDensity } from './optimize.js';
+export { optimizePlot, orderPlot, measurePenTravel, limitStrokeDensity } from './optimize.js';
 export type {
   OptimizePlotOptions,
+  PlotOrderOptions,
   DensityProtectOptions,
   DensityProtectResult,
 } from './optimize.js';

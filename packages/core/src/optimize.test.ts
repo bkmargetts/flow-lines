@@ -111,6 +111,127 @@ describe('optimizePlot', () => {
   });
 });
 
+describe('plot order strategies', () => {
+  // A seeded scatter of short strokes with distinct centroids.
+  const scatter = (): FlowLinesResult => {
+    const lines = [];
+    for (let i = 0; i < 24; i++) {
+      const x = ((i * 37) % 90) + 3;
+      const y = ((i * 53) % 90) + 3;
+      lines.push(
+        line([
+          [x, y],
+          [x + 6, y + 2],
+        ])
+      );
+    }
+    return result(lines);
+  };
+
+  /** Canonical form of a stroke, ignoring direction. */
+  const canon = (l: FlowLine): string => {
+    const fwd = JSON.stringify(l.points);
+    const rev = JSON.stringify([...l.points].reverse());
+    return fwd < rev ? fwd : rev;
+  };
+
+  const centroid = (l: FlowLine) => {
+    let sx = 0;
+    let sy = 0;
+    for (const p of l.points) {
+      sx += p.x;
+      sy += p.y;
+    }
+    return { x: sx / l.points.length, y: sy / l.points.length };
+  };
+
+  it('keeps the multiset of stroke geometries, up to reversal', () => {
+    const input = scatter();
+    const out = optimizePlot(input, {
+      mergeTolerance: 0,
+      order: { mode: 'sweep', angleDeg: 30 },
+    });
+    expect(out.lines.map(canon).sort()).toEqual(input.lines.map(canon).sort());
+  });
+
+  it('sweeps top to bottom at 0° and left to right at 90°', () => {
+    const input = scatter();
+    const down = optimizePlot(input, { mergeTolerance: 0, order: { mode: 'sweep', angleDeg: 0 } });
+    const ys = down.lines.map((l) => centroid(l).y);
+    for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeGreaterThanOrEqual(ys[i - 1]);
+
+    const right = optimizePlot(input, {
+      mergeTolerance: 0,
+      order: { mode: 'sweep', angleDeg: 90 },
+    });
+    const xs = right.lines.map((l) => centroid(l).x);
+    for (let i = 1; i < xs.length; i++) expect(xs[i]).toBeGreaterThanOrEqual(xs[i - 1]);
+  });
+
+  it('orders radially for centerOut and centerIn', () => {
+    const input = scatter();
+    const radius = (l: FlowLine) => {
+      const c = centroid(l);
+      return Math.hypot(c.x - 50, c.y - 50);
+    };
+
+    const outward = optimizePlot(input, { mergeTolerance: 0, order: { mode: 'centerOut' } });
+    const rOut = outward.lines.map(radius);
+    for (let i = 1; i < rOut.length; i++) expect(rOut[i]).toBeGreaterThanOrEqual(rOut[i - 1]);
+
+    const inward = optimizePlot(input, { mergeTolerance: 0, order: { mode: 'centerIn' } });
+    const rIn = inward.lines.map(radius);
+    for (let i = 1; i < rIn.length; i++) expect(rIn[i]).toBeLessThanOrEqual(rIn[i - 1]);
+  });
+
+  it('is deterministic and keeps input order on ties', () => {
+    // Two strokes sharing a centroid x: the tie must resolve to input order.
+    const input = result([
+      line([
+        [10, 20],
+        [20, 20],
+      ]),
+      line([
+        [10, 40],
+        [20, 40],
+      ]),
+      line([
+        [10, 30],
+        [20, 30],
+      ]),
+    ]);
+    const opts = {
+      mergeTolerance: 0,
+      order: { mode: 'sweep', angleDeg: 90, alternate: false },
+    } as const;
+    const a = optimizePlot(input, opts);
+    const b = optimizePlot(input, opts);
+    expect(a).toEqual(b);
+    // All three tie on x-projection; ranks follow input order.
+    expect(a.lines.map((l) => l.points[0].y)).toEqual([20, 40, 30]);
+  });
+
+  it('serpentines by default and not with alternate: false', () => {
+    const input = scatter();
+    const serp = optimizePlot(input, { mergeTolerance: 0, order: { mode: 'sweep' } });
+    const reversed = serp.lines.filter((l) => l.points[0].x > l.points[l.points.length - 1].x);
+    expect(reversed.length).toBeGreaterThan(0);
+
+    const straight = optimizePlot(input, {
+      mergeTolerance: 0,
+      order: { mode: 'sweep', alternate: false },
+    });
+    for (const l of straight.lines) expect(l.points[0].x).toBeLessThan(l.points[1].x);
+  });
+
+  it("mode 'travel' and an absent order are byte-identical", () => {
+    const input = scatter();
+    const plain = optimizePlot(input, { mergeTolerance: 0 });
+    const travel = optimizePlot(input, { mergeTolerance: 0, order: { mode: 'travel' } });
+    expect(travel).toEqual(plain);
+  });
+});
+
 describe('limitStrokeDensity', () => {
   // Many identical strokes stacked on the same patch of paper.
   const overHatched = (): FlowLinesResult =>

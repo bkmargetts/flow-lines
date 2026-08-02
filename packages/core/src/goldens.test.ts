@@ -603,6 +603,10 @@ CASES['overlapped-lines/blob/42'] = () =>
 // Post-processing stages, applied to a fixed base drawing.
 CASES['optimize/flow-lines/42'] = () =>
   optimizePlot(generateFlowLines({ width: 300, height: 400, lineCount: 40, seed: 42 }));
+CASES['optimize/sweep/42'] = () =>
+  optimizePlot(generateFlowLines({ width: 300, height: 400, lineCount: 40, seed: 42 }), {
+    order: { mode: 'sweep', angleDeg: 30 },
+  });
 CASES['hand-drawn/flow-lines/42'] = () =>
   applyHandDrawnStyle(generateFlowLines({ width: 300, height: 400, lineCount: 40, seed: 42 }));
 CASES['page-border/rounded'] = () =>

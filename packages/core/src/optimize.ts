@@ -9,6 +9,32 @@ export interface OptimizePlotOptions {
   mergeTolerance?: number;
   /** Reorder strokes to minimize pen-up travel (default true) */
   sort?: boolean;
+  /**
+   * Ordering strategy. `'travel'` (the default) is the greedy
+   * nearest-neighbour order. The other modes trade pen-up travel for a
+   * *deliberate* plot order: physical pen wear — pencil dulling, gel ink
+   * sheen changes, fountain-pen depletion — follows stroke order, so
+   * ordering strokes along a spatial ramp turns wear into a composed
+   * gradient across the sheet instead of scattered noise.
+   */
+  order?: PlotOrderOptions;
+}
+
+export interface PlotOrderOptions {
+  /**
+   * `'travel'` — greedy nearest-neighbour (identical to leaving `order`
+   * unset). `'sweep'` — strokes ordered by centroid along a direction.
+   * `'centerOut'` / `'centerIn'` — by radial distance from the sheet
+   * centre, outward or inward.
+   */
+  mode: 'travel' | 'sweep' | 'centerOut' | 'centerIn';
+  /** Sweep direction in degrees: 0 sweeps top→bottom, 90 left→right. */
+  angleDeg?: number;
+  /**
+   * Serpentine: reverse every other stroke so the pen boustrophedons
+   * instead of always returning to the same side (default true).
+   */
+  alternate?: boolean;
 }
 
 /**
@@ -40,13 +66,16 @@ export function optimizePlot(
 ): FlowLinesResult {
   const mergeTolerance = options.mergeTolerance ?? 1.5;
   const sort = options.sort ?? true;
+  const order = options.order;
 
   let lines = result.lines.filter((line) => line.points.length > 0);
 
   if (mergeTolerance > 0) {
     lines = mergeLines(lines, mergeTolerance);
   }
-  if (sort) {
+  if (order && order.mode !== 'travel') {
+    lines = sweepLines(lines, result.width, result.height, order);
+  } else if (sort) {
     lines = sortLines(lines, result.width, result.height);
   }
 
@@ -68,12 +97,16 @@ export function optimizePlot(
  * call `optimizePlot` directly instead.
  */
 export function orderPlot<T extends { lines: FlowLine[]; width: number; height: number }>(
-  result: T
+  result: T,
+  options: { order?: PlotOrderOptions } = {}
 ): T {
   // Generic over the result shape: `generatePlanet`/`generateMachine` return
   // `{ lines, width, height }` with no seed, so the caller's own fields are
   // carried through rather than forced into `FlowLinesResult`.
-  const ordered = optimizePlot({ ...result, seed: 0 } as FlowLinesResult, { mergeTolerance: 0 });
+  const ordered = optimizePlot({ ...result, seed: 0 } as FlowLinesResult, {
+    mergeTolerance: 0,
+    order: options.order,
+  });
   return { ...result, lines: ordered.lines };
 }
 
@@ -507,4 +540,49 @@ function sortLines(lines: FlowLine[], width: number, height: number): FlowLine[]
   }
 
   return ordered;
+}
+
+/**
+ * Deliberate spatial ordering: strokes sorted by centroid along a ramp —
+ * a direction (`sweep`) or radial distance from the sheet centre
+ * (`centerOut`/`centerIn`). Same contract as `sortLines`: the multiset of
+ * stroke geometries is untouched up to per-stroke reversal; only the
+ * drawing order (and with it, where physical pen wear lands) changes.
+ */
+function sweepLines(
+  lines: FlowLine[],
+  width: number,
+  height: number,
+  order: PlotOrderOptions
+): FlowLine[] {
+  if (lines.length < 2) return lines;
+
+  const rad = ((order.angleDeg ?? 0) * Math.PI) / 180;
+  const dx = Math.sin(rad);
+  const dy = Math.cos(rad);
+  const cx = width / 2;
+  const cy = height / 2;
+
+  const key = (line: FlowLine): number => {
+    let sx = 0;
+    let sy = 0;
+    for (const p of line.points) {
+      sx += p.x;
+      sy += p.y;
+    }
+    const mx = sx / line.points.length;
+    const my = sy / line.points.length;
+    if (order.mode === 'sweep') return mx * dx + my * dy;
+    const r = Math.hypot(mx - cx, my - cy);
+    return order.mode === 'centerIn' ? -r : r;
+  };
+
+  const ranked = lines
+    .map((line, index) => ({ line, index, k: key(line) }))
+    .sort((a, b) => a.k - b.k || a.index - b.index);
+
+  const alternate = order.alternate ?? true;
+  return ranked.map(({ line }, rank) =>
+    alternate && rank % 2 === 1 ? withMeta([...line.points].reverse(), line) : line
+  );
 }
