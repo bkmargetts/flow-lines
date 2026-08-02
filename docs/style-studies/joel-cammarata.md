@@ -132,3 +132,21 @@ the tell for the whole practice:
 Items 1–3 are the core; they generalise beyond imitating one artist —
 overprint, material-aware fields and order-aware plotting are missing
 capabilities of the toolbox, not style presets.
+
+## Shipped
+
+Items 1–3 landed alongside this study:
+
+1. **Overprint** — a per-layer ⊗ toggle in the web layer stack: the
+   layer's pens preview/export with multiply blend, it never carves
+   hold-off halos in layers beneath, and its own halo is ignored
+   (`lib/composite.ts`).
+2. **Material fields** — `generateInkField` (core) + the **Ink Field**
+   web module + `flow-lines ink-field` (CLI): `ribbon` (drafted
+   filleted band, vernier-braided inks), `lattice` (colour planes by
+   density inside one grid), `stripes` (drifting bands, optional ruled
+   blocks), with per-ink misregistration and margin pen-test dots.
+3. **Plot order** — `optimizePlot`/`orderPlot` take an order strategy
+   (`sweep` / `centerOut` / `centerIn`); exposed as the module's
+   "Plot order (wear)" group and `--plot-order` on the `ink-field` and
+   `image` commands.
