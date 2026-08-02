@@ -1,4 +1,5 @@
 import { DirectionMap } from '../image-field.js';
+import { type PlotOrderOptions } from '../optimize.js';
 import { GrayscaleImage } from '../image.js';
 import { PortraitOptions } from '../portrait.js';
 import { type LabelImage } from '../semantic-map.js';
@@ -288,6 +289,13 @@ export interface PenInkOptions {
    * travel — faster plots, fewer pen lifts (default true)
    */
   optimize?: boolean;
+
+  /**
+   * Ordering strategy when optimizing. Non-travel modes order strokes
+   * along a spatial ramp so physical pen wear lands as a composed
+   * gradient across the sheet (see `PlotOrderOptions`); default travel.
+   */
+  order?: PlotOrderOptions;
 
   /**
    * Emphasis passes for contour outlines: the same single pen draws the

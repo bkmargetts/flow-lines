@@ -19,6 +19,7 @@ import { registerMeander } from './commands/meander.js';
 import { registerTangles } from './commands/tangles.js';
 import { registerCoral } from './commands/coral.js';
 import { registerWarpGrid } from './commands/warp-grid.js';
+import { registerInkField } from './commands/ink-field.js';
 
 /**
  * The CLI surface had no real coverage: `cli.test.ts` imports
@@ -47,6 +48,7 @@ const REGISTRARS = [
   registerCoral,
   registerWarpGrid,
   registerTangles,
+  registerInkField,
 ];
 
 const EXPECTED_COMMANDS = [
@@ -65,6 +67,7 @@ const EXPECTED_COMMANDS = [
   'coral',
   'warp-grid',
   'tangles',
+  'ink-field',
 ];
 
 function buildProgram(): Command {
@@ -109,14 +112,17 @@ describe('command registration', () => {
 
   it('gives every command some way to choose the ink', () => {
     // Most commands take a single `--stroke-color`. The three palette-driven
-    // scene generators take `--palette` instead, because they emit multi-pen
-    // layer colours rather than one ink — so the invariant is "one or the
-    // other", not "always --stroke-color".
+    // scene generators take `--palette` instead, and ink-field takes an
+    // explicit `--ink-colors` list, because they emit multi-pen layer colours
+    // rather than one ink — so the invariant is "some way", not "always
+    // --stroke-color".
     for (const name of EXPECTED_COMMANDS) {
       const flags = flagsOf(commandNamed(program, name));
       expect(
-        flags.includes('--stroke-color') || flags.includes('--palette'),
-        `${name} offers neither --stroke-color nor --palette`
+        flags.includes('--stroke-color') ||
+          flags.includes('--palette') ||
+          flags.includes('--ink-colors'),
+        `${name} offers no ink flag`
       ).toBe(true);
     }
   });
@@ -185,6 +191,9 @@ describe('running commands end to end', () => {
     ['meander', ['meander', ...SMALL]],
     ['coral', ['coral', ...SMALL]],
     ['warp-grid', ['warp-grid', ...SMALL]],
+    ['ink-field ribbon', ['ink-field', ...SMALL]],
+    ['ink-field lattice', ['ink-field', ...SMALL, '--style', 'lattice']],
+    ['ink-field stripes', ['ink-field', ...SMALL, '--style', 'stripes', '--blocks']],
   ])('%s writes a well-formed SVG', async (_name, argv) => {
     const svg = await run(argv);
     expect(svg).toContain('<svg');
@@ -252,6 +261,14 @@ describe('running commands end to end', () => {
     const optimized = await run(['generate', ...SMALL, '-l', '30']);
     const raw = await run(['generate', ...SMALL, '-l', '30', '--no-optimize']);
     expect(raw).not.toBe(optimized);
+  });
+
+  it('--plot-order reorders strokes without changing their count', async () => {
+    const travel = await run(['ink-field', ...SMALL, '--style', 'lattice']);
+    const sweep = await run(['ink-field', ...SMALL, '--style', 'lattice', '--plot-order', 'sweep']);
+    expect(sweep).not.toBe(travel);
+    const paths = (svg: string) => (svg.match(/<path/g) ?? []).length;
+    expect(paths(sweep)).toBe(paths(travel));
   });
 
   it('--paper renders to a physical sheet size', async () => {
