@@ -4,10 +4,17 @@ import { growHoses } from './tangles/centerline.js';
 import { findHoseCrossings } from './tangles/crossings.js';
 import { solveHoseWeave } from './tangles/weave.js';
 import { finalizeOpen, sampleAtOpen, type TangleStrand } from './tangles/strand.js';
-import { findIntrusions, findUnexplainedGaps } from './tangles/occlude.js';
+import {
+  beyondTip,
+  endShapeOf,
+  findIntrusions,
+  findUnexplainedGaps,
+  inEndCap,
+} from './tangles/occlude.js';
 import { arcAt, type ArcTable } from './tangles/depth.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import type { Mark } from './tangles/hose.js';
+import type { Point } from './flow-lines.js';
 
 const BASE: TanglesOptions = { width: 300, height: 400, margin: 20, seed: 7 };
 
@@ -291,6 +298,184 @@ describe('occlusion', () => {
       expect({ name, gaps: gaps.length }).toEqual({ name, gaps: 0 });
     }, 120000);
   }
+
+  // `findUnexplainedGaps` asks the same BodyIndex that did the erasing
+  // whether the erasing was justified, so it is blind to a body that does not
+  // match the ink — which is exactly how open cuff ends used to lose whole
+  // stretches of a neighbouring duct. Here the silhouette is rebuilt from the
+  // shapes `hose.ts` and `lace.ts` draw (a band that stops flat at the last
+  // vertex, plus the mouth ellipse / aglet capsule) and the erasure is judged
+  // against THAT. Anything longer than the short-run floor is ink deleted from
+  // open paper, the artifact this module exists to avoid.
+  for (const [name, over] of [
+    ['web every end cuffed', { seed: 1, cuffChance: 1, count: 16 }],
+    ['web dense, every end cuffed', { seed: 137, cuffChance: 1, count: 24 }],
+    ['web defaults', { seed: 42 }],
+    ['web lace, every end aglet', { seed: 42, material: 'lace' as const, cuffChance: 1 }],
+  ] as const) {
+    it(`erases no visible ink the drawing cannot explain (${name})`, () => {
+      const scene = buildTangleScene(web(over));
+      const { strands, marks, marksBefore, occOpts, ends } = scene;
+      const grow = occOpts.gap + occOpts.inflatePx;
+      const shapes = strands.map((s, k) =>
+        endShapeOf(s, ends[k].cuffStart, ends[k].cuffEnd, occOpts, grow)
+      );
+
+      // Kept ink lies exactly on a survivor segment: survivors are
+      // sub-polylines of the original geometry.
+      const cell = 8;
+      const grid = new Map<string, number[][]>();
+      for (const m of marks) {
+        for (let i = 1; i < m.points.length; i++) {
+          const a = m.points[i - 1];
+          const b = m.points[i];
+          for (let cy = Math.floor(Math.min(a.y, b.y) / cell); cy <= Math.floor(Math.max(a.y, b.y) / cell); cy++) {
+            for (let cx = Math.floor(Math.min(a.x, b.x) / cell); cx <= Math.floor(Math.max(a.x, b.x) / cell); cx++) {
+              const key = `${m.strand}|${m.layer}|${cx},${cy}`;
+              let arr = grid.get(key);
+              if (!arr) grid.set(key, (arr = []));
+              arr.push([a.x, a.y, b.x, b.y]);
+            }
+          }
+        }
+      }
+      const alive = (p: Point, k: number, layer: string): boolean => {
+        const arr = grid.get(`${k}|${layer}|${Math.floor(p.x / cell)},${Math.floor(p.y / cell)}`);
+        if (!arr) return false;
+        for (const s of arr) {
+          const vx = s[2] - s[0];
+          const vy = s[3] - s[1];
+          const l2 = vx * vx + vy * vy;
+          const t =
+            l2 > 1e-12 ? Math.max(0, Math.min(1, ((p.x - s[0]) * vx + (p.y - s[1]) * vy) / l2)) : 0;
+          const dx = s[0] + vx * t - p.x;
+          const dy = s[1] + vy * t - p.y;
+          if (dx * dx + dy * dy < 0.09) return true;
+        }
+        return false;
+      };
+
+      const covers = (k: number, x: number, y: number): boolean => {
+        const s = strands[k];
+        const lim = s.r + grow;
+        for (let i = 0; i + 1 < s.pts.length; i++) {
+          const ax = s.pts[i].x;
+          const ay = s.pts[i].y;
+          const vx = s.pts[i + 1].x - ax;
+          const vy = s.pts[i + 1].y - ay;
+          const l2 = vx * vx + vy * vy;
+          const t = l2 > 1e-12 ? Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / l2)) : 0;
+          const dx = ax + vx * t - x;
+          const dy = ay + vy * t - y;
+          if (dx * dx + dy * dy >= lim * lim) continue;
+          if (i === 0 && beyondTip(shapes[k].start, x, y, grow)) continue;
+          if (i + 2 === s.pts.length && beyondTip(shapes[k].end, x, y, grow)) continue;
+          return true;
+        }
+        return shapes[k].caps.some((c) => inEndCap(c.shape, x, y));
+      };
+
+      // Longest contiguous stretch of erased ink standing on open paper.
+      let worst = 0;
+      let at = '';
+      for (const m of marksBefore) {
+        // Contact-shadow ticks drop whole by design — a half tick reads as
+        // dirt, not as a mark.
+        if (m.layer === 'shadow') continue;
+        let run = 0;
+        let prev: Point | null = null;
+        for (let i = 0; i < m.points.length; i++) {
+          const p = m.points[i];
+          let bad = !alive(p, m.strand, m.layer);
+          if (bad) {
+            for (let k = 0; k < strands.length && bad; k++) {
+              if (k === m.strand) continue;
+              if (covers(k, p.x, p.y)) bad = false;
+            }
+          }
+          if (bad) {
+            // A separate pass of the same strand — its band, or its own end
+            // hardware (a lace can curl back under its own aglet) — as long as
+            // it is far enough along the strand to be a genuinely different
+            // pass rather than the tube's own outline.
+            const s = strands[m.strand];
+            for (let j = 0; j < s.pts.length && bad; j++) {
+              if (Math.abs(s.arc[j] - m.arcs[i]) < 5 * s.r) continue;
+              if (Math.hypot(s.pts[j].x - p.x, s.pts[j].y - p.y) < s.r + grow) bad = false;
+            }
+            for (const c of shapes[m.strand].caps) {
+              if (!bad) break;
+              const endArc = c.at === 'start' ? 0 : s.len;
+              if (Math.abs(endArc - m.arcs[i]) < 5 * s.r) continue;
+              if (inEndCap(c.shape, p.x, p.y)) bad = false;
+            }
+          }
+          if (!bad) {
+            run = 0;
+            prev = null;
+            continue;
+          }
+          if (prev) run += Math.hypot(p.x - prev.x, p.y - prev.y);
+          prev = p;
+          if (run > worst) {
+            worst = run;
+            at = `(${p.x.toFixed(0)},${p.y.toFixed(0)}) ${m.layer}`;
+          }
+        }
+      }
+      // The only ink legitimately removed from open paper is a fragment too
+      // short to read as a line (`occludeMarks`' 1.5-pen-width floor). A round
+      // cap on a hose end used to leave stretches of 20-45px here.
+      const floor = 1.5 * web(over).penWidth!;
+      expect({ name, worst: worst <= floor + 0.5, at }).toEqual({ name, worst: true, at });
+    }, 120000);
+  }
+
+  it('stops a hose flat at its tip, and covers only the mouth it draws', () => {
+    const scene = buildTangleScene(web({ seed: 1, cuffChance: 1 }));
+    const k = scene.ends.findIndex((e) => e.cuffEnd);
+    expect(k).toBeGreaterThanOrEqual(0);
+    const s = scene.strands[k];
+    const shape = endShapeOf(s, false, true, scene.occOpts, 0);
+    const tip = shape.end;
+    const nx = -tip.ty;
+    const ny = tip.tx;
+    const at = (along: number, across: number) => ({
+      x: tip.x + tip.tx * along + nx * across,
+      y: tip.y + tip.ty * along + ny * across,
+    });
+    const inCap = (p: Point) => shape.caps.some((c) => inEndCap(c.shape, p.x, p.y));
+
+    // On the axis the mouth reaches CUFF_OPEN * r, and no further.
+    expect(inCap(at(0.3 * s.r, 0))).toBe(true);
+    expect(inCap(at(0.4 * s.r, 0))).toBe(false);
+    // Out at the mouth's widest the ellipse has closed back to the tip — this
+    // is the crescent a round cap used to bite out of whatever passes behind.
+    expect(inCap(at(0.3 * s.r, 0.9 * s.r))).toBe(false);
+    // And the tube itself has stopped.
+    const flank = at(0.2 * s.r, 0.9 * s.r);
+    expect(beyondTip(tip, flank.x, flank.y, 0)).toBe(true);
+  });
+
+  it('gives a lace aglet the capsule it draws', () => {
+    const scene = buildTangleScene(web({ seed: 42, material: 'lace', cuffChance: 1 }));
+    const k = scene.ends.findIndex((e) => e.cuffEnd);
+    expect(k).toBeGreaterThanOrEqual(0);
+    const s = scene.strands[k];
+    const shape = endShapeOf(s, false, true, { ...scene.occOpts, lace: true }, 0);
+    const tip = shape.end;
+    const at = (along: number, across: number) => ({
+      x: tip.x + tip.tx * along + -tip.ty * across,
+      y: tip.y + tip.ty * along + tip.tx * across,
+    });
+    const inCap = (p: { x: number; y: number }) =>
+      shape.caps.some((c) => inEndCap(c.shape, p.x, p.y));
+    // Reaches the aglet's full length on the axis, at its own half-width.
+    expect(inCap(at(4 * s.r, 0))).toBe(true);
+    expect(inCap(at(5.2 * s.r, 0))).toBe(false);
+    expect(inCap(at(2 * s.r, 0.7 * s.r))).toBe(true);
+    expect(inCap(at(2 * s.r, 0.9 * s.r))).toBe(false);
+  });
 
   it('caps hand-drawn displacement at maxDisplacement', () => {
     const line = {

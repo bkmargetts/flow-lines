@@ -123,6 +123,8 @@ export function buildTangleScene(options: TanglesOptions): {
   /** The stacking order the drawing was cut against. */
   table: ArcTable;
   index: BodyIndex;
+  /** Which ends carry drawn hardware (a hose cuff / a lace aglet). */
+  ends: { cuffStart: boolean; cuffEnd: boolean }[];
   seed: number;
 } {
   const o = { ...DEFAULTS, ...options };
@@ -295,11 +297,12 @@ export function buildTangleScene(options: TanglesOptions): {
     shadowHatch: o.shadowHatch,
     lace: o.material === 'lace',
     endZones,
+    ends: grown.map((g) => ({ cuffStart: g.cuffStart, cuffEnd: g.cuffEnd })),
   };
   // Cut the strands into arcs and stack them: one global order, from which
   // "who is on top here" is a lookup rather than a guess (see depth.ts).
   const table = buildArcDepths(strands, crossings, weave.aOnTop);
-  const index = new BodyIndex(strands, table, grown, occOpts);
+  const index = new BodyIndex(strands, table, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));
   // Snapshot the un-erased drawing: `findUnexplainedGaps` diffs the survivors
   // against it to prove every break is caused by a tube stacked above it.
@@ -315,6 +318,7 @@ export function buildTangleScene(options: TanglesOptions): {
     aOnTop: weave.aOnTop,
     table,
     index,
+    ends: occOpts.ends!,
     seed,
   };
 }

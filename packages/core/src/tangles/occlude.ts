@@ -1,7 +1,7 @@
 import type { Point } from '../flow-lines.js';
 import { sampleAtOpen, type TangleStrand } from './strand.js';
 import type { Crossing } from './crossings.js';
-import type { Mark } from './hose.js';
+import { CUFF_OPEN, type Mark } from './hose.js';
 import { arcAt, type ArcTable } from './depth.js';
 
 /**
@@ -37,6 +37,120 @@ export interface OccludeOptions {
   lace?: boolean;
   /** Per-strand end-hardware arc zones ([lo, hi] per open end). */
   endZones?: [number, number][][];
+  /** Which ends carry drawn hardware. Absent = no hardware anywhere. */
+  ends?: { cuffStart: boolean; cuffEnd: boolean }[];
+}
+
+/** A tip plane: the paper beyond it, along `t` from `(x, y)`, carries no ink. */
+export interface TipClip {
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+}
+
+/** The end hardware as an occluding shape — a hose's mouth or a lace's aglet. */
+export type EndCap =
+  | {
+      kind: 'ellipse';
+      x: number;
+      y: number;
+      /** Unit axes: `n` across the mouth, `t` along the strand, pointing out. */
+      nx: number;
+      ny: number;
+      tx: number;
+      ty: number;
+      /** Semi-axes: `A` across, `B` along. */
+      A: number;
+      B: number;
+    }
+  | { kind: 'capsule'; x0: number; y0: number; x1: number; y1: number; reach: number };
+
+/**
+ * What a strand covers at its two ends, as drawn — the single definition the
+ * eraser and the detectors both read, so they cannot disagree about where a
+ * hose stops.
+ *
+ * A hose ends FLAT: `hose.ts` draws two offset edges that simply stop at the
+ * last centerline vertex, with nothing closing them. Modelling the end as a
+ * round cap of radius `r` (the natural thing when a tube is a swept disc) puts
+ * an opaque bulge on paper that carries no ink, and anything passing behind it
+ * loses a crescent of line for no visible reason.
+ *
+ * An open cuff does add ink past the tip, but only the mouth ELLIPSE — `r`
+ * across by `CUFF_OPEN * r` along. A lace's aglet is a true capsule, of the
+ * aglet's half-width and reaching to where its own round tip is centred.
+ *
+ * `grow` inflates the shape (the reserved gap when erasing, a negative inset
+ * when asking whether ink is strictly inside).
+ */
+export function endShapeOf(
+  s: TangleStrand,
+  cuffStart: boolean,
+  cuffEnd: boolean,
+  o: { lace?: boolean; penWidth: number },
+  grow: number
+): { start: TipClip; end: TipClip; caps: { at: 'start' | 'end'; shape: EndCap }[] } {
+  const tipOf = (at: 'start' | 'end'): TipClip => {
+    const smp = sampleAtOpen(s, at === 'start' ? 0 : s.len);
+    const sign = at === 'start' ? -1 : 1;
+    return { x: smp.p.x, y: smp.p.y, tx: smp.t.x * sign, ty: smp.t.y * sign };
+  };
+  const start = tipOf('start');
+  const end = tipOf('end');
+  const caps: { at: 'start' | 'end'; shape: EndCap }[] = [];
+  for (const at of ['start', 'end'] as const) {
+    if (at === 'start' ? !cuffStart : !cuffEnd) continue;
+    const tip = at === 'start' ? start : end;
+    if (o.lace) {
+      // Aglet (`lace.ts`): a capsule of half-width `aw` whose round tip is
+      // centred `len - aw` out from the lace's end.
+      const aw = 0.75 * s.r;
+      const len = Math.max(5 * s.r, 4 * o.penWidth);
+      caps.push({
+        at,
+        shape: {
+          kind: 'capsule',
+          x0: tip.x,
+          y0: tip.y,
+          x1: tip.x + tip.tx * (len - aw),
+          y1: tip.y + tip.ty * (len - aw),
+          reach: Math.max(0, aw + grow),
+        },
+      });
+    } else {
+      caps.push({
+        at,
+        shape: {
+          kind: 'ellipse',
+          x: tip.x,
+          y: tip.y,
+          nx: -tip.ty,
+          ny: tip.tx,
+          tx: tip.tx,
+          ty: tip.ty,
+          A: Math.max(1e-6, s.r + grow),
+          B: Math.max(1e-6, CUFF_OPEN * s.r + grow),
+        },
+      });
+    }
+  }
+  return { start, end, caps };
+}
+
+/** Is `(x, y)` inside this piece of end hardware? */
+export function inEndCap(cap: EndCap, x: number, y: number): boolean {
+  if (cap.kind === 'ellipse') {
+    const u = (x - cap.x) * cap.nx + (y - cap.y) * cap.ny;
+    const v = (x - cap.x) * cap.tx + (y - cap.y) * cap.ty;
+    return (u / cap.A) ** 2 + (v / cap.B) ** 2 < 1;
+  }
+  return segDist2(x, y, cap.x0, cap.y0, cap.x1, cap.y1).d2 < cap.reach * cap.reach;
+}
+
+/** Is `(x, y)` beyond a flat end, where the strand has stopped? */
+export function beyondTip(clip: TipClip, x: number, y: number, pad: number): boolean {
+  return (x - clip.x) * clip.tx + (y - clip.y) * clip.ty > pad;
 }
 
 /** Squared distance from (px, py) to segment ab, and the parameter along it. */
@@ -57,47 +171,80 @@ function segDist2(
   return { d2: dx * dx + dy * dy, t };
 }
 
-interface BodySeg {
+interface BodyBase {
   arc: number;
   strand: number;
+  /** Arc positions at the body's ends, for the own-tube exemption. */
+  a0: number;
+  a1: number;
+}
+
+interface BodySeg extends BodyBase {
+  kind: 'seg';
   x0: number;
   y0: number;
   x1: number;
   y1: number;
-  /** Arc positions at the segment ends, for the own-tube exemption. */
-  a0: number;
-  a1: number;
   /** Erase radius: the tube plus its reserved paper. */
   reach: number;
+  /**
+   * Flat ends (see `endShapeOf`). Empty on interior segments; a strand short
+   * enough to be a single segment carries both of its tips here.
+   */
+  clips: TipClip[];
+  /** How far past a flat end the reserved gap still reaches. */
+  clipPad: number;
 }
 
+/** Drawn end hardware as a body — a cuff mouth or an aglet. */
+interface BodyCap extends BodyBase {
+  kind: 'cap';
+  cap: EndCap;
+}
+
+type Body = BodySeg | BodyCap;
+
 /**
- * Every tube body as segments in a uniform grid, tagged with the arc that
- * owns them. End hardware is not a special kind of occluder here — a cuff
- * mouth or an aglet is simply the strand's body carried past the tip by as
- * far as it is actually DRAWN (`CUFF_OPEN * r` for a hose mouth, the aglet's
- * length for a lace), so it can never bite a crescent out of a neighbour
- * beyond what the reader can see.
+ * Every tube body in a uniform grid, tagged with the arc that owns it.
+ *
+ * The body has to be the shape of the INK, not a convenient approximation of
+ * it, because the whole promise of this module is that a break in a line is
+ * explained by something the reader can see covering it. A body that reaches
+ * past the drawing erases onto bare paper, and no amount of correct stacking
+ * saves that.
+ *
+ * So the ends are modelled as they are drawn, not as capsules:
+ *
+ * - a hose stops FLAT at its last vertex (two offset edges, nothing closing
+ *   them), so the terminal segments carry an axial clip;
+ * - an open cuff adds its mouth ELLIPSE — half-axes `r` across by
+ *   `CUFF_OPEN * r` along (`hose.ts`) — not a round cap of radius `r`, which
+ *   is what used to chew a crescent out of every duct passing behind a hose
+ *   mouth;
+ * - a lace's aglet is a genuine capsule, but of the aglet's half-width and
+ *   stopping where the aglet's own round tip is centred (`lace.ts`).
  */
 export class BodyIndex {
   private readonly cell: number;
-  private readonly grid = new Map<string, BodySeg[]>();
+  private readonly grid = new Map<string, Body[]>();
 
-  constructor(
-    strands: TangleStrand[],
-    table: ArcTable,
-    ends: { cuffStart: boolean; cuffEnd: boolean }[],
-    o: OccludeOptions
-  ) {
+  constructor(strands: TangleStrand[], table: ArcTable, o: OccludeOptions) {
     let maxReach = 0;
     for (const s of strands) maxReach = Math.max(maxReach, s.r + o.gap + o.inflatePx);
     this.cell = Math.max(8, maxReach);
+    const d = o.gap + o.inflatePx;
 
     for (let k = 0; k < strands.length; k++) {
       const s = strands[k];
-      const reach = s.r + o.gap + o.inflatePx;
+      const reach = s.r + d;
+      const last = s.pts.length - 2;
+      const shape = endShapeOf(s, o.ends?.[k].cuffStart ?? false, o.ends?.[k].cuffEnd ?? false, o, d);
       for (let i = 0; i + 1 < s.pts.length; i++) {
+        const clips: TipClip[] = [];
+        if (i === 0) clips.push(shape.start);
+        if (i === last) clips.push(shape.end);
         this.add({
+          kind: 'seg',
           arc: arcAt(table, k, (s.arc[i] + s.arc[i + 1]) / 2),
           strand: k,
           x0: s.pts[i].x,
@@ -107,50 +254,62 @@ export class BodyIndex {
           a0: s.arc[i],
           a1: s.arc[i + 1],
           reach,
+          clips,
+          clipPad: d,
         });
       }
-      // Hardware: one extra segment past each open end.
-      const past = (o.lace ? 5 : 0.34) * s.r;
-      for (const end of ['start', 'end'] as const) {
-        if (end === 'start' ? !ends[k].cuffStart : !ends[k].cuffEnd) continue;
-        const endArc = end === 'start' ? 0 : s.len;
-        const smp = sampleAtOpen(s, endArc);
-        const tx = end === 'start' ? -smp.t.x : smp.t.x;
-        const ty = end === 'start' ? -smp.t.y : smp.t.y;
+      // Hardware past each open end, shaped like the mark that is drawn there.
+      for (const cap of shape.caps) {
+        const endArc = cap.at === 'start' ? 0 : s.len;
         this.add({
+          kind: 'cap',
           arc: arcAt(table, k, endArc),
           strand: k,
-          x0: smp.p.x,
-          y0: smp.p.y,
-          x1: smp.p.x + tx * past,
-          y1: smp.p.y + ty * past,
           a0: endArc,
           a1: endArc,
-          reach: (o.lace ? 0.85 * s.r : s.r) + o.gap + o.inflatePx,
+          cap: cap.shape,
         });
       }
     }
   }
 
-  private add(seg: BodySeg): void {
+  private add(body: Body): void {
     const c = this.cell;
-    const pad = seg.reach;
-    const cx0 = Math.floor((Math.min(seg.x0, seg.x1) - pad) / c);
-    const cx1 = Math.floor((Math.max(seg.x0, seg.x1) + pad) / c);
-    const cy0 = Math.floor((Math.min(seg.y0, seg.y1) - pad) / c);
-    const cy1 = Math.floor((Math.max(seg.y0, seg.y1) + pad) / c);
-    for (let cy = cy0; cy <= cy1; cy++) {
-      for (let cx = cx0; cx <= cx1; cx++) {
+    let x0: number;
+    let x1: number;
+    let y0: number;
+    let y1: number;
+    if (body.kind === 'seg') {
+      const pad = body.reach;
+      x0 = Math.min(body.x0, body.x1) - pad;
+      x1 = Math.max(body.x0, body.x1) + pad;
+      y0 = Math.min(body.y0, body.y1) - pad;
+      y1 = Math.max(body.y0, body.y1) + pad;
+    } else if (body.cap.kind === 'ellipse') {
+      const pad = Math.max(body.cap.A, body.cap.B);
+      x0 = body.cap.x - pad;
+      x1 = body.cap.x + pad;
+      y0 = body.cap.y - pad;
+      y1 = body.cap.y + pad;
+    } else {
+      const pad = body.cap.reach;
+      x0 = Math.min(body.cap.x0, body.cap.x1) - pad;
+      x1 = Math.max(body.cap.x0, body.cap.x1) + pad;
+      y0 = Math.min(body.cap.y0, body.cap.y1) - pad;
+      y1 = Math.max(body.cap.y0, body.cap.y1) + pad;
+    }
+    for (let cy = Math.floor(y0 / c); cy <= Math.floor(y1 / c); cy++) {
+      for (let cx = Math.floor(x0 / c); cx <= Math.floor(x1 / c); cx++) {
         const key = `${cx},${cy}`;
         let arr = this.grid.get(key);
         if (!arr) this.grid.set(key, (arr = []));
-        arr.push(seg);
+        arr.push(body);
       }
     }
   }
 
   /** Bodies whose cell contains (x, y). */
-  near(x: number, y: number): BodySeg[] | undefined {
+  near(x: number, y: number): Body[] | undefined {
     return this.grid.get(`${Math.floor(x / this.cell)},${Math.floor(y / this.cell)}`);
   }
 }
@@ -176,16 +335,33 @@ function hiddenAt(
   markArc: number,
   ownArc: number
 ): boolean {
-  const segs = index.near(x, y);
-  if (!segs) return false;
+  const bodies = index.near(x, y);
+  if (!bodies) return false;
   const ownDepth = table.depth[ownArc];
-  for (const seg of segs) {
-    if (seg.arc === ownArc) continue;
-    if (table.depth[seg.arc] <= ownDepth) continue;
-    const { d2, t } = segDist2(x, y, seg.x0, seg.y0, seg.x1, seg.y1);
-    if (d2 >= seg.reach * seg.reach) continue;
-    if (seg.strand === markStrand) {
-      const arcHere = seg.a0 + (seg.a1 - seg.a0) * t;
+  for (const body of bodies) {
+    if (body.arc === ownArc) continue;
+    if (table.depth[body.arc] <= ownDepth) continue;
+    let t: number;
+    if (body.kind === 'seg') {
+      const hit = segDist2(x, y, body.x0, body.y0, body.x1, body.y1);
+      if (hit.d2 >= body.reach * body.reach) continue;
+      // Past the flat end of a hose there is no ink, so there is nothing to
+      // hide behind either.
+      let past = false;
+      for (const c of body.clips) {
+        if (beyondTip(c, x, y, body.clipPad)) {
+          past = true;
+          break;
+        }
+      }
+      if (past) continue;
+      t = hit.t;
+    } else {
+      if (!inEndCap(body.cap, x, y)) continue;
+      t = 0;
+    }
+    if (body.strand === markStrand) {
+      const arcHere = body.a0 + (body.a1 - body.a0) * t;
       if (Math.abs(arcHere - markArc) < 5 * strands[markStrand].r) continue;
     }
     return true;
@@ -329,6 +505,13 @@ export function findIntrusions(
   // kissing the boundary is legitimate, anything deeper prints visibly
   // inside the tube.
   const inset = Math.max(1.25, 0.5 * o.penWidth);
+  // The same flat ends the eraser works to: a hose stops at its last vertex,
+  // so ink beyond that is not inside anything, and a cuff covers only its
+  // mouth ellipse. Judging intrusions against round caps instead would demand
+  // erasure the reader has no mark to explain.
+  const shapes = strands.map((s, k) =>
+    endShapeOf(s, o.ends?.[k].cuffStart ?? false, o.ends?.[k].cuffEnd ?? false, o, -inset)
+  );
   const intrusions: Intrusion[] = [];
   for (const m of marks) {
     const ownZones = o.endZones?.[m.strand];
@@ -339,6 +522,8 @@ export function findIntrusions(
       const p = m.points[pi];
       const cx = Math.floor(p.x / cell);
       const cy = Math.floor(p.y / cell);
+      const hit = (k: number, iArc: number) =>
+        intrusions.push({ j: m.strand, i: k, iArc, jArc: m.arcs[pi], x: p.x, y: p.y });
       for (let gy = cy - 1; gy <= cy + 1; gy++) {
         for (let gx = cx - 1; gx <= cx + 1; gx++) {
           const arr = grid.get(`${gx},${gy}`);
@@ -349,17 +534,24 @@ export function findIntrusions(
             const inner = Math.max(0, s.r - inset);
             const dx = s.pts[i].x - p.x;
             const dy = s.pts[i].y - p.y;
-            if (dx * dx + dy * dy < inner * inner) {
-              intrusions.push({
-                j: m.strand,
-                i: k,
-                iArc: s.arc[i],
-                jArc: m.arcs[pi],
-                x: p.x,
-                y: p.y,
-              });
-            }
+            if (dx * dx + dy * dy >= inner * inner) continue;
+            // Only the terminal vertices can be the closest point past a tip,
+            // so the clip stays local — a strand curling back on itself is
+            // still solid where it doubles behind its own end plane.
+            if (i === 0 && beyondTip(shapes[k].start, p.x, p.y, 0)) continue;
+            if (i === s.pts.length - 1 && beyondTip(shapes[k].end, p.x, p.y, 0)) continue;
+            hit(k, s.arc[i]);
           }
+        }
+      }
+      // Hardware is opaque too: ink inside a cuff mouth or an aglet is buried
+      // just as surely as ink inside the tube.
+      for (let k = 0; k < strands.length; k++) {
+        const s = strands[k];
+        for (const cap of shapes[k].caps) {
+          const endArc = cap.at === 'start' ? 0 : s.len;
+          if (k === m.strand && Math.abs(endArc - m.arcs[pi]) < 5 * s.r) continue;
+          if (inEndCap(cap.shape, p.x, p.y)) hit(k, endArc);
         }
       }
     }
