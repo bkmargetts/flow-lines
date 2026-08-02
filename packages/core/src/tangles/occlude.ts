@@ -54,6 +54,16 @@ export interface Occluder {
    *  default, a window walked far along a self-hug swallows the under
    *  pass's arcs into its own exemption and the self-crossing X-rays. */
   exemptPad?: number;
+  /**
+   * Outward cut plane at an open end. The distance field is a union of
+   * discs, so it bulges a full `half` past the strand's last vertex — but
+   * the hardware DRAWN there reaches only `CUFF_OPEN * r` (a hose mouth) or
+   * the aglet's length. Without a cut the difference is a bite of reserved
+   * paper hanging in front of a tube that ends before it: a crater with
+   * nothing above it. Points further than `reach` beyond `(x, y)` along the
+   * outward tangent are outside the hardware.
+   */
+  tipCut?: { x: number; y: number; tx: number; ty: number; reach: number };
 }
 
 /** Occluder over `s`'s tube along [arc0, arc1], inflated to `half`. */
@@ -109,6 +119,8 @@ function occluderFromWindow(
 
 /** Is (x, y) within the occluder's distance field? */
 function occluderHits(occ: Occluder, x: number, y: number): boolean {
+  const cut = occ.tipCut;
+  if (cut && (x - cut.x) * cut.tx + (y - cut.y) * cut.ty > cut.reach) return false;
   const h2 = occ.half * occ.half;
   for (let i = occ.i0; i <= occ.i1; i++) {
     const dx = occ.pts[i].x - x;
@@ -570,6 +582,20 @@ export function buildEndOccluders(
       );
       occ.segA = { x: smp.p.x, y: smp.p.y };
       occ.segB = tip;
+      // Trim the field to what the hardware actually DRAWS past the tip:
+      // a hose mouth is an ellipse leaning `CUFF_OPEN * r` (0.34r) out
+      // (hose.ts), a lace aglet a capsule `5r` long (lace.ts). The union of
+      // discs otherwise bulges a whole `half` beyond the last vertex, so a
+      // duct that stops mid-pile bit a crescent out of whatever lay behind
+      // it with nothing drawn in the bite.
+      const drawnReach = (o.lace ? 5 : 0.34) * r + o.gap + o.inflatePx;
+      occ.tipCut = {
+        x: smp.p.x,
+        y: smp.p.y,
+        tx: tOut.x,
+        ty: tOut.y,
+        reach: drawnReach,
+      };
       occ.minX = Math.min(occ.minX, tip.x - half);
       occ.minY = Math.min(occ.minY, tip.y - half);
       occ.maxX = Math.max(occ.maxX, tip.x + half);
@@ -604,6 +630,252 @@ function covered(
     if (occluderHits(occ, x, y)) return true;
   }
   return false;
+}
+
+/** Squared distance from (px, py) to segment ab, plus the parameter t. */
+function segDist2(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number
+): { d2: number; t: number } {
+  const vx = bx - ax;
+  const vy = by - ay;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 > 1e-12 ? Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / len2)) : 0;
+  const dx = ax + vx * t - px;
+  const dy = ay + vy * t - py;
+  return { d2: dx * dx + dy * dy, t };
+}
+
+/** A stretch of ink that was erased although nothing is drawn over it. */
+export interface UnexplainedGap {
+  strand: number;
+  layer: string;
+  /** Midpoint of the unexplained stretch. */
+  x: number;
+  y: number;
+  /** Erased length, px. */
+  length: number;
+  /** The erased stretch itself, so it can be put back. */
+  points: Point[];
+  arcs: number[];
+}
+
+/**
+ * The complement of `findIntrusions`, and the mechanical statement of the
+ * reader's expectation: **a break in a line must be explained by something
+ * drawn on top of it.**
+ *
+ * Nearly all erasure here is a distance field around another strand's
+ * centerline, so it can only remove ink that genuinely lies inside another
+ * tube — those breaks always have a cause the eye can see. But the
+ * confetti rules delete ink standing on OPEN PAPER (a short visible peek,
+ * a sub-floor fragment, a ring whose edges died), and a cascade can do it
+ * too: A erases B, then A's own ink is culled, leaving B's gap with
+ * nothing above it. Both read as a line inexplicably falling apart.
+ *
+ * A survivor point is matched against the survivors' own segments (kept
+ * ink lies exactly on them, since survivors are sub-polylines of the
+ * original geometry), and each erased run is probed against every strand's
+ * tube inflated to the occluder half — so anything a legitimate occluder
+ * could have erased counts as covered, provided that strand is actually
+ * DRAWN there (it still has a surviving edge at that arc). Contact-shadow
+ * ticks are exempt: they drop whole by design.
+ */
+export function findUnexplainedGaps(
+  survivors: Mark[],
+  before: Mark[],
+  strands: TangleStrand[],
+  o: OccludeOptions
+): UnexplainedGap[] {
+  // --- did this point survive? (exact: kept ink lies on a survivor segment)
+  const cell = 8;
+  const segKey = (cx: number, cy: number, k: number, layer: string) =>
+    `${k}|${layer}|${cx},${cy}`;
+  const segGrid = new Map<string, number[][]>();
+  for (const m of survivors) {
+    for (let i = 1; i < m.points.length; i++) {
+      const a = m.points[i - 1];
+      const b = m.points[i];
+      const seg = [a.x, a.y, b.x, b.y];
+      const cx0 = Math.floor(Math.min(a.x, b.x) / cell);
+      const cx1 = Math.floor(Math.max(a.x, b.x) / cell);
+      const cy0 = Math.floor(Math.min(a.y, b.y) / cell);
+      const cy1 = Math.floor(Math.max(a.y, b.y) / cell);
+      for (let cy = cy0; cy <= cy1; cy++) {
+        for (let cx = cx0; cx <= cx1; cx++) {
+          const kk = segKey(cx, cy, m.strand, m.layer);
+          let arr = segGrid.get(kk);
+          if (!arr) segGrid.set(kk, (arr = []));
+          arr.push(seg);
+        }
+      }
+    }
+  }
+  const survived = (p: Point, k: number, layer: string): boolean => {
+    const arr = segGrid.get(segKey(Math.floor(p.x / cell), Math.floor(p.y / cell), k, layer));
+    if (!arr) return false;
+    for (const s of arr) {
+      if (segDist2(p.x, p.y, s[0], s[1], s[2], s[3]).d2 < 0.1225) return true;
+    }
+    return false;
+  };
+
+  // --- is strand k actually INKED next to this spot? An arc-range test is
+  // too generous: a strand drawn 30px earlier along its length explains
+  // nothing about the paper here. Ask spatially instead — the eye does.
+  const inkCell = Math.max(8, 2 * Math.max(...strands.map((s) => s.r)));
+  const inkGrid = new Map<string, number[][]>();
+  for (const m of survivors) {
+    for (const p of m.points) {
+      const kk = `${m.strand}|${Math.floor(p.x / inkCell)},${Math.floor(p.y / inkCell)}`;
+      let arr = inkGrid.get(kk);
+      if (!arr) inkGrid.set(kk, (arr = []));
+      arr.push([p.x, p.y]);
+    }
+  }
+  const inkedNear = (k: number, p: Point, within: number): boolean => {
+    const cx = Math.floor(p.x / inkCell);
+    const cy = Math.floor(p.y / inkCell);
+    const w2 = within * within;
+    for (let gy = cy - 1; gy <= cy + 1; gy++) {
+      for (let gx = cx - 1; gx <= cx + 1; gx++) {
+        const arr = inkGrid.get(`${k}|${gx},${gy}`);
+        if (!arr) continue;
+        for (const q of arr) {
+          const dx = q[0] - p.x;
+          const dy = q[1] - p.y;
+          if (dx * dx + dy * dy < w2) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // --- centerline segments, for the "is this paper covered" probe
+  let maxR = 0;
+  for (const s of strands) maxR = Math.max(maxR, s.r);
+  const reachMax = maxR + o.gap + o.inflatePx + 1;
+  const cCell = Math.max(8, reachMax);
+  const cGrid = new Map<string, [number, number][]>();
+  for (let k = 0; k < strands.length; k++) {
+    const s = strands[k];
+    for (let i = 0; i < s.pts.length - 1; i++) {
+      const a = s.pts[i];
+      const b = s.pts[i + 1];
+      const cx0 = Math.floor(Math.min(a.x, b.x) / cCell);
+      const cx1 = Math.floor(Math.max(a.x, b.x) / cCell);
+      const cy0 = Math.floor(Math.min(a.y, b.y) / cCell);
+      const cy1 = Math.floor(Math.max(a.y, b.y) / cCell);
+      for (let cy = cy0; cy <= cy1; cy++) {
+        for (let cx = cx0; cx <= cx1; cx++) {
+          const kk = `${cx},${cy}`;
+          let arr = cGrid.get(kk);
+          if (!arr) cGrid.set(kk, (arr = []));
+          arr.push([k, i]);
+        }
+      }
+    }
+  }
+  const explained = (p: Point, ownStrand: number, ownArc: number): boolean => {
+    const cx = Math.floor(p.x / cCell);
+    const cy = Math.floor(p.y / cCell);
+    for (let gy = cy - 1; gy <= cy + 1; gy++) {
+      for (let gx = cx - 1; gx <= cx + 1; gx++) {
+        const arr = cGrid.get(`${gx},${gy}`);
+        if (!arr) continue;
+        for (const [k, i] of arr) {
+          const s = strands[k];
+          const reach = s.r + o.gap + o.inflatePx + 1;
+          const a = s.pts[i];
+          const b = s.pts[i + 1];
+          const { d2, t } = segDist2(p.x, p.y, a.x, a.y, b.x, b.y);
+          if (d2 >= reach * reach) continue;
+          const arcHere = s.arc[i] + t * (s.arc[i + 1] - s.arc[i]);
+          // A strand's own local tube is not "on top of" its own ink.
+          if (k === ownStrand && Math.abs(arcHere - ownArc) < 5 * s.r) continue;
+          if (inkedNear(k, p, s.r + o.gap + 2)) return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const minGap = Math.max(2, 2 * o.penWidth);
+  const gaps: UnexplainedGap[] = [];
+  for (const m of before) {
+    // Contact-shadow ticks drop whole when touched — a partial tick reads
+    // as dirt, so their disappearance is deliberate, not a broken line.
+    if (m.layer === 'shadow') continue;
+    const n = m.points.length;
+    const gone: boolean[] = new Array(n);
+    for (let i = 0; i < n; i++) gone[i] = !survived(m.points[i], m.strand, m.layer);
+    let i = 0;
+    while (i < n) {
+      if (!gone[i]) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < n && gone[j + 1]) j++;
+      // Longest contiguous stretch inside [i, j] that nothing explains.
+      let bestLo = -1;
+      let bestHi = -1;
+      let runLo = -1;
+      for (let q = i; q <= j + 1; q++) {
+        const bad =
+          q <= j && !explained(m.points[q], m.strand, m.arcs[q]);
+        if (bad && runLo < 0) runLo = q;
+        if (!bad && runLo >= 0) {
+          if (bestLo < 0 || q - runLo > bestHi - bestLo) {
+            bestLo = runLo;
+            bestHi = q - 1;
+          }
+          runLo = -1;
+        }
+      }
+      if (bestLo >= 0) {
+        let len = 0;
+        for (let q = bestLo; q < bestHi; q++) {
+          len += Math.hypot(
+            m.points[q + 1].x - m.points[q].x,
+            m.points[q + 1].y - m.points[q].y
+          );
+        }
+        if (bestHi === bestLo && n > 1) {
+          // Single-point stretch: charge it the local vertex spacing.
+          const a = m.points[Math.max(0, bestLo - 1)];
+          const b = m.points[Math.min(n - 1, bestLo + 1)];
+          len = Math.hypot(b.x - a.x, b.y - a.y) / 2;
+        }
+        if (len >= minGap) {
+          const mid = m.points[(bestLo + bestHi) >> 1];
+          // Carry a whisker of the SURVIVING ink on each side so a restored
+          // stretch rejoins its neighbours instead of floating — but never
+          // reach into ink that was erased for a good reason. The point
+          // beyond an unexplained run is erased-and-explained whenever the
+          // run sits inside a longer erasure, and putting that back is
+          // exactly the X-ray this module exists to prevent.
+          const lo = bestLo > 0 && !gone[bestLo - 1] ? bestLo - 1 : bestLo;
+          const hi = bestHi < n - 1 && !gone[bestHi + 1] ? bestHi + 1 : bestHi;
+          gaps.push({
+            strand: m.strand,
+            layer: m.layer,
+            x: mid.x,
+            y: mid.y,
+            length: len,
+            points: m.points.slice(lo, hi + 1),
+            arcs: m.arcs.slice(lo, hi + 1),
+          });
+        }
+      }
+      i = j + 1;
+    }
+  }
+  return gaps;
 }
 
 /**
@@ -658,10 +930,13 @@ export function findIntrusions(
     }
   }
 
-  // "Strictly inside" leaves half a pen of tolerance at the silhouette: a
-  // mark kissing the boundary is legitimate, but anything deeper prints
-  // visibly inside the tube.
-  const inset = 0.5 * o.penWidth;
+  // "Strictly inside" leaves a pen's tolerance at the silhouette: a mark
+  // kissing the boundary is legitimate, but anything deeper prints visibly
+  // inside the tube. The floor matters — every extra hit becomes another
+  // repair zone and another synthesized occluder, and those go on to drive
+  // the sliver rules, so an over-sensitive test costs visible ink far from
+  // the leak it was chasing.
+  const inset = Math.max(1.25, 0.5 * o.penWidth);
   const intrusions: Intrusion[] = [];
   for (const m of marks) {
     const ownZones = o.endZones?.[m.strand];
@@ -982,8 +1257,10 @@ function dropSliverPeeks(
     // crumb it removes. `covered` with the half shrunk by gap+inflate
     // tests the real tube body.
     const tubeShrink = o.gap + o.inflatePx;
-    const underTube = (a: number): boolean => {
+    /** Radius of the fattest real tube burying arc `a`, or -1 if none. */
+    const bracketRadius = (a: number): number => {
       const p = sampleAtOpen(s, a).p;
+      let best = -1;
       for (const occ of occs) {
         const exemptPad = occ.exemptPad ?? pad;
         if (occ.strand === k && a >= occ.arcMin - exemptPad && a <= occ.arcMax + exemptPad)
@@ -998,37 +1275,58 @@ function dropSliverPeeks(
         )
           continue;
         const shrunk: Occluder = { ...occ, half: Math.max(1, occ.half - tubeShrink) };
-        if (occluderHits(shrunk, p.x, p.y)) return true;
+        if (occluderHits(shrunk, p.x, p.y)) {
+          const rOver = strands[occ.strand]?.r ?? 0;
+          if (rOver > best) best = rOver;
+        }
       }
-      return false;
+      return best;
+    };
+    // Hiddenness is a property of the SILHOUETTE, not the axis. A thin
+    // strand crossing a fat one buries the fat one's centerline while both
+    // its edges still print in full; scoring the axis called that arc
+    // hidden and let the peek rule delete a tube whose outline is plainly
+    // there — one of the largest sources of lines breaking for no visible
+    // reason. An arc counts as hidden only when the centre AND both edges
+    // are covered.
+    const hidden = (a: number): boolean => {
+      const smp = sampleAtOpen(s, a);
+      if (!covered(smp.p.x, smp.p.y, a, k, occs, pad, ownEndZones)) return false;
+      for (const side of [1, -1] as const) {
+        const ex = smp.p.x + side * smp.n.x * s.r;
+        const ey = smp.p.y + side * smp.n.y * s.r;
+        if (!covered(ex, ey, a, k, occs, pad, ownEndZones)) return false;
+      }
+      return true;
     };
     const runs: DeadRun[] = [];
     let visStart = 0;
     let prevCovered = true;
     let arc = 0;
-    // Sentinel pass over [0, len] marking visible runs; runs shorter than
-    // the threshold become dead intervals.
-    const minPeek = 3 * s.r;
+    // Sentinel pass over [0, len] collecting the visible runs; how short a
+    // run has to be to count as debris is decided per run below.
     for (; arc <= s.len + step; arc += step) {
       const a = Math.min(arc, s.len);
-      const p = sampleAtOpen(s, a).p;
-      const isCov = covered(p.x, p.y, a, k, occs, pad, ownEndZones);
+      const isCov = hidden(a);
       if (prevCovered && !isCov) visStart = a;
-      if (!prevCovered && isCov && a - visStart < minPeek) {
-        runs.push({ lo: visStart, hi: a });
-      }
+      if (!prevCovered && isCov) runs.push({ lo: visStart, hi: a });
       prevCovered = isCov;
       if (a >= s.len) break;
     }
     // A visible run touching either strand END stays: a tube emerging off
     // the pile edge or into its own cuff is real anatomy, however short.
-    return runs.filter(
-      (r) =>
-        r.lo > step &&
-        r.hi < s.len - step &&
-        underTube(Math.max(0, r.lo - 1.5 * step)) &&
-        underTube(Math.min(s.len, r.hi + 1.5 * step))
-    );
+    // And a peek is judged against the tubes that BURY it, not against its
+    // own radius: the same 40px stretch is debris between two fat ducts and
+    // honest anatomy between two thin ones. The old blanket `3 * s.r` asked
+    // the wrong strand — at r = 24 it discarded 72px of plainly visible
+    // tube — so this can only ever be gentler, never more aggressive.
+    return runs.filter((r) => {
+      if (r.lo <= step || r.hi >= s.len - step) return false;
+      const rl = bracketRadius(Math.max(0, r.lo - 1.5 * step));
+      const rr = bracketRadius(Math.min(s.len, r.hi + 1.5 * step));
+      if (rl < 0 || rr < 0) return false;
+      return r.hi - r.lo < Math.min(3 * s.r, 0.6 * (rl + rr));
+    });
   });
 
   // Split marks against the dead intervals — never whole-drop by a single
@@ -1059,7 +1357,8 @@ function dropSliverPeeks(
         for (let i = 1; i < pts.length; i++) {
           len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
         }
-        if (len >= 4.5) kept.push({ points: pts, arcs, layer: m.layer, strand: m.strand });
+        if (len >= 1.5 * o.penWidth)
+          kept.push({ points: pts, arcs, layer: m.layer, strand: m.strand });
       }
       pts = [];
       arcs = [];
@@ -1134,8 +1433,12 @@ export function occludeMarks(
     const pad = 2 * r;
     // Edge fragments: a hose keeps short slivers (real anatomy between
     // adjacent crossings); a lace fragment shorter than about a width reads
-    // as dirt — the wad zones were full of 5px edge crumbs.
-    const minRun = Math.max(4.5, (o.lace ? 2.2 : 0.35) * r);
+    // as dirt — the wad zones were full of 5px edge crumbs. These floors
+    // discard ink that SURVIVED the erase, i.e. ink standing on open paper,
+    // so they must stay near the pen's own scale: the old absolute 4.5px
+    // (and 2.2r for lace, a full tube width) deleted visible outline and
+    // left breaks with nothing above them.
+    const minRun = Math.max(1.5 * o.penWidth, (o.lace ? 0.8 : 0.35) * r);
     const ownEndZones = o.endZones?.[mark.strand];
 
     const isCrossMark = mark.layer === 'shadow';
@@ -1190,11 +1493,15 @@ export function occludeMarks(
         mark.points[i].y - mark.points[i - 1].y
       );
     }
+    // Same principle as `minRun`: these reject ink that is standing on open
+    // paper, so they are kept close to the pen. A ring that keeps 41% of its
+    // sweep is a legible arc across the tube, not a shard — the old 0.6
+    // threshold binned it and left the gap unexplained.
     const minLenFor = (attached: boolean): number =>
       mark.layer === 'shade'
-        ? Math.max(minRun, 1.2 * r)
+        ? Math.max(minRun, 0.6 * r)
         : mark.layer === 'ring'
-          ? Math.max(4.5, (attached ? 0.25 : 0.6) * origLen)
+          ? Math.max(1.5 * o.penWidth, (attached ? 0.2 : 0.4) * origLen)
           : minRun;
     let runPts: Point[] = [];
     let runArcs: number[] = [];

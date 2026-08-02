@@ -122,6 +122,8 @@ const MAX_CROSSINGS = 4000;
  */
 export function buildTangleScene(options: TanglesOptions): {
   marks: Mark[];
+  /** The drawing before any erasure (marks + contact shadows). */
+  marksBefore: Mark[];
   strands: TangleStrand[];
   occOpts: OccludeOptions;
   crossings: ReturnType<typeof findHoseCrossings>;
@@ -304,12 +306,24 @@ export function buildTangleScene(options: TanglesOptions): {
   buildGrazeOccluders(strands, crossings, weave.aOnTop, occluders, occOpts);
   buildEndOccluders(strands, grown, occluders, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));
+  // Snapshot the complete un-erased drawing: `findUnexplainedGaps` diffs the
+  // survivors against it to prove every break is caused by something drawn.
+  const marksBefore = marks;
   marks = occludeMarks(marks, strands, occluders, occOpts);
   // Belt-and-braces: geometrically verify the survivors and erase any ink
   // still printing inside a tube that is on top of it (see repairOcclusion).
   marks = repairOcclusion(marks, strands, crossings, weave.aOnTop, occluders, occOpts);
 
-  return { marks, strands, occOpts, crossings, aOnTop: weave.aOnTop, occluders, seed };
+  return {
+    marks,
+    marksBefore,
+    strands,
+    occOpts,
+    crossings,
+    aOnTop: weave.aOnTop,
+    occluders,
+    seed,
+  };
 }
 
 /**

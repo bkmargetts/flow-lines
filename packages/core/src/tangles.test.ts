@@ -4,7 +4,7 @@ import { growHoses } from './tangles/centerline.js';
 import { findHoseCrossings, type Crossing } from './tangles/crossings.js';
 import { solveHoseWeave } from './tangles/weave.js';
 import { finalizeOpen, sampleAtOpen, type TangleStrand } from './tangles/strand.js';
-import { findIntrusions } from './tangles/occlude.js';
+import { findIntrusions, findUnexplainedGaps } from './tangles/occlude.js';
 import { applyHandDrawnStyle } from './hand-drawn.js';
 import type { Mark } from './tangles/hose.js';
 
@@ -212,8 +212,27 @@ function xrayHits(
     shadowHatch: 0,
     endZones,
   });
+  // An intrusion is only the X-ray ARTIFACT when the winning tube is
+  // actually inked at that spot — that is what makes two tubes print
+  // through each other. Where the winner's own ink is absent (buried, or
+  // culled by the confetti rules) the loser's ink stands on empty paper and
+  // there is nothing to see through; `restoreUnexplainedEdges` deliberately
+  // puts the silhouette back in exactly those places.
+  const inkedNear = (k: number, x: number, y: number, within: number): boolean => {
+    const w2 = within * within;
+    for (const m of marks) {
+      if (m.strand !== k) continue;
+      for (const p of m.points) {
+        const dx = p.x - x;
+        const dy = p.y - y;
+        if (dx * dx + dy * dy < w2) return true;
+      }
+    }
+    return false;
+  };
   let bad = 0;
   for (const t of intrusions) {
+    if (!inkedNear(t.i, t.x, t.y, strands[t.i].r + 2)) continue;
     if (t.i === t.j) {
       const s = strands[t.i];
       const lo = Math.min(t.iArc, t.jArc);
@@ -280,6 +299,56 @@ describe('occlusion', () => {
         scene.occOpts.endZones ?? scene.strands.map(() => [])
       );
       expect(bad).toBe(0);
+    }, 120000);
+  }
+
+  // The web app renders PHYSICAL radii (3..8mm at 3px/mm on A4), so r is
+  // 9..24px on a 630x891 sheet — a very different regime from the core
+  // defaults, and the one where the r-proportional confetti rules used to
+  // discard whole visible stretches of duct. Regression cover for it.
+  const WEB_MM = 3;
+  const web = (over: Partial<TanglesOptions> = {}): TanglesOptions => ({
+    width: 630,
+    height: 891,
+    margin: 10 * WEB_MM,
+    radiusMin: 3 * WEB_MM,
+    radiusMax: 8 * WEB_MM,
+    clearance: 1.5 * WEB_MM,
+    gap: 0.45 * WEB_MM,
+    penWidth: 0.4 * WEB_MM,
+    wobble: 0.25 * WEB_MM,
+    ...over,
+  });
+
+  // Ratchets on the worst single break in a duct's OUTLINE, in px. These
+  // are measurements, not aspirations: the confetti rules still delete some
+  // ink standing on open paper, and a deep pile can still bald a duct that
+  // was itself covering another. What they pin is that the conspicuous
+  // failure — a silhouette falling apart across a tube-width or more of
+  // blank paper — does not come back. Interior texture (rings, shade) is
+  // deliberately excluded; a missing ring reads as restraint, a broken
+  // outline as a mistake.
+  for (const [name, over, maxBreakPx] of [
+    ['web defaults', { seed: 42 }, 4],
+    ['web dense', { seed: 1337, count: 16 }, 70],
+    ['web every end cuffed', { seed: 1, cuffChance: 1 }, 20],
+    ['web lace', { seed: 42, material: 'lace' as const }, 30],
+  ] as const) {
+    it(`never breaks a line with nothing drawn over it (${name})`, () => {
+      const scene = buildTangleScene(web(over));
+      const gaps = findUnexplainedGaps(
+        scene.marks,
+        scene.marksBefore,
+        scene.strands,
+        scene.occOpts
+      );
+      // The silhouette is what reads as "the line": a duct outline may only
+      // stop where another duct is actually inked over it. Interior texture
+      // (rings, shade) is deliberately still thinned in a deep pile, so the
+      // invariant is asserted on `edge` alone.
+      const edgeGaps = gaps.filter((g) => g.layer === 'edge');
+      const worst = edgeGaps.reduce((m, g) => Math.max(m, g.length), 0);
+      expect({ name, tooWide: worst > maxBreakPx }).toEqual({ name, tooWide: false });
     }, 120000);
   }
 
