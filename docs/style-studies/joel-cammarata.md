@@ -145,7 +145,7 @@ Items 1–3 landed alongside this study:
    web module + `flow-lines ink-field` (CLI): `ribbon` (drafted
    filleted band, vernier-braided inks), `lattice` (colour planes by
    density inside one grid), `stripes` (drifting bands, optional ruled
-   blocks), with per-ink misregistration and margin pen-test dots.
+   blocks), with per-ink misregistration and optional per-ink proof dots.
 3. **Plot order** — `optimizePlot`/`orderPlot` take an order strategy
    (`sweep` / `centerOut` / `centerIn`); exposed as the module's
    "Plot order (wear)" group and `--plot-order` on the `ink-field` and

@@ -6,12 +6,13 @@ import { makeRandom, randomSeed, subSeed } from './lib/rng.js';
 import { clamp, clamp01 } from './lib/math.js';
 
 /**
- * Ink field — material-forward multi-ink fields in the vein of Joel
- * Cammarata's plotted work: the geometry is deliberately simple and regular
- * (a drafted band, a uniform lattice, stripe bands) so that the physical
- * behaviour of the inks — how crossing gel colours stack, how a fountain pen
- * depletes over the plot, how misregistered passes shimmer — carries the
- * piece. Three styles:
+ * Ink field — material-forward multi-ink fields: the geometry is
+ * deliberately simple and regular (a drafted band, a uniform lattice,
+ * stripe bands) so that the physical behaviour of the inks — how crossing
+ * colours stack, how a pen depletes over the plot, how misregistered passes
+ * shimmer — carries the piece. The techniques (overprint interleave,
+ * vernier beats, wear-order gradients) are surveyed in
+ * `docs/style-studies/joel-cammarata.md`. Three styles:
  *
  * - `ribbon` — one drafted band path (axis-aligned / 45° segments with
  *   filleted corners, the CAD look) rendered as dense parallel offsets;
@@ -87,7 +88,7 @@ export interface InkFieldOptions {
   /** Stripes: dark-block fraction of each block period, 0..1. */
   blockDuty?: number;
 
-  /** Margin swatch: one small filled test dot per ink (default true). */
+  /** Margin swatch: one small filled proof dot per ink (default false). */
   penTests?: boolean;
   /** Plot order as a wear gradient: pen wear follows stroke order, so a
    *  spatial ramp turns dulling/depletion into a composed gradient. */
@@ -286,7 +287,7 @@ export function generateInkField(options: InkFieldOptions): FlowLinesResult {
     stripeSoftness = 0.45,
     stripeBlocks = false,
     blockDuty = 0.5,
-    penTests = true,
+    penTests = false,
     wearOrder = 'none',
     wearAngleDeg = 0,
     minSegmentLengthPx = 3,
@@ -588,8 +589,8 @@ export function generateInkField(options: InkFieldOptions): FlowLinesResult {
     }
   }
 
-  // Pen-test dots: one small filled swatch per ink inside the margin box —
-  // the artist's habit of proofing each pen before the plot, kept as a mark.
+  // Optional proof dots: one small filled swatch per ink inside the margin
+  // box, for checking each pen's flow before committing to the field.
   if (penTests && lines.length) {
     const rDot = Math.max(2, penWidthPx * 2.2);
     const gap = rDot * 2 + Math.max(4, penWidthPx * 4);

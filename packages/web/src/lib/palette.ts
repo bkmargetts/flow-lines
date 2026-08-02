@@ -58,10 +58,10 @@ export const PALETTES: PaletteDef[] = [
     ramp: ['#111111', '#e2231a'],
   },
   {
-    id: 'gel',
-    label: 'Gel (blue + black + red)',
+    id: 'primaries',
+    label: 'Primaries',
     ground: 'light',
-    ramp: ['#1b48c8', '#111111', '#e2231a'],
+    ramp: ['#1d3fc0', '#111111', '#d0341c', '#0a9a4f'],
   },
   {
     id: 'mono',

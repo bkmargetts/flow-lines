@@ -59,7 +59,7 @@ export interface InkFieldState {
   /** Stripes: dark-block fraction, 0..1. */
   blockDuty: number;
 
-  /** One small test dot per ink inside the margin (the artist's pen proof). */
+  /** One small proof dot per ink inside the margin (off by default). */
   penTests: boolean;
   /** Multiply-blend the band inks in the preview (physical overprint). */
   blendInks: boolean;
@@ -76,8 +76,8 @@ export interface InkFieldState {
 export const defaultInkFieldState: InkFieldState = {
   style: 'ribbon',
   colorCount: 3,
-  palette: 'gel',
-  customRamp: ['#1b48c8', '#111111', '#e2231a'],
+  palette: 'primaries',
+  customRamp: ['#1d3fc0', '#111111', '#d0341c'],
 
   pitchMm: 0.8,
   angleDeg: 0,
@@ -102,7 +102,7 @@ export const defaultInkFieldState: InkFieldState = {
   stripeBlocks: false,
   blockDuty: 0.5,
 
-  penTests: true,
+  penTests: false,
   blendInks: true,
   wearOrder: 'none',
   wearAngleDeg: 0,

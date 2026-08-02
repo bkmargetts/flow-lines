@@ -6,15 +6,15 @@ import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.j
 /** The export layer name for ink index i (matches core's bandLayerName). */
 const bandLayer = (i: number): string => `band-${String(i).padStart(2, '0')}`;
 
-const DEFAULT_INK_COLORS = ['#1b48c8', '#111111', '#e2231a', '#0aa64f'];
+const DEFAULT_INK_COLORS = ['#1d3fc0', '#111111', '#d0341c', '#0a9a4f'];
 
 export function registerInkField(program: Command) {
   addTileOptions(addSketchOptions(program.command('ink-field')))
     .description(
-      'Render a material-forward multi-ink field (after Joel Cammarata): a ' +
-        'drafted ribbon band braided by vernier pitch differences, a lattice ' +
-        'carrying colour planes purely by ink density, or drifting stripe ' +
-        'bands — every ink a band-NN pen layer built to physically overprint'
+      'Render a material-forward multi-ink field: a drafted ribbon band ' +
+        'braided by vernier pitch differences, a lattice carrying colour ' +
+        'planes purely by ink density, or drifting stripe bands — every ink ' +
+        'a band-NN pen layer built to physically overprint'
     )
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '800')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '1066')
@@ -45,7 +45,7 @@ export function registerInkField(program: Command) {
     .option('--softness <number>', 'Stripes: band-edge overlap (0-1)', '0.45')
     .option('--blocks', 'Stripes: quantise into ruled dark/light blocks')
     .option('--block-duty <number>', 'Stripes: dark-block fraction (0-1)', '0.5')
-    .option('--no-pen-tests', 'Skip the per-ink pen-test dots in the margin')
+    .option('--pen-tests', 'Add one small proof dot per ink inside the margin')
     .option(
       '--plot-order <mode>',
       'Plot order as a wear gradient: travel | sweep | center-out | center-in ' +
