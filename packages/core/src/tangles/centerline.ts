@@ -420,6 +420,14 @@ export function growHoses(o: GrowOptions): GrownHose[] {
         want = theta + kAmp * noise.noise2D(arcPos / wanderScale, k * 13.7 + 0.5) * ds;
       }
 
+      // Entry commitment: a strand that comes in from an edge must PUSH
+      // INTO the sheet before it starts coiling. Without this, border
+      // containment plus wander can pin its whole body in a pocket beside
+      // the entry point — two such strands coil into a mutual wad the
+      // hidden-line machinery can only resolve into blank paper.
+      if (!cuffStart && arcPos < 0.18 * targetLen && !exitPhase) {
+        want = steer(want, Math.atan2(cy - y, cx - x), 0.055);
+      }
       if (exitPhase) {
         // Head out along the edge the CURRENT heading points at — nearest-
         // edge exits funnel every strand in a region into the same parallel

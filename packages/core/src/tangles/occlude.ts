@@ -608,6 +608,7 @@ export function repairOcclusion(
     j: number;
     i: number;
     iArc: number;
+    jArc: number;
     x: number;
     y: number;
   }
@@ -622,13 +623,23 @@ export function repairOcclusion(
           const arr = grid.get(`${gx},${gy}`);
           if (!arr) continue;
           for (const [k, i] of arr) {
-            if (k === m.strand) continue;
             const s = strands[k];
+            // Self-tucks count too — a strand coiling back onto its own
+            // earlier pass is hidden-line geometry like any other pair —
+            // but only well beyond the local tube neighbourhood.
+            if (k === m.strand && Math.abs(s.arc[i] - m.arcs[pi]) < 5 * s.r) continue;
             const dx = s.pts[i].x - p.x;
             const dy = s.pts[i].y - p.y;
             // Strictly inside: a mark kissing the silhouette is legitimate.
             if (dx * dx + dy * dy < (s.r - 1.25) * (s.r - 1.25)) {
-              intrusions.push({ j: m.strand, i: k, iArc: s.arc[i], x: p.x, y: p.y });
+              intrusions.push({
+                j: m.strand,
+                i: k,
+                iArc: s.arc[i],
+                jArc: m.arcs[pi],
+                x: p.x,
+                y: p.y,
+              });
             }
           }
         }
@@ -688,6 +699,52 @@ export function repairOcclusion(
     }
     const mx = sx / zone.length;
     const my = sy / zone.length;
+    if (i === j) {
+      // Self-tuck: two passes of one strand share the zone. The winner is
+      // the pass the weave put on top at the nearest self-crossing; with
+      // no crossing to consult, the LATER pass lies on top (a coil drops
+      // onto what is already down). The occluder's own-arc exemption
+      // protects the winning pass's marks inside the window.
+      const k = i;
+      let miArc = 0;
+      let mjArc = 0;
+      for (const t of zone) {
+        miArc += t.iArc;
+        mjArc += t.jArc;
+      }
+      miArc /= zone.length;
+      mjArc /= zone.length;
+      let winnerArc = -1;
+      let bestD = 12 * strands[k].r;
+      for (const c of crossings) {
+        if (c.a.strand !== k || c.b.strand !== k) continue;
+        const d = Math.hypot(c.x - mx, c.y - my);
+        if (d < bestD) {
+          bestD = d;
+          winnerArc = aOnTop[c.id] ? c.a.arc : c.b.arc;
+        }
+      }
+      const tubeWins =
+        winnerArc >= 0 ? Math.abs(miArc - winnerArc) <= Math.abs(mjArc - winnerArc) : miArc > mjArc;
+      if (!tubeWins) continue; // the mirrored zone erases the tube side
+      let arcLo = Infinity;
+      let arcHi = -Infinity;
+      for (const t of zone) {
+        if (t.iArc < arcLo) arcLo = t.iArc;
+        if (t.iArc > arcHi) arcHi = t.iArc;
+      }
+      const pad = 2.4 * strands[k].r;
+      repair[k].push(
+        occluderFromWindow(
+          strands[k],
+          k,
+          Math.max(0, arcLo - pad),
+          Math.min(strands[k].len, arcHi + pad),
+          strands[k].r + o.gap + o.inflatePx
+        )
+      );
+      continue;
+    }
     // One winner per zone: the weave's call at the pair's nearest
     // crossing; pure grazes fall back to the fatter tube (tie: lower
     // index), matching the graze pass's convention.
@@ -771,6 +828,31 @@ function dropSliverPeeks(
     const ownEndZones = o.endZones?.[k];
     const pad = 2 * s.r;
     const step = Math.max(2, s.r / 4);
+    // Sandwich test: a peek may only be swallowed when BOTH of its cut
+    // ends sit under another strand's actual TUBE (not merely inside the
+    // reserved-gap inflation). Dropping a peek that borders open paper
+    // amputates the tube — a flat cut hanging in white, worse than any
+    // crumb it removes. `covered` with the half shrunk by gap+inflate
+    // tests the real tube body.
+    const tubeShrink = o.gap + o.inflatePx;
+    const underTube = (a: number): boolean => {
+      const p = sampleAtOpen(s, a).p;
+      for (const occ of occs) {
+        if (occ.strand === k && a >= occ.arcMin - pad && a <= occ.arcMax + pad) continue;
+        if (occ.end && ownEndZones && ownEndZones.some(([lo, hi]) => a >= lo && a <= hi))
+          continue;
+        if (
+          p.x < occ.minX ||
+          p.x > occ.maxX ||
+          p.y < occ.minY ||
+          p.y > occ.maxY
+        )
+          continue;
+        const shrunk: Occluder = { ...occ, half: Math.max(1, occ.half - tubeShrink) };
+        if (occluderHits(shrunk, p.x, p.y)) return true;
+      }
+      return false;
+    };
     const runs: DeadRun[] = [];
     let visStart = 0;
     let prevCovered = true;
@@ -791,7 +873,13 @@ function dropSliverPeeks(
     }
     // A visible run touching either strand END stays: a tube emerging off
     // the pile edge or into its own cuff is real anatomy, however short.
-    return runs.filter((r) => r.lo > step && r.hi < s.len - step);
+    return runs.filter(
+      (r) =>
+        r.lo > step &&
+        r.hi < s.len - step &&
+        underTube(Math.max(0, r.lo - 1.5 * step)) &&
+        underTube(Math.min(s.len, r.hi + 1.5 * step))
+    );
   });
 
   // Split marks against the dead intervals — never whole-drop by a single
