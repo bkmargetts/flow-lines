@@ -9,7 +9,15 @@ import { ModulePicker } from './ModulePicker';
  * the 0 to type a new value. This keeps the raw text locally, commits any valid
  * number as you type, and only falls back to 0 on blur of an empty/invalid field.
  */
-function HoldOffInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function HoldOffInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}) {
   const [text, setText] = useState(String(value));
   // Re-sync when the committed value changes from elsewhere.
   useEffect(() => setText(String(value)), [value]);
@@ -19,6 +27,7 @@ function HoldOffInput({ value, onChange }: { value: number; onChange: (v: number
       min={0}
       max={20}
       step={0.5}
+      disabled={disabled}
       value={text}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => {
@@ -54,6 +63,7 @@ export function LayerStackPanel() {
     selectLayer,
     setVisible,
     setHoldOff,
+    setOverprint,
     canAdd,
   } = useLayerStore();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -123,16 +133,34 @@ export function LayerStackPanel() {
                 </span>
 
                 <label
-                  className="layer-holdoff"
-                  title="Clean-paper halo (mm) this layer reserves around the layers stacked above it"
+                  className={`layer-holdoff ${layer.overprint ? 'disabled' : ''}`}
+                  title={
+                    layer.overprint
+                      ? 'Overprint inks cross other layers — halo off'
+                      : 'Clean-paper halo (mm) this layer reserves around the layers stacked above it'
+                  }
                   onClick={(e) => e.stopPropagation()}
                 >
                   halo
                   <HoldOffInput
                     value={layer.holdOffMm}
+                    disabled={layer.overprint}
                     onChange={(v) => setHoldOff(layer.instanceId, v)}
                   />
                 </label>
+
+                <button
+                  type="button"
+                  className="layer-overprint"
+                  title="Overprint — this layer's ink crosses the others: multiply preview, no reserved-paper halos against it"
+                  aria-pressed={layer.overprint}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOverprint(layer.instanceId, !layer.overprint);
+                  }}
+                >
+                  ⊗
+                </button>
 
                 <button
                   type="button"

@@ -888,6 +888,7 @@ button.secondary:hover {
 }
 
 .layer-visible,
+.layer-overprint,
 .layer-duplicate,
 .layer-remove {
   border: none;
@@ -896,6 +897,14 @@ button.secondary:hover {
   font-size: 0.9rem;
   padding: 2px 4px;
   color: var(--text-secondary);
+}
+
+.layer-overprint[aria-pressed='false'] {
+  opacity: 0.35;
+}
+
+.layer-overprint[aria-pressed='true'] {
+  color: var(--accent);
 }
 
 .layer-duplicate:disabled,
@@ -934,6 +943,12 @@ button.secondary:hover {
   background: var(--bg-surface);
   color: var(--text-primary);
   font-size: 0.72rem;
+}
+
+.layer-holdoff.disabled,
+.layer-holdoff input:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .layer-empty {

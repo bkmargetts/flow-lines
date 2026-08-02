@@ -21,6 +21,7 @@ export interface SnapshotLayer {
   state?: unknown;
   visible: boolean;
   holdOffMm: number;
+  overprint: boolean;
   liveOutput: LayerOutput | null;
 }
 
@@ -41,6 +42,7 @@ export function snapshotToStack(layers: SnapshotLayer[]): CompositeLayer[] {
     state: l.state,
     visible: l.visible,
     holdOffMm: l.holdOffMm,
+    overprint: l.overprint,
     liveOutput: l.liveOutput,
   }));
 }

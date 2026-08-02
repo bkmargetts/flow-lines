@@ -27,6 +27,8 @@ export interface Layer {
   visible: boolean;
   /** Clean-paper sliver reserved around layers above, in mm (0 = independent). */
   holdOffMm: number;
+  /** Ink crosses the other layers: multiply preview, no hold-off either way. */
+  overprint: boolean;
 }
 
 interface LiveEntry {
@@ -45,6 +47,7 @@ interface LayerStoreValue {
   selectLayer: (instanceId: string) => void;
   setVisible: (instanceId: string, visible: boolean) => void;
   setHoldOff: (instanceId: string, mm: number) => void;
+  setOverprint: (instanceId: string, overprint: boolean) => void;
   updateState: (instanceId: string, update: StateUpdate<unknown>) => void;
   publishOutput: (instanceId: string, output: LayerOutput | null, busy: boolean) => void;
   /** Wholesale replace the stack from an undo/redo snapshot. */
@@ -67,6 +70,7 @@ function makeLayer(moduleId: string): Layer {
     state: getModule(moduleId).defaultState(),
     visible: true,
     holdOffMm: 0,
+    overprint: false,
   };
 }
 
@@ -110,6 +114,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
         state,
         visible: src.visible,
         holdOffMm: src.holdOffMm,
+        overprint: src.overprint,
       };
       setSelectedId(copy.instanceId);
       const next = prev.slice();
@@ -158,6 +163,12 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
   const setHoldOff = useCallback((instanceId: string, mm: number) => {
     setLayers((prev) =>
       prev.map((l) => (l.instanceId === instanceId ? { ...l, holdOffMm: mm } : l))
+    );
+  }, []);
+
+  const setOverprint = useCallback((instanceId: string, overprint: boolean) => {
+    setLayers((prev) =>
+      prev.map((l) => (l.instanceId === instanceId ? { ...l, overprint } : l))
     );
   }, []);
 
@@ -220,6 +231,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       selectLayer,
       setVisible,
       setHoldOff,
+      setOverprint,
       updateState,
       publishOutput,
       restoreLayers,
@@ -236,6 +248,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       selectLayer,
       setVisible,
       setHoldOff,
+      setOverprint,
       updateState,
       publishOutput,
       restoreLayers,
@@ -294,6 +307,7 @@ function CompositeHost({ children }: { children: ReactNode }) {
         ...(kind === 'pure' ? { state: l.state } : {}),
         visible: l.visible,
         holdOffMm: l.holdOffMm,
+        overprint: l.overprint,
         liveOutput: liveOutputs[l.instanceId]?.output ?? null,
       };
     });
