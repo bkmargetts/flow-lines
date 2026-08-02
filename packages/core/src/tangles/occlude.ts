@@ -794,15 +794,48 @@ function dropSliverPeeks(
     return runs.filter((r) => r.lo > step && r.hi < s.len - step);
   });
 
-  const kept = marks.filter((m) => {
-    const runs = dead[m.strand];
-    if (!runs || runs.length === 0) return true;
-    const mid = m.arcs[Math.floor(m.arcs.length / 2)];
+  // Split marks against the dead intervals — never whole-drop by a single
+  // representative arc: a long edge piece whose MID happens to land in one
+  // short dead sliver would vanish end to end, leaving hundreds of px of
+  // rings with no silhouette (ring-ladder skeletons, the worst read a
+  // deep pile can produce). Short single-arc marks (rings, ticks) reduce
+  // to the mid test naturally.
+  const inDead = (runs: DeadRun[], a: number): boolean => {
     for (const r of runs) {
-      if (mid >= r.lo && mid <= r.hi) return false;
+      if (a >= r.lo && a <= r.hi) return true;
+      if (r.lo > a) break;
     }
-    return true;
-  });
+    return false;
+  };
+  const kept: Mark[] = [];
+  for (const m of marks) {
+    const runs = dead[m.strand];
+    if (!runs || runs.length === 0) {
+      kept.push(m);
+      continue;
+    }
+    let pts: Point[] = [];
+    let arcs: number[] = [];
+    const flush = () => {
+      if (pts.length >= 2) {
+        let len = 0;
+        for (let i = 1; i < pts.length; i++) {
+          len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        }
+        if (len >= 4.5) kept.push({ points: pts, arcs, layer: m.layer, strand: m.strand });
+      }
+      pts = [];
+      arcs = [];
+    };
+    for (let i = 0; i < m.points.length; i++) {
+      if (inDead(runs, m.arcs[i])) flush();
+      else {
+        pts.push(m.points[i]);
+        arcs.push(m.arcs[i]);
+      }
+    }
+    flush();
+  }
 
   // Edge support: corrugation, shade, and ticks belong to a tube that has
   // a silhouette there. In a deep pile the survival rules can keep a ring
