@@ -90,6 +90,7 @@ lives in a collapsed Advanced group.
 | Fracture | pure | Crack propagation — mud cracks, glaze crazing |
 | Noise Texture | pure | Noise-modulated line fields |
 | Colour Field | pure | Atmospheric multi-ink gradients |
+| Ink Field | pure | Braided ribbons and colour-plane fields for crossing inks |
 | Marbling | pure | Suminagashi / ebru paper marbling |
 | Meander | pure | Fisk-style river-migration cartography |
 | Coral | pure | Differential-growth organisms |
