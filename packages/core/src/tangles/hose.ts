@@ -44,6 +44,10 @@ export interface HoseMarkOptions {
 /** How far a hose end's cuff hardware reaches along the axis, in radii. */
 export const CUFF_REACH = 1.1;
 
+/** Half-length of the open mouth ellipse along the hose axis, in radii —
+ *  the mouth seen obliquely. The occluder uses it to shape the end body. */
+export const CUFF_OPEN = 0.34;
+
 export function buildHoseMarks(
   strand: TangleStrand,
   k: number,
@@ -208,7 +212,6 @@ function cuffMarks(
   const s = sampleAtOpen(strand, endArc);
   const tOut = end === 'start' ? { x: -s.t.x, y: -s.t.y } : s.t;
   const nrm = s.n;
-  const CUFF_OPEN = 0.34;
 
   // Collar rings: the stiff end fitting — tight pitch, reduced bow.
   for (const d of [0.4 * r, 0.78 * r]) {

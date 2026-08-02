@@ -13,14 +13,8 @@ import { findHoseCrossings } from './crossings.js';
 import { solveHoseWeave } from './weave.js';
 import { buildHoseMarks, type Mark } from './hose.js';
 import { buildLaceMarks } from './lace.js';
-import {
-  buildEndOccluders,
-  buildGrazeOccluders,
-  buildOccluders,
-  contactShadows,
-  occludeMarks,
-  repairOcclusion,
-} from './occlude.js';
+import { BodyIndex, contactShadows, occludeMarks, type OccludeOptions } from './occlude.js';
+import { buildArcDepths, type ArcTable } from './depth.js';
 
 export type { TangleMaterial } from './centerline.js';
 
@@ -114,10 +108,25 @@ const DEFAULTS: Required<Omit<TanglesOptions, 'width' | 'height' | 'margin' | 's
 const MAX_CROSSINGS = 4000;
 
 /**
- * Generate a tangle drawing. Returns plain stroked polylines tagged by
- * layer (`edge` / `ring` / `shade` / `shadow`), deterministic per seed.
+ * Stages 1-4: centerlines, weave, marks, and hidden-line removal — the
+ * complete occluded scene before the hand finish. Exported for the
+ * occlusion regression tests (not re-exported from the package barrel).
  */
-export function generateTangles(options: TanglesOptions): FlowLinesResult {
+export function buildTangleScene(options: TanglesOptions): {
+  marks: Mark[];
+  /** The drawing before any erasure (marks + contact shadows). */
+  marksBefore: Mark[];
+  strands: TangleStrand[];
+  occOpts: OccludeOptions;
+  crossings: ReturnType<typeof findHoseCrossings>;
+  aOnTop: boolean[];
+  /** The stacking order the drawing was cut against. */
+  table: ArcTable;
+  index: BodyIndex;
+  /** Which ends carry drawn hardware (a hose cuff / a lace aglet). */
+  ends: { cuffStart: boolean; cuffEnd: boolean }[];
+  seed: number;
+} {
   const o = { ...DEFAULTS, ...options };
   const seed = options.seed ?? randomSeed();
   const { width, height, margin } = options;
@@ -133,13 +142,21 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   const radiusMax = Math.max(radiusMin, o.radiusMax * matScale);
   const gap = Math.max(o.gap, 0.9 * o.penWidth);
 
-  // The occlusion margin must cover the finish pass's peak displacement
-  // (wobble amplitude + whole-stroke misregistration), or the hand pass
-  // bends erased strokes back into the reserved gaps. The 0.7 base covers
-  // the pen's own half-width; anything more is pure moat — the halo must
-  // read as a held-off sliver, not a channel.
+  // Humanisation is split in two. Most of the wobble budget is applied to
+  // the CENTERLINES, before crossings, marks, and occlusion, so every mark
+  // of a strand and every occlusion boundary shares one distortion — a
+  // per-stroke wobble after occlusion scatters the terminations at every
+  // reserved gap (each stroke drifts on its own noise track) and the gaps
+  // read as broken lines, the worst "haloing" artifact this module can
+  // produce. A small residual per-stroke wobble keeps the pen texture, and
+  // ONLY that residual inflates the occluders: the 0.7 base covers the
+  // pen's own half-width; anything more is pure moat — the halo must read
+  // as a held-off sliver, not a channel.
+  const geomWobble = o.wobble * 1.1;
+  const strokeWobble = o.wobble * 0.3;
   const finishReach = o.wobble * 1.6;
-  const inflatePx = 0.7 + finishReach;
+  const strokeReach = strokeWobble * 1.5;
+  const inflatePx = 0.7 + strokeReach;
 
   // 1. Grow the centerlines, then relax parallel hoses apart. The pushes can
   // locally re-tighten a bend past the growth cap, so re-clamp and smooth
@@ -184,9 +201,40 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
   // Resample to uniform spacing (the pushes compress vertices into
   // micro-segments whose spike angles carry huge curvature), then enforce
   // the cap exactly by turn redistribution.
+  const geomNoise = createNoise(subSeed(seed, 8));
   const strands: TangleStrand[] = grown.map((g, k) => {
     const resampled = resampleUniform(paths[k], clamp(g.r / 3, 2, 6));
     enforceCurvature(resampled, kappaMaxFor(o.material, g.r));
+    // The geometry share of the humanisation: a low-frequency perpendicular
+    // wobble plus a small whole-strand misregistration offset, stamped into
+    // the centerline itself so edges, rings, shade, crossings, and
+    // occluders all agree on it. Re-clamp curvature afterwards — the
+    // wobble adds a little bend everywhere.
+    if (geomWobble > 0) {
+      const track = k * 0.731 + 0.5;
+      const offX = 0.5 * o.wobble * geomNoise.noise2D(track, 31.7);
+      const offY = 0.5 * o.wobble * geomNoise.noise2D(track, 47.3);
+      let arc = 0;
+      for (let i = 0; i < resampled.length; i++) {
+        if (i > 0) {
+          arc += Math.hypot(
+            resampled[i].x - resampled[i - 1].x,
+            resampled[i].y - resampled[i - 1].y
+          );
+        }
+        const ahead = resampled[Math.min(i + 1, resampled.length - 1)];
+        const behind = resampled[Math.max(i - 1, 0)];
+        const tx = ahead.x - behind.x;
+        const ty = ahead.y - behind.y;
+        const tl = Math.hypot(tx, ty) || 1;
+        const w = geomWobble * geomNoise.fbm(arc / 46, track, 2, 0.5, 2.2);
+        resampled[i] = {
+          x: resampled[i].x + offX + (-ty / tl) * w,
+          y: resampled[i].y + offY + (tx / tl) * w,
+        };
+      }
+      enforceCurvature(resampled, kappaMaxFor(o.material, g.r));
+    }
     return finalizeOpen(smoothPolyline(resampled, 1), g.r);
   });
 
@@ -242,31 +290,72 @@ export function generateTangles(options: TanglesOptions): FlowLinesResult {
     if (grown[k].cuffEnd) zones.push([s.len - endReach(s.r), s.len]);
     return zones;
   });
-  const occOpts = {
+  const occOpts: OccludeOptions = {
     gap,
     inflatePx,
     penWidth: o.penWidth,
     shadowHatch: o.shadowHatch,
     lace: o.material === 'lace',
     endZones,
+    ends: grown.map((g) => ({ cuffStart: g.cuffStart, cuffEnd: g.cuffEnd })),
   };
-  const occluders = buildOccluders(strands, crossings, weave.aOnTop, occOpts);
-  buildGrazeOccluders(strands, crossings, weave.aOnTop, occluders, occOpts);
-  buildEndOccluders(strands, grown, occluders, occOpts);
+  // Cut the strands into arcs and stack them: one global order, from which
+  // "who is on top here" is a lookup rather than a guess (see depth.ts).
+  const table = buildArcDepths(strands, crossings, weave.aOnTop);
+  const index = new BodyIndex(strands, table, occOpts);
   marks.push(...contactShadows(strands, crossings, weave.aOnTop, occOpts));
-  marks = occludeMarks(marks, strands, occluders, occOpts);
-  // Belt-and-braces: geometrically verify the survivors and erase any ink
-  // still printing inside a tube that is on top of it (see repairOcclusion).
-  marks = repairOcclusion(marks, strands, crossings, weave.aOnTop, occluders, occOpts);
+  // Snapshot the un-erased drawing: `findUnexplainedGaps` diffs the survivors
+  // against it to prove every break is caused by a tube stacked above it.
+  const marksBefore = marks;
+  marks = occludeMarks(marks, strands, table, index, occOpts);
+
+  return {
+    marks,
+    marksBefore,
+    strands,
+    occOpts,
+    crossings,
+    aOnTop: weave.aOnTop,
+    table,
+    index,
+    ends: occOpts.ends!,
+    seed,
+  };
+}
+
+/**
+ * Generate a tangle drawing. Returns plain stroked polylines tagged by
+ * layer (`edge` / `ring` / `shade` / `shadow`), deterministic per seed.
+ */
+export function generateTangles(options: TanglesOptions): FlowLinesResult {
+  const o = { ...DEFAULTS, ...options };
+  const { width, height, margin } = options;
+  const x0 = margin;
+  const y0 = margin;
+  const x1 = width - margin;
+  const y1 = height - margin;
+  const { marks, seed } = buildTangleScene(options);
 
   // 5. Plain stroked polylines, layer-tagged for multi-pen export.
   const lines: FlowLine[] = marks.map((m) => ({ points: m.points, layer: m.layer }));
 
-  // 6. Hand finish, then clip and reorder. Occlusion ran before the wobble
-  // and every reserved gap was inflated by its reach.
+  // 6. Residual hand finish, then clip and reorder. The bulk of the wobble
+  // is already in the centerlines (see buildTangleScene) where occlusion
+  // could account for it exactly; this pass only adds per-stroke pen
+  // texture, so its amplitude is small, its jitter is off (whole-stroke
+  // misregistration detaches rings from their edges — the strand-level
+  // offset happened in geometry), and its displacement is hard-capped at
+  // the reach the occluders were inflated by.
+  const strokeWobble = o.wobble * 0.3;
   const finished = applyHandDrawnStyle(
     { lines, width, height, seed },
-    { amplitude: o.wobble, wavelength: 42, seed: subSeed(seed, 6) }
+    {
+      amplitude: strokeWobble,
+      wavelength: 42,
+      jitter: 0,
+      seed: subSeed(seed, 6),
+      maxDisplacement: strokeWobble * 1.5,
+    }
   ).lines.flatMap((l) =>
     clipPolylineToRect(l.points, x0, y0, x1, y1).map((pts) => ({ ...l, points: pts }))
   );
