@@ -244,17 +244,35 @@ export function findHoseCrossings(strands: TangleStrand[], maxCrossings: number)
       // lens, entry and exit) and alternating over/under inside it is
       // impossible geometry. One crossing, one winner, and the occluder
       // walk then covers the whole lens. Angle and arc-distance gates don't
-      // apply — a dive can be steep and hundreds of arcs long.
-      if (!merge && h.sa !== h.sb && dA < 40 * pairBand) {
+      // apply — a dive can be steep and hundreds of arcs long. The walk
+      // must run along BOTH strands: checking only "is some of B near A"
+      // false-merges a wad — when B coils through the same spot several
+      // times, a different coil of B answers for the stretch where the
+      // diving coil has long since left, fusing two physically distinct
+      // crossings into one and leaving the second pass without an
+      // occluder (it X-rays straight through). A genuine dive also keeps
+      // B itself hugging A along B's own arc between its entry and exit.
+      if (!merge && h.sa !== h.sb && dA < 40 * pairBand && dB < 40 * pairBand) {
         const bLo = Math.min(prev.arcB, h.arcB);
         const bHi = Math.max(prev.arcB, h.arcB);
         const bMid = (bLo + bHi) / 2;
         const bWin = (bHi - bLo) / 2 + 2 * pairBand;
+        const aLo = Math.min(prev.arcA, h.arcA);
+        const aHi = Math.max(prev.arcA, h.arcA);
+        const aMid = (aLo + aHi) / 2;
+        const aWin = (aHi - aLo) / 2 + 2 * pairBand;
         let connected = true;
         const step = pairBand / 2;
-        for (let a = Math.min(prev.arcA, h.arcA); a <= Math.max(prev.arcA, h.arcA); a += step) {
+        for (let a = aLo; a <= aHi; a += step) {
           const smp = sampleAtOpen(strands[h.sa], a);
           if (distNear(strands[h.sb], smp.p, bMid, bWin) >= pairBand) {
+            connected = false;
+            break;
+          }
+        }
+        for (let b = bLo; connected && b <= bHi; b += step) {
+          const smp = sampleAtOpen(strands[h.sb], b);
+          if (distNear(strands[h.sa], smp.p, aMid, aWin) >= pairBand) {
             connected = false;
             break;
           }

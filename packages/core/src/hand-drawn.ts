@@ -22,6 +22,14 @@ export interface HandDrawnOptions {
    * layers not listed are unaffected
    */
   layerAmplitude?: Record<string, number>;
+  /**
+   * Hard cap on each point's TOTAL displacement (wobble + misregistration
+   * combined), px. Generators that reserve paper before the hand pass
+   * (hidden-line gaps sized to a wobble budget) pass their budget here so
+   * the statistical tail of wobble-plus-jitter can never bend erased ink
+   * back into a reserved gap. Unset = uncapped (the historical behavior).
+   */
+  maxDisplacement?: number;
 }
 
 /**
@@ -97,10 +105,22 @@ export function applyHandDrawnStyle(
       const wobble =
         lineAmplitude * noise.fbm(arc / wavelength, track, 2, 0.5, 2.2);
 
-      points[i] = {
-        x: p.x + offsetX + (-ty / len) * wobble,
-        y: p.y + offsetY + (tx / len) * wobble,
-      };
+      if (options.maxDisplacement === undefined) {
+        points[i] = {
+          x: p.x + offsetX + (-ty / len) * wobble,
+          y: p.y + offsetY + (tx / len) * wobble,
+        };
+      } else {
+        let dx = offsetX + (-ty / len) * wobble;
+        let dy = offsetY + (tx / len) * wobble;
+        const d = Math.hypot(dx, dy);
+        if (d > options.maxDisplacement) {
+          const scale = options.maxDisplacement / d;
+          dx *= scale;
+          dy *= scale;
+        }
+        points[i] = { x: p.x + dx, y: p.y + dy };
+      }
     }
 
     return { ...line, points };
