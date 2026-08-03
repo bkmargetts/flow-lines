@@ -67,8 +67,81 @@ describe('conway exposure render styles', () => {
     expect(history(dense)).toBeGreaterThan(history(sparse));
   });
 
+  it('renders weave style as band layers plus the present', () => {
+    const r = generateConwayExposure({ ...base, style: 'weave' });
+    const layers = layersOf(r);
+    expect(layers.has('present')).toBe(true);
+    expect(layers.has('band-00')).toBe(true);
+    expect(layers.has('band-01')).toBe(true);
+    expect(layers.has('band-02')).toBe(true);
+    expect(layers.has('band-03')).toBe(false);
+    // no ghost/trail pens — the grating carries the whole history
+    expect(layers.has('ghost')).toBe(false);
+    expect(layers.has('trail')).toBe(false);
+  });
+
+  it('weave ink count sets the number of band layers', () => {
+    const r = generateConwayExposure({ ...base, style: 'weave', weaveInks: 2 });
+    const layers = layersOf(r);
+    expect(layers.has('band-00')).toBe(true);
+    expect(layers.has('band-01')).toBe(true);
+    expect(layers.has('band-02')).toBe(false);
+  });
+
+  it('weave with all disturbances at zero is a perfect ruling with coincident inks', () => {
+    const r = generateConwayExposure({
+      ...base,
+      style: 'weave',
+      weaveSeparation: 0,
+      weaveVernier: 0,
+      weaveBend: 0,
+      weavePitchSwell: 0,
+      weaveWobble: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const bands = r.lines.filter((l) => l.layer?.startsWith('band-'));
+    expect(bands.length).toBeGreaterThan(0);
+    // Every ruling is collinear: max perpendicular deviation from its chord ~0.
+    for (const line of bands) {
+      const a = line.points[0];
+      const b = line.points[line.points.length - 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      for (const p of line.points) {
+        const dev = Math.abs(((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y)) / len);
+        expect(dev).toBeLessThan(1e-6);
+      }
+    }
+    // The inks are byte-identical rulings — calm paper keeps them registered.
+    const geom = (k: string) =>
+      JSON.stringify(r.lines.filter((l) => l.layer === k).map((l) => l.points));
+    expect(geom('band-00')).toBe(geom('band-01'));
+  });
+
+  it('weave disturbs the ruling near the trails', () => {
+    const r = generateConwayExposure({
+      ...base,
+      style: 'weave',
+      weaveWobble: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const bands = r.lines.filter((l) => l.layer?.startsWith('band-'));
+    let maxDev = 0;
+    for (const line of bands) {
+      const a = line.points[0];
+      const b = line.points[line.points.length - 1];
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      for (const p of line.points) {
+        const dev = Math.abs(((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y)) / len);
+        if (dev > maxDev) maxDev = dev;
+      }
+    }
+    expect(maxDev).toBeGreaterThan(0.5);
+  });
+
   it('is deterministic per style', () => {
-    for (const style of ['marks', 'contour', 'streaks', 'slipstream', 'embers'] as const) {
+    for (const style of ['marks', 'contour', 'streaks', 'slipstream', 'embers', 'weave'] as const) {
       const a = generateConwayExposure({ ...base, style });
       const b = generateConwayExposure({ ...base, style });
       expect(JSON.stringify(a.lines)).toBe(JSON.stringify(b.lines));

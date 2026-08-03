@@ -2,6 +2,7 @@ import { Point } from '../flow-lines.js';
 import { gaussianBlur } from '../image.js';
 import { traceIsoContours } from '../iso-contours.js';
 import { SimplexNoise } from '../noise.js';
+import { motionDir } from './sim.js';
 
 /** Closed square outline for a cell, inset by `inset` px from its bounds */
 export function cellSquare(cx: number, cy: number, half: number, inset: number): Point[] {
@@ -43,6 +44,36 @@ export function posterize(t: number, bands: number, lo: number): number {
   const span = 1 - lo;
   const k = Math.min(bands - 1, Math.floor(((t - lo) / span) * bands));
   return lo + ((k + 0.5) / bands) * span;
+}
+
+/**
+ * The colony motion field as smooth per-cell vector components. motionDir is
+ * sparse (null in dead space) and noisy cell-to-cell, so the raw components
+ * are blurred to fill the gaps and yield a field that flows continuously
+ * across both the core and the receding trails. Shared by the slipstream and
+ * weave styles.
+ */
+export function blurredMotionField(
+  lastAlive: Int32Array,
+  cols: number,
+  rows: number,
+  sigma: number
+): { fx: Float32Array; fy: Float32Array } {
+  const rawX = new Float32Array(cols * rows);
+  const rawY = new Float32Array(cols * rows);
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const d = motionDir(lastAlive, cols, rows, cx, cy);
+      if (d) {
+        rawX[cy * cols + cx] = d.x;
+        rawY[cy * cols + cx] = d.y;
+      }
+    }
+  }
+  return {
+    fx: gaussianBlur({ width: cols, height: rows, data: rawX }, sigma).data,
+    fy: gaussianBlur({ width: cols, height: rows, data: rawY }, sigma).data,
+  };
 }
 
 /** A unit vector whose angle varies smoothly with position via fBm noise. */

@@ -15,7 +15,10 @@ import {
   noiseAngle,
   coreBoundaryPolylines,
   angledRegionHatch,
+  blurredMotionField,
 } from './render.js';
+import { renderWeave } from './weave.js';
+import { bandLayerName } from '../overlapped-lines.js';
 
 export { stepLife } from './sim.js';
 
@@ -37,15 +40,20 @@ export { stepLife } from './sim.js';
  * that exposure is turned into ink as MARK DENSITY — sparse dashes for faint
  * ghosts, dense cross-hatch for solids — never opacity or stroke-width tricks.
  *
- * Three render styles share the same simulation:
- *  - `marks`   — discrete per-cell marks (the default look).
- *  - `contour` — nested iso-contours of the blurred light field: continuous
- *                organic ridges, comet tracks as long tapering loops.
- *  - `streaks` — the paths of moving clusters (gliders) traced as continuous
- *                centre-line strokes, with the core left as soft contours.
+ * Six render styles share the same simulation:
+ *  - `marks`      — discrete per-cell marks (the default look).
+ *  - `contour`    — nested iso-contours of the blurred light field: continuous
+ *                   organic ridges, comet tracks as long tapering loops.
+ *  - `streaks`    — the paths of moving clusters (gliders) traced as continuous
+ *                   centre-line strokes, with the core left as soft contours.
+ *  - `slipstream` — evenly-spaced streamlines through the colony motion field.
+ *  - `embers`     — stipple whose density carries the exposure tone.
+ *  - `weave`      — the whole sheet as a calm ruled multi-ink grating that the
+ *                   trails locally disturb (see ./weave.ts).
  *
  * Every stroke is tagged with a `layer` ('present' / 'ghost' / 'trail') so the
- * piece can be exported one SVG per pen.
+ * piece can be exported one SVG per pen — except the weave grating, whose inks
+ * land on `band-NN` layers (the Ink Field convention) alongside 'present'.
  */
 export interface ConwayExposureOptions {
   /** Page width in px */
@@ -91,7 +99,7 @@ export interface ConwayExposureOptions {
   /** Base hand-drawn wobble amplitude in px (default scales with cellSize) */
   wobble?: number;
   /** Render style for the history (default 'marks') */
-  style?: 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers';
+  style?: 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers' | 'weave';
   /**
    * Reserved-paper sliver in px held around the crisp present (and, in
    * `streaks`, around the trails): history marks/lines stop short of it so the
@@ -117,6 +125,45 @@ export interface ConwayExposureOptions {
    * tails fall to a spark or two; the dark trails build a dense field.
    */
   stippleDensity?: number;
+  /**
+   * `weave`: inks in the calm grating, 1..4 — each emits on its own `band-NN`
+   * pen layer (the Ink Field convention), alongside the crisp `present`
+   * layer. (default 3)
+   */
+  weaveInks?: number;
+  /** `weave`: ruling spacing within one ink, px (default max(1.5, cellSize*0.8)). */
+  weavePitch?: number;
+  /** `weave`: grating direction in degrees; 0 = vertical (default 0). */
+  weaveAngle?: number;
+  /**
+   * `weave`: per-ink lateral split at full exposure, as a fraction of the
+   * pitch per ink step (default 0.4). In calm paper the inks are always
+   * near-coincident — every split is scaled by the local exposure tone.
+   */
+  weaveSeparation?: number;
+  /**
+   * `weave`: per-ink pitch differential at full exposure (default 0.01).
+   * Inside a trail each ink's offset also grows with the ruling index, so the
+   * coincidence beat sweeps across the trail — the vernier braid.
+   */
+  weaveVernier?: number;
+  /**
+   * `weave`: how far the ruling direction swings toward the local trail
+   * motion at full exposure, 0..1 (default 0.7). Lines relax back to the calm
+   * angle where exposure fades.
+   */
+  weaveBend?: number;
+  /**
+   * `weave`: signed density swell (default 0.5). >0 pulls rulings toward
+   * trail ridges so spacing tightens and carries tone; <0 spreads them.
+   */
+  weavePitchSwell?: number;
+  /**
+   * `weave`: hand-wobble amplitude at full exposure, px (default
+   * cellSize*0.35). Calm ruling keeps ~8% of it — drafted-straight paper,
+   * agitated trails.
+   */
+  weaveWobble?: number;
   /** Chain strokes and order them to cut pen travel (default true) */
   optimize?: boolean;
 
@@ -196,6 +243,12 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     minTrackDisplacement = 6,
     slipstreamSpacing = 0.9,
     stippleDensity = 7,
+    weaveInks = 3,
+    weaveAngle = 0,
+    weaveSeparation = 0.4,
+    weaveVernier = 0.01,
+    weaveBend = 0.7,
+    weavePitchSwell = 0.5,
     optimize = true,
   } = options;
 
@@ -217,6 +270,8 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   const cellSize = Math.max(2, options.cellSize ?? Math.round(width / 100));
   const wobble = options.wobble ?? Math.max(0.4, cellSize * 0.12);
   const haloRadius = options.haloRadius ?? cellSize * 0.6;
+  const weavePitch = Math.max(0.75, options.weavePitch ?? Math.max(1.5, cellSize * 0.8));
+  const weaveWobble = options.weaveWobble ?? cellSize * 0.35;
   const noise = createNoise(seed + 8101);
 
   // Reserve the border gutter (borderGap cells) for the whole art mode, not
@@ -535,22 +590,7 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
   // into the comet tails: one continuous flowing drawing, the toolbox's
   // signature streamline technique applied to the exposure.
   const renderSlipstream = (): void => {
-    // motionDir is sparse (null in dead space) and noisy cell-to-cell, so blur
-    // the vector components to fill the gaps and yield a field that flows
-    // continuously across both the core and the receding trails.
-    const rawX = new Float32Array(cols * rows);
-    const rawY = new Float32Array(cols * rows);
-    for (let cy = 0; cy < rows; cy++) {
-      for (let cx = 0; cx < cols; cx++) {
-        const d = motionDir(sim.lastAlive, cols, rows, cx, cy);
-        if (d) {
-          rawX[cy * cols + cx] = d.x;
-          rawY[cy * cols + cx] = d.y;
-        }
-      }
-    }
-    const fxField = gaussianBlur({ width: cols, height: rows, data: rawX }, 1.5).data;
-    const fyField = gaussianBlur({ width: cols, height: rows, data: rawY }, 1.5).data;
+    const { fx: fxField, fy: fyField } = blurredMotionField(sim.lastAlive, cols, rows, 1.5);
 
     // Bilinear sample of the (renormalized) flow field in cell coordinates.
     const sampleDir = (x: number, y: number): Point | null => {
@@ -710,24 +750,74 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     }
   };
 
+  // ---- History as a disturbed calm multi-ink grating ----------------------
+  const renderWeaveStyle = (): void => {
+    const { fx, fy } = blurredMotionField(sim.lastAlive, cols, rows, 1.5);
+    const blurTone = gaussianBlur({ width: cols, height: rows, data: new Float32Array(tone) }, 1.5)
+      .data;
+    lines.push(
+      ...renderWeave({
+        cols,
+        rows,
+        originX,
+        originY,
+        cellSize,
+        blurTone,
+        flowX: fx,
+        flowY: fy,
+        haloCells,
+        seed,
+        vignette,
+        inks: weaveInks,
+        pitch: weavePitch,
+        angleDeg: weaveAngle,
+        separation: weaveSeparation,
+        vernier: weaveVernier,
+        bend: weaveBend,
+        pitchSwell: weavePitchSwell,
+        wobble: weaveWobble,
+      })
+    );
+  };
+
   renderPresent();
   if (style === 'contour') renderContour(0);
   else if (style === 'streaks') renderStreaks();
   else if (style === 'slipstream') renderSlipstream();
   else if (style === 'embers') renderEmbers();
+  else if (style === 'weave') renderWeaveStyle();
   else renderMarks();
 
   let result: FlowLinesResult = { lines, width, height, seed };
 
-  // Faint old marks wobble (haunted); crisp final cells stay sharp.
+  // Faint old marks wobble (haunted); crisp final cells stay sharp. The weave
+  // grating handles its own tone-scaled wobble inline — the default scale here
+  // is exactly backwards for a calm ruling (calm ⇒ tone 0 ⇒ max shake) — so
+  // its band layers are exempted; present-layer strokes keep their wobble.
   result = applyHandDrawnStyle(result, {
     amplitude: wobble,
     wavelength: cellSize * 8,
     seed,
     amplitudeScale: (x, y) => lerp(1.4, 0.12, tone[cellIndexAt(x, y)]),
+    layerAmplitude:
+      style === 'weave'
+        ? Object.fromEntries(
+            Array.from({ length: Math.max(1, Math.round(weaveInks)) }, (_, k) => [
+              bandLayerName(k),
+              0,
+            ])
+          )
+        : undefined,
   });
 
-  if (optimize) result = optimizePlot(result);
+  // Chaining could hairpin-join adjacent same-ink rulings where the weave's
+  // swell/separation squeeze them, so cap the merge tolerance by the pitch.
+  if (optimize) {
+    result = optimizePlot(
+      result,
+      style === 'weave' ? { mergeTolerance: Math.min(1.5, weavePitch * 0.4) } : undefined
+    );
+  }
 
   // The framing rule is no longer drawn here — the shared page border (see the
   // frame/page controls) draws it for every module. Conway still reserves the

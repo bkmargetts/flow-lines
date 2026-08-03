@@ -87,7 +87,7 @@ const PLANET_PRESETS = {
   sketch: ['--type', 'terrestrial', '--sea-level', '0.1', '--ice-caps', '--sketch', '0.5', '--sketch-style', 'loose', '--palette', 'astronomical'],
 };
 
-const CONWAY_STYLES = ['marks', 'contour', 'streaks', 'slipstream', 'embers'];
+const CONWAY_STYLES = ['marks', 'contour', 'streaks', 'slipstream', 'embers', 'weave'];
 const LANDSCAPE_SCENES = ['coastal-sunset', 'misty-ranges', 'rolling-hills', 'desert-dunes', 'alpine-lake'];
 
 /** name → argv (without -o). */

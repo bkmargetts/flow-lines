@@ -1,5 +1,5 @@
 import { InfoTip } from '../../components/InfoTip';
-import { ColorField } from '../../components/ColorField';
+import { ColorField, PalettePicker } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { RandomiseButton } from '../../components/controls/RandomiseButton';
 import { SeedControl } from '../../components/controls/SeedControl';
@@ -14,6 +14,7 @@ const CONWAY_STYLES: ConwayState['style'][] = [
   'streaks',
   'slipstream',
   'embers',
+  'weave',
 ];
 
 /** Roll a whole new exposure — style, run length, fade tiers and the art
@@ -46,6 +47,13 @@ export function randomConwayGenome(rng: () => number): Partial<ConwayState> {
     valueBands: rng() < 0.25 ? 0 : 3 + Math.floor(rng() * 4),
     offCenter: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
     vignette: Number((0.05 * Math.floor(rng() * 15)).toFixed(2)),
+    weavePitchMm: Number((0.8 + 0.1 * Math.floor(rng() * 13)).toFixed(1)),
+    weaveAngle: 15 * Math.floor(rng() * 13),
+    weaveSeparation: Number((0.1 + 0.05 * Math.floor(rng() * 15)).toFixed(2)),
+    weaveVernier: Number((0.01 * Math.floor(rng() * 5)).toFixed(2)),
+    weaveBend: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
+    weavePitchSwell: Number((-0.6 + 0.1 * Math.floor(rng() * 13)).toFixed(1)),
+    weaveWobbleMm: Number((0.05 * Math.floor(rng() * 9)).toFixed(2)),
   };
 }
 
@@ -64,7 +72,7 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
         <label>
           <span className="label-text">
             Style
-            <InfoTip text="Marks: discrete per-cell strokes. Contour ridges: nested smooth contours of the light field — organic, topographic. Comet streaks: each glider's path traced as one continuous flowing line, the core left as soft contours. Slipstream: the whole exposure as evenly-spaced streamlines following the colony's motion, woven tight in the core and fanning into the tails. Embers: the trails as stipple dots — dense comet heads scattering off into sparse sparks." />
+            <InfoTip text="Marks: discrete per-cell strokes. Contour ridges: nested smooth contours of the light field — organic, topographic. Comet streaks: each glider's path traced as one continuous flowing line, the core left as soft contours. Slipstream: the whole exposure as evenly-spaced streamlines following the colony's motion, woven tight in the core and fanning into the tails. Embers: the trails as stipple dots — dense comet heads scattering off into sparse sparks. Weave: the whole sheet as a calm ruled multi-ink grating; the colonies leave a disturbed trail of interweaved ink — lines bend along the paths, the inks split and braid, spacing tightens." />
           </span>
         </label>
         <select
@@ -76,6 +84,7 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
           <option value="streaks">Comet streaks (organic)</option>
           <option value="slipstream">Slipstream (flow)</option>
           <option value="embers">Embers (stipple)</option>
+          <option value="weave">Weave (disturbed grating)</option>
         </select>
       </div>
 
@@ -153,6 +162,142 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
           step={1}
           onChange={(v) => updateState({ stippleDensity: v })}
         />
+      )}
+
+      {state.style === 'weave' && (
+        <>
+          <PalettePicker
+            palette={state.weavePalette}
+            customRamp={state.weaveCustomRamp}
+            colorCount={state.weaveInks}
+            onChange={(p) =>
+              updateState({
+                ...(p.palette !== undefined && { weavePalette: p.palette }),
+                ...(p.customRamp && { weaveCustomRamp: p.customRamp }),
+              })
+            }
+            info="Inks in the calm grating — each is its own pen layer (band-NN) for multi-pen plotting. In calm paper they sit almost perfectly registered; the trails split them apart."
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Inks
+                <InfoTip text="Pens in the grating — each plots as its own layer, alongside the present ink." />
+              </span>
+            }
+            value={state.weaveInks}
+            min={1}
+            max={4}
+            step={1}
+            onChange={(v) => updateState({ weaveInks: v })}
+          />
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={state.weaveBlend}
+              onChange={(e) => updateState({ weaveBlend: e.target.checked })}
+            />
+            Blend inks in preview (overprint)
+          </label>
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Line pitch
+                <InfoTip text="Gap between neighbouring rulings within one ink. Tighter darkens the calm field; wider leaves more paper between the lines." />
+              </span>
+            }
+            value={state.weavePitchMm}
+            min={0.6}
+            max={2}
+            step={0.1}
+            onChange={(v) => updateState({ weavePitchMm: v })}
+            format={(v) => `${v.toFixed(1)}mm`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Angle
+                <InfoTip text="Grating direction; 0 runs the rulings down the page." />
+              </span>
+            }
+            value={state.weaveAngle}
+            min={0}
+            max={180}
+            step={5}
+            onChange={(v) => updateState({ weaveAngle: v })}
+            format={(v) => `${v}°`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Ink separation
+                <InfoTip text="How far the inks split apart inside a trail, as a share of the pitch. In calm paper they always sit registered — this only opens up where colonies passed, so the trail shimmers with woven colour." />
+              </span>
+            }
+            value={Math.round(state.weaveSeparation * 100)}
+            min={0}
+            max={80}
+            step={5}
+            onChange={(v) => updateState({ weaveSeparation: v / 100 })}
+            format={(v) => `${v}%`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Vernier beat
+                <InfoTip text="A hair of per-ink pitch difference inside the trails, so the ink coincidence sweeps across the disturbance — the braided moiré. 0 keeps the split even." />
+              </span>
+            }
+            value={Math.round(state.weaveVernier * 100)}
+            min={0}
+            max={5}
+            step={1}
+            onChange={(v) => updateState({ weaveVernier: v / 100 })}
+            format={(v) => `${v}%`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Bend
+                <InfoTip text="How far the rulings swing toward the colony's direction of travel where it passed — lines follow the wake, then relax back to the calm angle." />
+              </span>
+            }
+            value={Math.round(state.weaveBend * 100)}
+            min={0}
+            max={100}
+            step={5}
+            onChange={(v) => updateState({ weaveBend: v / 100 })}
+            format={(v) => `${v}%`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Density swell
+                <InfoTip text="Positive pulls the rulings together over the trails so the spacing itself carries the tone; negative spreads them apart into an opened wake; 0 leaves spacing even everywhere." />
+              </span>
+            }
+            value={Math.round(state.weavePitchSwell * 100)}
+            min={-100}
+            max={100}
+            step={5}
+            onChange={(v) => updateState({ weavePitchSwell: v / 100 })}
+            format={(v) => `${v}%`}
+          />
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Trail wobble
+                <InfoTip text="Hand-shake that rises with exposure: the calm ruling stays drafted-straight, the disturbed trails get nervous, agitated linework." />
+              </span>
+            }
+            value={state.weaveWobbleMm}
+            min={0}
+            max={0.8}
+            step={0.05}
+            onChange={(v) => updateState({ weaveWobbleMm: v })}
+            format={(v) => `${v.toFixed(2)}mm`}
+          />
+        </>
       )}
 
       <h3 className="section-title">Exposure</h3>
@@ -238,18 +383,22 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
             onChange={(presentColor) => updateState({ presentColor })}
             info="Ink for the crisp present mass and the plate border — the darkest, most committed marks."
           />
-          <ColorField
-            label="Ghost ink"
-            value={state.ghostColor}
-            onChange={(ghostColor) => updateState({ ghostColor })}
-            info="Ink for the mid-tone ghosts — the recent history hatching."
-          />
-          <ColorField
-            label="Trail ink"
-            value={state.trailColor}
-            onChange={(trailColor) => updateState({ trailColor })}
-            info="Ink for the faint comet trails — the oldest, dimmest marks."
-          />
+          {state.style !== 'weave' && (
+            <>
+              <ColorField
+                label="Ghost ink"
+                value={state.ghostColor}
+                onChange={(ghostColor) => updateState({ ghostColor })}
+                info="Ink for the mid-tone ghosts — the recent history hatching."
+              />
+              <ColorField
+                label="Trail ink"
+                value={state.trailColor}
+                onChange={(trailColor) => updateState({ trailColor })}
+                info="Ink for the faint comet trails — the oldest, dimmest marks."
+              />
+            </>
+          )}
         </>
       ) : (
         <ColorField

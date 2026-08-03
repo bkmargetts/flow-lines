@@ -199,6 +199,8 @@ CASES['pen-ink/style-sumie/42'] = () =>
   imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('sumie') });
 CASES['conway/streaks/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'streaks' });
+CASES['conway/weave/42'] = () =>
+  generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'weave' });
 CASES['reaction-diffusion/coral/42'] = () =>
   generateReactionDiffusion({ width: 300, height: 400, seed: 42, preset: 'coral' });
 CASES['lenia/cells/42'] = () =>
