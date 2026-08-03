@@ -938,7 +938,7 @@ export function imageToPenInk(
   }
 
   if (options.optimize ?? true) {
-    result = optimizePlot(result);
+    result = optimizePlot(result, { order: options.order });
   }
 
   // Frame the content onto the full sheet: translate every mark into place and

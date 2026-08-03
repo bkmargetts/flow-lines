@@ -50,6 +50,9 @@ const PREVIEW_STATES: Record<string, Record<string, unknown>> = {
     ],
   },
   'reaction-diffusion': { preset: 'coral' },
+  // Thumbnail scale merges the default 0.8mm pitch into a solid mass — open
+  // the pitch so the braided inks read.
+  'ink-field': { pitchMm: 1.8, bandWidthMm: 42, misregisterMm: 0.5, seed: 7 },
   'tangles': { count: 6, radiusMinMm: 4, radiusMaxMm: 10, wander: 0.45 },
   lenia: { preset: 'cells', seedPattern: 'soup', seedSpots: 9, style: 'dual' },
   physarum: { preset: 'veins' },

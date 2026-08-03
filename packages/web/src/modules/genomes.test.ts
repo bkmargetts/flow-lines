@@ -12,6 +12,7 @@ import { randomRDGenome } from '../projects/reaction-diffusion/Controls';
 import { randomLeniaGenome } from '../projects/lenia/Controls';
 import { randomPhysarumGenome } from '../projects/physarum/Controls';
 import { randomColorFieldGenome } from '../projects/color-field/Controls';
+import { randomInkFieldGenome } from '../projects/ink-field/Controls';
 import { randomStickmenGenome } from '../projects/stickmen/Controls';
 import { randomSportsBallsGenome } from '../projects/sports-balls/Controls';
 import { randomHeartsGenome } from '../projects/hearts/Controls';
@@ -520,6 +521,45 @@ const SPECS: GenomeSpec[] = [
       'accents',
       'minSegmentLengthMm',
       'wobbleWavelengthMm',
+      'penWidthMm',
+    ],
+  },
+  {
+    name: 'ink-field',
+    genome: randomInkFieldGenome,
+    bounds: {
+      pitchMm: [0.4, 2],
+      angleDeg: [0, 180],
+      inkPhase: [0, 0.8],
+      inkPitchDelta: [0, 0.08],
+      phaseDrift: [0, 3],
+      misregisterMm: [0, 1],
+      wobbleAmpMm: [0, 0.3],
+      bandWidthMm: [10, 70],
+      ribbonSegments: [2, 8],
+      planeCount: [0, 4],
+      insetPatches: [0, 2],
+      baseDensity: [0.1, 0.8],
+      planeDensity: [0.5, 1],
+      stripeCount: [2, 16],
+      stripeSoftness: [0.1, 0.8],
+      blockDuty: [0.3, 0.7],
+    },
+    ints: ['ribbonSegments', 'planeCount', 'insetPatches', 'stripeCount', 'bandWidthMm'],
+    bools: ['stripeBlocks'],
+    enums: { style: ['ribbon', 'lattice', 'stripes'] },
+    forbidden: [
+      'seed',
+      'palette',
+      'customRamp',
+      'colorCount',
+      'blendInks',
+      'penTests',
+      'wearOrder',
+      'wearAngleDeg',
+      'minSegmentLengthMm',
+      'wobbleWavelengthMm',
+      'jitterMm',
       'penWidthMm',
     ],
   },

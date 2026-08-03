@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getPaperSize, pageMetrics } from '@flow-lines/core';
-import { composite, type CompositeLayer } from './composite';
+import { composite, compositeLayers, type CompositeLayer } from './composite';
 import { defaultFrame } from '../FrameContext';
 import { getModule } from '../modules/registry';
 import type { PureModule } from '../modules/types';
@@ -175,6 +175,77 @@ describe('composite', () => {
       layer(top),
     ]);
     expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(2);
+  });
+
+  it('overprint layers never carve hold-off halos in layers beneath', () => {
+    // Same geometry as the hold-off split test, but the crossing top layer
+    // overprints — the bottom line must stay whole.
+    const top: PureModule<unknown> = {
+      kind: 'pure',
+      id: 'top',
+      label: 'top',
+      category: 'textures',
+      description: 'test fixture module for compositing',
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: [{ points: [{ x: 105, y: 0 }, { x: 105, y: 200 }], pen: 'fine' }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+      }),
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('bottom', '#ff0000', 100, 10, 200), { holdOffMm: 1.5 }),
+      layer(top, { overprint: true }),
+    ]);
+    const bottomFrags = result.result.lines.filter((l) => l.layer === 'L0/fine');
+    expect(bottomFrags.length).toBe(1);
+  });
+
+  it("ignores an overprint layer's own hold-off", () => {
+    // The bottom layer asks for a halo *and* overprint: overprint wins, so the
+    // crossing top layer doesn't split it.
+    const top: PureModule<unknown> = {
+      kind: 'pure',
+      id: 'top',
+      label: 'top',
+      category: 'textures',
+      description: 'test fixture module for compositing',
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: [{ points: [{ x: 105, y: 0 }, { x: 105, y: 200 }], pen: 'fine' }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+      }),
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('bottom', '#ff0000', 100, 10, 200), { holdOffMm: 1.5, overprint: true }),
+      layer(top),
+    ]);
+    expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(1);
+  });
+
+  it('previews overprint layers with multiply blend, but never in per-pen files', () => {
+    const stack = [
+      layer(stripe('a', '#ff0000', 20)),
+      layer(stripe('b', '#00ff00', 40), { overprint: true }),
+    ];
+    const on = composite({ ...defaultFrame }, page, stack);
+    expect(on.exportSvg).toContain('mix-blend-mode:multiply');
+    // Only the overprint layer's pen blends.
+    expect(on.svgOptions.layerBlend?.['L1/fine']).toBe('multiply');
+    expect(on.svgOptions.layerBlend?.['L0/fine']).toBeUndefined();
+    // Per-pen plotter files stay unstyled.
+    for (const { svg } of compositeLayers(on)) {
+      expect(svg).not.toContain('mix-blend-mode');
+    }
+
+    const off = composite({ ...defaultFrame }, page, [
+      layer(stripe('a', '#ff0000', 20)),
+      layer(stripe('b', '#00ff00', 40)),
+    ]);
+    expect(off.exportSvg).not.toContain('mix-blend-mode');
   });
 
   it('is a clean empty sheet when there are no visible layers', () => {

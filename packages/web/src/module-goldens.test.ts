@@ -46,6 +46,7 @@ for (const mod of pureModules) {
 
 const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   tangles: { material: 'lace' },
+  'ink-field': { style: 'lattice' },
   'impact-grid': {
     // A fixed synthetic strike (page px for the A4 × 1.5 test frame) so the
     // crush/shatter/fill code path is pinned, not just the pristine grid.

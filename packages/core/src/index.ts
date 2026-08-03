@@ -17,6 +17,8 @@ export type { OverlappedLinesOptions, MaskShape } from './overlapped-lines.js';
 // Colour-field texture (dense banded gradient lines + geometric accents)
 export { generateColorField, accentLayerName } from './color-field.js';
 export type { ColorFieldOptions, AccentSpec } from './color-field.js';
+export { generateInkField } from './ink-field.js';
+export type { InkFieldOptions, InkFieldStyle } from './ink-field.js';
 
 // Conway's Game of Life long-exposure still
 export { generateConwayExposure } from './conway/index.js';
@@ -243,9 +245,10 @@ export type {
 export type { TextureRegionOptions } from './texture-region.js';
 
 // Plot optimization
-export { optimizePlot, measurePenTravel, limitStrokeDensity } from './optimize.js';
+export { optimizePlot, orderPlot, measurePenTravel, limitStrokeDensity } from './optimize.js';
 export type {
   OptimizePlotOptions,
+  PlotOrderOptions,
   DensityProtectOptions,
   DensityProtectResult,
 } from './optimize.js';

@@ -40,6 +40,10 @@ export interface CompositeLayer {
   /** Clean-paper sliver this layer reserves around the lines stacked above it,
    *  in mm. 0 = stacks independently (the default). */
   holdOffMm: number;
+  /** This layer's ink physically crosses the others: its pens preview with
+   *  multiply blend, it never carves hold-off halos in layers beneath it,
+   *  and its own `holdOffMm` is ignored. Default false. */
+  overprint?: boolean;
   /** Latest published output for live modules; ignored for pure modules. */
   liveOutput?: LayerOutput | null;
 }
@@ -91,7 +95,9 @@ export function composite(
 
   for (let i = stack.length - 1; i >= 0; i--) {
     const layer = stack[i];
-    const holdOff = layer.holdOffMm > 0;
+    // An overprinting ink crosses what's above it — trimming it against the
+    // foreground would contradict the toggle, so its own halo is ignored.
+    const holdOff = layer.holdOffMm > 0 && !layer.overprint;
     const haloPx = holdOff ? layer.holdOffMm * page.pxPerMm : undefined;
     let out: LayerOutput | null;
 
@@ -119,7 +125,11 @@ export function composite(
     }
 
     outputs[i] = out;
-    if (out && out.lines.length) avoidAccum = avoidAccum.concat(out.lines);
+    // Overprint layers never join the avoid union: layers beneath must not
+    // reserve paper around an ink that's meant to cross them.
+    if (out && out.lines.length && !layer.overprint) {
+      avoidAccum = avoidAccum.concat(out.lines);
+    }
   }
 
   // ---- 2. Assemble bottom→top, namespacing pen-layer keys per stack slot ----
@@ -139,7 +149,11 @@ export function composite(
       if (!(nsKey in layerColors)) {
         layerColors[nsKey] = out.layerColors?.[key] ?? out.strokeColor;
         layerWidths[nsKey] = out.strokeWidthPx;
-        const blend = out.layerBlend?.[key];
+        // Overprint forces multiply on every pen of the layer (crossing inks
+        // physically mix); otherwise the module's own blend declaration wins.
+        // Density protection needs no overprint handling: coverage grids are
+        // per namespaced pen layer, so one layer can never thin another.
+        const blend = stack[i].overprint ? 'multiply' : out.layerBlend?.[key];
         if (blend) layerBlend[nsKey] = blend;
       }
     }

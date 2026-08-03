@@ -23,6 +23,7 @@ import { physarumModule } from '../projects/physarum';
 import { fractureModule } from '../projects/fracture';
 import { noiseTextureModule } from '../projects/noise-texture';
 import { colorFieldModule } from '../projects/color-field';
+import { inkFieldModule } from '../projects/ink-field';
 import { marblingModule } from '../projects/marbling';
 import { meanderModule } from '../projects/meander';
 import { coralModule } from '../projects/coral';
@@ -61,6 +62,7 @@ export const MODULES: Module<any>[] = [
   fractureModule,
   noiseTextureModule,
   colorFieldModule,
+  inkFieldModule,
   marblingModule,
   meanderModule,
   coralModule,

@@ -113,6 +113,13 @@ export function registerImage(program: Command) {
     .option('--outline-passes <number>', 'Single-pen passes used to build bold outlines (1-4)', '2')
     .option('--no-optimize', 'Skip stroke chaining and pen-travel ordering')
     .option(
+      '--plot-order <mode>',
+      'Plot order as a wear gradient: travel | sweep | center-out | center-in ' +
+        '(pen wear follows stroke order; non-travel modes trade pen travel for a composed gradient)',
+      'travel'
+    )
+    .option('--plot-order-angle <deg>', 'Sweep direction; 0 plots top→bottom', '0')
+    .option(
       '--density-max-passes <number>',
       'Pen-plotting density protection: trim runs where lines coalesce and re-ink the same path once a patch has taken this many passes; crossings kept (omit = off, 1 = ink each path once)'
     )
@@ -233,6 +240,18 @@ export function registerImage(program: Command) {
         depthIsolation: parseFloat(options.depthIsolation),
         outlinePasses: parseInt(options.outlinePasses, 10),
         optimize: options.optimize,
+        order:
+          options.plotOrder && options.plotOrder !== 'travel'
+            ? {
+                mode:
+                  options.plotOrder === 'center-out'
+                    ? ('centerOut' as const)
+                    : options.plotOrder === 'center-in'
+                      ? ('centerIn' as const)
+                      : ('sweep' as const),
+                angleDeg: parseFloat(options.plotOrderAngle),
+              }
+            : undefined,
         autoStyle: options.autoStyle ?? false,
         seed: options.seed ? parseInt(options.seed, 10) : undefined,
         // With a sheet the page border is the margin; the photo fills its content rect

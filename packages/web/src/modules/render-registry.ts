@@ -19,6 +19,7 @@ import { renderPhysarum } from '../projects/physarum/render';
 import { renderFracture } from '../projects/fracture/render';
 import { renderNoiseTexture } from '../projects/noise-texture/render';
 import { renderColorField } from '../projects/color-field/render';
+import { renderInkField } from '../projects/ink-field/render';
 import { renderMarbling } from '../projects/marbling/render';
 import { renderMeander } from '../projects/meander/render';
 import { renderCoral } from '../projects/coral/render';
@@ -72,6 +73,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   fracture: entry(renderFracture),
   'noise-texture': entry(renderNoiseTexture),
   'color-field': entry(renderColorField),
+  'ink-field': entry(renderInkField),
   marbling: entry(renderMarbling),
   meander: entry(renderMeander),
   coral: entry(renderCoral),

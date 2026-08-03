@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { generateFlowLines, generateFlowLinesGrid, generateFlowLinesEven } from './flow-lines.js';
 import { generateOverlappedLines } from './overlapped-lines.js';
 import { generateColorField } from './color-field.js';
+import { generateInkField } from './ink-field.js';
 import { generateConwayExposure } from './conway/index.js';
 import { generateReactionDiffusion } from './reaction-diffusion.js';
 import { generateLenia } from './lenia.js';
@@ -134,6 +135,14 @@ for (const seed of SEEDS) {
   CASES[`overlapped-lines/${seed}`] = () =>
     generateOverlappedLines({ width: 300, height: 400, seed });
   CASES[`color-field/${seed}`] = () => generateColorField({ width: 300, height: 400, seed });
+  CASES[`ink-field/ribbon/${seed}`] = () =>
+    generateInkField({ width: 300, height: 400, margin: 15, seed });
+  CASES[`ink-field/lattice/${seed}`] = () =>
+    generateInkField({ width: 300, height: 400, margin: 15, style: 'lattice', seed });
+  CASES[`ink-field/stripes/${seed}`] = () =>
+    generateInkField({ width: 300, height: 400, margin: 15, style: 'stripes', seed });
+  CASES[`ink-field/ribbon/wear/${seed}`] = () =>
+    generateInkField({ width: 300, height: 400, margin: 15, wearOrder: 'sweep', seed });
   CASES[`conway/marks/${seed}`] = () =>
     generateConwayExposure({ width: 300, height: 400, seed });
   CASES[`reaction-diffusion/${seed}`] = () =>
@@ -603,6 +612,10 @@ CASES['overlapped-lines/blob/42'] = () =>
 // Post-processing stages, applied to a fixed base drawing.
 CASES['optimize/flow-lines/42'] = () =>
   optimizePlot(generateFlowLines({ width: 300, height: 400, lineCount: 40, seed: 42 }));
+CASES['optimize/sweep/42'] = () =>
+  optimizePlot(generateFlowLines({ width: 300, height: 400, lineCount: 40, seed: 42 }), {
+    order: { mode: 'sweep', angleDeg: 30 },
+  });
 CASES['hand-drawn/flow-lines/42'] = () =>
   applyHandDrawnStyle(generateFlowLines({ width: 300, height: 400, lineCount: 40, seed: 42 }));
 CASES['page-border/rounded'] = () =>
