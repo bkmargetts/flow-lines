@@ -345,9 +345,13 @@ const SPECS: GenomeSpec[] = [
       weaveBend: [0, 1],
       weavePitchSwell: [-1, 1],
       weaveWobbleMm: [0, 0.8],
+      weaveCoverage: [0, 1],
     },
     ints: ['seedCount', 'generations', 'residueMaxCells', 'contourLevels', 'stippleDensity', 'valueBands', 'weaveAngle'],
-    enums: { style: ['marks', 'contour', 'streaks', 'slipstream', 'embers', 'weave'] },
+    enums: {
+      style: ['marks', 'contour', 'streaks', 'slipstream', 'embers', 'weave'],
+      weaveForm: ['grating', 'rings'],
+    },
     forbidden: [
       'seed',
       'artStyle',

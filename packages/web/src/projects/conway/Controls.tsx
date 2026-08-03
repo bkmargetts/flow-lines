@@ -54,6 +54,8 @@ export function randomConwayGenome(rng: () => number): Partial<ConwayState> {
     weaveBend: Number((0.05 * Math.floor(rng() * 21)).toFixed(2)),
     weavePitchSwell: Number((-0.6 + 0.1 * Math.floor(rng() * 13)).toFixed(1)),
     weaveWobbleMm: Number((0.05 * Math.floor(rng() * 9)).toFixed(2)),
+    weaveCoverage: Number((0.15 + 0.05 * Math.floor(rng() * 18)).toFixed(2)),
+    weaveForm: rng() < 0.5 ? ('rings' as const) : ('grating' as const),
   };
 }
 
@@ -72,7 +74,7 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
         <label>
           <span className="label-text">
             Style
-            <InfoTip text="Marks: discrete per-cell strokes. Contour ridges: nested smooth contours of the light field — organic, topographic. Comet streaks: each glider's path traced as one continuous flowing line, the core left as soft contours. Slipstream: the whole exposure as evenly-spaced streamlines following the colony's motion, woven tight in the core and fanning into the tails. Embers: the trails as stipple dots — dense comet heads scattering off into sparse sparks. Weave: the whole sheet as a calm ruled multi-ink grating; the colonies leave a disturbed trail of interweaved ink — lines bend along the paths, the inks split and braid, spacing tightens." />
+            <InfoTip text="Marks: discrete per-cell strokes. Contour ridges: nested smooth contours of the light field — organic, topographic. Comet streaks: each glider's path traced as one continuous flowing line, the core left as soft contours. Slipstream: the whole exposure as evenly-spaced streamlines following the colony's motion, woven tight in the core and fanning into the tails. Embers: the trails as stipple dots — dense comet heads scattering off into sparse sparks. Weave: a calm ruled multi-ink field the colonies disturb — organic ripple rings (or bent rulings) spread from the trails, the inks splitting and braiding through them, with the calm field held airy so the drawing builds from white space." />
           </span>
         </label>
         <select
@@ -115,12 +117,12 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
         format={(v) => `${v.toFixed(1)}mm`}
       />
 
-      {state.style === 'contour' && (
+      {(state.style === 'contour' || (state.style === 'weave' && state.weaveForm === 'rings')) && (
         <Slider
           labelNode={
             <span className="label-text">
               Contour levels
-              <InfoTip text="How many nested iso-contours trace the light field. More levels give a finer tonal gradient (denser shading); fewer give bold, sparse rings." />
+              <InfoTip text="How many nested iso-contours trace the light field. More levels give a finer tonal gradient (denser shading); fewer give bold, sparse rings. In the weave's ripple-rings form this sets the ring density (two ripples per level)." />
             </span>
           }
           value={state.contourLevels}
@@ -166,6 +168,35 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
 
       {state.style === 'weave' && (
         <>
+          <div className="control-group">
+            <label>
+              <span className="label-text">
+                Form
+                <InfoTip text="Ripple rings: the calm ruling stays drafted-straight and thins out under nested organic ripple loops spreading from the trails — the inks split and braid along each ring. Bent grating: the rulings themselves bend along the colony paths and converge over the trails." />
+              </span>
+            </label>
+            <select
+              value={state.weaveForm}
+              onChange={(e) => updateState({ weaveForm: e.target.value as ConwayState['weaveForm'] })}
+            >
+              <option value="rings">Ripple rings (organic)</option>
+              <option value="grating">Bent grating (linear)</option>
+            </select>
+          </div>
+          <Slider
+            labelNode={
+              <span className="label-text">
+                Field coverage
+                <InfoTip text="How much of the calm ruling is inked. 100% is the full grating; lower keeps an evenly-spaced airy subset and lets the trails recruit the missing lines locally — at 0 the drawing builds up entirely from white space." />
+              </span>
+            }
+            value={Math.round(state.weaveCoverage * 100)}
+            min={0}
+            max={100}
+            step={5}
+            onChange={(v) => updateState({ weaveCoverage: v / 100 })}
+            format={(v) => `${v}%`}
+          />
           <PalettePicker
             palette={state.weavePalette}
             customRamp={state.weaveCustomRamp}
@@ -255,34 +286,38 @@ export function ConwayControls({ state, update }: ControlsProps<ConwayState>) {
             onChange={(v) => updateState({ weaveVernier: v / 100 })}
             format={(v) => `${v}%`}
           />
-          <Slider
-            labelNode={
-              <span className="label-text">
-                Bend
-                <InfoTip text="How far the rulings swing toward the colony's direction of travel where it passed — lines follow the wake, then relax back to the calm angle." />
-              </span>
-            }
-            value={Math.round(state.weaveBend * 100)}
-            min={0}
-            max={100}
-            step={5}
-            onChange={(v) => updateState({ weaveBend: v / 100 })}
-            format={(v) => `${v}%`}
-          />
-          <Slider
-            labelNode={
-              <span className="label-text">
-                Density swell
-                <InfoTip text="Positive pulls the rulings together over the trails so the spacing itself carries the tone; negative spreads them apart into an opened wake; 0 leaves spacing even everywhere." />
-              </span>
-            }
-            value={Math.round(state.weavePitchSwell * 100)}
-            min={-100}
-            max={100}
-            step={5}
-            onChange={(v) => updateState({ weavePitchSwell: v / 100 })}
-            format={(v) => `${v}%`}
-          />
+          {state.weaveForm === 'grating' && (
+            <>
+              <Slider
+                labelNode={
+                  <span className="label-text">
+                    Bend
+                    <InfoTip text="How far the rulings swing toward the colony's direction of travel where it passed — lines follow the wake, then relax back to the calm angle." />
+                  </span>
+                }
+                value={Math.round(state.weaveBend * 100)}
+                min={0}
+                max={100}
+                step={5}
+                onChange={(v) => updateState({ weaveBend: v / 100 })}
+                format={(v) => `${v}%`}
+              />
+              <Slider
+                labelNode={
+                  <span className="label-text">
+                    Density swell
+                    <InfoTip text="Positive pulls the rulings together over the trails so the spacing itself carries the tone; negative spreads them apart into an opened wake; 0 leaves spacing even everywhere." />
+                  </span>
+                }
+                value={Math.round(state.weavePitchSwell * 100)}
+                min={-100}
+                max={100}
+                step={5}
+                onChange={(v) => updateState({ weavePitchSwell: v / 100 })}
+                format={(v) => `${v}%`}
+              />
+            </>
+          )}
           <Slider
             labelNode={
               <span className="label-text">

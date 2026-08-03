@@ -201,6 +201,8 @@ CASES['conway/streaks/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'streaks' });
 CASES['conway/weave/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'weave' });
+CASES['conway/weave-grating/42'] = () =>
+  generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'weave', weaveForm: 'grating' });
 CASES['reaction-diffusion/coral/42'] = () =>
   generateReactionDiffusion({ width: 300, height: 400, seed: 42, preset: 'coral' });
 CASES['lenia/cells/42'] = () =>

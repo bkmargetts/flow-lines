@@ -43,6 +43,8 @@ export function registerConway(program: Command) {
     .option('--weave-bend <number>', 'Weave: ruling swing toward trail motion at full exposure (0-1)', '0.7')
     .option('--weave-pitch-swell <number>', 'Weave: signed density swell; >0 tightens spacing on trails', '0.5')
     .option('--weave-wobble <number>', 'Weave: wobble amplitude at full exposure in px (default ~cell*0.35)')
+    .option('--weave-coverage <number>', 'Weave: fraction of the calm ruling drawn; 1 = full grating, lower breathes and recruits lines where trails pass', '0.4')
+    .option('--weave-form <form>', 'Weave: rings (ripple loops of the exposure tone; --contour-levels sets ring count) | grating (bent rulings)', 'rings')
     .option(
       '--split-layers',
       'Write one SVG per layer for multi-pen plotting, named <output>.<layer>.svg (present/ghost/trail; the weave style emits band-00..band-NN + present)'
@@ -98,6 +100,8 @@ export function registerConway(program: Command) {
         weaveBend: parseFloat(options.weaveBend),
         weavePitchSwell: parseFloat(options.weavePitchSwell),
         weaveWobble: options.weaveWobble ? parseFloat(options.weaveWobble) : undefined,
+        weaveCoverage: parseFloat(options.weaveCoverage),
+        weaveForm: options.weaveForm as 'grating' | 'rings',
         optimize: options.optimize,
       };
 

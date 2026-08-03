@@ -46,6 +46,8 @@ export function renderConway(state: ConwayState, env: RenderEnv): LayerOutput {
     weaveBend: state.weaveBend,
     weavePitchSwell: state.weavePitchSwell,
     weaveWobble: state.weaveWobbleMm * page.pxPerMm,
+    weaveCoverage: state.weaveCoverage,
+    weaveForm: state.weaveForm,
     artStyle: state.artStyle,
     massCore: state.massCore,
     hatchAngle: state.hatchAngle,

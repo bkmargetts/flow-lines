@@ -16,6 +16,7 @@ import {
   coreBoundaryPolylines,
   angledRegionHatch,
   blurredMotionField,
+  chamferDistanceCells,
 } from './render.js';
 import { renderWeave } from './weave.js';
 import { bandLayerName } from '../overlapped-lines.js';
@@ -164,6 +165,23 @@ export interface ConwayExposureOptions {
    * agitated trails.
    */
   weaveWobble?: number;
+  /**
+   * `weave`: fraction of the calm-paper ruling that is drawn, 0..1 (default
+   * 0.4). 1 is the full grating; lower keeps an evenly-spaced airy subset
+   * (golden-ratio stratified, so it never clumps) and recruits the missing
+   * rulings locally where the trails raise the tone — the drawing builds up
+   * from white space.
+   */
+  weaveCoverage?: number;
+  /**
+   * `weave`: how the disturbance renders (default 'rings'). 'grating' bends
+   * the rulings along the trails; 'rings' keeps the calm ruling
+   * drafted-straight (it dissolves out where tone rises) and renders the
+   * disturbance as nested ripple loops of the exposure tone (`contourLevels`
+   * sets the ring count), the inks splitting and braiding along each ring.
+   * `weaveBend`/`weavePitchSwell` act on the grating form only.
+   */
+  weaveForm?: 'grating' | 'rings';
   /** Chain strokes and order them to cut pen travel (default true) */
   optimize?: boolean;
 
@@ -249,6 +267,8 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     weaveVernier = 0.01,
     weaveBend = 0.7,
     weavePitchSwell = 0.5,
+    weaveCoverage = 0.4,
+    weaveForm = 'rings',
     optimize = true,
   } = options;
 
@@ -755,6 +775,26 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
     const { fx, fy } = blurredMotionField(sim.lastAlive, cols, rows, 1.5);
     const blurTone = gaussianBlur({ width: cols, height: rows, data: new Float32Array(tone) }, 1.5)
       .data;
+    // Reserved paper around the present at an exact, smooth radius: chamfer
+    // distance to the alive cells, lightly blurred so the silhouette's cell
+    // corners round off (blurring the distance field can never delete a
+    // one-cell still-life the way blurring the binary would).
+    const haloDist = gaussianBlur(
+      { width: cols, height: rows, data: chamferDistanceCells(sim.finalAlive, cols, rows) },
+      0.6
+    ).data;
+    // Ring iso levels: 2 rings per contour level across the faint..solid
+    // span (renderContour's range) — the trail skirts live in that band, so
+    // that's where nesting density buys visible ripples.
+    const ringLevelCount = Math.max(2, contourLevels) * 2;
+    const ringIsoLevels =
+      weaveForm === 'rings'
+        ? Array.from(
+            { length: ringLevelCount },
+            (_, k) =>
+              faintThreshold + (solidThreshold - faintThreshold) * ((k + 0.5) / ringLevelCount)
+          )
+        : [];
     lines.push(
       ...renderWeave({
         cols,
@@ -765,7 +805,8 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
         blurTone,
         flowX: fx,
         flowY: fy,
-        haloCells,
+        haloDist,
+        haloRadius,
         seed,
         vignette,
         inks: weaveInks,
@@ -776,6 +817,9 @@ export function generateConwayExposure(options: ConwayExposureOptions): FlowLine
         bend: weaveBend,
         pitchSwell: weavePitchSwell,
         wobble: weaveWobble,
+        coverage: weaveCoverage,
+        form: weaveForm,
+        ringIsoLevels,
       })
     );
   };

@@ -76,6 +76,47 @@ export function blurredMotionField(
   };
 }
 
+/**
+ * Two-pass chamfer distance transform: distance (in cell units, capped) from
+ * every cell to the nearest set cell of `mask`. Exact enough at any cluster
+ * size — unlike blur-of-binary iso tricks, a lone cell keeps its full-radius
+ * footprint — so a reserved-paper radius keeps its physical meaning. The cap
+ * keeps the field finite for a follow-up blur.
+ */
+export function chamferDistanceCells(mask: Uint8Array, cols: number, rows: number): Float32Array {
+  const DIST_CAP = 16;
+  const SQRT2 = Math.SQRT2;
+  const d = new Float32Array(cols * rows);
+  for (let i = 0; i < d.length; i++) d[i] = mask[i] ? 0 : DIST_CAP;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      let v = d[i];
+      if (x > 0) v = Math.min(v, d[i - 1] + 1);
+      if (y > 0) {
+        v = Math.min(v, d[i - cols] + 1);
+        if (x > 0) v = Math.min(v, d[i - cols - 1] + SQRT2);
+        if (x < cols - 1) v = Math.min(v, d[i - cols + 1] + SQRT2);
+      }
+      d[i] = Math.min(v, DIST_CAP);
+    }
+  }
+  for (let y = rows - 1; y >= 0; y--) {
+    for (let x = cols - 1; x >= 0; x--) {
+      const i = y * cols + x;
+      let v = d[i];
+      if (x < cols - 1) v = Math.min(v, d[i + 1] + 1);
+      if (y < rows - 1) {
+        v = Math.min(v, d[i + cols] + 1);
+        if (x < cols - 1) v = Math.min(v, d[i + cols + 1] + SQRT2);
+        if (x > 0) v = Math.min(v, d[i + cols - 1] + SQRT2);
+      }
+      d[i] = Math.min(v, DIST_CAP);
+    }
+  }
+  return d;
+}
+
 /** A unit vector whose angle varies smoothly with position via fBm noise. */
 export function noiseAngle(noise: SimplexNoise, x: number, y: number, freq: number): Point {
   const theta = Math.PI * noise.fbm(x * freq, y * freq, 2, 0.5, 2.2);

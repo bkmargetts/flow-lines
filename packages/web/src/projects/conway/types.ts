@@ -56,6 +56,10 @@ export interface ConwayState {
   weavePitchSwell: number;
   /** Weave: wobble amplitude at full exposure, mm */
   weaveWobbleMm: number;
+  /** Weave: fraction of the calm ruling drawn (0..1); lower breathes */
+  weaveCoverage: number;
+  /** Weave: disturbance form — bent rulings or ripple rings */
+  weaveForm: 'grating' | 'rings';
   strokeColor: string;
   /** Pen width in millimetres (plotted line weight) */
   penWidthMm: number;
@@ -118,6 +122,8 @@ export const defaultConwayState: ConwayState = {
   weaveBend: 0.7,
   weavePitchSwell: 0.5,
   weaveWobbleMm: 0.25,
+  weaveCoverage: 0.4,
+  weaveForm: 'rings',
   strokeColor: '#000000',
   penWidthMm: 0.3,
 
