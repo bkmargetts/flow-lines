@@ -255,4 +255,205 @@ describe('composite', () => {
     expect(result.result.lines.length).toBe(0);
     expect(result.exportSvg).toContain('</svg>');
   });
+
+  /** A module drawing a dense hatch block spanning x∈[80,160], y∈[80,160]. */
+  function block(id: string): PureModule<unknown> {
+    return {
+      kind: 'pure',
+      id,
+      label: id,
+      category: 'textures',
+      description: 'test fixture module for compositing',
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: Array.from({ length: 21 }, (_, i) => ({
+          points: [{ x: 80, y: 80 + i * 4 }, { x: 160, y: 80 + i * 4 }],
+          pen: 'fine' as const,
+        })),
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+      }),
+    };
+  }
+
+  const spanOf = (lines: { points: { x: number }[] }[]): [number, number] => {
+    const xs = lines.flatMap((l) => l.points.map((p) => p.x));
+    return [Math.min(...xs), Math.max(...xs)];
+  };
+
+  it('clips a layer inside another layer\'s shape', () => {
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('probe', '#ff0000', 120, 0, 400), {
+        clip: { sourceId: 'shape', mode: 'inside', growMm: 2, expandMm: 0, featherMm: 0 },
+      }),
+      layer(block('shape'), { instanceId: 'shape' }),
+    ]);
+    const probe = result.result.lines.filter((l) => l.layer === 'L0/fine');
+    expect(probe.length).toBe(1);
+    const [min, max] = spanOf(probe);
+    expect(min).toBeGreaterThan(40);
+    expect(max).toBeLessThan(200);
+  });
+
+  it('clips outside, keeping the flanking runs', () => {
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('probe', '#ff0000', 120, 0, 400), {
+        clip: { sourceId: 'shape', mode: 'outside', growMm: 2, expandMm: 0, featherMm: 0 },
+      }),
+      layer(block('shape'), { instanceId: 'shape' }),
+    ]);
+    const probe = result.result.lines.filter((l) => l.layer === 'L0/fine');
+    expect(probe.length).toBe(2);
+  });
+
+  it('resolves the clip source by instanceId regardless of stack order', () => {
+    // Shape below, probe above — the source needn't be stacked above.
+    const result = composite({ ...defaultFrame }, page, [
+      layer(block('shape'), { instanceId: 'shape' }),
+      layer(stripe('probe', '#ff0000', 120, 0, 400), {
+        clip: { sourceId: 'shape', mode: 'inside', growMm: 2, expandMm: 0, featherMm: 0 },
+      }),
+    ]);
+    const probe = result.result.lines.filter((l) => l.layer === 'L1/fine');
+    expect(probe.length).toBe(1);
+    expect(spanOf(probe)[1]).toBeLessThan(200);
+  });
+
+  it('leaves a layer unclipped when its source is hidden or missing', () => {
+    const hidden = composite({ ...defaultFrame }, page, [
+      layer(stripe('probe', '#ff0000', 120, 0, 400), {
+        clip: { sourceId: 'shape', mode: 'inside', growMm: 2, expandMm: 0, featherMm: 0 },
+      }),
+      layer(block('shape'), { instanceId: 'shape', visible: false }),
+    ]);
+    const probe = hidden.result.lines.filter((l) => l.layer === 'L0/fine');
+    expect(probe.length).toBe(1);
+    expect(spanOf(probe)).toEqual([0, 400]);
+
+    const missing = composite({ ...defaultFrame }, page, [
+      layer(stripe('probe', '#ff0000', 120, 0, 400), {
+        clip: { sourceId: 'gone', mode: 'inside', growMm: 2, expandMm: 0, featherMm: 0 },
+      }),
+    ]);
+    expect(spanOf(missing.result.lines.filter((l) => l.layer === 'L0/fine'))).toEqual([0, 400]);
+  });
+
+  it('ignores a self-referencing clip', () => {
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('probe', '#ff0000', 120, 0, 400), {
+        instanceId: 'probe',
+        clip: { sourceId: 'probe', mode: 'inside', growMm: 2, expandMm: 0, featherMm: 0 },
+      }),
+    ]);
+    expect(spanOf(result.result.lines.filter((l) => l.layer === 'L0/fine'))).toEqual([0, 400]);
+  });
+
+  it('translates a layer by its transform (mm → px)', () => {
+    const t = {
+      dxMm: 10, dyMm: 0, rotateDeg: 0, scale: 1,
+      echoCopies: 1, echoDxMm: 0, echoDyMm: 0, echoRotateDeg: 0, echoScale: 1,
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('a', '#ff0000', 20, 10, 200), { transform: t }),
+    ]);
+    const [min, max] = spanOf(result.result.lines.filter((l) => l.layer === 'L0/fine'));
+    expect(min).toBeCloseTo(10 + 10 * page.pxPerMm, 6);
+    expect(max).toBeCloseTo(200 + 10 * page.pxPerMm, 6);
+  });
+
+  it('echoes a layer into N copies on the same pen', () => {
+    const t = {
+      dxMm: 0, dyMm: 0, rotateDeg: 0, scale: 1,
+      echoCopies: 3, echoDxMm: 2, echoDyMm: 0, echoRotateDeg: 0, echoScale: 1,
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('a', '#ff0000', 20), { transform: t }),
+    ]);
+    const copies = result.result.lines.filter((l) => l.layer === 'L0/fine');
+    expect(copies.length).toBe(3);
+    const ys = new Set(copies.map((l) => l.points[0].y));
+    expect(ys.size).toBe(1); // dx-only echo keeps y
+  });
+
+  it('halo-exempt layers never carve halos in layers beneath', () => {
+    // Mirror of the overprint test: the crossing top layer is halo-exempt,
+    // so the holding-off bottom stripe stays whole.
+    const top: PureModule<unknown> = {
+      kind: 'pure',
+      id: 'top',
+      label: 'top',
+      category: 'textures',
+      description: 'test fixture module for compositing',
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: [{ points: [{ x: 105, y: 0 }, { x: 105, y: 200 }], pen: 'fine' }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+      }),
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      layer(stripe('bottom', '#ff0000', 100, 10, 200), { holdOffMm: 1.5 }),
+      layer(top, { haloExempt: true }),
+    ]);
+    expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(1);
+    // Unlike overprint, exemption doesn't force a multiply preview.
+    expect(result.svgOptions.layerBlend?.['L1/fine']).toBeUndefined();
+  });
+
+  it('emits a halo outline pen only while holding off', () => {
+    const on = composite({ ...defaultFrame }, page, [
+      layer(block('bottom'), { instanceId: 'bottom', holdOffMm: 2, haloOutline: true }),
+      layer(stripe('top', '#000', 120, 0, 400)),
+    ]);
+    const outline = on.result.lines.filter((l) => l.layer === 'L0/halo');
+    expect(outline.length).toBeGreaterThan(0);
+    // The outline inherits the layer's ink.
+    expect(on.svgOptions.layerColors?.['L0/halo']).toBe('#000');
+
+    const off = composite({ ...defaultFrame }, page, [
+      layer(block('bottom'), { instanceId: 'bottom', haloOutline: true }),
+      layer(stripe('top', '#000', 120, 0, 400)),
+    ]);
+    expect(off.result.lines.filter((l) => l.layer === 'L0/halo').length).toBe(0);
+  });
+
+  it('still trims a transformed consumesAvoid module (generic fallback)', () => {
+    // A consumesAvoid module that ignores env.avoid entirely: with a
+    // transform active it must NOT be trusted to reserve the halo natively —
+    // the generic post-transform trim splits its line.
+    const texture: PureModule<unknown> = {
+      kind: 'pure',
+      id: 'tex',
+      label: 'tex',
+      category: 'textures',
+      description: 'test fixture module for compositing',
+      consumesAvoid: true,
+      defaultState: () => ({}),
+      Controls: () => null,
+      render: () => ({
+        lines: [{ points: [{ x: 10, y: 100 }, { x: 200, y: 100 }], pen: 'fine' }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+      }),
+    };
+    const t = {
+      dxMm: 1, dyMm: 0, rotateDeg: 0, scale: 1,
+      echoCopies: 1, echoDxMm: 0, echoDyMm: 0, echoRotateDeg: 0, echoScale: 1,
+    };
+    const cross: PureModule<unknown> = {
+      ...stripe('cross', '#000', 0),
+      render: () => ({
+        lines: [{ points: [{ x: 110, y: 0 }, { x: 110, y: 200 }], pen: 'fine' }],
+        strokeColor: '#000',
+        strokeWidthPx: 1,
+      }),
+    };
+    const result = composite({ ...defaultFrame }, page, [
+      layer(texture, { holdOffMm: 1.5, transform: t }),
+      layer(cross, { instanceId: 'cross' }),
+    ]);
+    expect(result.result.lines.filter((l) => l.layer === 'L0/fine').length).toBe(2);
+  });
 });
