@@ -20,6 +20,7 @@ import { registerTangles } from './commands/tangles.js';
 import { registerCoral } from './commands/coral.js';
 import { registerWarpGrid } from './commands/warp-grid.js';
 import { registerInkField } from './commands/ink-field.js';
+import { registerHarmonograph } from './commands/harmonograph.js';
 
 /**
  * The CLI surface had no real coverage: `cli.test.ts` imports
@@ -49,6 +50,7 @@ const REGISTRARS = [
   registerWarpGrid,
   registerTangles,
   registerInkField,
+  registerHarmonograph,
 ];
 
 const EXPECTED_COMMANDS = [
@@ -68,6 +70,7 @@ const EXPECTED_COMMANDS = [
   'warp-grid',
   'tangles',
   'ink-field',
+  'harmonograph',
 ];
 
 function buildProgram(): Command {
@@ -194,6 +197,9 @@ describe('running commands end to end', () => {
     ['ink-field ribbon', ['ink-field', ...SMALL]],
     ['ink-field lattice', ['ink-field', ...SMALL, '--style', 'lattice']],
     ['ink-field stripes', ['ink-field', ...SMALL, '--style', 'stripes', '--blocks']],
+    ['harmonograph pendulum', ['harmonograph', ...SMALL]],
+    ['harmonograph spiro', ['harmonograph', ...SMALL, '--preset', 'wheelwork', '--ink-groups', '2']],
+    ['harmonograph rosette', ['harmonograph', ...SMALL, '--preset', 'engine-turn']],
   ])('%s writes a well-formed SVG', async (_name, argv) => {
     const svg = await run(argv);
     expect(svg).toContain('<svg');

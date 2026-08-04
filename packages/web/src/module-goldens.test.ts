@@ -46,6 +46,22 @@ for (const mod of pureModules) {
 
 const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   tangles: { material: 'lace' },
+  harmonograph: {
+    // The full engine-turn recipe (what selectPreset applies) plus a second
+    // pen, so the rosette tracer and the ink-layer cycling are both pinned.
+    preset: 'engine-turn',
+    mode: 'rosette',
+    rings: 40,
+    waves: 24,
+    waveAmp: 0.5,
+    phaseAdvanceDeg: 7.5,
+    innerHole: 0.14,
+    waves2: 6,
+    wave2Amp: 0.25,
+    envelope: 'flat',
+    jitter: 0.05,
+    inkGroups: 2,
+  },
   'ink-field': { style: 'lattice' },
   'impact-grid': {
     // A fixed synthetic strike (page px for the A4 × 1.5 test frame) so the

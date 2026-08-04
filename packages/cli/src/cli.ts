@@ -17,6 +17,7 @@ import { registerTangles } from './commands/tangles.js';
 import { registerCoral } from './commands/coral.js';
 import { registerWarpGrid } from './commands/warp-grid.js';
 import { registerInkField } from './commands/ink-field.js';
+import { registerHarmonograph } from './commands/harmonograph.js';
 
 const program = new Command();
 
@@ -43,5 +44,6 @@ registerTangles(program);
 registerCoral(program);
 registerWarpGrid(program);
 registerInkField(program);
+registerHarmonograph(program);
 
 program.parse();

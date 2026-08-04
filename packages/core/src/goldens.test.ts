@@ -24,6 +24,7 @@ import { generateImpactGrid } from './impact-grid/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateTangles } from './tangles/index.js';
 import { generateMarbling } from './marbling/index.js';
+import { generateHarmonograph } from './harmonograph/index.js';
 import { generateMeander } from './meander/index.js';
 import { generateCoral } from './coral/index.js';
 import { generateWarpGrid } from './warp-grid/index.js';
@@ -175,6 +176,8 @@ for (const seed of SEEDS) {
     generateGesture({ width: 300, height: 400, margin: 20, seed });
   CASES[`marbling/nonpareil/${seed}`] = () =>
     generateMarbling({ width: 300, height: 400, margin: 20, seed });
+  CASES[`harmonograph/pendulum/${seed}`] = () =>
+    generateHarmonograph({ width: 300, height: 400, margin: 20, seed });
   CASES[`meander/atlas/${seed}`] = () =>
     generateMeander({ width: 300, height: 400, margin: 20, seed });
   CASES[`coral/reef/${seed}`] = () =>
@@ -287,6 +290,18 @@ CASES['coral/maze/42'] = () =>
     iterations: 300,
     maxNodes: 1500,
   });
+CASES['harmonograph/lissajous/42'] = () =>
+  generateHarmonograph({ width: 300, height: 400, margin: 20, seed: 42, preset: 'lissajous' });
+CASES['harmonograph/rotary/42'] = () =>
+  generateHarmonograph({ width: 300, height: 400, margin: 20, seed: 42, preset: 'rotary' });
+CASES['harmonograph/spiro/42'] = () =>
+  generateHarmonograph({ width: 300, height: 400, margin: 20, seed: 42, preset: 'spiro' });
+CASES['harmonograph/wheelwork/42'] = () =>
+  generateHarmonograph({ width: 300, height: 400, margin: 20, seed: 42, preset: 'wheelwork', inkGroups: 2 });
+CASES['harmonograph/rosette/42'] = () =>
+  generateHarmonograph({ width: 300, height: 400, margin: 20, seed: 42, preset: 'rosette' });
+CASES['harmonograph/engine-turn/42'] = () =>
+  generateHarmonograph({ width: 300, height: 400, margin: 20, seed: 42, preset: 'engine-turn', inkGroups: 3 });
 CASES['warp-grid/current/42'] = () =>
   generateWarpGrid({ width: 300, height: 400, margin: 20, seed: 42, preset: 'current' });
 CASES['warp-grid/relief/42'] = () =>

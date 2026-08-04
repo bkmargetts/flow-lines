@@ -222,6 +222,20 @@ export type { MachineOptions } from './machine/index.js';
 export { generateMarbling, inkLayerName, MARBLING_PRESETS } from './marbling/index.js';
 export type { MarblingOptions, MarblingPattern } from './marbling/index.js';
 
+// Harmonograph / guilloché (damped pendulums, spirograph wheels, engine turning)
+export {
+  generateHarmonograph,
+  harmonographLayerName,
+  HARMONOGRAPH_PRESETS,
+} from './harmonograph/index.js';
+export type {
+  HarmonographOptions,
+  HarmonographMode,
+  HarmonographPreset,
+  TrochoidKind,
+  RosetteEnvelope,
+} from './harmonograph/index.js';
+
 // Portrait-aware rendering
 export type { PortraitOptions } from './portrait.js';
 
