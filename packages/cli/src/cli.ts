@@ -18,6 +18,7 @@ import { registerCoral } from './commands/coral.js';
 import { registerWarpGrid } from './commands/warp-grid.js';
 import { registerInkField } from './commands/ink-field.js';
 import { registerHarmonograph } from './commands/harmonograph.js';
+import { registerStack } from './commands/stack.js';
 
 const program = new Command();
 
@@ -45,5 +46,6 @@ registerCoral(program);
 registerWarpGrid(program);
 registerInkField(program);
 registerHarmonograph(program);
+registerStack(program);
 
 program.parse();

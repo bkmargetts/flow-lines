@@ -219,10 +219,74 @@ Run `flow-lines <command> --help` for the full, authoritative flag list.
 | `warp-grid` | Op-art gratings deformed by hidden relief |
 | `tangles` | Corrugated ducts or shoelaces weaving over and under |
 | `harmonograph` | Harmonograph, spirograph and guilloché curve machines |
+| `stack` | A multi-layer composite described by a JSON recipe |
 
-Several generators are currently reachable only from the web app — Reaction–
-Diffusion, Lenia, Physarum, Colour Field, City, Stick Men, Sports Balls, Hearts,
-Ribbon Weave and Complex Flow have no CLI command yet.
+Several generators are currently reachable only from the web app's controls —
+Reaction–Diffusion, Lenia, Physarum, Colour Field, City, Stick Men, Sports
+Balls, Hearts, Ribbon Weave and Complex Flow have no dedicated CLI command —
+but every one of them can be rendered as a `stack` layer.
+
+### Layer stacks (`flow-lines stack`)
+
+`stack` is the CLI counterpart of the web app's layer panel: a JSON recipe
+lists layers bottom → top, each a core generator with its own options, ink and
+pen, plus the layer-combination controls — clean-paper hold-off halos,
+overprint, stencil clips (render a layer only inside or outside another
+layer's shape), page-space transforms and echo copies, halo-gap outlines, and
+halo exemption. Output supports `--split-layers` (one registered SVG per pen)
+and the full tiling/crosses flag set.
+
+```bash
+flow-lines stack recipe.json -o out.svg --split-layers
+```
+
+```jsonc
+{
+  "version": 1,
+  "page": { "paper": "a4", "orientation": "portrait", "resolution": 3, "marginMm": 12 },
+  "border": { "insetMm": 0 },
+  "layers": [
+    {
+      // Background hatch, held a clean sliver off everything above it,
+      // and only drawn inside the coral mass's silhouette.
+      "generator": "texture",
+      "options": { "seed": 5, "style": "hatch", "spacingMm": 3.2, "angleDeg": 30 },
+      "color": "#b34700",
+      "holdOffMm": 1.5,
+      "haloOutline": true,
+      "clip": { "source": "organism", "mode": "inside", "growMm": 4, "featherMm": 1 }
+    },
+    {
+      "id": "organism",
+      "generator": "coral",
+      "options": { "seed": 12, "preset": "reef" },
+      "color": "#1c2f4a",
+      "echo": { "copies": 2, "dxMm": 0.8, "dyMm": 0.6 }
+    }
+  ]
+}
+```
+
+Recipe notes:
+
+- `layers[].generator` names a core generator (`flow-lines stack` with an
+  unknown name lists every valid one); `layers[].options` is that generator's
+  own option object — `width`/`height` always come from the page, `margin`
+  defaults to the page margin, and a missing `seed` defaults to a stable
+  per-layer value so recipes reproduce byte-identically.
+- `clip.source` is another layer's `id` (or 0-based index); `mode` keeps ink
+  `inside` or `outside` that layer's silhouette, `growMm` sets how far apart
+  strokes still merge into one mass, `expandMm` insets/outsets the shape and
+  `featherMm` lets the cut edge wander organically.
+- `transform` (`dxMm`/`dyMm`/`rotateDeg`/`scale`) moves a layer's finished
+  lines about the page centre; `echo` repeats them with compounding per-copy
+  deltas (misregistration, drop shadows, radial repeats).
+- `holdOffMm` reserves clean paper around every layer stacked above (set
+  `haloOutline` to trace the gap's edge as a light stroke); `overprint`
+  crosses inks instead; `haloExempt` keeps lower layers from reserving paper
+  around this layer without the overprint blend.
+- Optional `border`, `sketch` (the hand-sketch finish) and `density`
+  (stroke-density protection) blocks mirror the web app's frame controls.
 
 ## Development
 

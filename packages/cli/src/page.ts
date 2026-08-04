@@ -80,6 +80,14 @@ export function resolvePageFrame(options: {
   return { width, height, marginPx, paperSvg, paperStrokeWidth, page, marginMm };
 }
 
+/** Layer keys become filename segments in --split-layers output; the stack
+ *  command's namespaced pens (`L0/fine`) carry a path separator, which must
+ *  not create directories. Historic layer names contain no slashes, so their
+ *  filenames are unchanged. */
+function safeLayerName(layer: string): string {
+  return layer.replace(/[/\\]/g, '-');
+}
+
 /** Flag values registered by addTileOptions. */
 export interface TileFlagValues {
   tile?: string;
@@ -179,7 +187,7 @@ export function writePlotOutput(
       const base = resolve(process.cwd(), options.output.replace(/\.svg$/i, ''));
       const layers = toSVGLayers(result, svgOptions);
       for (const { layer, svg } of layers) {
-        const layerPath = `${base}.${layer}.svg`;
+        const layerPath = `${base}.${safeLayerName(layer)}.svg`;
         writeFileSync(layerPath, svg, 'utf-8');
         console.log(`  Saved layer '${layer}' to: ${layerPath}`);
       }
@@ -239,7 +247,7 @@ export function writePlotOutput(
     };
     if (options.splitLayers) {
       for (const { layer, svg } of toSVGLayers(t.result, tileSvgOptions)) {
-        const layerPath = `${base}-${tileLabel(t.tile)}.${layer}.svg`;
+        const layerPath = `${base}-${tileLabel(t.tile)}.${safeLayerName(layer)}.svg`;
         writeFileSync(layerPath, svg, 'utf-8');
         console.log(`  Saved sheet ${tileLabel(t.tile)} layer '${layer}' to: ${layerPath}`);
       }
