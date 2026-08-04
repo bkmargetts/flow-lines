@@ -183,6 +183,63 @@ CASES['composite/stack'] = () => {
   return composite(borderFrame, page, layers).exportSvg;
 };
 
+// A stencil-clipped stack: the classic texture renders only inside the conway
+// layer's silhouette (grow + expand + feather at a fixed seed) while holding
+// off, with the halo-gap outline on — pins the coverage-mask clip path, the
+// domain-warp feather, and the traced outline through one hash.
+CASES['composite/clip'] = () => {
+  const byId = new Map(pureModules.map((m) => [m.id, m]));
+  const texture = byId.get('classic')!;
+  const conway = byId.get('conway')!;
+  const layers: CompositeLayer[] = [
+    {
+      instanceId: 'golden-clip-texture',
+      module: texture as Module,
+      state: stateFor(texture),
+      visible: true,
+      holdOffMm: 1.5,
+      haloOutline: true,
+      clip: { sourceId: 'golden-clip-conway', mode: 'inside', growMm: 3, expandMm: 2, featherMm: 1 },
+    },
+    {
+      instanceId: 'golden-clip-conway',
+      module: conway as Module,
+      state: stateFor(conway),
+      visible: true,
+      holdOffMm: 0,
+    },
+  ];
+  return composite(frame, page, layers).exportSvg;
+};
+
+// A transformed + echoed stack — pins the page-space transform math and the
+// compounding echo copies (same pens) through one hash.
+CASES['composite/transform'] = () => {
+  const byId = new Map(pureModules.map((m) => [m.id, m]));
+  const flow = byId.get('flow-field')!;
+  const layers: CompositeLayer[] = [
+    {
+      instanceId: 'golden-transform-flow',
+      module: flow as Module,
+      state: stateFor(flow),
+      visible: true,
+      holdOffMm: 0,
+      transform: {
+        dxMm: 6,
+        dyMm: -4,
+        rotateDeg: 12,
+        scale: 0.85,
+        echoCopies: 3,
+        echoDxMm: 1.5,
+        echoDyMm: 1,
+        echoRotateDeg: 2,
+        echoScale: 0.98,
+      },
+    },
+  ];
+  return composite(frame, page, layers).exportSvg;
+};
+
 // The same stack with the global hand-sketch finish on — pins the unified
 // sketch pass (breaks, overshoot, overdraw, steady border) at a fixed seed.
 CASES['composite/sketch'] = () => {

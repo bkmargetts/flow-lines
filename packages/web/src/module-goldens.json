@@ -52,5 +52,7 @@
   "classic/organic": "71afa36b9384283ac1178b58a1d6e1d33d4ecba0e1c1fae67ba682d12fc5459d",
   "grating/blob": "377d49a65d1070b494d9589c2ff20f9f2404a093e124ea8c1206c2b571508c7e",
   "composite/stack": "1d55bafea3a3c3678f3d34b4e725fbba961734a6b83663ed9681bc05c96fafed",
+  "composite/clip": "1df74ee288ddab50d618b5d664d7856cb09e71425d0a0926fede1008b65e9b37",
+  "composite/transform": "674b0801e4ba704bc5bcc42a261b4cda914c2cd46c6de3e3b88e535caaaf7e8b",
   "composite/sketch": "13dff97023b09c646835434ec5e66ed723240bf18513ba6b7e4ca971671b78ec"
 }
