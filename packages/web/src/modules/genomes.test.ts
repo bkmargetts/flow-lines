@@ -23,6 +23,7 @@ import { randomMarblingGenome } from '../projects/marbling/presets';
 import { randomMeanderGenome } from '../projects/meander/Controls';
 import { randomCoralGenome } from '../projects/coral/Controls';
 import { randomWarpGridGenome } from '../projects/warp-grid/presets';
+import { randomHarmonographGenome } from '../projects/harmonograph/presets';
 import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
@@ -128,6 +129,49 @@ const SPECS: GenomeSpec[] = [
       pattern: ['lines', 'waves', 'circles', 'rays'],
     },
     forbidden: ['seed', 'detailMm', 'penWidthMm', 'wobbleMm', 'strokeColor'],
+  },
+  {
+    name: 'harmonograph',
+    genome: randomHarmonographGenome,
+    bounds: {
+      scale: [0.3, 1],
+      jitter: [0, 1],
+      ratioNum: [1, 9],
+      ratioDen: [1, 9],
+      detune: [0, 0.05],
+      damping: [0, 1],
+      rotary: [0, 1],
+      phaseDeg: [0, 180],
+      periods: [2, 120],
+      lobes: [3, 24],
+      wheelOrder: [1, 12],
+      penOffset: [0, 1.5],
+      nest: [1, 24],
+      nestShrink: [0.5, 1],
+      rings: [4, 80],
+      waves: [3, 48],
+      waveAmp: [0, 1],
+      phaseAdvanceDeg: [0, 45],
+      innerHole: [0, 0.9],
+      waves2: [0, 12],
+      wave2Amp: [0, 1],
+    },
+    ints: ['ratioNum', 'ratioDen', 'periods', 'lobes', 'wheelOrder', 'nest', 'rings', 'waves', 'waves2'],
+    enums: {
+      preset: ['pendulum', 'lissajous', 'rotary', 'spiro', 'wheelwork', 'rosette', 'engine-turn'],
+      mode: ['harmonograph', 'spirograph', 'rosette'],
+    },
+    forbidden: [
+      'seed',
+      'detailMm',
+      'penWidthMm',
+      'wobbleMm',
+      'inkGroups',
+      'strokeColor',
+      'ink2Color',
+      'ink3Color',
+      'ink4Color',
+    ],
   },
   {
     name: 'impact-grid',

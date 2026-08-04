@@ -95,6 +95,7 @@ lives in a collapsed Advanced group.
 | Meander | pure | Fisk-style river-migration cartography |
 | Coral | pure | Differential-growth organisms |
 | Warp Grid | pure | Op-art gratings deformed by hidden relief |
+| Harmonograph | pure | Decaying pendulum curves, spirograph wheels, engine-turned guilloché rosettes |
 | Impact Grid | pure | A hand-ruled grid struck along a drawn path — displaced, torqued, shattered |
 | Pattern | pure | Background hatch / grid / dot textures |
 | Grating (multi-ink) | pure | Interleaved multi-pen gratings |
@@ -217,6 +218,7 @@ Run `flow-lines <command> --help` for the full, authoritative flag list.
 | `coral` | Differential-growth organisms |
 | `warp-grid` | Op-art gratings deformed by hidden relief |
 | `tangles` | Corrugated ducts or shoelaces weaving over and under |
+| `harmonograph` | Harmonograph, spirograph and guilloché curve machines |
 
 Several generators are currently reachable only from the web app — Reaction–
 Diffusion, Lenia, Physarum, Colour Field, City, Stick Men, Sports Balls, Hearts,

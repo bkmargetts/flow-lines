@@ -24,6 +24,7 @@ import { renderMarbling } from '../projects/marbling/render';
 import { renderMeander } from '../projects/meander/render';
 import { renderCoral } from '../projects/coral/render';
 import { renderWarpGrid } from '../projects/warp-grid/render';
+import { renderHarmonograph } from '../projects/harmonograph/render';
 import { renderImpactGrid } from '../projects/impact-grid/render';
 import { renderClassicTexture } from '../textures/classic/render';
 import { renderGratingTexture } from '../textures/grating/render';
@@ -78,6 +79,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   meander: entry(renderMeander),
   coral: entry(renderCoral),
   'warp-grid': entry(renderWarpGrid),
+  harmonograph: entry(renderHarmonograph),
   'impact-grid': entry(renderImpactGrid),
   classic: entry(renderClassicTexture, true),
   grating: entry(renderGratingTexture, true),

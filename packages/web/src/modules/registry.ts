@@ -28,6 +28,7 @@ import { marblingModule } from '../projects/marbling';
 import { meanderModule } from '../projects/meander';
 import { coralModule } from '../projects/coral';
 import { warpGridModule } from '../projects/warp-grid';
+import { harmonographModule } from '../projects/harmonograph';
 import { impactGridModule } from '../projects/impact-grid';
 
 /**
@@ -67,6 +68,7 @@ export const MODULES: Module<any>[] = [
   meanderModule,
   coralModule,
   warpGridModule,
+  harmonographModule,
   impactGridModule,
   classicTexture,
   gratingTexture,
