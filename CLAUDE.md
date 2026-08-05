@@ -299,6 +299,17 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
   (botanical / landscape / planet) build their genome by crossing whole
   presets and so deliberately re-roll `palette`; `PALETTE_ROLLERS` pins
   that list, and every other module is asserted never to touch ink.
+  Above the per-module genomes sits the stack-level **"🎲 Generate
+  artwork"** button (`LayerStackPanel`): `rollRandomArtwork` in
+  `lib/random-artwork.ts` replaces the whole stack via `restoreLayers`
+  (one undo step; it must keep count ≤ `MAX_LAYERS` itself —
+  `restoreLayers` doesn't clamp) with genome-rolled layers from
+  `modules/genome-registry.ts` — the moduleId→genome map, which imports
+  Controls-hosted genomes and therefore React: never import it from
+  worker code. The roller is the one place allowed to roll pen/ink and
+  palettes at random (per-module genomes stay ink-free); every new pure
+  module must join `ARTWORK_POOL` — `random-artwork.test.ts` pins the
+  pool against the registry and the roller's hard invariants.
   The page frame (paper, orientation, resolution, margin, fit)
   lives in a shared `FrameContext` (`FrameControls`) so every layer plots
   to the same physical sheet. New modules are developed on
