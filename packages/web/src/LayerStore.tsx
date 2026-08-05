@@ -74,7 +74,8 @@ interface LayerStoreValue {
   patchLayer: (instanceId: string, patch: LayerPatch) => void;
   updateState: (instanceId: string, update: StateUpdate<unknown>) => void;
   publishOutput: (instanceId: string, output: LayerOutput | null, busy: boolean) => void;
-  /** Wholesale replace the stack from an undo/redo snapshot. */
+  /** Wholesale replace the stack — undo/redo snapshots and the random
+   *  artwork roller. Callers guarantee `layers.length <= MAX_LAYERS`. */
   restoreLayers: (layers: Layer[], selectedId: string) => void;
   canAdd: boolean;
 }
@@ -82,7 +83,9 @@ interface LayerStoreValue {
 const LayerStoreContext = createContext<LayerStoreValue | null>(null);
 
 let counter = 0;
-function newInstanceId(moduleId: string): string {
+/** Mint a fresh layer instance id. Exported for the stack-level artwork
+ *  roller, which builds whole `Layer[]`s outside the store. */
+export function newInstanceId(moduleId: string): string {
   counter += 1;
   return `${moduleId}-${counter}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -227,8 +230,9 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // Undo/redo restore: snapshots were valid states (so the MAX_LAYERS cap
-  // always holds) and every entry is immutable, so a wholesale swap is safe.
+  // Wholesale restore (undo/redo, artwork roller): callers pass valid stacks
+  // (so the MAX_LAYERS cap always holds) and history entries are immutable,
+  // so a wholesale swap is safe.
   // Live outputs for layers not in the restored stack are pruned (mirrors
   // removeLayer); a re-added live layer remounts fresh and republishes.
   const restoreLayers = useCallback((next: Layer[], nextSelectedId: string) => {

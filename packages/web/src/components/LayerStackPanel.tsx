@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getModule } from '../modules/registry';
-import { useLayerStore, MAX_LAYERS } from '../LayerStore';
+import { useLayerStore, newInstanceId, MAX_LAYERS } from '../LayerStore';
+import { rollRandomArtwork } from '../lib/random-artwork';
 import { LayerOptionsRow } from './LayerOptionsRow';
 import { ModulePicker } from './ModulePicker';
 
@@ -65,6 +66,7 @@ export function LayerStackPanel() {
     setVisible,
     setHoldOff,
     setOverprint,
+    restoreLayers,
     canAdd,
   } = useLayerStore();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -77,7 +79,9 @@ export function LayerStackPanel() {
 
       <div className="layer-list">
         {layers.length === 0 && (
-          <p className="layer-empty">No layers yet — add one below to begin.</p>
+          <p className="layer-empty">
+            No layers yet — add one below, or roll a random artwork.
+          </p>
         )}
         {/* Top of the stack renders at the top of the list. */}
         {layers
@@ -225,6 +229,17 @@ export function LayerStackPanel() {
           onClick={() => setPickerOpen(true)}
         >
           + Add layer
+        </button>
+        <button
+          type="button"
+          className="secondary layer-add-btn"
+          title="Generate a random artwork — replaces the current stack (undo brings it back)"
+          onClick={() => {
+            const rolled = rollRandomArtwork(Math.random, newInstanceId);
+            restoreLayers(rolled.layers, rolled.selectedId);
+          }}
+        >
+          🎲 Generate artwork
         </button>
       </div>
       {pickerOpen && (
