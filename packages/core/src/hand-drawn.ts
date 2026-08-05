@@ -63,7 +63,7 @@ export function applyHandDrawnStyle(
     // Whole layers can be calmed by name (solid fill must stay tight or
     // paper gaps open between its passes)
     const layerScale =
-      (line.layer !== undefined && options.layerAmplitude?.[line.layer]) || 1;
+      line.layer !== undefined ? options.layerAmplitude?.[line.layer] ?? 1 : 1;
 
     // Per-line noise track, offset so strokes are decorrelated
     const track = lineIndex * 0.731 + 0.5;

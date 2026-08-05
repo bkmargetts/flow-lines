@@ -4,6 +4,7 @@ import {
 } from '@flow-lines/core';
 import type { LayerOutput, RenderEnv } from '../../modules/types';
 import { sheetAreaFactor } from '../../lib/sheet-scale';
+import { buildPaletteLayerColors } from '../../lib/palette';
 import type { ConwayState } from './types';
 
 /**
@@ -37,6 +38,16 @@ export function renderConway(state: ConwayState, env: RenderEnv): LayerOutput {
     contourLevels: state.contourLevels,
     slipstreamSpacing: state.slipstreamSpacing,
     stippleDensity: state.stippleDensity,
+    weaveInks: state.weaveInks,
+    weavePitch: state.weavePitchMm * page.pxPerMm,
+    weaveAngle: state.weaveAngle,
+    weaveSeparation: state.weaveSeparation,
+    weaveVernier: state.weaveVernier,
+    weaveBend: state.weaveBend,
+    weavePitchSwell: state.weavePitchSwell,
+    weaveWobble: state.weaveWobbleMm * page.pxPerMm,
+    weaveCoverage: state.weaveCoverage,
+    weaveForm: state.weaveForm,
     artStyle: state.artStyle,
     massCore: state.massCore,
     hatchAngle: state.hatchAngle,
@@ -48,9 +59,34 @@ export function renderConway(state: ConwayState, env: RenderEnv): LayerOutput {
   };
 
   const result = generateConwayExposure(options);
+  const presentInk = state.multiInk ? state.presentColor : state.strokeColor;
+
+  // The weave grating plots its inks on band-NN layers (like Ink Field), with
+  // the crisp present keeping its own pen. Ghost/trail inks don't apply.
+  if (state.style === 'weave') {
+    const layerColors: Record<string, string> = {
+      ...buildPaletteLayerColors(state.weavePalette, state.weaveInks, state.weaveCustomRamp),
+      present: presentInk,
+    };
+    let layerBlend: Record<string, string> | undefined;
+    if (state.weaveBlend) {
+      layerBlend = {};
+      for (const key of Object.keys(layerColors)) {
+        if (key.startsWith('band-')) layerBlend[key] = 'multiply';
+      }
+    }
+    return {
+      lines: result.lines,
+      strokeColor: presentInk,
+      strokeWidthPx: state.penWidthMm * page.pxPerMm,
+      layerColors,
+      layerBlend,
+    };
+  }
+
   return {
     lines: result.lines,
-    strokeColor: state.multiInk ? state.presentColor : state.strokeColor,
+    strokeColor: presentInk,
     strokeWidthPx: state.penWidthMm * page.pxPerMm,
     layerColors: state.multiInk
       ? { present: state.presentColor, ghost: state.ghostColor, trail: state.trailColor }

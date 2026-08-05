@@ -2,6 +2,7 @@ import { Point } from '../flow-lines.js';
 import { gaussianBlur } from '../image.js';
 import { traceIsoContours } from '../iso-contours.js';
 import { SimplexNoise } from '../noise.js';
+import { motionDir } from './sim.js';
 
 /** Closed square outline for a cell, inset by `inset` px from its bounds */
 export function cellSquare(cx: number, cy: number, half: number, inset: number): Point[] {
@@ -43,6 +44,77 @@ export function posterize(t: number, bands: number, lo: number): number {
   const span = 1 - lo;
   const k = Math.min(bands - 1, Math.floor(((t - lo) / span) * bands));
   return lo + ((k + 0.5) / bands) * span;
+}
+
+/**
+ * The colony motion field as smooth per-cell vector components. motionDir is
+ * sparse (null in dead space) and noisy cell-to-cell, so the raw components
+ * are blurred to fill the gaps and yield a field that flows continuously
+ * across both the core and the receding trails. Shared by the slipstream and
+ * weave styles.
+ */
+export function blurredMotionField(
+  lastAlive: Int32Array,
+  cols: number,
+  rows: number,
+  sigma: number
+): { fx: Float32Array; fy: Float32Array } {
+  const rawX = new Float32Array(cols * rows);
+  const rawY = new Float32Array(cols * rows);
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const d = motionDir(lastAlive, cols, rows, cx, cy);
+      if (d) {
+        rawX[cy * cols + cx] = d.x;
+        rawY[cy * cols + cx] = d.y;
+      }
+    }
+  }
+  return {
+    fx: gaussianBlur({ width: cols, height: rows, data: rawX }, sigma).data,
+    fy: gaussianBlur({ width: cols, height: rows, data: rawY }, sigma).data,
+  };
+}
+
+/**
+ * Two-pass chamfer distance transform: distance (in cell units, capped) from
+ * every cell to the nearest set cell of `mask`. Exact enough at any cluster
+ * size — unlike blur-of-binary iso tricks, a lone cell keeps its full-radius
+ * footprint — so a reserved-paper radius keeps its physical meaning. The cap
+ * keeps the field finite for a follow-up blur.
+ */
+export function chamferDistanceCells(mask: Uint8Array, cols: number, rows: number): Float32Array {
+  const DIST_CAP = 16;
+  const SQRT2 = Math.SQRT2;
+  const d = new Float32Array(cols * rows);
+  for (let i = 0; i < d.length; i++) d[i] = mask[i] ? 0 : DIST_CAP;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      let v = d[i];
+      if (x > 0) v = Math.min(v, d[i - 1] + 1);
+      if (y > 0) {
+        v = Math.min(v, d[i - cols] + 1);
+        if (x > 0) v = Math.min(v, d[i - cols - 1] + SQRT2);
+        if (x < cols - 1) v = Math.min(v, d[i - cols + 1] + SQRT2);
+      }
+      d[i] = Math.min(v, DIST_CAP);
+    }
+  }
+  for (let y = rows - 1; y >= 0; y--) {
+    for (let x = cols - 1; x >= 0; x--) {
+      const i = y * cols + x;
+      let v = d[i];
+      if (x < cols - 1) v = Math.min(v, d[i + 1] + 1);
+      if (y < rows - 1) {
+        v = Math.min(v, d[i + cols] + 1);
+        if (x < cols - 1) v = Math.min(v, d[i + cols + 1] + SQRT2);
+        if (x > 0) v = Math.min(v, d[i + cols - 1] + SQRT2);
+      }
+      d[i] = Math.min(v, DIST_CAP);
+    }
+  }
+  return d;
 }
 
 /** A unit vector whose angle varies smoothly with position via fBm noise. */

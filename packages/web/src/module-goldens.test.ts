@@ -63,6 +63,7 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
     inkGroups: 2,
   },
   'ink-field': { style: 'lattice' },
+  conway: { style: 'weave' },
   'impact-grid': {
     // A fixed synthetic strike (page px for the A4 × 1.5 test frame) so the
     // crush/shatter/fill code path is pinned, not just the pristine grid.
@@ -136,6 +137,14 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
 for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const mod = pureModules.find((m) => m.id === id);
   if (mod) CASES[`${id}/${Object.values(patch)[0]}`] = () => mod.render(stateFor(mod, patch), env);
+}
+
+// Conway's PRESET_VARIANTS slot pins the weave default (rings); the grating
+// form gets an explicit case so both weave forms stay pinned.
+{
+  const conway = pureModules.find((m) => m.id === 'conway')!;
+  CASES['conway/weave-grating'] = () =>
+    conway.render(stateFor(conway, { style: 'weave', weaveForm: 'grating' }), env);
 }
 
 // The classic texture's PRESET_VARIANTS slot pins 'dashes'; the newer style

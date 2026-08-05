@@ -23,7 +23,7 @@ export interface ConwayState {
   /** Hand-drawn wobble amplitude in px */
   wobble: number;
   /** History render style */
-  style: 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers';
+  style: 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers' | 'weave';
   /** Reserved-paper sliver around the present, in mm */
   haloMm: number;
   /** Nested iso levels for the contour style */
@@ -32,6 +32,34 @@ export interface ConwayState {
   slipstreamSpacing: number;
   /** Embers: stipple dots per cell at full tone */
   stippleDensity: number;
+
+  // ---- Weave (calm multi-ink grating disturbed by the trails) ----
+  /** Weave: inks in the grating (1..4), each on its own band-NN pen layer */
+  weaveInks: number;
+  /** Weave: palette id for the grating inks */
+  weavePalette: string;
+  /** Weave: custom ink ramp when weavePalette is 'custom' */
+  weaveCustomRamp: string[];
+  /** Weave: multiply-blend the band inks in the preview (overprint look) */
+  weaveBlend: boolean;
+  /** Weave: ruling spacing within one ink, mm */
+  weavePitchMm: number;
+  /** Weave: grating direction in degrees (0 = vertical) */
+  weaveAngle: number;
+  /** Weave: per-ink split at full exposure, fraction of pitch per ink step */
+  weaveSeparation: number;
+  /** Weave: per-ink pitch differential at full exposure (vernier beat) */
+  weaveVernier: number;
+  /** Weave: ruling swing toward the trail motion at full exposure, 0..1 */
+  weaveBend: number;
+  /** Weave: signed density swell; >0 tightens spacing on trails */
+  weavePitchSwell: number;
+  /** Weave: wobble amplitude at full exposure, mm */
+  weaveWobbleMm: number;
+  /** Weave: fraction of the calm ruling drawn (0..1); lower breathes */
+  weaveCoverage: number;
+  /** Weave: disturbance form — bent rulings or ripple rings */
+  weaveForm: 'grating' | 'rings';
   strokeColor: string;
   /** Pen width in millimetres (plotted line weight) */
   penWidthMm: number;
@@ -82,6 +110,20 @@ export const defaultConwayState: ConwayState = {
   contourLevels: 5,
   slipstreamSpacing: 0.9,
   stippleDensity: 7,
+
+  weaveInks: 3,
+  weavePalette: 'primaries',
+  weaveCustomRamp: ['#1d3fc0', '#111111', '#d0341c'],
+  weaveBlend: true,
+  weavePitchMm: 1.4,
+  weaveAngle: 0,
+  weaveSeparation: 0.4,
+  weaveVernier: 0.01,
+  weaveBend: 0.7,
+  weavePitchSwell: 0.5,
+  weaveWobbleMm: 0.25,
+  weaveCoverage: 0.4,
+  weaveForm: 'rings',
   strokeColor: '#000000',
   penWidthMm: 0.3,
 

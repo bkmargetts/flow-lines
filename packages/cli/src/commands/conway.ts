@@ -28,16 +28,26 @@ export function registerConway(program: Command) {
     .option('--gamma <number>', 'Perceptual lift on faint trails (<1 brightens)', '0.45')
     .option(
       '--style <style>',
-      'History render style: marks (discrete) | contour (organic ridges) | streaks (tracked comet trails) | slipstream (flow streamlines) | embers (stipple)',
+      'History render style: marks (discrete) | contour (organic ridges) | streaks (tracked comet trails) | slipstream (flow streamlines) | embers (stipple) | weave (calm multi-ink grating disturbed by the trails; use --split-layers for real multi-ink)',
       'marks'
     )
     .option('--halo-radius <number>', 'Reserved-paper sliver around the present in px (default ~cell*0.6)')
     .option('--contour-levels <number>', 'Nested iso levels for the contour style', '5')
     .option('--slipstream-spacing <number>', 'Slipstream: base streamline separation in grid cells', '0.9')
     .option('--stipple-density <number>', 'Embers: stipple dots per cell at full tone', '7')
+    .option('--weave-inks <number>', 'Weave: inks in the grating, each on its own band-NN layer', '3')
+    .option('--weave-pitch <number>', 'Weave: ruling spacing within one ink in px (default ~cell*0.8)')
+    .option('--weave-angle <number>', 'Weave: grating direction in degrees (0 = vertical)', '0')
+    .option('--weave-separation <number>', 'Weave: per-ink split at full exposure, fraction of pitch', '0.4')
+    .option('--weave-vernier <number>', 'Weave: per-ink pitch differential at full exposure', '0.01')
+    .option('--weave-bend <number>', 'Weave: ruling swing toward trail motion at full exposure (0-1)', '0.7')
+    .option('--weave-pitch-swell <number>', 'Weave: signed density swell; >0 tightens spacing on trails', '0.5')
+    .option('--weave-wobble <number>', 'Weave: wobble amplitude at full exposure in px (default ~cell*0.35)')
+    .option('--weave-coverage <number>', 'Weave: fraction of the calm ruling drawn; 1 = full grating, lower breathes and recruits lines where trails pass', '0.4')
+    .option('--weave-form <form>', 'Weave: rings (ripple loops of the exposure tone; --contour-levels sets ring count) | grating (bent rulings)', 'rings')
     .option(
       '--split-layers',
-      'Write one SVG per layer (present/ghost/trail) for multi-pen plotting, named <output>.<layer>.svg'
+      'Write one SVG per layer for multi-pen plotting, named <output>.<layer>.svg (present/ghost/trail; the weave style emits band-00..band-NN + present)'
     )
     .option('--faint-threshold <number>', 'Tone below this leaves blank paper (0-1)', '0.1')
     .option('--medium-threshold <number>', 'Faint→medium tone boundary (0-1)', '0.32')
@@ -77,11 +87,21 @@ export function registerConway(program: Command) {
         solidThreshold: parseFloat(options.solidThreshold),
         residueMaxCells: parseInt(options.residueMaxCells, 10),
         wobble: options.wobble ? parseFloat(options.wobble) : undefined,
-        style: options.style as 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers',
+        style: options.style as 'marks' | 'contour' | 'streaks' | 'slipstream' | 'embers' | 'weave',
         haloRadius: options.haloRadius ? parseFloat(options.haloRadius) : undefined,
         contourLevels: parseInt(options.contourLevels, 10),
         slipstreamSpacing: parseFloat(options.slipstreamSpacing),
         stippleDensity: parseFloat(options.stippleDensity),
+        weaveInks: parseInt(options.weaveInks, 10),
+        weavePitch: options.weavePitch ? parseFloat(options.weavePitch) : undefined,
+        weaveAngle: parseFloat(options.weaveAngle),
+        weaveSeparation: parseFloat(options.weaveSeparation),
+        weaveVernier: parseFloat(options.weaveVernier),
+        weaveBend: parseFloat(options.weaveBend),
+        weavePitchSwell: parseFloat(options.weavePitchSwell),
+        weaveWobble: options.weaveWobble ? parseFloat(options.weaveWobble) : undefined,
+        weaveCoverage: parseFloat(options.weaveCoverage),
+        weaveForm: options.weaveForm as 'grating' | 'rings',
         optimize: options.optimize,
       };
 
