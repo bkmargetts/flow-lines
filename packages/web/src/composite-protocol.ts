@@ -2,7 +2,7 @@ import type { PageMetrics } from '@flow-lines/core';
 import type { FrameSettings } from './FrameContext';
 import type { LayerOutput } from './modules/types';
 import { RENDERERS } from './modules/render-registry';
-import type { CompositeLayer } from './lib/composite';
+import type { CompositeLayer, LayerClipState, LayerTransformState } from './lib/composite';
 
 /**
  * The wire format between the composite client and worker: a fully
@@ -22,6 +22,13 @@ export interface SnapshotLayer {
   visible: boolean;
   holdOffMm: number;
   overprint: boolean;
+  // Combination options — optional so absent stays absent across the wire
+  // (an option dropped here would silently die in the worker; the round-trip
+  // test in composite-protocol.test.ts pins the pass-through).
+  transform?: LayerTransformState;
+  clip?: LayerClipState;
+  haloOutline?: boolean;
+  haloExempt?: boolean;
   liveOutput: LayerOutput | null;
 }
 
@@ -43,6 +50,10 @@ export function snapshotToStack(layers: SnapshotLayer[]): CompositeLayer[] {
     visible: l.visible,
     holdOffMm: l.holdOffMm,
     overprint: l.overprint,
+    transform: l.transform,
+    clip: l.clip,
+    haloOutline: l.haloOutline,
+    haloExempt: l.haloExempt,
     liveOutput: l.liveOutput,
   }));
 }

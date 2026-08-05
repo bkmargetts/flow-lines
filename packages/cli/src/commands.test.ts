@@ -21,6 +21,7 @@ import { registerCoral } from './commands/coral.js';
 import { registerWarpGrid } from './commands/warp-grid.js';
 import { registerInkField } from './commands/ink-field.js';
 import { registerHarmonograph } from './commands/harmonograph.js';
+import { registerStack } from './commands/stack.js';
 
 /**
  * The CLI surface had no real coverage: `cli.test.ts` imports
@@ -282,5 +283,195 @@ describe('running commands end to end', () => {
     // Physical output carries mm dimensions rather than raw pixels.
     expect(svg).toMatch(/width="[\d.]+mm"/);
     expect(svg).toMatch(/height="[\d.]+mm"/);
+  });
+});
+
+describe('stack command', () => {
+  // `stack` deliberately sits outside the universal-flag invariants above:
+  // its art configuration (inks, seeds, sketch) lives in the recipe file, so
+  // it carries only output/sheet flags.
+  let dir: string;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'flow-lines-stack-'));
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterAll(() => {
+    logSpy.mockRestore();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function buildStackProgram(): Command {
+    const program = new Command();
+    program.name('flow-lines').exitOverride();
+    registerStack(program);
+    return program;
+  }
+
+  function writeRecipe(name: string, recipe: unknown): string {
+    const path = join(dir, name);
+    writeFileSync(path, JSON.stringify(recipe), 'utf-8');
+    return path;
+  }
+
+  async function runStack(recipePath: string, extra: string[] = []): Promise<string> {
+    const out = join(dir, `stack-${Math.random().toString(36).slice(2)}.svg`);
+    await buildStackProgram().parseAsync(['stack', recipePath, ...extra, '-o', out], {
+      from: 'user',
+    });
+    expect(existsSync(out), 'stack wrote no output').toBe(true);
+    return readFileSync(out, 'utf-8');
+  }
+
+  /** A small two-layer recipe: a hatch texture holding off (and clipped
+   *  inside) a gestural top layer, both explicitly seeded. */
+  const RECIPE = {
+    version: 1,
+    page: { paper: 'a6', resolution: 2, marginMm: 8 },
+    layers: [
+      {
+        id: 'ground',
+        generator: 'texture',
+        options: { seed: 5, spacingMm: 4 },
+        color: '#c04000',
+        holdOffMm: 1.5,
+        clip: { source: 'figure', mode: 'inside', growMm: 4 },
+      },
+      {
+        id: 'figure',
+        generator: 'gesture',
+        options: { seed: 9 },
+        color: '#111111',
+      },
+    ],
+  };
+
+  it('composites a recipe into namespaced multi-ink strokes', async () => {
+    const svg = await runStack(writeRecipe('basic.json', RECIPE));
+    expect(svg).toContain('<svg');
+    expect(svg.trimEnd().endsWith('</svg>')).toBe(true);
+    expect(svg).toContain('<path');
+    // Both layers' inks are present.
+    expect(svg.toLowerCase()).toContain('#c04000');
+    expect(svg).toContain('#111111');
+    // Physical sheet dimensions.
+    expect(svg).toMatch(/width="[\d.]+mm"/);
+    // Plottability: stroked paths only.
+    expect(svg).not.toMatch(/fill="(?!none)[^"]+"/);
+  });
+
+  it('reproduces byte-identically across runs', async () => {
+    const path = writeRecipe('det.json', RECIPE);
+    expect(await runStack(path)).toBe(await runStack(path));
+  });
+
+  it('clips the bottom layer inside the top layer\'s shape', async () => {
+    const unclipped = {
+      ...RECIPE,
+      layers: [{ ...RECIPE.layers[0], clip: undefined }, RECIPE.layers[1]],
+    };
+    const clipped = await runStack(writeRecipe('clip-on.json', RECIPE));
+    const open = await runStack(writeRecipe('clip-off.json', unclipped));
+    expect(clipped).not.toBe(open);
+    // Clipping strictly removes texture ink.
+    const paths = (svg: string) => (svg.match(/<path/g) ?? []).length;
+    expect(paths(clipped)).toBeLessThan(paths(open));
+  });
+
+  it('echoes and transforms move a layer deterministically', async () => {
+    const moved = {
+      version: 1,
+      page: { paper: 'a6', resolution: 2 },
+      layers: [
+        {
+          generator: 'gesture',
+          options: { seed: 9 },
+          transform: { dxMm: 5 },
+          echo: { copies: 2, dxMm: 3 },
+        },
+      ],
+    };
+    const base = {
+      version: 1,
+      page: { paper: 'a6', resolution: 2 },
+      layers: [{ generator: 'gesture', options: { seed: 9 } }],
+    };
+    const a = await runStack(writeRecipe('moved.json', moved));
+    const b = await runStack(writeRecipe('base.json', base));
+    expect(a).not.toBe(b);
+    const paths = (svg: string) => (svg.match(/<path/g) ?? []).length;
+    expect(paths(a)).toBe(paths(b) * 2);
+  });
+
+  it('--split-layers writes one file per pen with sanitized names', async () => {
+    const out = join(dir, 'split.svg');
+    await buildStackProgram().parseAsync(
+      ['stack', writeRecipe('split.json', RECIPE), '--split-layers', '-o', out],
+      { from: 'user' }
+    );
+    // Namespaced pens L0/… L1/… land as L0-…, never as directories.
+    const texturePen = join(dir, 'split.L0-texture.svg');
+    expect(existsSync(texturePen), 'missing per-pen file for L0/texture').toBe(true);
+    expect(readFileSync(texturePen, 'utf-8')).toContain('<path');
+  });
+
+  it.each([
+    [
+      'unsupported version',
+      { version: 2, page: { paper: 'a6' }, layers: [{ generator: 'gesture' }] },
+      /recipe\.version/,
+    ],
+    [
+      'unknown generator',
+      { version: 1, page: { paper: 'a6' }, layers: [{ generator: 'sunset' }] },
+      /recipe\.layers\[0\]\.generator.*valid:/s,
+    ],
+    [
+      'missing paper',
+      { version: 1, page: {}, layers: [{ generator: 'gesture' }] },
+      /recipe\.page\.paper/,
+    ],
+    [
+      'unknown clip source',
+      {
+        version: 1,
+        page: { paper: 'a6' },
+        layers: [{ generator: 'gesture', clip: { source: 'sky' } }],
+      },
+      /clip\.source.*no layer with id "sky"/,
+    ],
+    [
+      'self clip',
+      {
+        version: 1,
+        page: { paper: 'a6' },
+        layers: [{ id: 'me', generator: 'gesture', clip: { source: 'me' } }],
+      },
+      /cannot clip to itself/,
+    ],
+  ])('rejects a recipe with %s', async (_name, recipe, message) => {
+    const path = writeRecipe(`bad-${Math.random().toString(36).slice(2)}.json`, recipe);
+    await expect(
+      buildStackProgram().parseAsync(['stack', path, '-o', join(dir, 'never.svg')], {
+        from: 'user',
+      })
+    ).rejects.toThrow(message);
+  });
+
+  it('rejects an unreadable or malformed recipe file', async () => {
+    await expect(
+      buildStackProgram().parseAsync(['stack', join(dir, 'nope.json'), '-o', join(dir, 'n.svg')], {
+        from: 'user',
+      })
+    ).rejects.toThrow(/could not read recipe/);
+    const garbled = join(dir, 'garbled.json');
+    writeFileSync(garbled, '{ not json', 'utf-8');
+    await expect(
+      buildStackProgram().parseAsync(['stack', garbled, '-o', join(dir, 'n2.svg')], {
+        from: 'user',
+      })
+    ).rejects.toThrow(/could not read recipe/);
   });
 });

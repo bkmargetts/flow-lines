@@ -270,3 +270,23 @@ export type {
 // Universal page border (plottable overlay, its own export layer)
 export { pageBorder } from './page-frame.js';
 export type { PageBorderOptions } from './page-frame.js';
+
+// Layer compositing geometry (hold-off halos, stencil masks, transforms) —
+// shared by the web layer stack and the CLI `stack` command
+export {
+  holdOffLines,
+  buildCoverageMask,
+  morphMask,
+  clipLinesToMask,
+  traceMaskOutline,
+  transformLines,
+  echoLines,
+} from './compose/index.js';
+export type {
+  CoverageMask,
+  CoverageMaskOptions,
+  MaskClipOptions,
+  MaskOutlineOptions,
+  LineTransformOptions,
+  EchoOptions,
+} from './compose/index.js';

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getModule } from '../modules/registry';
 import { useLayerStore, MAX_LAYERS } from '../LayerStore';
+import { LayerOptionsRow } from './LayerOptionsRow';
 import { ModulePicker } from './ModulePicker';
 
 /**
@@ -67,6 +68,8 @@ export function LayerStackPanel() {
     canAdd,
   } = useLayerStore();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The one layer whose combination options strip is expanded ('' = none).
+  const [optionsFor, setOptionsFor] = useState('');
 
   return (
     <div className="layer-stack">
@@ -83,9 +86,12 @@ export function LayerStackPanel() {
           .map(({ layer, index }) => {
             const mod = getModule(layer.moduleId);
             const busy = liveOutputs[layer.instanceId]?.busy;
+            const optionsOpen = optionsFor === layer.instanceId;
+            const optionsTouched =
+              !!layer.transform || !!layer.clip || !!layer.haloOutline || !!layer.haloExempt;
             return (
+              <div key={layer.instanceId} className="layer-entry">
               <div
-                key={layer.instanceId}
                 className={`layer-row ${layer.instanceId === selectedId ? 'selected' : ''}`}
                 onClick={() => selectLayer(layer.instanceId)}
               >
@@ -164,6 +170,19 @@ export function LayerStackPanel() {
 
                 <button
                   type="button"
+                  className={`layer-gear ${optionsTouched ? 'touched' : ''}`}
+                  title="Layer options — clip to a shape, transform & echo, halo extras"
+                  aria-pressed={optionsOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOptionsFor(optionsOpen ? '' : layer.instanceId);
+                  }}
+                >
+                  ⚙
+                </button>
+
+                <button
+                  type="button"
                   className="layer-duplicate"
                   title={
                     canAdd
@@ -190,6 +209,8 @@ export function LayerStackPanel() {
                 >
                   ×
                 </button>
+              </div>
+              {optionsOpen && <LayerOptionsRow layer={layer} />}
               </div>
             );
           })}

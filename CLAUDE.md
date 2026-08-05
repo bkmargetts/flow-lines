@@ -249,7 +249,24 @@ sourced from Google's public `cloud-samples-data` bucket for this reason.
   registry of art modules (`modules/registry.ts`); a plot is a *stack* of
   layer instances composited bottom→top onto one sheet (`LayerStore.tsx`,
   `lib/composite.ts`: top→bottom hold-off, per-slot pen-layer
-  namespacing, page border, density protection). A module is `pure`
+  namespacing, page border, density protection). Beyond hold-off/
+  overprint, each layer carries optional combination fields (all
+  `undefined` = inert; geometry lives in core `src/compose/`, shared
+  with the CLI): `clip` (stencil to another layer's silhouette — its
+  *base lines* disc-stamped into a coverage mask; inside/outside,
+  grow/expand/feather), `transform` (page-space dx/dy/rotate/scale +
+  compounding echo copies; a transformed `consumesAvoid` texture falls
+  back to the generic post-transform trim), `haloOutline` (trace the
+  reserved-paper gap edge on a per-slot `halo` pen), `haloExempt`
+  (never joins the avoid union). Per-layer order: render →
+  echo/transform → clip → hold-off → outline. New fields must thread
+  through three places (`LayerStore` snapshot, `SnapshotLayer`,
+  `snapshotToStack`) — a round-trip test pins it — and `cloneLayer`'s
+  field list (key-enumeration test). The CLI mirror is
+  `flow-lines stack recipe.json` (`commands/stack.ts` +
+  `stack-recipe.ts`/`stack-generators.ts`): same pipeline over core
+  generators, strict recipe validation, per-layer default seeds for
+  byte-identical re-runs. A module is `pure`
   (React-free `render.ts`: `state + env → lines`, run in the composite
   worker — new pure modules must also be added to
   `modules/render-registry.ts`; a parity test enforces it) or `live`

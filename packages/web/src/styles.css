@@ -958,6 +958,78 @@ button.secondary:hover {
   margin: 0;
 }
 
+.layer-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layer-gear {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 4px;
+  color: var(--text-secondary);
+  opacity: 0.45;
+}
+
+.layer-gear.touched,
+.layer-gear[aria-pressed='true'] {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* The expanded per-layer combination options strip (clip / transform / halo). */
+.layer-options {
+  margin: 0 4px 4px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.layer-options-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layer-options-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.layer-options-reset {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--accent);
+  padding: 0 2px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.layer-options select {
+  max-width: 60%;
+}
+
+.layer-options-hint {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
 .layer-add {
   display: flex;
   gap: 6px;

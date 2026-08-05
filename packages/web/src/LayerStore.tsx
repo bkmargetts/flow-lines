@@ -12,7 +12,12 @@ import { useFrame } from './FrameContext';
 import { pageLongEdgeCapPx } from './lib/page-cap';
 import { getModule } from './modules/registry';
 import type { LayerOutput, LiveModule, RenderEnv, StateUpdate } from './modules/types';
-import { composite, type CompositeResult } from './lib/composite';
+import {
+  composite,
+  type CompositeResult,
+  type LayerClipState,
+  type LayerTransformState,
+} from './lib/composite';
 import { requestComposite, SUPERSEDED, type SnapshotLayer } from './composite-client';
 
 /** The most layers a single plot may stack — "a reasonable number". */
@@ -29,7 +34,23 @@ export interface Layer {
   holdOffMm: number;
   /** Ink crosses the other layers: multiply preview, no hold-off either way. */
   overprint: boolean;
+  // The four combination options below stay `undefined` until first touched —
+  // absent fields are inert in the compositor and keep snapshots lean.
+  /** Page-space transform/echo of the finished lines. */
+  transform?: LayerTransformState;
+  /** Stencil clip against another layer's shape. */
+  clip?: LayerClipState;
+  /** Trace the reserved-paper gap boundary as a light stroke. */
+  haloOutline?: boolean;
+  /** Excluded from other layers' halos. */
+  haloExempt?: boolean;
 }
+
+/** The per-layer fields `patchLayer` may change — everything but identity
+ *  and module state (those have dedicated flows). */
+export type LayerPatch = Partial<
+  Omit<Layer, 'instanceId' | 'moduleId' | 'state'>
+>;
 
 interface LiveEntry {
   output: LayerOutput | null;
@@ -48,6 +69,9 @@ interface LayerStoreValue {
   setVisible: (instanceId: string, visible: boolean) => void;
   setHoldOff: (instanceId: string, mm: number) => void;
   setOverprint: (instanceId: string, overprint: boolean) => void;
+  /** Merge any per-layer combination options (transform, clip, halo flags).
+   *  Set a field to `undefined` to clear it back to inert. */
+  patchLayer: (instanceId: string, patch: LayerPatch) => void;
   updateState: (instanceId: string, update: StateUpdate<unknown>) => void;
   publishOutput: (instanceId: string, output: LayerOutput | null, busy: boolean) => void;
   /** Wholesale replace the stack from an undo/redo snapshot. */
@@ -74,6 +98,35 @@ function makeLayer(moduleId: string): Layer {
   };
 }
 
+/**
+ * Clone a layer for duplication: fresh instanceId, deep-copied state (shallow
+ * fallback for non-cloneable live data — updates always patch into a fresh
+ * object, they never mutate in place), and every per-layer option carried
+ * over. A clip's sourceId still points at the same source layer — that's the
+ * useful copy. Exported for the field-list test: a new Layer field missed
+ * here would silently drop off every duplicate.
+ */
+export function cloneLayer(src: Layer): Layer {
+  let state: unknown;
+  try {
+    state = structuredClone(src.state);
+  } catch {
+    state = { ...(src.state as object) };
+  }
+  return {
+    instanceId: newInstanceId(src.moduleId),
+    moduleId: src.moduleId,
+    state,
+    visible: src.visible,
+    holdOffMm: src.holdOffMm,
+    overprint: src.overprint,
+    transform: src.transform ? { ...src.transform } : undefined,
+    clip: src.clip ? { ...src.clip } : undefined,
+    haloOutline: src.haloOutline,
+    haloExempt: src.haloExempt,
+  };
+}
+
 export function LayerStoreProvider({ children }: { children: ReactNode }) {
   // A fresh plot starts empty — the user adds the layers they want.
   const [layers, setLayers] = useState<Layer[]>([]);
@@ -92,30 +145,13 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
 
   // Clone a layer directly above its source — the copy overprints the
   // original, ready for the tiny change (new seed, offset ink, nudged knob)
-  // that makes echo/misregistration stacks. State is deep-copied so the two
-  // layers can drift apart; live-module state may hold non-cloneable data
-  // (bitmaps), where a shallow copy is fine — updates always patch into a
-  // fresh object, they never mutate in place.
+  // that makes echo/misregistration stacks.
   const duplicateLayer = useCallback((instanceId: string) => {
     setLayers((prev) => {
       if (prev.length >= MAX_LAYERS) return prev;
       const index = prev.findIndex((l) => l.instanceId === instanceId);
       if (index < 0) return prev;
-      const src = prev[index];
-      let state: unknown;
-      try {
-        state = structuredClone(src.state);
-      } catch {
-        state = { ...(src.state as object) };
-      }
-      const copy: Layer = {
-        instanceId: newInstanceId(src.moduleId),
-        moduleId: src.moduleId,
-        state,
-        visible: src.visible,
-        holdOffMm: src.holdOffMm,
-        overprint: src.overprint,
-      };
+      const copy = cloneLayer(prev[index]);
       setSelectedId(copy.instanceId);
       const next = prev.slice();
       next.splice(index + 1, 0, copy);
@@ -169,6 +205,12 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
   const setOverprint = useCallback((instanceId: string, overprint: boolean) => {
     setLayers((prev) =>
       prev.map((l) => (l.instanceId === instanceId ? { ...l, overprint } : l))
+    );
+  }, []);
+
+  const patchLayer = useCallback((instanceId: string, patch: LayerPatch) => {
+    setLayers((prev) =>
+      prev.map((l) => (l.instanceId === instanceId ? { ...l, ...patch } : l))
     );
   }, []);
 
@@ -232,6 +274,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       setVisible,
       setHoldOff,
       setOverprint,
+      patchLayer,
       updateState,
       publishOutput,
       restoreLayers,
@@ -249,6 +292,7 @@ export function LayerStoreProvider({ children }: { children: ReactNode }) {
       setVisible,
       setHoldOff,
       setOverprint,
+      patchLayer,
       updateState,
       publishOutput,
       restoreLayers,
@@ -308,6 +352,10 @@ function CompositeHost({ children }: { children: ReactNode }) {
         visible: l.visible,
         holdOffMm: l.holdOffMm,
         overprint: l.overprint,
+        transform: l.transform,
+        clip: l.clip,
+        haloOutline: l.haloOutline,
+        haloExempt: l.haloExempt,
         liveOutput: liveOutputs[l.instanceId]?.output ?? null,
       };
     });
