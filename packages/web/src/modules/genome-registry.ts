@@ -24,6 +24,7 @@ import { randomCoralGenome } from '../projects/coral/Controls';
 import { randomWarpGridGenome } from '../projects/warp-grid/presets';
 import { randomHarmonographGenome } from '../projects/harmonograph/presets';
 import { randomImpactGridGenome } from '../projects/impact-grid/types';
+import { randomLapidaryGenome } from '../projects/lapidary/presets';
 import { randomClassicGenome } from '../textures/classic/Controls';
 import { randomGratingGenome } from '../textures/grating/shared';
 
@@ -92,6 +93,7 @@ export const ARTWORK_POOL: Record<string, ArtworkEntry> = {
   'warp-grid': entry(randomWarpGridGenome, 'stroke'),
   harmonograph: entry(randomHarmonographGenome, 'stroke'),
   'impact-grid': entry(randomImpactGridGenome, 'self', { clipAnchor: true }),
+  lapidary: entry(randomLapidaryGenome, 'self', { clipAnchor: true }),
   classic: entry(randomClassicGenome, 'stroke'),
   grating: entry(randomGratingGenome, 'palette'),
 };

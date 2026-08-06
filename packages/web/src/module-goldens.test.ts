@@ -63,6 +63,9 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
     inkGroups: 2,
   },
   'ink-field': { style: 'lattice' },
+  // Strata beds through the geometric-gap path plus per-region pens, so both
+  // the second layout family and the pen-per-band assignment are pinned.
+  lapidary: { mode: 'strata', textureMix: 'shuffle', angleDeg: 0, penAssignment: 'per-region' },
   'impact-grid': {
     // A fixed synthetic strike (page px for the A4 × 1.5 test frame) so the
     // crush/shatter/fill code path is pinned, not just the pristine grid.

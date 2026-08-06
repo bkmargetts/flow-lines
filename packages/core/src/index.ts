@@ -222,6 +222,16 @@ export type { MachineOptions } from './machine/index.js';
 export { generateMarbling, inkLayerName, MARBLING_PRESETS } from './marbling/index.js';
 export type { MarblingOptions, MarblingPattern } from './marbling/index.js';
 
+// Lapidary (layered pattern artworks — textured regions split by paper seams)
+export { generateLapidary, LAPIDARY_PRESETS } from './lapidary/index.js';
+export type {
+  LapidaryOptions,
+  LapidaryMode,
+  LapidaryTexture,
+  BandTexture,
+  PenAssignment,
+} from './lapidary/index.js';
+
 // Harmonograph / guilloché (damped pendulums, spirograph wheels, engine turning)
 export {
   generateHarmonograph,

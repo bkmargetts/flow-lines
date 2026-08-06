@@ -24,6 +24,7 @@ import { generateImpactGrid } from './impact-grid/index.js';
 import { generateRibbonWeave } from './ribbons/index.js';
 import { generateTangles } from './tangles/index.js';
 import { generateMarbling } from './marbling/index.js';
+import { generateLapidary, LAPIDARY_PRESETS } from './lapidary/index.js';
 import { generateHarmonograph } from './harmonograph/index.js';
 import { generateMeander } from './meander/index.js';
 import { generateCoral } from './coral/index.js';
@@ -176,6 +177,8 @@ for (const seed of SEEDS) {
     generateGesture({ width: 300, height: 400, margin: 20, seed });
   CASES[`marbling/nonpareil/${seed}`] = () =>
     generateMarbling({ width: 300, height: 400, margin: 20, seed });
+  CASES[`lapidary/specimen/${seed}`] = () =>
+    generateLapidary({ width: 300, height: 400, margin: 20, seed, ...LAPIDARY_PRESETS.specimen });
   CASES[`harmonograph/pendulum/${seed}`] = () =>
     generateHarmonograph({ width: 300, height: 400, margin: 20, seed });
   CASES[`meander/atlas/${seed}`] = () =>
@@ -264,6 +267,12 @@ CASES['impact-grid/rip/42'] = () =>
   });
 CASES['marbling/stone/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'stone' });
+CASES['lapidary/geode/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.geode });
+CASES['lapidary/breccia/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.breccia });
+CASES['lapidary/terraces/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.terraces });
 CASES['marbling/feather/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'feather', inkGroups: 2 });
 CASES['marbling/vortex/42'] = () =>
