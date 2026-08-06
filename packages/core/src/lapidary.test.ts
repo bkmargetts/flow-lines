@@ -136,6 +136,34 @@ describe('generateLapidary', () => {
     expect(min).toBeGreaterThan(0.5);
   });
 
+  it('field: false drops the background band, leaving the shapes on paper', () => {
+    const withField = generateLapidary({ ...BASE, textures: ['lines'] });
+    const without = generateLapidary({ ...BASE, textures: ['lines'], field: false });
+    expect(without.lines.length).toBeGreaterThan(50);
+    expect(without.lines.length).toBeLessThan(withField.lines.length);
+    // Without the full-frame band nothing reaches the margin corners.
+    const corner = without.lines.some((l) =>
+      l.points.some((p) => p.x < BASE.margin + 10 && p.y < BASE.margin + 10)
+    );
+    expect(corner).toBe(false);
+  });
+
+  it('shape languages are deterministic and distinct', () => {
+    for (const shapes of ['angular', 'mixed'] as const) {
+      const a = generateLapidary({ ...BASE, shapes });
+      const b = generateLapidary({ ...BASE, shapes });
+      expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
+      expect(a.lines.length).toBeGreaterThan(50);
+    }
+    const organic = generateLapidary({ ...BASE });
+    const angular = generateLapidary({ ...BASE, shapes: 'angular' });
+    expect(JSON.stringify(organic.lines)).not.toEqual(JSON.stringify(angular.lines));
+    for (const mode of MODES) {
+      const r = generateLapidary({ ...BASE, mode, shapes: 'angular' });
+      expect(r.lines.length).toBeGreaterThan(50);
+    }
+  });
+
   it('renders every preset with substance', () => {
     for (const [name, preset] of Object.entries(LAPIDARY_PRESETS)) {
       const r = generateLapidary({ ...BASE, ...preset });

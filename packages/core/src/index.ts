@@ -228,6 +228,8 @@ export type {
   LapidaryOptions,
   LapidaryMode,
   LapidaryTexture,
+  LapidaryShape,
+  LapidaryShapes,
   BandTexture,
   PenAssignment,
 } from './lapidary/index.js';

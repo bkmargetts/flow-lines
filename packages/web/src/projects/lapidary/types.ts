@@ -1,4 +1,4 @@
-import type { LapidaryMode, PenAssignment } from '@flow-lines/core';
+import type { LapidaryMode, LapidaryShapes, PenAssignment } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /** Which curated band-texture sequence the sheet deals outer→inner.
@@ -17,6 +17,8 @@ export interface LapidaryState {
   // Arrangement
   mode: LapidaryMode;
   bands: number;
+  field: boolean; // draw the full-frame background band (agate/breccia)
+  shapes: LapidaryShapes; // organic blobs | angular facets | mixed deal
   irregularity: number; // 0..1 silhouette wobble
   coverage: number; // 0.4..1 outer silhouette ÷ frame
   centerX: number; // -0.5..0.5 of the half-extents
@@ -57,6 +59,8 @@ export const defaultLapidaryState: LapidaryState = {
 
   mode: 'agate',
   bands: 5,
+  field: true,
+  shapes: 'organic',
   irregularity: 0.55,
   coverage: 0.9,
   centerX: 0,

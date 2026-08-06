@@ -1,9 +1,20 @@
 import { Point } from '../flow-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { lerp, clamp } from '../lib/math.js';
-import { nestedRingTables, ringPolygon, blobBoundaryTable, strataCurves } from './shapes.js';
+import {
+  nestedRingTables,
+  ringPolygon,
+  blobBoundaryTable,
+  angularBoundaryTable,
+  strataCurves,
+  type LapidaryShape,
+} from './shapes.js';
 
 export type LapidaryMode = 'agate' | 'breccia' | 'strata';
+export type { LapidaryShape } from './shapes.js';
+
+/** Sheet-wide silhouette language; 'mixed' deals organic/angular per band. */
+export type LapidaryShapes = LapidaryShape | 'mixed';
 
 export type LapidaryTexture =
   | 'lines'
@@ -25,6 +36,8 @@ export interface BandTexture {
   waviness?: number;
   /** Per-band override of the global patchiness (patchy/cross only). */
   patchiness?: number;
+  /** Per-band override of the sheet's shape language (agate/breccia). */
+  shape?: LapidaryShape;
 }
 
 /** A band texture with every knob resolved to concrete numbers. */
@@ -52,6 +65,10 @@ export interface LayoutConfig {
   mode: LapidaryMode;
   rect: { x0: number; y0: number; x1: number; y1: number };
   bands: number;
+  /** Draw the full-frame background band (agate/breccia). Without it the
+   *  layered shapes float on clean paper. */
+  field: boolean;
+  shapes: LapidaryShapes;
   irregularity: number;
   coverage: number;
   centerX: number;
@@ -133,6 +150,21 @@ function rectPolygon(rect: LayoutConfig['rect']): Point[] {
   ];
 }
 
+/** The shape language for band `z`: an explicit per-band override in the
+ *  texture spec wins; otherwise the sheet-wide setting, with 'mixed' dealing
+ *  each band its own seeded coin so re-rolling one knob never flips a
+ *  sibling band's language. */
+function shapeFor(cfg: LayoutConfig, z: number): LapidaryShape {
+  if (cfg.textures && cfg.textures.length > 0) {
+    const raw = cfg.textures[z % cfg.textures.length];
+    if (typeof raw !== 'string' && raw.shape) return raw.shape;
+  }
+  if (cfg.shapes === 'mixed') {
+    return makeRandom(subSeed(cfg.seed, 550 + z))() < 0.5 ? 'organic' : 'angular';
+  }
+  return cfg.shapes;
+}
+
 function agateRegions(cfg: LayoutConfig): Region[] {
   const { x0, y0, x1, y1 } = cfg.rect;
   const halfW = (x1 - x0) / 2;
@@ -140,16 +172,20 @@ function agateRegions(cfg: LayoutConfig): Region[] {
   const cx = x0 + halfW + cfg.centerX * halfW;
   const cy = y0 + halfH + cfg.centerY * halfH;
   // Ring shrink must leave room for the seam plus a couple of surviving
-  // strokes, or a band exists only as its own halo.
+  // strokes, or a band exists only as its own halo. Without the background
+  // field every band is a ring; ring z stays i+1 either way so toggling the
+  // field never reshuffles the rings' sub-seeded shapes and textures.
   const minGap = cfg.haloPx * 2 + cfg.spacingPx * 3;
+  const rings = cfg.field ? cfg.bands - 1 : cfg.bands;
   const tables = nestedRingTables(
     cfg.seed,
-    cfg.bands - 1,
+    rings,
     cfg.coverage,
     cfg.irregularity,
     halfW,
     halfH,
-    minGap
+    minGap,
+    (i) => shapeFor(cfg, i + 1)
   );
   const regions: Region[] = [];
   let prevKind: LapidaryTexture | null = null;
@@ -158,7 +194,7 @@ function agateRegions(cfg: LayoutConfig): Region[] {
     prevKind = tex.kind;
     regions.push({ z, poly, tex });
   };
-  push(0, rectPolygon(cfg.rect));
+  if (cfg.field) push(0, rectPolygon(cfg.rect));
   tables.forEach((g, i) => push(i + 1, ringPolygon(cx, cy, halfW, halfH, g)));
   return regions;
 }
@@ -172,7 +208,7 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
   const halfW = (x1 - x0) / 2;
   const halfH = (y1 - y0) / 2;
   const rng = makeRandom(subSeed(cfg.seed, 5));
-  const want = Math.min(cfg.bands - 1, BRECCIA_CAP);
+  const want = Math.min(cfg.field ? cfg.bands - 1 : cfg.bands, BRECCIA_CAP);
   const frags: Array<{ cx: number; cy: number; rx: number; ry: number; seed: number }> = [];
   let attempts = 0;
   while (frags.length < want && attempts < want * 12) {
@@ -207,9 +243,12 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
     prevKind = tex.kind;
     regions.push({ z, poly, tex });
   };
-  push(0, rectPolygon(cfg.rect));
+  if (cfg.field) push(0, rectPolygon(cfg.rect));
   frags.forEach((fr, i) => {
-    const table = blobBoundaryTable(fr.seed, cfg.irregularity, null, 0);
+    const table =
+      shapeFor(cfg, i + 1) === 'angular'
+        ? angularBoundaryTable(fr.seed, cfg.irregularity)
+        : blobBoundaryTable(fr.seed, cfg.irregularity, null, 0);
     push(i + 1, ringPolygon(fr.cx, fr.cy, fr.rx, fr.ry, table));
   });
   return regions;
@@ -225,7 +264,8 @@ function strataRegions(cfg: LayoutConfig): Region[] {
     x1,
     y1,
     cfg.irregularity,
-    cfg.haloPx * 2 + cfg.spacingPx * 2
+    cfg.haloPx * 2 + cfg.spacingPx * 2,
+    (k) => shapeFor(cfg, k)
   );
   const half = cfg.haloPx / 2;
   const regions: Region[] = [];

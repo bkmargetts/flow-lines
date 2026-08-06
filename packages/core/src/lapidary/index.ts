@@ -7,9 +7,15 @@ import { buildRegions, LayoutConfig } from './layout.js';
 import { fillRegion } from './textures.js';
 import { carveRegions, PenAssignment } from './carve.js';
 
-export type { LapidaryMode, LapidaryTexture, BandTexture } from './layout.js';
+export type {
+  LapidaryMode,
+  LapidaryTexture,
+  BandTexture,
+  LapidaryShape,
+  LapidaryShapes,
+} from './layout.js';
 export type { PenAssignment } from './carve.js';
-import type { LapidaryMode, LapidaryTexture, BandTexture } from './layout.js';
+import type { LapidaryMode, LapidaryTexture, BandTexture, LapidaryShapes } from './layout.js';
 
 /**
  * Lapidary — layered pattern artworks in the style of a cut and polished
@@ -46,9 +52,18 @@ export interface LapidaryOptions {
   // ---- Arrangement ----
   /** Layout mode (default 'agate') */
   mode?: LapidaryMode;
-  /** Region count incl. the background field: agate bands / breccia
-   *  fragments+field / strata beds. 2..10 (default 5) */
+  /** Region count incl. the background field when present: agate bands /
+   *  breccia fragments+field / strata beds. 2..10 (default 5) */
   bands?: number;
+  /** Draw the full-frame background band (default true). Off, the layered
+   *  shapes float on clean paper. Agate/breccia only — strata partitions
+   *  the whole sheet. */
+  field?: boolean;
+  /** Silhouette language: 'organic' blobs (default), 'angular'
+   *  straight-edged facets/shards (stepped terraces in strata), or 'mixed'
+   *  (seeded per-band deal). Each band can override via
+   *  `BandTexture.shape`. */
+  shapes?: LapidaryShapes;
   /** Silhouette irregularity 0..1 (default 0.55) */
   irregularity?: number;
   /** Outermost silhouette size as a fraction of the frame, 0.4..1 (default 0.9) */
@@ -138,6 +153,22 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     baseAngleDeg: 0,
     angleDriftDeg: 14,
   },
+  facet: {
+    mode: 'agate',
+    bands: 5,
+    pens: 2,
+    field: false,
+    shapes: 'angular',
+    coverage: 0.95,
+    irregularity: 0.7,
+    textures: [
+      { kind: 'hatch', spacingScale: 1.3 },
+      { kind: 'lines', spacingScale: 0.9 },
+      { kind: 'cross', spacingScale: 1.1 },
+      { kind: 'lines', angleDeg: 35, spacingScale: 1.5 },
+      { kind: 'hatch', spacingScale: 0.8 },
+    ],
+  },
   mono: {
     mode: 'agate',
     bands: 5,
@@ -174,6 +205,8 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     mode: options.mode ?? 'agate',
     rect: { x0, y0, x1, y1 },
     bands: clamp(Math.round(options.bands ?? 5), 2, 10),
+    field: options.field ?? true,
+    shapes: options.shapes ?? 'organic',
     irregularity: clamp(options.irregularity ?? 0.55, 0, 1),
     coverage: clamp(options.coverage ?? 0.9, 0.4, 1),
     centerX: clamp(options.centerX ?? 0, -0.5, 0.5),

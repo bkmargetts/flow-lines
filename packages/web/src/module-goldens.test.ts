@@ -165,6 +165,14 @@ for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const grating = pureModules.find((m) => m.id === 'grating')!;
   CASES['grating/blob'] = () =>
     grating.render(stateFor(grating, { maskMode: 'blob', maskIrregularity: 0.6 }), env);
+  // Lapidary's PRESET_VARIANTS slot pins strata; the angular/no-field shape
+  // language gets its own explicit case.
+  const lapidary = pureModules.find((m) => m.id === 'lapidary')!;
+  CASES['lapidary/facet'] = () =>
+    lapidary.render(
+      stateFor(lapidary, { field: false, shapes: 'angular', textureMix: 'tonal', irregularity: 0.7 }),
+      env
+    );
 }
 
 // One small stack through the compositor: a texture under two generative

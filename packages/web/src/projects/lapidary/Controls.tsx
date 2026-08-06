@@ -1,4 +1,4 @@
-import type { LapidaryMode, PenAssignment } from '@flow-lines/core';
+import type { LapidaryMode, LapidaryShapes, PenAssignment } from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { PresetPicker } from '../../components/controls/PresetPicker';
@@ -67,6 +67,25 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
           <option value="strata">Strata — horizontal beds</option>
         </select>
       </label>
+
+      <label className="field">
+        <span>Shapes</span>
+        <select
+          value={state.shapes}
+          onChange={(e) => update({ shapes: e.target.value as LapidaryShapes })}
+        >
+          <option value="organic">Organic blobs</option>
+          <option value="angular">Angular facets</option>
+          <option value="mixed">Mixed (seeded deal)</option>
+        </select>
+      </label>
+
+      <Toggle
+        label="Background field"
+        checked={state.field}
+        onChange={(v) => update({ field: v })}
+        disabled={state.mode === 'strata'}
+      />
 
       <Slider label="Bands" value={state.bands} min={2} max={10} step={1} onChange={(v) => update({ bands: v })} format={(v) => `${Math.round(v)}`} />
       <Slider label="Irregularity" value={state.irregularity} min={0} max={1} step={0.01} onChange={(v) => update({ irregularity: v })} format={(v) => `${Math.round(v * 100)}%`} />

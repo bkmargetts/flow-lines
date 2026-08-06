@@ -198,6 +198,8 @@ describe('running commands end to end', () => {
     ['lapidary', ['lapidary', ...SMALL]],
     ['lapidary breccia', ['lapidary', ...SMALL, '--preset', 'breccia', '--pens', '3']],
     ['lapidary strata', ['lapidary', ...SMALL, '--mode', 'strata', '--textures', 'lines,hatch']],
+    ['lapidary facet', ['lapidary', ...SMALL, '--preset', 'facet']],
+    ['lapidary angular', ['lapidary', ...SMALL, '--shapes', 'angular', '--no-field']],
     ['meander', ['meander', ...SMALL]],
     ['coral', ['coral', ...SMALL]],
     ['warp-grid', ['warp-grid', ...SMALL]],

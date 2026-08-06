@@ -4,6 +4,7 @@ import {
   LAPIDARY_PRESETS,
   type LapidaryMode,
   type LapidaryOptions,
+  type LapidaryShapes,
   type LapidaryTexture,
   type PenAssignment,
   type SVGOptions,
@@ -35,7 +36,12 @@ export function registerLapidary(program: Command) {
       'Curated look: specimen | geode | breccia | terraces | mono (explicit flags override)'
     )
     .option('--mode <name>', 'Arrangement: agate | breccia | strata')
-    .option('--bands <number>', 'Region count incl. the background field (2-10)')
+    .option('--bands <number>', 'Region count incl. the background field when present (2-10)')
+    .option(
+      '--shapes <style>',
+      'Silhouette language: organic | angular | mixed (angular = straight-edged facets/shards; stepped terraces in strata)'
+    )
+    .option('--no-field', 'Skip the full-frame background band — shapes float on clean paper')
     .option('--irregularity <number>', 'Silhouette irregularity (0-1)')
     .option('--coverage <number>', 'Outer silhouette size as a fraction of the frame (0.4-1)')
     .option('--center-x <number>', 'Composition centre X offset (-0.5..0.5)')
@@ -92,6 +98,10 @@ export function registerLapidary(program: Command) {
       // Explicit flags override the preset — but only when actually given.
       const flagOptions: Partial<LapidaryOptions> = {
         mode: options.mode as LapidaryMode | undefined,
+        // Commander's --no-field default is true; only an explicit --no-field
+        // may override a preset's own `field` setting.
+        field: options.field === false ? false : undefined,
+        shapes: options.shapes as LapidaryShapes | undefined,
         bands: options.bands ? parseInt(options.bands, 10) : undefined,
         irregularity: options.irregularity ? parseFloat(options.irregularity) : undefined,
         coverage: options.coverage ? parseFloat(options.coverage) : undefined,

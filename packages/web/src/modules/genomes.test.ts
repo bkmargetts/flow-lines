@@ -245,9 +245,10 @@ const SPECS: GenomeSpec[] = [
       pens: [1, 4],
     },
     ints: ['bands', 'angleDriftDeg', 'pens'],
-    bools: ['outlines'],
+    bools: ['outlines', 'field'],
     enums: {
       mode: ['agate', 'breccia', 'strata'],
+      shapes: ['organic', 'angular', 'mixed'],
       textureMix: ['specimen', 'geode', 'linework', 'tonal', 'shuffle'],
       penAssignment: ['interleave', 'per-region'],
     },

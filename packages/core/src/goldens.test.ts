@@ -273,6 +273,8 @@ CASES['lapidary/breccia/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.breccia });
 CASES['lapidary/terraces/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.terraces });
+CASES['lapidary/facet/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.facet });
 CASES['marbling/feather/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'feather', inkGroups: 2 });
 CASES['marbling/vortex/42'] = () =>
