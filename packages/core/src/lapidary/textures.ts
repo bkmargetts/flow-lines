@@ -102,6 +102,90 @@ export function fillRegion(region: Region): RegionFill {
     emitStroke(ink, a, b, '', craft);
   };
 
+  // Long ruled lines break into hand-fed dashes with small pen-lift gaps
+  // at irregular heights (the reference's airy background field); short
+  // runs — a core band, sliver spans — stay whole. Shared by 'lines' and
+  // the contour fallback on regions with no silhouette geometry.
+  const fillLines = (): void => {
+    const dashMin = t.spacing * 22;
+    for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
+      const len = Math.hypot(run[1].x - run[0].x, run[1].y - run[0].y);
+      if (len <= dashMin) {
+        push(ink, densify(run[0], run[1], step));
+        continue;
+      }
+      const ux = (run[1].x - run[0].x) / len;
+      const uy = (run[1].y - run[0].y) / len;
+      let s = 0;
+      let guard = 0;
+      while (s < len - 2 && guard++ < 200) {
+        const e = Math.min(len, s + t.spacing * (14 + 18 * rng()));
+        push(
+          ink,
+          densify(
+            { x: run[0].x + ux * s, y: run[0].y + uy * s },
+            { x: run[0].x + ux * e, y: run[0].y + uy * e },
+            step
+          )
+        );
+        s = e + 1.8 + rng() * 2;
+      }
+    }
+  };
+
+  // The 'lines' hand-fed dashing applied to an arbitrary polyline: walk the
+  // arc length, lift the pen briefly at irregular intervals. Closed loops
+  // start at a seeded phase so the lift gaps don't stack radially across
+  // nested contour loops.
+  const dashPolyline = (pts: Point[], closed: boolean): void => {
+    if (pts.length < 2) return;
+    const cum: number[] = new Array(pts.length);
+    cum[0] = 0;
+    for (let i = 1; i < pts.length; i++) {
+      cum[i] = cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    }
+    const total = cum[pts.length - 1];
+    if (total <= t.spacing * 22) {
+      push(ink, pts);
+      return;
+    }
+    // Slice the arc-length window [sa, sb] out of the polyline.
+    const at = (s: number): Point => {
+      let i = 1;
+      while (i < pts.length - 1 && cum[i] < s) i++;
+      const span = cum[i] - cum[i - 1] || 1;
+      const f = (s - cum[i - 1]) / span;
+      return {
+        x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
+        y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f,
+      };
+    };
+    const slice = (sa: number, sb: number): Point[] => {
+      const out: Point[] = [at(sa)];
+      for (let i = 0; i < pts.length; i++) {
+        if (cum[i] > sa && cum[i] < sb) out.push(pts[i]);
+      }
+      out.push(at(sb));
+      return out;
+    };
+    const phase = closed ? total * rng() : 0;
+    let s = 0;
+    let guard = 0;
+    while (s < total - 2 && guard++ < 200) {
+      const e = Math.min(total, s + t.spacing * (14 + 18 * rng()));
+      const sa = (s + phase) % total;
+      const sb = (e + phase) % total;
+      if (sa < sb) {
+        push(ink, slice(sa, sb));
+      } else {
+        // The phase-shifted dash wraps the loop seam: emit both halves.
+        if (total - sa > 2) push(ink, slice(sa, total));
+        if (sb > 2) push(ink, slice(0, sb));
+      }
+      s = e + 1.8 + rng() * 2;
+    }
+  };
+
   switch (t.kind) {
     case 'blank': {
       // Coarse phantom coverage: sampled tighter than the halo radius so the
@@ -113,31 +197,164 @@ export function fillRegion(region: Region): RegionFill {
     }
 
     case 'lines': {
-      // Long ruled lines break into hand-fed dashes with small pen-lift gaps
-      // at irregular heights (the reference's airy background field); short
-      // runs — a core band, sliver spans — stay whole.
-      const dashMin = t.spacing * 22;
-      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
-        const len = Math.hypot(run[1].x - run[0].x, run[1].y - run[0].y);
-        if (len <= dashMin) {
-          push(ink, densify(run[0], run[1], step));
-          continue;
+      fillLines();
+      break;
+    }
+
+    case 'contour': {
+      // Concentric banding: loops that follow the region's own silhouette —
+      // the fortification-agate mark. Offsets happen in table space, where an
+      // inward offset of these star-shaped blobs can never self-intersect;
+      // near the core, partially collapsed loops surface as open crescents,
+      // exactly how real agate banding closes out. Regions without silhouette
+      // geometry (the background field) fall back to ruled lines.
+      const pitch = t.spacing;
+      const lambda = Math.max(36, pitch * 16);
+      // Waviness cap stays below half the pitch so neighbouring loops never
+      // touch; one shared page-space field keeps them undulating together.
+      const amp = t.waviness * Math.min(pitch * 0.35, lambda * 0.1);
+      const wave = (pts: Point[], dir: (p: Point) => Point): Point[] =>
+        amp <= 0
+          ? pts
+          : pts.map((p) => {
+              const d = amp * noise.fbm(p.x / lambda, p.y / lambda, 2, 0.5, 2);
+              const u = dir(p);
+              return { x: p.x + u.x * d, y: p.y + u.y * d };
+            });
+      const densifyRun = (pts: Point[]): Point[] => {
+        const out: Point[] = [];
+        for (let i = 1; i < pts.length; i++) {
+          const seg = densify(pts[i - 1], pts[i], 4);
+          if (out.length > 0) seg.shift();
+          out.push(...seg);
         }
-        const ux = (run[1].x - run[0].x) / len;
-        const uy = (run[1].y - run[0].y) / len;
-        let s = 0;
-        let guard = 0;
-        while (s < len - 2 && guard++ < 200) {
-          const e = Math.min(len, s + t.spacing * (14 + 18 * rng()));
-          push(
-            ink,
-            densify(
-              { x: run[0].x + ux * s, y: run[0].y + uy * s },
-              { x: run[0].x + ux * e, y: run[0].y + uy * e },
-              step
-            )
-          );
-          s = e + 1.8 + rng() * 2;
+        return out;
+      };
+
+      if (region.radial) {
+        const { cx, cy, rx, ry, table } = region.radial;
+        const n = table.length;
+        const baseLen = new Float64Array(n);
+        let maxR = 0;
+        for (let j = 0; j < n; j++) {
+          const theta = (j / n) * Math.PI * 2;
+          baseLen[j] = Math.hypot(Math.cos(theta) * rx, Math.sin(theta) * ry) || 1e-6;
+          maxR = Math.max(maxR, table[j] * baseLen[j]);
+        }
+        const radialDir = (p: Point): Point => {
+          const len = Math.hypot(p.x - cx, p.y - cy) || 1;
+          return { x: (p.x - cx) / len, y: (p.y - cy) / len };
+        };
+        const pointAt = (j: number, inset: number): Point => {
+          const theta = (j / n) * Math.PI * 2;
+          const g = table[j] - inset / baseLen[j];
+          return { x: cx + Math.cos(theta) * rx * g, y: cy + Math.sin(theta) * ry * g };
+        };
+        const maxLoops = Math.ceil(maxR / pitch);
+        for (let k = 1; k <= maxLoops && ink.length < REGION_LINE_CAP; k++) {
+          const inset = k * pitch;
+          const alive: boolean[] = new Array(n);
+          let anyAlive = false;
+          let allAlive = true;
+          for (let j = 0; j < n; j++) {
+            alive[j] = table[j] * baseLen[j] - inset >= pitch * 0.5;
+            anyAlive ||= alive[j];
+            allAlive &&= alive[j];
+          }
+          if (!anyAlive) break;
+          if (allAlive) {
+            const pts: Point[] = [];
+            for (let j = 0; j < n; j++) pts.push(pointAt(j, inset));
+            pts.push({ ...pts[0] });
+            dashPolyline(wave(densifyRun(pts), radialDir), true);
+            continue;
+          }
+          // Contiguous alive arcs (circular): each surfaces as an open run.
+          for (let j = 0; j < n; j++) {
+            if (!alive[j] || alive[(j - 1 + n) % n]) continue;
+            const arc: Point[] = [];
+            for (let m = j; alive[m % n] && arc.length < n; m++) {
+              arc.push(pointAt(m % n, inset));
+            }
+            if (arc.length >= 3) dashPolyline(wave(densifyRun(arc), radialDir), false);
+          }
+        }
+        break;
+      }
+
+      if (region.strataBand) {
+        // Onion-skin lamination between the band's bounding curves: interior
+        // curves only — the boundaries themselves are the seam edges.
+        const { top, bottom } = region.strataBand;
+        let gap = 0;
+        for (let i = 0; i < top.length; i++) gap += bottom[i].y - top[i].y;
+        gap /= top.length;
+        const rows = Math.max(1, Math.round(gap / pitch));
+        const down = (): Point => ({ x: 0, y: 1 });
+        for (let r = 1; r < rows && ink.length < REGION_LINE_CAP; r++) {
+          const f = r / rows;
+          const pts = top.map((p, i) => ({
+            x: p.x,
+            y: p.y + (bottom[i].y - p.y) * f,
+          }));
+          dashPolyline(wave(densifyRun(pts), down), false);
+        }
+        break;
+      }
+
+      fillLines();
+      break;
+    }
+
+    case 'crystal': {
+      // Druzy lining: tapered rays radiating from the region centre toward
+      // the silhouette, with jittered reach — the length scatter is the
+      // sparkle. On a non-innermost band the carve clips the fan's middle
+      // out, leaving spikes fringing the annulus wall for free. Regions
+      // without silhouette geometry fall back to ruled lines.
+      if (!region.radial) {
+        fillLines();
+        break;
+      }
+      const { cx, cy, rx, ry, table } = region.radial;
+      const n = table.length;
+      let rAvg = 0;
+      for (let j = 0; j < n; j++) {
+        const theta = (j / n) * Math.PI * 2;
+        rAvg += table[j] * Math.hypot(Math.cos(theta) * rx, Math.sin(theta) * ry);
+      }
+      rAvg /= n;
+      const tableAt = (theta: number): number => {
+        const f = ((theta / (Math.PI * 2)) * n + n) % n;
+        const j = Math.floor(f);
+        return table[j] + (table[(j + 1) % n] - table[j]) * (f - j);
+      };
+      const rays = Math.round(
+        Math.min(600, Math.max(16, (Math.PI * 2 * rAvg) / (t.spacing * 1.15)))
+      );
+      for (let i = 0; i < rays && ink.length < REGION_LINE_CAP; i++) {
+        const theta = ((i + (rng() - 0.5) * 0.6) / rays) * Math.PI * 2;
+        const g = tableAt(theta);
+        const ex = Math.cos(theta) * rx;
+        const ey = Math.sin(theta) * ry;
+        const s0 = g * (0.06 + 0.3 * rng());
+        // Every ~4th ray reaches the wall so the band edge reads lined.
+        const s1 = g * (i % 4 === 0 ? 0.97 : 0.55 + 0.4 * rng());
+        if (s1 <= s0) continue;
+        const tip = { x: cx + ex * s1, y: cy + ey * s1 };
+        emitTapered({ x: cx + ex * s0, y: cy + ey * s0 }, tip);
+        // Occasional chevron tip: the angular termination of a crystal face.
+        if (rng() < 0.3) {
+          const len = Math.hypot(ex, ey) * (s1 - s0) || 1;
+          const ux = (ex * (s1 - s0)) / len;
+          const uy = (ey * (s1 - s0)) / len;
+          const wing = t.spacing * 0.8;
+          const spreadA = (20 * Math.PI) / 180;
+          const back = (a: number): Point => ({
+            x: tip.x - (ux * Math.cos(a) - uy * Math.sin(a)) * wing,
+            y: tip.y - (ux * Math.sin(a) + uy * Math.cos(a)) * wing,
+          });
+          push(ink, [back(spreadA), tip, back(-spreadA)]);
         }
       }
       break;
@@ -250,7 +467,10 @@ export function fillRegion(region: Region): RegionFill {
           const x = gx + (rng() - 0.5) * pitch * 0.8;
           const y = gy + (rng() - 0.5) * pitch * 0.8;
           const ang = rng() * Math.PI * 2;
-          const l = 0.35 + rng() * 0.3;
+          // Tick half-length rides the pitch (≈0.35-0.65 px at the default
+          // stipple pitch) so dots keep their weight on big sheets instead of
+          // staying sub-pixel while everything else scales.
+          const l = pitch * (0.045 + rng() * 0.04);
           if (!pointInPolygon(poly, x, y)) continue;
           push(ink, [
             { x: x - Math.cos(ang) * l, y: y - Math.sin(ang) * l },

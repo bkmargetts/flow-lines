@@ -19,6 +19,8 @@ export type LapidaryShapes = LapidaryShape | 'mixed';
 export type LapidaryTexture =
   | 'lines'
   | 'wavy'
+  | 'contour'
+  | 'crystal'
   | 'hatch'
   | 'patchy'
   | 'cross'
@@ -52,12 +54,33 @@ export interface ResolvedTexture {
   seed: number;
 }
 
+/** Radial geometry behind a table-built region (agate rings, breccia
+ *  fragments): the per-θ multiplier table plus its ellipse frame. Fills that
+ *  follow the silhouette (contour loops, crystal rays) offset in table space,
+ *  where inward offsets of these star-shaped blobs can never self-intersect. */
+export interface RegionRadial {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  table: Float64Array;
+}
+
+/** A strata band's bounding curves, index-aligned left→right on the shared
+ *  x grid (page-edge bands get their straight edge resampled to match). */
+export interface RegionStrataBand {
+  top: Point[];
+  bottom: Point[];
+}
+
 /** One drawable region: a closed silhouette plus its resolved texture.
  *  Higher z = drawn on top; lower-z ink is carved away around it. */
 export interface Region {
   z: number;
   poly: Point[];
   tex: ResolvedTexture;
+  radial?: RegionRadial;
+  strataBand?: RegionStrataBand;
 }
 
 export interface LayoutConfig {
@@ -81,6 +104,8 @@ export interface LayoutConfig {
   densityContrast: number;
   waviness: number;
   patchiness: number;
+  /** Vertical fault planes thrown across the strata stack (strata only). */
+  faults: number;
 }
 
 /** Baseline pitch multiplier per texture kind, spread further apart by
@@ -89,6 +114,8 @@ export interface LayoutConfig {
 const KIND_SPACING: Record<LapidaryTexture, number> = {
   lines: 1.7,
   wavy: 1.1,
+  contour: 1.0,
+  crystal: 0.8,
   hatch: 0.45,
   patchy: 0.55,
   cross: 0.95,
@@ -96,9 +123,18 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   blank: 1,
 };
 
-/** Kinds the seeded picker may deal a band (blank is preset-only — a random
- *  paper band next to the background reads as a hole, not a decision). */
-const RANDOM_KINDS: LapidaryTexture[] = ['lines', 'wavy', 'hatch', 'patchy', 'cross', 'stipple'];
+/** Kinds the seeded picker may deal a band (blank and crystal are
+ *  preset-only — a random paper band next to the background reads as a hole,
+ *  not a decision, and a druzy ray-burst is too loud to land uninvited). */
+const RANDOM_KINDS: LapidaryTexture[] = [
+  'lines',
+  'wavy',
+  'contour',
+  'hatch',
+  'patchy',
+  'cross',
+  'stipple',
+];
 
 /**
  * Resolve the texture for band `z` (0 = the background field). Explicit
@@ -189,13 +225,15 @@ function agateRegions(cfg: LayoutConfig): Region[] {
   );
   const regions: Region[] = [];
   let prevKind: LapidaryTexture | null = null;
-  const push = (z: number, poly: Point[]): void => {
+  const push = (z: number, poly: Point[], radial?: RegionRadial): void => {
     const tex = resolveTexture(cfg, z, prevKind);
     prevKind = tex.kind;
-    regions.push({ z, poly, tex });
+    regions.push({ z, poly, tex, radial });
   };
   if (cfg.field) push(0, rectPolygon(cfg.rect));
-  tables.forEach((g, i) => push(i + 1, ringPolygon(cx, cy, halfW, halfH, g)));
+  tables.forEach((g, i) =>
+    push(i + 1, ringPolygon(cx, cy, halfW, halfH, g), { cx, cy, rx: halfW, ry: halfH, table: g })
+  );
   return regions;
 }
 
@@ -238,10 +276,10 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
   }
   const regions: Region[] = [];
   let prevKind: LapidaryTexture | null = null;
-  const push = (z: number, poly: Point[]): void => {
+  const push = (z: number, poly: Point[], radial?: RegionRadial): void => {
     const tex = resolveTexture(cfg, z, prevKind);
     prevKind = tex.kind;
-    regions.push({ z, poly, tex });
+    regions.push({ z, poly, tex, radial });
   };
   if (cfg.field) push(0, rectPolygon(cfg.rect));
   frags.forEach((fr, i) => {
@@ -249,7 +287,13 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
       shapeFor(cfg, i + 1) === 'angular'
         ? angularBoundaryTable(fr.seed, cfg.irregularity)
         : blobBoundaryTable(fr.seed, cfg.irregularity, null, 0);
-    push(i + 1, ringPolygon(fr.cx, fr.cy, fr.rx, fr.ry, table));
+    push(i + 1, ringPolygon(fr.cx, fr.cy, fr.rx, fr.ry, table), {
+      cx: fr.cx,
+      cy: fr.cy,
+      rx: fr.rx,
+      ry: fr.ry,
+      table,
+    });
   });
   return regions;
 }
@@ -265,32 +309,43 @@ function strataRegions(cfg: LayoutConfig): Region[] {
     y1,
     cfg.irregularity,
     cfg.haloPx * 2 + cfg.spacingPx * 2,
-    (k) => shapeFor(cfg, k)
+    (k) => shapeFor(cfg, k),
+    cfg.faults
   );
   const half = cfg.haloPx / 2;
   const regions: Region[] = [];
   let prevKind: LapidaryTexture | null = null;
   for (let k = 0; k < cfg.bands; k++) {
-    const top: Point[] =
-      k === 0
-        ? [
-            { x: x0, y: y0 },
-            { x: x1, y: y0 },
-          ]
-        : curves[k - 1].map((p) => ({ x: p.x, y: p.y + half }));
-    const bottom: Point[] =
-      k === cfg.bands - 1
-        ? [
-            { x: x1, y: y1 },
-            { x: x0, y: y1 },
-          ]
-        : curves[k]
-            .map((p) => ({ x: p.x, y: p.y - half }))
-            .reverse();
+    const topCurve = k === 0 ? null : curves[k - 1].map((p) => ({ x: p.x, y: p.y + half }));
+    const bottomCurve =
+      k === cfg.bands - 1 ? null : curves[k].map((p) => ({ x: p.x, y: p.y - half }));
+    const top: Point[] = topCurve ?? [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+    ];
+    const bottom: Point[] = bottomCurve
+      ? [...bottomCurve].reverse()
+      : [
+          { x: x1, y: y1 },
+          { x: x0, y: y1 },
+        ];
     const poly = [...top, ...bottom];
+    // Bounding curves for silhouette-following fills, index-aligned on the
+    // shared x grid: a page-edge band resamples its straight edge onto the
+    // opposite curve's grid.
+    const bandTop = topCurve ?? (bottomCurve ?? []).map((p) => ({ x: p.x, y: y0 }));
+    const bandBottom = bottomCurve ?? (topCurve ?? []).map((p) => ({ x: p.x, y: y1 }));
     const tex = resolveTexture(cfg, k, prevKind);
     prevKind = tex.kind;
-    regions.push({ z: k, poly, tex });
+    regions.push({
+      z: k,
+      poly,
+      tex,
+      strataBand:
+        bandTop.length > 1 && bandTop.length === bandBottom.length
+          ? { top: bandTop, bottom: bandBottom }
+          : undefined,
+    });
   }
   return regions;
 }

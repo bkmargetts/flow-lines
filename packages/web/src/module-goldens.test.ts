@@ -170,7 +170,7 @@ for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const lapidary = pureModules.find((m) => m.id === 'lapidary')!;
   CASES['lapidary/facet'] = () =>
     lapidary.render(
-      stateFor(lapidary, { field: false, shapes: 'angular', textureMix: 'tonal', irregularity: 0.7 }),
+      stateFor(lapidary, { field: false, shapes: 'angular', textureMix: 'facet', irregularity: 0.7 }),
       env
     );
 }

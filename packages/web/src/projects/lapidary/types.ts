@@ -3,7 +3,14 @@ import { randomSeed } from '../../lib/random';
 
 /** Which curated band-texture sequence the sheet deals outer→inner.
  *  'shuffle' hands the deal to the core's seeded pick. */
-export type LapidaryTextureMix = 'specimen' | 'geode' | 'linework' | 'tonal' | 'shuffle';
+export type LapidaryTextureMix =
+  | 'specimen'
+  | 'geode'
+  | 'fortification'
+  | 'facet'
+  | 'linework'
+  | 'tonal'
+  | 'shuffle';
 
 /**
  * UI state for Lapidary (mm / degrees / 0..1 units). `render.ts` converts it
@@ -23,6 +30,8 @@ export interface LapidaryState {
   coverage: number; // 0.4..1 outer silhouette ÷ frame
   centerX: number; // -0.5..0.5 of the half-extents
   centerY: number;
+  faults: number; // 0..4 vertical fault planes (strata only)
+  veins: boolean; // trace fragment seams on the last pen (breccia only)
 
   // Seams
   haloMm: number; // reserved-paper seam width
@@ -65,6 +74,8 @@ export const defaultLapidaryState: LapidaryState = {
   coverage: 0.9,
   centerX: 0,
   centerY: 0,
+  faults: 0,
+  veins: false,
 
   haloMm: 2.2,
   outlines: false,

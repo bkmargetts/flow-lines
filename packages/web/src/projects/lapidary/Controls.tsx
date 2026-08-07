@@ -20,6 +20,8 @@ const PRESET_LABELS = Object.fromEntries(
 const MIX_LABELS: Record<LapidaryTextureMix, string> = {
   specimen: 'Specimen (lines · wavy · mottle · hatch)',
   geode: 'Geode (cross · stipple · paper band)',
+  fortification: 'Fortification (concentric banding)',
+  facet: 'Facet (hatch · lines · cross)',
   linework: 'Linework (lines & waves only)',
   tonal: 'Tonal (hatch · mottle · stipple)',
   shuffle: 'Shuffle (seeded deal)',
@@ -112,6 +114,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         <AdvGroup title="Composition">
           <Slider label="Centre X" value={state.centerX} min={-0.5} max={0.5} step={0.01} onChange={(v) => update({ centerX: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.mode === 'strata'} />
           <Slider label="Centre Y" value={state.centerY} min={-0.5} max={0.5} step={0.01} onChange={(v) => update({ centerY: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.mode === 'strata'} />
+          <Slider label="Faults" value={state.faults} min={0} max={4} step={1} onChange={(v) => update({ faults: v })} format={(v) => `${Math.round(v)}`} disabled={state.mode !== 'strata'} />
         </AdvGroup>
 
         <AdvGroup title="Texture detail">
@@ -134,6 +137,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
             </select>
           </label>
           <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
+          <Toggle label="Kintsugi veins" checked={state.veins} onChange={(v) => update({ veins: v })} disabled={state.mode !== 'breccia'} />
         </AdvGroup>
 
         <AdvGroup title="Pen & finish">

@@ -50,6 +50,24 @@ export const LAPIDARY_WEB_PRESETS: LapidaryWebPreset[] = [
     },
   },
   {
+    id: 'fortification',
+    label: 'Fortification',
+    state: {
+      preset: 'fortification',
+      mode: 'agate',
+      bands: 6,
+      field: true,
+      shapes: 'organic',
+      textureMix: 'fortification',
+      irregularity: 0.55,
+      coverage: 0.92,
+      angleDeg: 90,
+      angleDriftDeg: 25,
+      penAssignment: 'interleave',
+      palette: 'specimen',
+    },
+  },
+  {
     id: 'breccia',
     label: 'Breccia',
     state: {
@@ -79,6 +97,7 @@ export const LAPIDARY_WEB_PRESETS: LapidaryWebPreset[] = [
       textureMix: 'shuffle',
       irregularity: 0.55,
       coverage: 0.9,
+      faults: 1,
       angleDeg: 0,
       angleDriftDeg: 14,
       penAssignment: 'interleave',
@@ -94,7 +113,7 @@ export const LAPIDARY_WEB_PRESETS: LapidaryWebPreset[] = [
       bands: 5,
       field: false,
       shapes: 'angular',
-      textureMix: 'tonal',
+      textureMix: 'facet',
       irregularity: 0.7,
       coverage: 0.95,
       angleDeg: 90,
@@ -113,7 +132,15 @@ function pick<T>(rng: () => number, values: readonly T[]): T {
   return values[Math.min(values.length - 1, Math.floor(rng() * values.length))];
 }
 
-const MIXES: LapidaryTextureMix[] = ['specimen', 'geode', 'linework', 'tonal', 'shuffle'];
+const MIXES: LapidaryTextureMix[] = [
+  'specimen',
+  'geode',
+  'fortification',
+  'facet',
+  'linework',
+  'tonal',
+  'shuffle',
+];
 
 /**
  * Randomise-everything genome: a whole new arrangement within the sliders'
@@ -138,6 +165,8 @@ export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> 
     coverage: Number((0.6 + rng() * 0.4).toFixed(2)),
     centerX: Number(((rng() - 0.5) * 0.4).toFixed(2)),
     centerY: Number(((rng() - 0.5) * 0.4).toFixed(2)),
+    faults: mode === 'strata' ? Math.floor(rng() * 3) : 0,
+    veins: mode === 'breccia' && rng() < 0.25,
     haloMm: Number((1.4 + rng() * 1.8).toFixed(1)),
     outlines: rng() < 0.2,
     textureMix: pick(rng, MIXES),

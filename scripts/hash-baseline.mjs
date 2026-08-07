@@ -131,6 +131,14 @@ for (const scene of LANDSCAPE_SCENES) {
 }
 CASES['marbling/nonpareil'] = ['marbling', ...SIZE, ...SEED];
 CASES['marbling/feather'] = ['marbling', ...SIZE, ...SEED, '--pattern', 'feather', '--ink-groups', '2'];
+// Lapidary: a preset row, the shuffle deal, and the per-band override syntax.
+CASES['lapidary/fortification'] = ['lapidary', ...SIZE, ...SEED, '--preset', 'fortification'];
+CASES['lapidary/shuffle'] = ['lapidary', ...SIZE, ...SEED, '--mode', 'breccia', '--pens', '2'];
+CASES['lapidary/texture-overrides'] = [
+  'lapidary', ...SIZE, ...SEED, '--textures', 'lines:45,contour::0.8,hatch:125:0.6',
+];
+CASES['lapidary/veins'] = ['lapidary', ...SIZE, ...SEED, '--mode', 'breccia', '--pens', '2', '--veins'];
+CASES['lapidary/faults'] = ['lapidary', ...SIZE, ...SEED, '--mode', 'strata', '--faults', '2'];
 // Paper-size page path (the block repeated across commands) + hand-drawn wobble.
 CASES['botanical/paper-a5'] = ['botanical', ...SEED, '--paper', 'a5', ...BOTANICAL_SPECIES.fern];
 CASES['landscape/paper-a5'] = ['landscape', ...SEED, '--paper', 'a5', '--scene', 'rolling-hills'];

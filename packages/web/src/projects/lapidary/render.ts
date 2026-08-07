@@ -11,14 +11,16 @@ import { CUSTOM_PALETTE, getLapidaryPalette } from './palettes';
 import type { LapidaryState, LapidaryTextureMix } from './types';
 
 /** The curated band-texture deals, outer→inner (cycled over the band count).
- *  'specimen'/'geode' reuse the core presets' tables so the web look and the
- *  CLI preset stay the same drawing. */
+ *  'specimen'/'geode'/'facet' reuse the core presets' tables so the web look
+ *  and the CLI preset stay the same drawing. */
 const TEXTURE_MIXES: Record<
   Exclude<LapidaryTextureMix, 'shuffle'>,
   Array<LapidaryTexture | BandTexture>
 > = {
   specimen: LAPIDARY_PRESETS.specimen.textures!,
   geode: LAPIDARY_PRESETS.geode.textures!,
+  fortification: LAPIDARY_PRESETS.fortification.textures!,
+  facet: LAPIDARY_PRESETS.facet.textures!,
   linework: [
     { kind: 'lines', spacingScale: 1.1 },
     { kind: 'wavy', spacingScale: 0.8 },
@@ -62,6 +64,8 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     coverage: state.coverage,
     centerX: state.centerX,
     centerY: state.centerY,
+    faults: state.faults,
+    veins: state.veins,
 
     haloPx: state.haloMm * mm,
     outlines: state.outlines,

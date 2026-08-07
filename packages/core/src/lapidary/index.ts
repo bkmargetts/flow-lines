@@ -1,9 +1,10 @@
-import { FlowLinesResult } from '../flow-lines.js';
+import { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { optimizePlot } from '../optimize.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { clamp } from '../lib/math.js';
-import { buildRegions, LayoutConfig } from './layout.js';
+import { inkLayerName } from '../marbling/index.js';
+import { buildRegions, LayoutConfig, Region, RegionRadial } from './layout.js';
 import { fillRegion } from './textures.js';
 import { carveRegions, PenAssignment } from './carve.js';
 
@@ -20,9 +21,10 @@ import type { LapidaryMode, LapidaryTexture, BandTexture, LapidaryShapes } from 
 /**
  * Lapidary — layered pattern artworks in the style of a cut and polished
  * stone cross-section: organic regions, each filled with its own line
- * texture (ruled lines, wavy combing, dense hatch, mottled patchy hatch,
- * shallow cross-hatch, stipple, or held paper), separated by clean
- * reserved-paper seams the way stacked stencil layers hold off one another.
+ * texture (ruled lines, wavy combing, concentric contour banding, dense
+ * hatch, mottled patchy hatch, shallow cross-hatch, stipple, or held
+ * paper), separated by clean reserved-paper seams the way stacked stencil
+ * layers hold off one another.
  *
  * Three arrangements: `agate` nests concentric blob bands around a centre
  * (the reference piece), `breccia` scatters overlapping fragments over the
@@ -66,6 +68,15 @@ export interface LapidaryOptions {
   shapes?: LapidaryShapes;
   /** Silhouette irregularity 0..1 (default 0.55) */
   irregularity?: number;
+  /** Vertical fault planes thrown across the strata stack, 0..4 (default 0).
+   *  Every bed boundary shifts by the fault's displacement on one side of a
+   *  slightly inclined fault line — the near-vertical scarp is the
+   *  geological tell. Strata only. */
+  faults?: number;
+  /** Trace the reserved-paper seams between breccia fragments as strokes on
+   *  the LAST pen (default false) — load it with gold for the kintsugi
+   *  look. Breccia only. */
+  veins?: boolean;
   /** Outermost silhouette size as a fraction of the frame, 0.4..1 (default 0.9) */
   coverage?: number;
   /** Composition centre offset as a fraction of the half-extents, -0.5..0.5 */
@@ -138,7 +149,7 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     bands: 7,
     pens: 3,
     coverage: 0.95,
-    textures: ['lines', 'cross', 'stipple', 'hatch', 'blank', 'patchy', 'lines'],
+    textures: ['lines', 'cross', 'stipple', 'hatch', 'blank', 'patchy', 'crystal'],
   },
   breccia: {
     mode: 'breccia',
@@ -152,6 +163,21 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     pens: 2,
     baseAngleDeg: 0,
     angleDriftDeg: 14,
+    faults: 1,
+  },
+  fortification: {
+    mode: 'agate',
+    bands: 6,
+    pens: 2,
+    coverage: 0.92,
+    textures: [
+      { kind: 'lines', spacingScale: 1.2 },
+      { kind: 'contour', spacingScale: 1 },
+      { kind: 'contour', spacingScale: 0.7 },
+      { kind: 'lines', angleDeg: 90, spacingScale: 1.4 },
+      { kind: 'contour', spacingScale: 0.9 },
+      { kind: 'stipple', spacingScale: 1.1 },
+    ],
   },
   facet: {
     mode: 'agate',
@@ -182,6 +208,73 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     ],
   },
 };
+
+/**
+ * Kintsugi veins: one path per breccia fragment, run mid-seam — the fragment's
+ * ink ends on its boundary and the surrounding ink is held a full halo off it,
+ * so a path half a halo out has clear paper both sides (the wobble cap keeps
+ * it there). Samples covered by a fragment drawn on top are dropped; the
+ * survivors emit as open arcs.
+ */
+function brecciaVeins(
+  regions: Region[],
+  rect: { x0: number; y0: number; x1: number; y1: number },
+  haloPx: number,
+  pen: string
+): FlowLine[] {
+  const frags = regions.filter((r) => r.z > 0 && r.radial);
+  const insideFrag = (x: number, y: number, f: RegionRadial): boolean => {
+    const ex = (x - f.cx) / f.rx;
+    const ey = (y - f.cy) / f.ry;
+    const r = Math.hypot(ex, ey);
+    if (r === 0) return true;
+    const n = f.table.length;
+    const fi = (((Math.atan2(ey, ex) / (Math.PI * 2)) * n % n) + n) % n;
+    const j = Math.floor(fi);
+    const g = f.table[j] + (f.table[(j + 1) % n] - f.table[j]) * (fi - j);
+    return r < g;
+  };
+  const out: FlowLine[] = [];
+  for (const reg of frags) {
+    const f = reg.radial!;
+    const n = f.table.length;
+    const loop: Point[] = [];
+    for (let j = 0; j <= n; j++) {
+      const theta = ((j % n) / n) * Math.PI * 2;
+      const baseLen = Math.hypot(Math.cos(theta) * f.rx, Math.sin(theta) * f.ry) || 1e-6;
+      const g = f.table[j % n] + (haloPx * 0.5) / baseLen;
+      loop.push({ x: f.cx + Math.cos(theta) * f.rx * g, y: f.cy + Math.sin(theta) * f.ry * g });
+    }
+    const covers = frags.filter((o) => o.z > reg.z).map((o) => o.radial!);
+    const keep = (p: Point): boolean =>
+      p.x >= rect.x0 &&
+      p.x <= rect.x1 &&
+      p.y >= rect.y0 &&
+      p.y <= rect.y1 &&
+      !covers.some((o) => insideFrag(p.x, p.y, o));
+    let arc: Point[] = [];
+    const flush = (): void => {
+      let len = 0;
+      for (let i = 1; i < arc.length; i++) {
+        len += Math.hypot(arc[i].x - arc[i - 1].x, arc[i].y - arc[i - 1].y);
+      }
+      if (len >= haloPx * 3) out.push({ points: arc, layer: pen });
+      arc = [];
+    };
+    for (let i = 1; i < loop.length; i++) {
+      const a = loop[i - 1];
+      const b = loop[i];
+      const segs = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 5));
+      for (let s = i === 1 ? 0 : 1; s <= segs; s++) {
+        const p = { x: a.x + ((b.x - a.x) * s) / segs, y: a.y + ((b.y - a.y) * s) / segs };
+        if (keep(p)) arc.push(p);
+        else flush();
+      }
+    }
+    flush();
+  }
+  return out;
+}
 
 /** Render a lapidary sheet as plottable per-pen strokes. */
 export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
@@ -219,19 +312,25 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     densityContrast: clamp(options.densityContrast ?? 0.6, 0, 1),
     waviness: clamp(options.waviness ?? 0.5, 0, 1),
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
+    faults: clamp(Math.round(options.faults ?? 0), 0, 4),
   };
 
+  const pens = clamp(Math.round(options.pens ?? 1), 1, 4);
   const { regions, geometricGaps } = buildRegions(layout);
   const lines = carveRegions(regions, fillRegion, {
     width,
     height,
     haloPx,
     seed,
-    pens: clamp(Math.round(options.pens ?? 1), 1, 4),
+    pens,
     penAssignment: options.penAssignment ?? 'interleave',
     outlines: options.outlines ?? false,
     geometricGaps,
   });
+
+  if ((options.veins ?? false) && layout.mode === 'breccia') {
+    lines.push(...brecciaVeins(regions, layout.rect, haloPx, inkLayerName(pens - 1)));
+  }
 
   let result: FlowLinesResult = { lines, width, height, seed };
 

@@ -162,6 +162,12 @@ export function nestedRingTables(
  * against the curve above still lines up sample-for-sample). Curves are
  * clamped monotonically apart by `minGapPx` so bands never cross. Returned
  * top→bottom, each as left→right points.
+ *
+ * `faults` throws that many vertical fault planes across the stack: every
+ * curve shifts by the fault's displacement on one side of a (slightly
+ * inclined) fault line, so each bed boundary shows the same near-vertical
+ * scarp — the geological tell. Fault randomness draws from its own stream,
+ * so `faults: 0` leaves the curves byte-identical.
  */
 export function strataCurves(
   seed: number,
@@ -172,7 +178,8 @@ export function strataCurves(
   y1: number,
   irregularity: number,
   minGapPx: number,
-  styleFor: (curve: number) => LapidaryShape
+  styleFor: (curve: number) => LapidaryShape,
+  faults = 0
 ): Point[][] {
   const rng = makeRandom(subSeed(seed, 2));
   const noise = createNoise(subSeed(seed, 3));
@@ -215,6 +222,31 @@ export function strataCurves(
       if (xc >= x1) break;
     }
     curves.push(pts);
+  }
+  if (faults > 0 && curves.length > 0) {
+    const frng = makeRandom(subSeed(seed, 8));
+    for (let f = 0; f < faults; f++) {
+      const xf = x0 + (0.15 + 0.7 * frng()) * (x1 - x0);
+      const throwY =
+        (frng() < 0.5 ? -1 : 1) * bandH * (0.25 + 0.45 * frng()) * Math.max(0.4, irregularity);
+      // A slight dip inclines the fault plane, so the scarp walks sideways
+      // as it descends through the beds instead of stacking dead-vertical.
+      const slope = (frng() - 0.5) * 0.3;
+      for (let k = 0; k < curves.length; k++) {
+        const threshold = xf + k * bandH * slope;
+        for (const p of curves[k]) {
+          if (p.x >= threshold) p.y += throwY;
+        }
+      }
+    }
+    // Re-impose the bounds and the top-down monotonic gap the shifts broke.
+    for (let k = 0; k < curves.length; k++) {
+      for (let i = 0; i < curves[k].length; i++) {
+        const p = curves[k][i];
+        p.y = Math.min(y1 - minGapPx * 0.5, Math.max(y0 + minGapPx * 0.5, p.y));
+        if (k > 0) p.y = Math.max(p.y, curves[k - 1][i].y + minGapPx);
+      }
+    }
   }
   return curves;
 }

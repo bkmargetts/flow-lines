@@ -186,4 +186,139 @@ describe('generateLapidary', () => {
     const r = generateLapidary({ width: 40, height: 40, margin: 15, seed: 42 });
     expect(r.lines).toEqual([]);
   });
+
+  it('contour strokes follow the band silhouette', () => {
+    // Zero irregularity on a square page makes every ring a circle, so a
+    // silhouette-following loop keeps a near-constant distance to the centre
+    // along its whole length — straight hatching would sweep the ring's full
+    // radial extent.
+    const opts = {
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 3,
+      field: false,
+      irregularity: 0,
+      textures: ['contour' as const],
+      wobble: 0,
+      waviness: 0,
+      optimize: false,
+    };
+    const r = generateLapidary(opts);
+    expect(r.lines.length).toBeGreaterThan(20);
+    for (const line of r.lines) {
+      const radii = line.points.map((p) => Math.hypot(p.x - 150, p.y - 150));
+      expect(Math.max(...radii) - Math.min(...radii)).toBeLessThan(3);
+    }
+    expect(JSON.stringify(generateLapidary(opts))).toEqual(JSON.stringify(r));
+  });
+
+  it('renders contour in every mode and on the field without throwing', () => {
+    for (const mode of MODES) {
+      const r = generateLapidary({ ...BASE, mode, textures: ['contour'] });
+      expect(r.lines.length).toBeGreaterThan(50);
+    }
+  });
+
+  it('crystal rays radiate from the band centre', () => {
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 2,
+      field: false,
+      irregularity: 0,
+      textures: ['crystal'],
+      wobble: 0,
+      optimize: false,
+    });
+    expect(r.lines.length).toBeGreaterThan(30);
+    // Rays point at the centre; chevron tips (the short 3-point strokes)
+    // deliberately don't, so the property holds for the large majority.
+    let radial = 0;
+    for (const line of r.lines) {
+      const a = line.points[0];
+      const b = line.points[line.points.length - 1];
+      const dir = Math.atan2(b.y - a.y, b.x - a.x);
+      const toCentre = Math.atan2(150 - a.y, 150 - a.x);
+      let diff = Math.abs(dir - toCentre) % Math.PI;
+      if (diff > Math.PI / 2) diff = Math.PI - diff;
+      if (diff < (15 * Math.PI) / 180) radial++;
+    }
+    expect(radial / r.lines.length).toBeGreaterThan(0.6);
+  });
+
+  it('breccia veins land on the last pen and only add strokes', () => {
+    const base = { ...BASE, mode: 'breccia' as const, pens: 3, wobble: 0, optimize: false };
+    const without = generateLapidary(base);
+    const withVeins = generateLapidary({ ...base, veins: true });
+    expect(withVeins.lines.length).toBeGreaterThan(without.lines.length);
+    // Veins append after the carve: the carved drawing is untouched.
+    expect(JSON.stringify(withVeins.lines.slice(0, without.lines.length))).toEqual(
+      JSON.stringify(without.lines)
+    );
+    const veins = withVeins.lines.slice(without.lines.length);
+    for (const line of veins) expect(line.layer).toBe(inkLayerName(2));
+    for (const line of veins) {
+      for (const p of line.points) {
+        expect(p.x).toBeGreaterThanOrEqual(0);
+        expect(p.x).toBeLessThanOrEqual(BASE.width);
+        expect(p.y).toBeGreaterThanOrEqual(0);
+        expect(p.y).toBeLessThanOrEqual(BASE.height);
+      }
+    }
+  });
+
+  it('strata faults shift the beds without touching faults: 0', () => {
+    const base = { ...BASE, mode: 'strata' as const };
+    expect(JSON.stringify(generateLapidary({ ...base, faults: 0 }))).toEqual(
+      JSON.stringify(generateLapidary(base))
+    );
+    const faulted = generateLapidary({ ...base, faults: 2 });
+    expect(JSON.stringify(faulted.lines)).not.toEqual(
+      JSON.stringify(generateLapidary(base).lines)
+    );
+    expect(JSON.stringify(generateLapidary({ ...base, faults: 2 }))).toEqual(
+      JSON.stringify(faulted)
+    );
+    for (const line of faulted.lines) {
+      for (const p of line.points) {
+        expect(p.y).toBeGreaterThanOrEqual(0);
+        expect(p.y).toBeLessThanOrEqual(BASE.height);
+      }
+    }
+  });
+
+  it('scales stipple tick length with the line pitch', () => {
+    // Ticks used to be an absolute px length; they must ride the pitch so
+    // dots keep their weight on big sheets.
+    const medianTick = (spacingPx: number): number => {
+      const r = generateLapidary({
+        ...BASE,
+        textures: ['stipple'],
+        spacingPx,
+        wobble: 0,
+        optimize: false,
+      });
+      const lens = r.lines
+        .map((l) => {
+          let len = 0;
+          for (let i = 1; i < l.points.length; i++) {
+            len += Math.hypot(
+              l.points[i].x - l.points[i - 1].x,
+              l.points[i].y - l.points[i - 1].y
+            );
+          }
+          return len;
+        })
+        .sort((a, b) => a - b);
+      return lens[Math.floor(lens.length / 2)];
+    };
+    const at4 = medianTick(4);
+    const at12 = medianTick(12);
+    expect(at12 / at4).toBeGreaterThan(2);
+    expect(at12 / at4).toBeLessThan(4.5);
+  });
 });
