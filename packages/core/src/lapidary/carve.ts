@@ -1,5 +1,5 @@
 import { FlowLine, Point } from '../flow-lines.js';
-import { buildCoverageMask, clipLinesToMask } from '../compose/index.js';
+import { CoverageAccumulator, createCoverageAccumulator, clipLinesToMask } from '../compose/index.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { inkLayerName } from '../marbling/index.js';
 import { Region } from './layout.js';
@@ -76,23 +76,32 @@ export function carveRegions(
   cfg: CarveConfig
 ): FlowLine[] {
   const sorted = [...regions].sort((a, b) => b.z - a.z);
-  const avoid: FlowLine[] = [];
+  // Accumulated upper-ink coverage, stamped incrementally: each stroke is
+  // rasterized once instead of re-building the whole mask per region.
+  let acc: CoverageAccumulator | null = null;
+  let accHasInk = false;
   const out: FlowLine[] = [];
   for (const region of sorted) {
     const { ink, phantom } = fill(region);
     let drawn = cfg.outlines && region.z > 0 ? [...ink, ...outlineLines(region)] : ink;
-    if (!cfg.geometricGaps && avoid.length > 0 && drawn.length > 0) {
-      const mask = buildCoverageMask(avoid, cfg.width, cfg.height, { radiusPx: cfg.haloPx });
-      drawn = clipLinesToMask(drawn, mask, {
-        mode: 'outside',
-        // Dust filter, sized to the texture: sliver hatch ticks at the seam
-        // are noise, but a stipple dot is sub-px long and must survive.
-        minKeepPx: region.tex.kind === 'stipple' ? 0.5 : region.tex.spacing,
-      });
+    if (!cfg.geometricGaps) {
+      if (accHasInk && drawn.length > 0) {
+        drawn = clipLinesToMask(drawn, acc!.mask, {
+          mode: 'outside',
+          // Dust filter, sized to the texture: sliver hatch ticks at the seam
+          // are noise, but a stipple dot is sub-px long and must survive.
+          minKeepPx: region.tex.kind === 'stipple' ? 0.5 : region.tex.spacing,
+        });
+      }
+      const add = [...drawn, ...phantom];
+      if (add.length > 0) {
+        acc ??= createCoverageAccumulator(cfg.width, cfg.height, { radiusPx: cfg.haloPx });
+        acc.stamp(add);
+        accHasInk = true;
+      }
     }
     assignPens(drawn, region, cfg);
     out.push(...drawn);
-    avoid.push(...drawn, ...phantom);
   }
   return out;
 }

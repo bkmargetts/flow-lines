@@ -48,16 +48,14 @@ function maskFromRaster(cols: number, rows: number, cellPx: number, data: Uint8A
   };
 }
 
-/**
- * Build a layer's coverage mask by disc-stamping densified line samples into a
- * downsampled occupancy grid (the `texture.ts` halo-mask pattern).
- */
-export function buildCoverageMask(
-  lines: FlowLine[],
+/** Resolve the raster geometry for a page: the same cell sizing (including
+ *  the MAX_CELLS coarsening) whether the mask is built one-shot or
+ *  accumulated, so the two paths raster identically. */
+function resolveRaster(
   widthPx: number,
   heightPx: number,
   options: CoverageMaskOptions
-): CoverageMask {
+): { radius: number; cellPx: number; cols: number; rows: number } {
   const radius = Math.max(0.5, options.radiusPx);
   let cellPx = options.cellPx ?? Math.max(2, Math.round(radius / 3));
   // Cap the raster for very large pages; a coarser grid degrades gracefully.
@@ -66,7 +64,18 @@ export function buildCoverageMask(
   }
   const cols = Math.max(1, Math.ceil(widthPx / cellPx));
   const rows = Math.max(1, Math.ceil(heightPx / cellPx));
-  const data = new Uint8Array(cols * rows);
+  return { radius, cellPx, cols, rows };
+}
+
+/** Disc-stamp densified line samples into an occupancy raster in place. */
+function stampLinesInto(
+  data: Uint8Array,
+  cols: number,
+  rows: number,
+  cellPx: number,
+  radius: number,
+  lines: FlowLine[]
+): void {
   const r = Math.ceil(radius / cellPx);
   const radius2 = radius * radius;
 
@@ -101,8 +110,51 @@ export function buildCoverageMask(
       }
     }
   }
+}
 
+/**
+ * Build a layer's coverage mask by disc-stamping densified line samples into a
+ * downsampled occupancy grid (the `texture.ts` halo-mask pattern).
+ */
+export function buildCoverageMask(
+  lines: FlowLine[],
+  widthPx: number,
+  heightPx: number,
+  options: CoverageMaskOptions
+): CoverageMask {
+  const { radius, cellPx, cols, rows } = resolveRaster(widthPx, heightPx, options);
+  const data = new Uint8Array(cols * rows);
+  stampLinesInto(data, cols, rows, cellPx, radius, lines);
   return maskFromRaster(cols, rows, cellPx, data);
+}
+
+export interface CoverageAccumulator {
+  /** Union more strokes into the mask. */
+  stamp(lines: FlowLine[]): void;
+  /** Live view over the accumulating raster — valid across stamps. */
+  mask: CoverageMask;
+}
+
+/**
+ * A coverage mask built up over successive `stamp` calls instead of one shot.
+ * Disc stamping is an idempotent, order-independent union, so the raster is
+ * byte-identical to `buildCoverageMask` over the concatenated strokes — but a
+ * caller that alternates clip-then-add (the lapidary carve) pays for each
+ * stroke once instead of re-rasterizing the whole accumulation per step.
+ */
+export function createCoverageAccumulator(
+  widthPx: number,
+  heightPx: number,
+  options: CoverageMaskOptions
+): CoverageAccumulator {
+  const { radius, cellPx, cols, rows } = resolveRaster(widthPx, heightPx, options);
+  const data = new Uint8Array(cols * rows);
+  return {
+    stamp(lines: FlowLine[]): void {
+      stampLinesInto(data, cols, rows, cellPx, radius, lines);
+    },
+    mask: maskFromRaster(cols, rows, cellPx, data),
+  };
 }
 
 /**

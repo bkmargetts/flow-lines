@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import type { FlowLine, Point } from '../flow-lines.js';
 import { holdOffLines } from './hold-off.js';
-import { buildCoverageMask, morphMask, clipLinesToMask, traceMaskOutline } from './mask.js';
+import {
+  buildCoverageMask,
+  createCoverageAccumulator,
+  morphMask,
+  clipLinesToMask,
+  traceMaskOutline,
+} from './mask.js';
+import { makeRandom } from '../lib/rng.js';
 import { transformLines, echoLines } from './transform.js';
 import { pointInPolygon } from '../lib/polyline.js';
 
@@ -248,6 +255,52 @@ describe('transformLines / echoLines', () => {
   it('is inert for one copy or an identity delta', () => {
     expect(echoLines(square, { copies: 1, translateXPx: 5 })).toBe(square);
     expect(echoLines(square, { copies: 4 })).toBe(square);
+  });
+});
+
+describe('createCoverageAccumulator', () => {
+  /** Seeded wandering polylines scattered over the page. */
+  function randomLines(seed: number, count: number): FlowLine[] {
+    const rng = makeRandom(seed);
+    const lines: FlowLine[] = [];
+    for (let i = 0; i < count; i++) {
+      const points: Point[] = [];
+      let x = rng() * 200;
+      let y = rng() * 200;
+      const n = 2 + Math.floor(rng() * 6);
+      for (let j = 0; j < n; j++) {
+        points.push({ x, y });
+        x += (rng() - 0.5) * 40;
+        y += (rng() - 0.5) * 40;
+      }
+      lines.push({ points });
+    }
+    return lines;
+  }
+
+  it('incremental stamping matches the one-shot mask byte for byte', () => {
+    for (const [seed, radiusPx] of [
+      [1, 6],
+      [7, 2.5],
+      [42, 11],
+    ] as const) {
+      const batches = [randomLines(seed, 8), randomLines(seed + 100, 1), [], randomLines(seed + 200, 12)];
+      const acc = createCoverageAccumulator(200, 200, { radiusPx });
+      for (const batch of batches) acc.stamp(batch);
+      const oneShot = buildCoverageMask(batches.flat(), 200, 200, { radiusPx });
+      expect(acc.mask.cols).toBe(oneShot.cols);
+      expect(acc.mask.rows).toBe(oneShot.rows);
+      expect(acc.mask.cellPx).toBe(oneShot.cellPx);
+      expect(Buffer.compare(Buffer.from(acc.mask.data), Buffer.from(oneShot.data))).toBe(0);
+    }
+  });
+
+  it('the mask view is live across stamps', () => {
+    const acc = createCoverageAccumulator(200, 200, { radiusPx: 6 });
+    const view = acc.mask;
+    expect(view.inside(100, 100)).toBe(false);
+    acc.stamp(hatchBand());
+    expect(view.inside(100, 100)).toBe(true);
   });
 });
 
