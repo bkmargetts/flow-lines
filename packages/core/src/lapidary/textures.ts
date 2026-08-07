@@ -1,5 +1,6 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { hatchPolygon } from '../hearts/heart.js';
+import { traceIsoContours } from '../iso-contours.js';
 import { emitStroke, Craft } from '../landscape/hatching.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { createNoise } from '../noise.js';
@@ -392,6 +393,156 @@ export function fillRegion(region: Region): RegionFill {
       const minLen = t.spacing * 1.5;
       for (const run of hatchPolygon(poly, ang2, t.spacing * 1.25, 1 - t.phase)) {
         gatedRun(run[0], run[1], Math.min(8, patchScale / 4), gate, minLen, 0, emitTapered);
+      }
+      break;
+    }
+
+    case 'mottle': {
+      // Two-tone blob pattern (the reference's leopard/wood-grain ring): a
+      // low-frequency field deals organic blobs, and a second half-pitch
+      // hatch family fills only their interiors — two committed density
+      // levels, where the patchy gate only removes ink below one. The gate
+      // and the wall raster share one noise instance so the drawn cell
+      // walls sit exactly on the density boundary. Per-blob pen splitting
+      // would need RegionFill to carry sub-tags through the carve — pens
+      // stay a downstream per-region/interleave decision.
+      const mottleNoise = createNoise(subSeed(t.seed, 2));
+      // Blob cells stay hand-sized even at tight pitch (the patchScale
+      // idiom, but larger — leopard patches, not flecks); patchiness is
+      // the blob coverage knob.
+      const blobScale = Math.max(40, t.spacing * 16);
+      const blobCut = 0.8 - t.patchiness * 1.3;
+      const inBlob = (x: number, y: number): boolean =>
+        mottleNoise.noise2D(x / blobScale, y / blobScale) > blobCut;
+
+      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
+        emitTapered(run[0], run[1]);
+      }
+      // Infill lands exactly between the base lines. edgeBand 0 — unlike
+      // patchy, blob ink must not smear onto the silhouette seam.
+      const minLen = t.spacing * 1.5;
+      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, (t.phase + 0.5) % 1)) {
+        gatedRun(run[0], run[1], Math.min(8, blobScale / 4), inBlob, minLen, 0, emitTapered);
+      }
+
+      if (t.blobOutlines) {
+        let bx0 = Infinity;
+        let by0 = Infinity;
+        let bx1 = -Infinity;
+        let by1 = -Infinity;
+        for (const p of poly) {
+          if (p.x < bx0) bx0 = p.x;
+          if (p.y < by0) by0 = p.y;
+          if (p.x > bx1) bx1 = p.x;
+          if (p.y > by1) by1 = p.y;
+        }
+        const cellPx = Math.max(3, blobScale / 8);
+        const gw = Math.max(2, Math.ceil((bx1 - bx0) / cellPx) + 3);
+        const gh = Math.max(2, Math.ceil((by1 - by0) / cellPx) + 3);
+        const data = new Float32Array(gw * gh);
+        for (let gy = 0; gy < gh; gy++) {
+          for (let gx = 0; gx < gw; gx++) {
+            const x = bx0 + (gx - 1) * cellPx;
+            const y = by0 + (gy - 1) * cellPx;
+            data[gy * gw + gx] = mottleNoise.noise2D(x / blobScale, y / blobScale);
+          }
+        }
+        const minKeep = t.spacing * 4;
+        for (const loop of traceIsoContours({ width: gw, height: gh, data }, blobCut)) {
+          const pts = loop.map((p) => ({
+            x: bx0 + (p.x - 1) * cellPx,
+            y: by0 + (p.y - 1) * cellPx,
+          }));
+          const wholeLoop =
+            pts.length >= 4 &&
+            Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 1e-6;
+          let kept: Point[] = [];
+          let clipped = false;
+          const flush = (): void => {
+            if (kept.length >= 2) {
+              let l = 0;
+              for (let i = 1; i < kept.length; i++) {
+                l += Math.hypot(kept[i].x - kept[i - 1].x, kept[i].y - kept[i - 1].y);
+              }
+              // Confetti guard: wall fragments shorter than a few pitches
+              // read as stray ticks, not cell walls.
+              if (l >= minKeep) dashPolyline(kept, wholeLoop && !clipped);
+            }
+            kept = [];
+          };
+          for (const q of pts) {
+            if (pointInPolygon(poly, q.x, q.y)) {
+              kept.push(q);
+            } else {
+              clipped = true;
+              flush();
+            }
+          }
+          flush();
+        }
+      }
+      break;
+    }
+
+    case 'grain': {
+      // Stone grain: short curved dashes combed along one shared noise flow
+      // field, lengths stretched by a decorrelated fBm — reads as worked
+      // material, distinct from stipple's isotropic ticks and wavy's
+      // unbroken combing. Waviness is the bend knob.
+      const grainNoise = createNoise(subSeed(t.seed, 3));
+      const flowScale = Math.max(36, t.spacing * 16);
+      const bend = 0.7 * (0.4 + 0.6 * t.waviness);
+      const dir = (x: number, y: number): number =>
+        t.angleRad + bend * grainNoise.fbm(x / flowScale, y / flowScale, 3, 0.5, 2);
+      // Seed pitch and dash lengths tuned together: at 1.4× pitch with
+      // longer dashes the overlap reads near-solid fur, not grain.
+      const pitch = t.spacing * 1.7;
+      const minKeep = t.spacing * 1.2;
+      let bx0 = Infinity;
+      let by0 = Infinity;
+      let bx1 = -Infinity;
+      let by1 = -Infinity;
+      for (const p of poly) {
+        if (p.x < bx0) bx0 = p.x;
+        if (p.y < by0) by0 = p.y;
+        if (p.x > bx1) bx1 = p.x;
+        if (p.y > by1) by1 = p.y;
+      }
+      for (let gy = by0 + pitch / 2; gy <= by1; gy += pitch) {
+        for (let gx = bx0 + pitch / 2; gx <= bx1; gx += pitch) {
+          const sx = gx + (rng() - 0.5) * pitch * 0.8;
+          const sy = gy + (rng() - 0.5) * pitch * 0.8;
+          if (!pointInPolygon(poly, sx, sy)) continue;
+          // The +41.7 domain offset decorrelates length from direction
+          // (the cross-gate idiom).
+          const v =
+            0.5 +
+            0.5 * grainNoise.fbm(sx / (flowScale * 0.6) + 41.7, sy / (flowScale * 0.6), 2, 0.5, 2);
+          const half = t.spacing * (2.2 + 3.8 * v) * 0.5;
+          // Walk the streamline both ways from the seed, re-sampling the
+          // flow each step (curved dashes); raw polylines — the wobble
+          // pass supplies the hand feel.
+          const pts: Point[] = [{ x: sx, y: sy }];
+          for (const sgn of [1, -1] as const) {
+            let x = sx;
+            let y = sy;
+            let s = 0;
+            while (s < half) {
+              const a = dir(x, y);
+              x += Math.cos(a) * fineStep * sgn;
+              y += Math.sin(a) * fineStep * sgn;
+              s += fineStep;
+              if (!pointInPolygon(poly, x, y)) break;
+              if (sgn === 1) pts.push({ x, y });
+              else pts.unshift({ x, y });
+            }
+          }
+          let l = 0;
+          for (let i = 1; i < pts.length; i++) {
+            l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+          }
+          if (l >= minKeep) push(ink, pts);
+        }
       }
       break;
     }

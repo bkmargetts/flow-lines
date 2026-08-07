@@ -205,6 +205,7 @@ describe('running commands end to end', () => {
       ['lapidary', ...SMALL, '--textures', 'lines:45,hatch:125:0.6,wavy::0.8'],
     ],
     ['lapidary veins', ['lapidary', ...SMALL, '--mode', 'breccia', '--pens', '3', '--veins']],
+    ['lapidary noise textures', ['lapidary', ...SMALL, '--textures', 'mottle,grain,hatch']],
     ['lapidary faults', ['lapidary', ...SMALL, '--mode', 'strata', '--faults', '2']],
     [
       'lapidary palette',

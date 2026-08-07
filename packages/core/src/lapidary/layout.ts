@@ -25,6 +25,8 @@ export type LapidaryTexture =
   | 'patchy'
   | 'cross'
   | 'stipple'
+  | 'mottle'
+  | 'grain'
   | 'blank';
 
 /** Per-band texture spec; a plain kind string means "defaults for that kind". */
@@ -35,12 +37,17 @@ export interface BandTexture {
   /** Multiplier on the kind's resolved line pitch. */
   spacingScale?: number;
   /** Per-band override of the global waviness (wavy amplitude / contour
-   *  undulation). */
+   *  undulation / grain bend). */
   waviness?: number;
-  /** Per-band override of the global patchiness (patchy/cross only). */
+  /** Per-band override of the global patchiness (patchy/cross hole amount;
+   *  mottle blob coverage). */
   patchiness?: number;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
+  /** Trace the mottle blob boundaries as light dashed cell walls (mottle
+   *  only; default on — the walls are what turn two hatch densities into a
+   *  drawn pattern). */
+  blobOutlines?: boolean;
 }
 
 /** The tuning anchor: the A3 short edge at 3 px/mm. Feature sizes (seam
@@ -59,6 +66,8 @@ export interface ResolvedTexture {
   patchiness: number;
   /** Slides the hatch family so no two bands' lines register alike. */
   phase: number;
+  /** See `BandTexture.blobOutlines` (mottle only). */
+  blobOutlines: boolean;
   seed: number;
   /** sizingDim / TUNING_DIM — see `TUNING_DIM`. */
   featureScale: number;
@@ -132,6 +141,12 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   patchy: 0.55,
   cross: 0.95,
   stipple: 1.3,
+  // Base family airier than patchy — the half-pitch blob infill doubles
+  // interior density to an effective 0.35, darker than plain hatch. The
+  // gap matters: at tight pitches both levels saturate and the two-tone
+  // drowns.
+  mottle: 0.7,
+  grain: 0.7,
   blank: 1,
 };
 
@@ -146,6 +161,8 @@ const RANDOM_KINDS: LapidaryTexture[] = [
   'patchy',
   'cross',
   'stipple',
+  'mottle',
+  'grain',
 ];
 
 /**
@@ -185,6 +202,7 @@ function resolveTexture(cfg: LayoutConfig, z: number, prevKind: LapidaryTexture 
     waviness: clamp(spec.waviness ?? cfg.waviness, 0, 1),
     patchiness: clamp(spec.patchiness ?? cfg.patchiness, 0, 1),
     phase: rng(),
+    blobOutlines: spec.blobOutlines ?? true,
     seed: subSeed(cfg.seed, 400 + z),
     featureScale: cfg.featureScale,
   };

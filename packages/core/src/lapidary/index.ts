@@ -26,9 +26,10 @@ export const VEIN_LAYER = 'vein';
  * Lapidary — layered pattern artworks in the style of a cut and polished
  * stone cross-section: organic regions, each filled with its own line
  * texture (ruled lines, wavy combing, concentric contour banding, dense
- * hatch, mottled patchy hatch, shallow cross-hatch, stipple, or held
- * paper), separated by clean reserved-paper seams the way stacked stencil
- * layers hold off one another.
+ * hatch, mottled patchy hatch, shallow cross-hatch, stipple, two-tone
+ * mottle blobs, flowing grain dashes, or held paper), separated by clean
+ * reserved-paper seams the way stacked stencil layers hold off one
+ * another.
  *
  * Three arrangements: `agate` nests concentric blob bands around a centre
  * (the reference piece), `breccia` scatters overlapping fragments over the
@@ -110,11 +111,13 @@ export interface LapidaryOptions {
   spacingPx?: number;
   /** 0..1 spread between dense and sparse bands (default 0.6) */
   densityContrast?: number;
-  /** Line undulation 0..1 (default 0.5): wavy-texture amplitude, and how far
-   *  contour bands drift off the silhouette they echo */
+  /** Line undulation 0..1 (default 0.5): wavy-texture amplitude, how far
+   *  contour bands drift off the silhouette they echo, and how hard grain
+   *  dashes bend off the band angle */
   waviness?: number;
-  /** Patchy/cross hole amount 0..1 (default 0.55); cross keeps its second
-   *  family legible by flooring its gate at 0.25 */
+  /** Patchy/cross hole amount and mottle blob coverage, 0..1 (default
+   *  0.55); cross keeps its second family legible by flooring its gate at
+   *  0.25 */
   patchiness?: number;
 
   // ---- Pens ----
@@ -146,7 +149,7 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     textures: [
       { kind: 'lines', spacingScale: 1.1 },
       { kind: 'wavy', angleDeg: 90, spacingScale: 0.75, waviness: 0.9 },
-      { kind: 'patchy', spacingScale: 0.5 },
+      { kind: 'mottle', spacingScale: 0.75 },
       { kind: 'hatch', angleDeg: 125, spacingScale: 1.4 },
       { kind: 'lines', angleDeg: 90, spacingScale: 1.3 },
     ],
@@ -156,7 +159,7 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     bands: 7,
     pens: 3,
     coverage: 0.95,
-    textures: ['lines', 'cross', 'stipple', 'hatch', 'blank', 'patchy', 'crystal'],
+    textures: ['lines', 'cross', 'stipple', 'hatch', 'blank', 'grain', 'crystal'],
   },
   breccia: {
     mode: 'breccia',
@@ -209,7 +212,7 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     textures: [
       { kind: 'lines', spacingScale: 1.1 },
       { kind: 'wavy', angleDeg: 90, spacingScale: 0.75, waviness: 0.9 },
-      { kind: 'patchy', spacingScale: 0.5 },
+      { kind: 'mottle', spacingScale: 0.75 },
       { kind: 'hatch', angleDeg: 125, spacingScale: 1.4 },
       { kind: 'lines', angleDeg: 90, spacingScale: 1.3 },
     ],

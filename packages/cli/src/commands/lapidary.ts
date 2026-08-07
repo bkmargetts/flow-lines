@@ -24,6 +24,8 @@ const TEXTURE_KINDS = new Set([
   'patchy',
   'cross',
   'stipple',
+  'mottle',
+  'grain',
   'blank',
 ]);
 
@@ -68,7 +70,7 @@ export function registerLapidary(program: Command) {
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
-      'Outer→inner band textures, cycled (lines,wavy,contour,crystal,hatch,patchy,cross,stipple,blank); ' +
+      'Outer→inner band textures, cycled (lines,wavy,contour,crystal,hatch,patchy,cross,stipple,mottle,grain,blank); ' +
         'omit for a seeded deal. Per-band overrides: kind[:angle[:spacingScale]], ' +
         'e.g. lines:45,hatch:125:0.6,wavy::0.8'
     )
@@ -76,8 +78,14 @@ export function registerLapidary(program: Command) {
     .option('--angle-drift <number>', 'Seeded per-band drift off the base angle in degrees')
     .option('--spacing <number>', 'Base line pitch in px')
     .option('--density-contrast <number>', 'Spread between dense and sparse bands (0-1)')
-    .option('--waviness <number>', 'Wavy-texture amplitude / contour-band undulation (0-1)')
-    .option('--patchiness <number>', 'Patchy/cross hole amount (0-1; cross floors its gate at 0.25)')
+    .option(
+      '--waviness <number>',
+      'Wavy-texture amplitude / contour-band undulation / grain-dash bend (0-1)'
+    )
+    .option(
+      '--patchiness <number>',
+      'Patchy/cross hole amount and mottle blob coverage (0-1; cross floors its gate at 0.25)'
+    )
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')
     .option(

@@ -348,10 +348,21 @@ describe('generateLapidary', () => {
   });
 
   it('outlines add strokes but never trace the background field', () => {
-    const base = { ...BASE, wobble: 0, optimize: false };
-    const plain = generateLapidary(base);
-    const outlined = generateLapidary({ ...base, outlines: true });
-    expect(outlined.lines.length).toBeGreaterThan(plain.lines.length);
+    // Count on a single floating band: outline strokes are also stamped
+    // into the avoid mask, so with bands below, clipped slivers can cancel
+    // out the added loops in a raw line count.
+    const solo = {
+      ...BASE,
+      bands: 1,
+      field: false,
+      textures: ['hatch'] as ['hatch'],
+      wobble: 0,
+      optimize: false,
+    };
+    expect(generateLapidary({ ...solo, outlines: true }).lines.length).toBeGreaterThan(
+      generateLapidary(solo).lines.length
+    );
+    const outlined = generateLapidary({ ...BASE, wobble: 0, optimize: false, outlines: true });
     // The field's silhouette is the margin rect: an outlined field would put
     // a stroke through several of its corners exactly (wobble is off).
     const corners = [
@@ -467,6 +478,121 @@ describe('generateLapidary', () => {
         expect(regions.length, `${mode} seed ${seed}`).toBe(8);
       }
     }
+  });
+
+  it('mottle lays a second density level over the plain hatch', () => {
+    // Pin both kinds to the same resolved pitch (mottle's 0.6 baseline vs
+    // hatch's 0.45): the blob infill and cell walls must add ink beyond the
+    // identical base family — the two-tone pattern is extra committed
+    // density, not the patchy gate's holes.
+    const totalLen = (textures: Parameters<typeof generateLapidary>[0]['textures']): number => {
+      const r = generateLapidary({ ...BASE, textures, wobble: 0, optimize: false });
+      let len = 0;
+      for (const line of r.lines) {
+        for (let i = 1; i < line.points.length; i++) {
+          len += Math.hypot(
+            line.points[i].x - line.points[i - 1].x,
+            line.points[i].y - line.points[i - 1].y
+          );
+        }
+      }
+      return len;
+    };
+    const hatch = totalLen([{ kind: 'hatch', spacingScale: 0.7 / 0.45 }]);
+    const mottle = totalLen([{ kind: 'mottle', spacingScale: 1 }]);
+    expect(mottle).toBeGreaterThan(hatch * 1.1);
+  });
+
+  it('mottle blob coverage rides the patchiness knob', () => {
+    const totalLen = (patchiness: number): number => {
+      const r = generateLapidary({
+        ...BASE,
+        textures: ['mottle'],
+        patchiness,
+        wobble: 0,
+        optimize: false,
+      });
+      let len = 0;
+      for (const line of r.lines) {
+        for (let i = 1; i < line.points.length; i++) {
+          len += Math.hypot(
+            line.points[i].x - line.points[i - 1].x,
+            line.points[i].y - line.points[i - 1].y
+          );
+        }
+      }
+      return len;
+    };
+    expect(totalLen(0.85)).toBeGreaterThan(totalLen(0.15) * 1.1);
+  });
+
+  it('blobOutlines: false drops the mottle cell walls', () => {
+    const base = { ...BASE, wobble: 0, optimize: false };
+    const walled = generateLapidary({ ...base, textures: [{ kind: 'mottle' as const }] });
+    const bare = generateLapidary({
+      ...base,
+      textures: [{ kind: 'mottle' as const, blobOutlines: false }],
+    });
+    expect(bare.lines.length).toBeGreaterThan(50);
+    expect(bare.lines.length).toBeLessThan(walled.lines.length);
+    for (const r of [walled, bare]) {
+      for (const line of r.lines) {
+        for (const p of line.points) {
+          expect(p.x).toBeGreaterThanOrEqual(0);
+          expect(p.x).toBeLessThanOrEqual(BASE.width);
+          expect(p.y).toBeGreaterThanOrEqual(0);
+          expect(p.y).toBeLessThanOrEqual(BASE.height);
+        }
+      }
+    }
+  });
+
+  it('grain dashes stay short and comb along the band angle', () => {
+    const spacingPx = 8;
+    const spacing = spacingPx * 0.7; // grain's KIND_SPACING baseline
+    const r = generateLapidary({
+      ...BASE,
+      textures: [{ kind: 'grain', spacingScale: 1 }],
+      spacingPx,
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      waviness: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    expect(r.lines.length).toBeGreaterThan(100);
+    for (const line of r.lines) {
+      let len = 0;
+      for (let i = 1; i < line.points.length; i++) {
+        len += Math.hypot(
+          line.points[i].x - line.points[i - 1].x,
+          line.points[i].y - line.points[i - 1].y
+        );
+      }
+      // Length cap: spacing * (2.2 + 3.8) plus one step of walk overshoot
+      // per side — a dash is a mark, never a streamline.
+      expect(len).toBeLessThan(spacing * 8.5);
+      // At waviness 0 the bend budget is 0.28 rad: every dash chord stays
+      // near the vertical base angle.
+      const a = line.points[0];
+      const b = line.points[line.points.length - 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < spacing) continue;
+      let diff = Math.abs(Math.atan2(b.y - a.y, b.x - a.x) - Math.PI / 2) % Math.PI;
+      if (diff > Math.PI / 2) diff = Math.PI - diff;
+      expect(diff).toBeLessThan(0.4);
+    }
+  });
+
+  it('mottle and grain are deterministic and distinct', () => {
+    for (const kind of ['mottle', 'grain'] as const) {
+      const a = generateLapidary({ ...BASE, textures: [kind] });
+      const b = generateLapidary({ ...BASE, textures: [kind] });
+      expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
+      expect(a.lines.length).toBeGreaterThan(50);
+    }
+    expect(JSON.stringify(generateLapidary({ ...BASE, textures: ['mottle'] }).lines)).not.toEqual(
+      JSON.stringify(generateLapidary({ ...BASE, textures: ['grain'] }).lines)
+    );
   });
 
   it('degrades gracefully when the geometry cannot fit the request', () => {
