@@ -12,13 +12,24 @@ export type LapidaryTextureMix =
   | 'tonal'
   | 'shuffle';
 
+/** Curated look ids ('custom' = the picker's label after a randomise). */
+export type LapidaryLook =
+  | 'specimen'
+  | 'geode'
+  | 'fortification'
+  | 'breccia'
+  | 'terraces'
+  | 'facet'
+  | 'mono'
+  | 'custom';
+
 /**
  * UI state for Lapidary (mm / degrees / 0..1 units). `render.ts` converts it
  * to the core's `LapidaryOptions` in px. The named palette carries the pen
  * count; 'custom' hands both the count and the hexes to the fields below.
  */
 export interface LapidaryState {
-  preset: string;
+  preset: LapidaryLook;
   seed: number;
 
   // Arrangement
@@ -31,7 +42,7 @@ export interface LapidaryState {
   centerX: number; // -0.5..0.5 of the half-extents
   centerY: number;
   faults: number; // 0..4 vertical fault planes (strata only)
-  veins: boolean; // trace fragment seams on the last pen (breccia only)
+  veins: boolean; // trace fragment seams on the vein accent pen (breccia only)
 
   // Seams
   haloMm: number; // reserved-paper seam width
@@ -60,6 +71,7 @@ export interface LapidaryState {
   ink2Color: string;
   ink3Color: string;
   ink4Color: string;
+  veinColor: string; // the kintsugi accent pen — only drawn when veins are on
 }
 
 export const defaultLapidaryState: LapidaryState = {
@@ -99,4 +111,5 @@ export const defaultLapidaryState: LapidaryState = {
   ink2Color: '#d4551a',
   ink3Color: '#1f3a5f',
   ink4Color: '#9c2b52',
+  veinColor: '#b8860b',
 };

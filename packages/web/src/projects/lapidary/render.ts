@@ -2,6 +2,7 @@ import {
   generateLapidary,
   inkLayerName,
   LAPIDARY_PRESETS,
+  VEIN_LAYER,
   type BandTexture,
   type LapidaryOptions,
   type LapidaryTexture,
@@ -37,6 +38,13 @@ export function resolveLapidaryInks(state: LapidaryState): string[] {
   if (pal) return pal.inks;
   const pens = Math.max(1, Math.min(4, Math.round(state.pens)));
   return [state.strokeColor, state.ink2Color, state.ink3Color, state.ink4Color].slice(0, pens);
+}
+
+/** The kintsugi accent ink: a named palette carries its own vein colour;
+ *  'custom' takes the veinColor field. */
+export function resolveLapidaryVein(state: LapidaryState): string {
+  const pal = state.palette === CUSTOM_PALETTE ? null : getLapidaryPalette(state.palette);
+  return pal?.vein ?? state.veinColor;
 }
 
 /**
@@ -90,6 +98,8 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
   inks.forEach((ink, g) => {
     layerColors[inkLayerName(g)] = ink;
   });
+  // Harmless when veins are off — no stroke carries the layer.
+  layerColors[VEIN_LAYER] = resolveLapidaryVein(state);
 
   return {
     lines: result.lines,

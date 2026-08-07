@@ -10,11 +10,18 @@ import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
 import { CUSTOM_PALETTE, LAPIDARY_PALETTES } from './palettes';
 import { LAPIDARY_WEB_PRESETS, getLapidaryPreset, randomLapidaryGenome } from './presets';
-import { resolveLapidaryInks } from './render';
+import { resolveLapidaryInks, resolveLapidaryVein } from './render';
 import type { LapidaryState, LapidaryTextureMix } from './types';
 
 const PRESET_LABELS = Object.fromEntries(
   LAPIDARY_WEB_PRESETS.map((p) => [p.id, p.label])
+) as Record<string, string>;
+
+const PALETTE_LABELS = Object.fromEntries(
+  LAPIDARY_PALETTES.map((p) => [
+    p.id,
+    `${p.label} (${p.inks.length} pen${p.inks.length > 1 ? 's' : ''})`,
+  ])
 ) as Record<string, string>;
 
 const MIX_LABELS: Record<LapidaryTextureMix, string> = {
@@ -32,12 +39,28 @@ const MIX_LABELS: Record<LapidaryTextureMix, string> = {
  *  pen kit live in Advanced. */
 export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>) {
   const selectPreset = (id: string) => {
+    // Only real preset ids restore anything; 'custom' is a label, not a look.
     const preset = getLapidaryPreset(id);
-    update(preset ? { ...preset.state, preset: id } : { preset: id });
+    if (preset) update({ ...preset.state, preset: preset.id });
   };
 
   const inks = resolveLapidaryInks(state);
+  const vein = resolveLapidaryVein(state);
   const custom = state.palette === CUSTOM_PALETTE;
+
+  // Editing any ink of a named palette forks to 'custom', pre-filled with the
+  // palette's own colours so only the touched pen changes.
+  const goCustom = (patch: Partial<LapidaryState>) =>
+    update({
+      palette: CUSTOM_PALETTE,
+      pens: inks.length,
+      strokeColor: inks[0],
+      ink2Color: inks[1] ?? inks[0],
+      ink3Color: inks[2] ?? inks[inks.length - 1],
+      ink4Color: inks[3] ?? inks[inks.length - 1],
+      veinColor: vein,
+      ...patch,
+    });
 
   return (
     <div className="controls">
@@ -51,7 +74,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
       <PresetPicker
         label="Look"
         info="A curated arrangement + texture deal. Seed, pen width and custom inks survive a switch."
-        labels={PRESET_LABELS}
+        labels={state.preset === 'custom' ? { ...PRESET_LABELS, custom: 'Custom' } : PRESET_LABELS}
         value={state.preset}
         onChange={selectPreset}
       />
@@ -138,6 +161,13 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
           </label>
           <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
           <Toggle label="Kintsugi veins" checked={state.veins} onChange={(v) => update({ veins: v })} disabled={state.mode !== 'breccia'} />
+          {state.mode === 'breccia' && (
+            <ColorField
+              label="Vein ink"
+              value={vein}
+              onChange={(v) => (custom ? update({ veinColor: v }) : goCustom({ veinColor: v }))}
+            />
+          )}
         </AdvGroup>
 
         <AdvGroup title="Pen & finish">
@@ -147,32 +177,26 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
       </AdvancedSection>
 
       <h3 className="section-title">Ink</h3>
-      <label className="field">
-        <span>Palette</span>
-        <select value={state.palette} onChange={(e) => update({ palette: e.target.value })}>
-          {LAPIDARY_PALETTES.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label} ({p.inks.length} pen{p.inks.length > 1 ? 's' : ''})
-            </option>
-          ))}
-          <option value={CUSTOM_PALETTE}>Custom</option>
-        </select>
-      </label>
+      <PresetPicker
+        label="Palette"
+        info="A named pen set — the palette carries the pen count and the vein accent. Edit any ink to go custom."
+        labels={custom ? { ...PALETTE_LABELS, [CUSTOM_PALETTE]: 'Custom' } : PALETTE_LABELS}
+        value={state.palette}
+        onChange={(id) => update({ palette: id })}
+      />
       {custom && (
-        <>
-          <Slider label="Pens" value={state.pens} min={1} max={4} step={1} onChange={(v) => update({ pens: v })} format={(v) => `${Math.round(v)}`} />
-          <ColorField label={inks.length > 1 ? 'Pen 1' : 'Ink'} value={state.strokeColor} onChange={(v) => update({ strokeColor: v })} />
-          {inks.length > 1 && (
-            <ColorField label="Pen 2" value={state.ink2Color} onChange={(v) => update({ ink2Color: v })} />
-          )}
-          {inks.length > 2 && (
-            <ColorField label="Pen 3" value={state.ink3Color} onChange={(v) => update({ ink3Color: v })} />
-          )}
-          {inks.length > 3 && (
-            <ColorField label="Pen 4" value={state.ink4Color} onChange={(v) => update({ ink4Color: v })} />
-          )}
-        </>
+        <Slider label="Pens" value={state.pens} min={1} max={4} step={1} onChange={(v) => update({ pens: v })} format={(v) => `${Math.round(v)}`} />
       )}
+      {(['strokeColor', 'ink2Color', 'ink3Color', 'ink4Color'] as const)
+        .slice(0, inks.length)
+        .map((field, i) => (
+          <ColorField
+            key={field}
+            label={inks.length > 1 ? `Pen ${i + 1}` : 'Ink'}
+            value={inks[i]}
+            onChange={(v) => (custom ? update({ [field]: v }) : goCustom({ [field]: v }))}
+          />
+        ))}
     </div>
   );
 }
