@@ -249,7 +249,7 @@ const SPECS: GenomeSpec[] = [
     enums: {
       mode: ['agate', 'breccia', 'strata'],
       shapes: ['organic', 'angular', 'mixed'],
-      textureMix: ['specimen', 'geode', 'linework', 'tonal', 'shuffle'],
+      textureMix: ['specimen', 'geode', 'facet', 'linework', 'tonal', 'shuffle'],
       penAssignment: ['interleave', 'per-region'],
     },
     // Ink fields are absent from forbidden by design: lapidary is in

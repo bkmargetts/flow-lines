@@ -94,7 +94,7 @@ export const LAPIDARY_WEB_PRESETS: LapidaryWebPreset[] = [
       bands: 5,
       field: false,
       shapes: 'angular',
-      textureMix: 'tonal',
+      textureMix: 'facet',
       irregularity: 0.7,
       coverage: 0.95,
       angleDeg: 90,
@@ -113,7 +113,7 @@ function pick<T>(rng: () => number, values: readonly T[]): T {
   return values[Math.min(values.length - 1, Math.floor(rng() * values.length))];
 }
 
-const MIXES: LapidaryTextureMix[] = ['specimen', 'geode', 'linework', 'tonal', 'shuffle'];
+const MIXES: LapidaryTextureMix[] = ['specimen', 'geode', 'facet', 'linework', 'tonal', 'shuffle'];
 
 /**
  * Randomise-everything genome: a whole new arrangement within the sliders'
