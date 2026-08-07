@@ -43,6 +43,13 @@ export interface BandTexture {
   shape?: LapidaryShape;
 }
 
+/** The tuning anchor: the A3 short edge at 3 px/mm. Feature sizes (seam
+ *  width, line pitch, wobble amplitude) derive from the sizing dimension
+ *  directly; fixed detail steps (densify sampling, wobble wavelength, vein
+ *  sampling) scale by `sizingDim / TUNING_DIM` so they keep their tuned
+ *  physical size on other sheets too. */
+export const TUNING_DIM = 891;
+
 /** A band texture with every knob resolved to concrete numbers. */
 export interface ResolvedTexture {
   kind: LapidaryTexture;
@@ -53,6 +60,8 @@ export interface ResolvedTexture {
   /** Slides the hatch family so no two bands' lines register alike. */
   phase: number;
   seed: number;
+  /** sizingDim / TUNING_DIM — see `TUNING_DIM`. */
+  featureScale: number;
 }
 
 /** Radial geometry behind a table-built region (agate rings, breccia
@@ -107,6 +116,8 @@ export interface LayoutConfig {
   patchiness: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
+  /** sizingDim / TUNING_DIM — see `TUNING_DIM`. */
+  featureScale: number;
 }
 
 /** Baseline pitch multiplier per texture kind, spread further apart by
@@ -175,6 +186,7 @@ function resolveTexture(cfg: LayoutConfig, z: number, prevKind: LapidaryTexture 
     patchiness: clamp(spec.patchiness ?? cfg.patchiness, 0, 1),
     phase: rng(),
     seed: subSeed(cfg.seed, 400 + z),
+    featureScale: cfg.featureScale,
   };
 }
 

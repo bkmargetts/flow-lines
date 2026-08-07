@@ -85,7 +85,11 @@ export function fillRegion(region: Region): RegionFill {
   const rng = makeRandom(t.seed);
   const noise = createNoise(subSeed(t.seed, 1));
   const ink: FlowLine[] = [];
-  const step = 6;
+  // Detail steps ride the feature scale so wobble samples stay a fixed
+  // physical distance apart on any sheet (floored — micro pages must not
+  // explode point counts).
+  const step = Math.max(1, 6 * t.featureScale);
+  const fineStep = Math.max(1, 4 * t.featureScale);
 
   // The patchy gate: hand-sized low-frequency holes (the landscape
   // makePatchMask idiom — a floor keeps the holes hand-sized even at very
@@ -224,7 +228,7 @@ export function fillRegion(region: Region): RegionFill {
       const densifyRun = (pts: Point[]): Point[] => {
         const out: Point[] = [];
         for (let i = 1; i < pts.length; i++) {
-          const seg = densify(pts[i - 1], pts[i], 4);
+          const seg = densify(pts[i - 1], pts[i], fineStep);
           if (out.length > 0) seg.shift();
           out.push(...seg);
         }
@@ -422,7 +426,7 @@ export function fillRegion(region: Region): RegionFill {
       const amp = t.waviness * lambda * 0.16;
       const minKeep = t.spacing * 0.8;
       for (const run of hatchPolygon(box, t.angleRad, t.spacing, t.phase)) {
-        const base = densify(run[0], run[1], 4);
+        const base = densify(run[0], run[1], fineStep);
         const dx = run[1].x - run[0].x;
         const dy = run[1].y - run[0].y;
         const len = Math.hypot(dx, dy) || 1;

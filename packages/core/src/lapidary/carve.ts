@@ -17,6 +17,8 @@ export interface CarveConfig {
   outlines: boolean;
   /** Strata builds its seam gaps into the polygons — skip the masks. */
   geometricGaps: boolean;
+  /** sizingDim / TUNING_DIM — scales the outline densify step. */
+  featureScale: number;
 }
 
 /** Tag every stroke with its pen layer. Interleave walks a per-region
@@ -44,10 +46,10 @@ function assignPens(lines: FlowLine[], region: Region, cfg: CarveConfig): void {
 }
 
 /** The region silhouette as a closed, densified stroke. */
-function outlineLines(region: Region): FlowLine[] {
+function outlineLines(region: Region, featureScale: number): FlowLine[] {
   const poly = region.poly;
   const points: Point[] = [];
-  const step = 6;
+  const step = Math.max(1, 6 * featureScale);
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i];
     const b = poly[(i + 1) % poly.length];
@@ -83,7 +85,8 @@ export function carveRegions(
   const out: FlowLine[] = [];
   for (const region of sorted) {
     const { ink, phantom } = fill(region);
-    let drawn = cfg.outlines && region.z > 0 ? [...ink, ...outlineLines(region)] : ink;
+    let drawn =
+      cfg.outlines && region.z > 0 ? [...ink, ...outlineLines(region, cfg.featureScale)] : ink;
     if (!cfg.geometricGaps) {
       if (accHasInk && drawn.length > 0) {
         drawn = clipLinesToMask(drawn, acc!.mask, {
