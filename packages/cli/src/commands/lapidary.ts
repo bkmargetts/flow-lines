@@ -17,6 +17,7 @@ const TEXTURE_KINDS = new Set([
   'lines',
   'wavy',
   'contour',
+  'crystal',
   'hatch',
   'patchy',
   'cross',
@@ -53,13 +54,18 @@ export function registerLapidary(program: Command) {
     )
     .option('--no-field', 'Skip the full-frame background band — shapes float on clean paper')
     .option('--irregularity <number>', 'Silhouette irregularity (0-1)')
+    .option('--faults <number>', 'Vertical fault planes across the strata stack (0-4, strata only)')
+    .option(
+      '--veins',
+      'Trace the seams between breccia fragments on the last pen (kintsugi; breccia only)'
+    )
     .option('--coverage <number>', 'Outer silhouette size as a fraction of the frame (0.4-1)')
     .option('--center-x <number>', 'Composition centre X offset (-0.5..0.5)')
     .option('--center-y <number>', 'Composition centre Y offset (-0.5..0.5)')
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
-      'Outer→inner band textures, cycled (lines,wavy,contour,hatch,patchy,cross,stipple,blank); ' +
+      'Outer→inner band textures, cycled (lines,wavy,contour,crystal,hatch,patchy,cross,stipple,blank); ' +
         'omit for a seeded deal. Per-band overrides: kind[:angle[:spacingScale]], ' +
         'e.g. lines:45,hatch:125:0.6,wavy::0.8'
     )
@@ -137,6 +143,8 @@ export function registerLapidary(program: Command) {
         shapes: options.shapes as LapidaryShapes | undefined,
         bands: options.bands ? parseInt(options.bands, 10) : undefined,
         irregularity: options.irregularity ? parseFloat(options.irregularity) : undefined,
+        faults: options.faults ? parseInt(options.faults, 10) : undefined,
+        veins: options.veins ? true : undefined,
         coverage: options.coverage ? parseFloat(options.coverage) : undefined,
         centerX: options.centerX ? parseFloat(options.centerX) : undefined,
         centerY: options.centerY ? parseFloat(options.centerY) : undefined,

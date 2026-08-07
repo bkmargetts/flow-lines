@@ -306,6 +306,60 @@ export function fillRegion(region: Region): RegionFill {
       break;
     }
 
+    case 'crystal': {
+      // Druzy lining: tapered rays radiating from the region centre toward
+      // the silhouette, with jittered reach — the length scatter is the
+      // sparkle. On a non-innermost band the carve clips the fan's middle
+      // out, leaving spikes fringing the annulus wall for free. Regions
+      // without silhouette geometry fall back to ruled lines.
+      if (!region.radial) {
+        fillLines();
+        break;
+      }
+      const { cx, cy, rx, ry, table } = region.radial;
+      const n = table.length;
+      let rAvg = 0;
+      for (let j = 0; j < n; j++) {
+        const theta = (j / n) * Math.PI * 2;
+        rAvg += table[j] * Math.hypot(Math.cos(theta) * rx, Math.sin(theta) * ry);
+      }
+      rAvg /= n;
+      const tableAt = (theta: number): number => {
+        const f = ((theta / (Math.PI * 2)) * n + n) % n;
+        const j = Math.floor(f);
+        return table[j] + (table[(j + 1) % n] - table[j]) * (f - j);
+      };
+      const rays = Math.round(
+        Math.min(600, Math.max(16, (Math.PI * 2 * rAvg) / (t.spacing * 1.15)))
+      );
+      for (let i = 0; i < rays && ink.length < REGION_LINE_CAP; i++) {
+        const theta = ((i + (rng() - 0.5) * 0.6) / rays) * Math.PI * 2;
+        const g = tableAt(theta);
+        const ex = Math.cos(theta) * rx;
+        const ey = Math.sin(theta) * ry;
+        const s0 = g * (0.06 + 0.3 * rng());
+        // Every ~4th ray reaches the wall so the band edge reads lined.
+        const s1 = g * (i % 4 === 0 ? 0.97 : 0.55 + 0.4 * rng());
+        if (s1 <= s0) continue;
+        const tip = { x: cx + ex * s1, y: cy + ey * s1 };
+        emitTapered({ x: cx + ex * s0, y: cy + ey * s0 }, tip);
+        // Occasional chevron tip: the angular termination of a crystal face.
+        if (rng() < 0.3) {
+          const len = Math.hypot(ex, ey) * (s1 - s0) || 1;
+          const ux = (ex * (s1 - s0)) / len;
+          const uy = (ey * (s1 - s0)) / len;
+          const wing = t.spacing * 0.8;
+          const spreadA = (20 * Math.PI) / 180;
+          const back = (a: number): Point => ({
+            x: tip.x - (ux * Math.cos(a) - uy * Math.sin(a)) * wing,
+            y: tip.y - (ux * Math.sin(a) + uy * Math.cos(a)) * wing,
+          });
+          push(ink, [back(spreadA), tip, back(-spreadA)]);
+        }
+      }
+      break;
+    }
+
     case 'hatch': {
       for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
         emitTapered(run[0], run[1]);

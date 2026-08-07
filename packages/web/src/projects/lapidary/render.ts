@@ -64,6 +64,8 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     coverage: state.coverage,
     centerX: state.centerX,
     centerY: state.centerY,
+    faults: state.faults,
+    veins: state.veins,
 
     haloPx: state.haloMm * mm,
     outlines: state.outlines,

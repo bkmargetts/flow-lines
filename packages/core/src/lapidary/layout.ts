@@ -20,6 +20,7 @@ export type LapidaryTexture =
   | 'lines'
   | 'wavy'
   | 'contour'
+  | 'crystal'
   | 'hatch'
   | 'patchy'
   | 'cross'
@@ -103,6 +104,8 @@ export interface LayoutConfig {
   densityContrast: number;
   waviness: number;
   patchiness: number;
+  /** Vertical fault planes thrown across the strata stack (strata only). */
+  faults: number;
 }
 
 /** Baseline pitch multiplier per texture kind, spread further apart by
@@ -112,6 +115,7 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   lines: 1.7,
   wavy: 1.1,
   contour: 1.0,
+  crystal: 0.8,
   hatch: 0.45,
   patchy: 0.55,
   cross: 0.95,
@@ -119,8 +123,9 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   blank: 1,
 };
 
-/** Kinds the seeded picker may deal a band (blank is preset-only — a random
- *  paper band next to the background reads as a hole, not a decision). */
+/** Kinds the seeded picker may deal a band (blank and crystal are
+ *  preset-only — a random paper band next to the background reads as a hole,
+ *  not a decision, and a druzy ray-burst is too loud to land uninvited). */
 const RANDOM_KINDS: LapidaryTexture[] = [
   'lines',
   'wavy',
@@ -304,7 +309,8 @@ function strataRegions(cfg: LayoutConfig): Region[] {
     y1,
     cfg.irregularity,
     cfg.haloPx * 2 + cfg.spacingPx * 2,
-    (k) => shapeFor(cfg, k)
+    (k) => shapeFor(cfg, k),
+    cfg.faults
   );
   const half = cfg.haloPx / 2;
   const regions: Region[] = [];

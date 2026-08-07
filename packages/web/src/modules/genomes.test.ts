@@ -243,9 +243,10 @@ const SPECS: GenomeSpec[] = [
       waviness: [0, 1],
       patchiness: [0, 1],
       pens: [1, 4],
+      faults: [0, 4],
     },
-    ints: ['bands', 'angleDriftDeg', 'pens'],
-    bools: ['outlines', 'field'],
+    ints: ['bands', 'angleDriftDeg', 'pens', 'faults'],
+    bools: ['outlines', 'field', 'veins'],
     enums: {
       mode: ['agate', 'breccia', 'strata'],
       shapes: ['organic', 'angular', 'mixed'],

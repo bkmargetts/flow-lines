@@ -30,6 +30,8 @@ export interface LapidaryState {
   coverage: number; // 0.4..1 outer silhouette ÷ frame
   centerX: number; // -0.5..0.5 of the half-extents
   centerY: number;
+  faults: number; // 0..4 vertical fault planes (strata only)
+  veins: boolean; // trace fragment seams on the last pen (breccia only)
 
   // Seams
   haloMm: number; // reserved-paper seam width
@@ -72,6 +74,8 @@ export const defaultLapidaryState: LapidaryState = {
   coverage: 0.9,
   centerX: 0,
   centerY: 0,
+  faults: 0,
+  veins: false,
 
   haloMm: 2.2,
   outlines: false,
