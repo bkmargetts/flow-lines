@@ -77,10 +77,11 @@ const ART_TREATMENT_BOUNDS: Record<string, [number, number]> = {
  * quietly join them.
  */
 // Lapidary joins for the impact-grid reason: its identity is multi-pen
-// interplay (strokes interleaved across 2-3 pens within every texture), so a
-// surprise that never re-dealt the pen set wouldn't be one. Like impact-grid
-// it rolls a NAMED palette — hexes come from its curated table (which also
-// fixes `pens` to the palette's size), never generated colours.
+// interplay (strokes interleaved across 2-4 pens within every texture), so a
+// surprise that never re-dealt the pen set wouldn't be one. Most rolls deal a
+// NAMED palette from its curated table; a slice invents one through
+// `randomLapidaryPalette` (seeded, ink-plausible colours). Either way the
+// palette fixes `pens` to its size and carries the vein accent.
 const PALETTE_ROLLERS = [
   'botanical-generator',
   'landscape-generator',
@@ -257,9 +258,9 @@ const SPECS: GenomeSpec[] = [
       penAssignment: ['interleave', 'per-region'],
     },
     // Ink fields are absent from forbidden by design: lapidary is in
-    // PALETTE_ROLLERS and rolls a NAMED palette — strokeColor/ink2..4Color,
-    // `pens` and the `veinColor` accent come from the curated table, never
-    // generated colours.
+    // PALETTE_ROLLERS and rolls the palette — strokeColor/ink2..4Color,
+    // `pens` and the `veinColor` accent come from the curated table or, on a
+    // slice of rolls, from `randomLapidaryPalette`'s invented pen set.
     forbidden: ['seed', 'penWidthMm', 'wobbleMm'],
   },
   {

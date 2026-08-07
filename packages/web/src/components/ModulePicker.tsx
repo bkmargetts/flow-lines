@@ -20,7 +20,13 @@ export function ModulePicker({
 }) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  useEffect(() => searchRef.current?.focus(), []);
+  // Autofocus is a desktop affordance (type-to-filter, Enter picks first). On
+  // touch devices focusing the search pops the software keyboard over the very
+  // grid the user came to browse — let them tap the field if they want it.
+  useEffect(() => {
+    if (window.matchMedia?.('(pointer: coarse)').matches) return;
+    searchRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

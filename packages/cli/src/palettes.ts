@@ -21,6 +21,13 @@ export const LAPIDARY_PALETTES: Record<string, { inks: string[]; vein: string }>
   'graphite-rust-teal': { inks: ['#2a2a26', '#8a3324', '#1f6f6a'], vein: '#b8860b' },
   garden: { inks: ['#3d5a28', '#c3401f', '#5a4a7f'], vein: '#b8860b' },
   'midnight-gold': { inks: ['#20243f', '#b8860b'], vein: '#b8860b' },
+  sepia: { inks: ['#3a2a1a', '#8a6a3a'], vein: '#b87333' },
+  'bordeaux-slate': { inks: ['#6e1f33', '#3a4a5c'], vein: '#b8860b' },
+  'verdigris-rust': { inks: ['#1f6f5e', '#8a3324'], vein: '#b87333' },
+  glacier: { inks: ['#20243f', '#3a6fa0'], vein: '#8a8a92' },
+  ember: { inks: ['#2a2a26', '#8a2a1f', '#d4551a'], vein: '#b8860b' },
+  'olive-plum': { inks: ['#55601f', '#5a2a4a', '#a8642a'], vein: '#b8860b' },
+  quartet: { inks: ['#1f1f1d', '#c3401f', '#1f6f6a', '#b8860b'], vein: '#b87333' },
   mono: { inks: ['#1f1f1d'], vein: '#b8860b' },
 };
 

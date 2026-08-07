@@ -1,4 +1,4 @@
-import { LAPIDARY_PALETTES } from './palettes';
+import { LAPIDARY_PALETTES, randomLapidaryPalette } from './palettes';
 import type { LapidaryLook, LapidaryState, LapidaryTextureMix } from './types';
 
 /**
@@ -148,16 +148,17 @@ const MIXES: LapidaryTextureMix[] = [
 /**
  * Randomise-everything genome: a whole new arrangement within the sliders'
  * ranges. Rolls the mode and texture deal — the big levers of a surprise —
- * and, like the scene generators, a NAMED pen palette: this module's whole
+ * and, like the scene generators, the pen palette: this module's whole
  * identity is multi-pen interplay, so a surprise that always came back
- * black-and-orange wouldn't be one. The palette's hexes come from the
- * curated table (never generated colours) and its size sets `pens`; the
- * vein accent rides along the same way. Never touches the seed (the button
- * rolls it), pen width, or wobble.
+ * black-and-orange wouldn't be one. Most rolls deal a NAMED palette from the
+ * curated table; about a third invent one via `randomLapidaryPalette` (the
+ * table can't be the whole colour universe). Either way the palette's size
+ * sets `pens` and the vein accent rides along. Never touches the seed (the
+ * button rolls it), pen width, or wobble.
  */
 export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> {
   const mode = rng() < 0.5 ? 'agate' : rng() < 0.5 ? 'breccia' : 'strata';
-  const pal = pick(rng, LAPIDARY_PALETTES);
+  const pal = rng() < 0.65 ? pick(rng, LAPIDARY_PALETTES) : randomLapidaryPalette(rng);
   const inks = pal.inks;
   const shapesRoll = rng();
   return {
