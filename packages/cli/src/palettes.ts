@@ -10,6 +10,20 @@ export const BOTANICAL_PALETTES: Record<string, Record<string, string>> = {
   autumn: { stem: '#6e4326', tendril: '#6e4326', leaf: '#a8662a', vein: '#7d4a1f', flower: '#b23b2e', shadow: '#9b7b53' },
 };
 
+// Multi-pen pen sets for the lapidary command (matches the web app's
+// packages/web/src/projects/lapidary/palettes.ts — keep the two tables in
+// sync). Unlike the landscape's semantic roles, pens are indexed
+// ink-0..ink-3 and every pen draws every texture; each set carries its own
+// pen count. `vein` colours the kintsugi accent layer when --veins is on.
+export const LAPIDARY_PALETTES: Record<string, { inks: string[]; vein: string }> = {
+  specimen: { inks: ['#1f1f1d', '#d4551a'], vein: '#b8860b' },
+  'indigo-vermilion': { inks: ['#1f3a5f', '#c3401f'], vein: '#b8860b' },
+  'graphite-rust-teal': { inks: ['#2a2a26', '#8a3324', '#1f6f6a'], vein: '#b8860b' },
+  garden: { inks: ['#3d5a28', '#c3401f', '#5a4a7f'], vein: '#b8860b' },
+  'midnight-gold': { inks: ['#20243f', '#b8860b'], vein: '#b8860b' },
+  mono: { inks: ['#1f1f1d'], vein: '#b8860b' },
+};
+
 // Multi-pen ink palettes for the planet command (subset of the web app's).
 export const PLANET_PALETTES: Record<string, Record<string, string>> = {
   ink: { limb: '#2a2a26', hatch: '#2a2a26', feature: '#2a2a26', stipple: '#2a2a26', ring: '#2a2a26', star: '#2a2a26', atmosphere: '#2a2a26', aurora: '#2a2a26', tail: '#2a2a26', graticule: '#2a2a26', annotation: '#2a2a26', label: '#2a2a26', orbit: '#2a2a26', relief: '#2a2a26', cloud: '#2a2a26', callout: '#2a2a26' },

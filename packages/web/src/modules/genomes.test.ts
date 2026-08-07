@@ -248,14 +248,18 @@ const SPECS: GenomeSpec[] = [
     ints: ['bands', 'angleDriftDeg', 'pens', 'faults'],
     bools: ['outlines', 'field', 'veins'],
     enums: {
+      // 'custom' resets the Look picker's label — a rolled state is no
+      // preset's reference artwork.
+      preset: ['custom'],
       mode: ['agate', 'breccia', 'strata'],
       shapes: ['organic', 'angular', 'mixed'],
       textureMix: ['specimen', 'geode', 'fortification', 'facet', 'linework', 'tonal', 'shuffle'],
       penAssignment: ['interleave', 'per-region'],
     },
     // Ink fields are absent from forbidden by design: lapidary is in
-    // PALETTE_ROLLERS and rolls a NAMED palette — strokeColor/ink2..4Color
-    // and `pens` come from the curated table, never generated colours.
+    // PALETTE_ROLLERS and rolls a NAMED palette — strokeColor/ink2..4Color,
+    // `pens` and the `veinColor` accent come from the curated table, never
+    // generated colours.
     forbidden: ['seed', 'penWidthMm', 'wobbleMm'],
   },
   {

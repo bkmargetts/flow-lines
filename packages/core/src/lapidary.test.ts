@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generateLapidary, LAPIDARY_PRESETS } from './lapidary/index.js';
+import { generateLapidary, LAPIDARY_PRESETS, VEIN_LAYER } from './lapidary/index.js';
+import { buildRegions, TUNING_DIM, type LayoutConfig } from './lapidary/layout.js';
 import { inkLayerName } from './marbling/index.js';
 import type { LapidaryMode } from './lapidary/index.js';
 
@@ -188,10 +189,11 @@ describe('generateLapidary', () => {
   });
 
   it('contour strokes follow the band silhouette', () => {
-    // Zero irregularity on a square page makes every ring a circle, so a
-    // silhouette-following loop keeps a near-constant distance to the centre
-    // along its whole length — straight hatching would sweep the ring's full
-    // radial extent.
+    // Zero irregularity on a square page makes every ring a circle, and
+    // waviness: 0 is the documented way to switch off the contour bands'
+    // undulation — so a silhouette-following loop keeps a near-constant
+    // distance to the centre along its whole length; straight hatching
+    // would sweep the ring's full radial extent.
     const opts = {
       width: 300,
       height: 300,
@@ -250,7 +252,7 @@ describe('generateLapidary', () => {
     expect(radial / r.lines.length).toBeGreaterThan(0.6);
   });
 
-  it('breccia veins land on the last pen and only add strokes', () => {
+  it('breccia veins land on the dedicated vein layer and only add strokes', () => {
     const base = { ...BASE, mode: 'breccia' as const, pens: 3, wobble: 0, optimize: false };
     const without = generateLapidary(base);
     const withVeins = generateLapidary({ ...base, veins: true });
@@ -260,7 +262,7 @@ describe('generateLapidary', () => {
       JSON.stringify(without.lines)
     );
     const veins = withVeins.lines.slice(without.lines.length);
-    for (const line of veins) expect(line.layer).toBe(inkLayerName(2));
+    for (const line of veins) expect(line.layer).toBe(VEIN_LAYER);
     for (const line of veins) {
       for (const p of line.points) {
         expect(p.x).toBeGreaterThanOrEqual(0);
@@ -320,5 +322,162 @@ describe('generateLapidary', () => {
     const at12 = medianTick(12);
     expect(at12 / at4).toBeGreaterThan(2);
     expect(at12 / at4).toBeLessThan(4.5);
+  });
+
+  // Mirrors generateLapidary's option resolution at BASE geometry.
+  const layoutFor = (mode: LayoutConfig['mode'], seed: number, bands: number): LayoutConfig => ({
+    seed,
+    mode,
+    rect: { x0: 20, y0: 20, x1: 280, y1: 380 },
+    bands,
+    field: true,
+    shapes: 'organic',
+    irregularity: 0.55,
+    coverage: 0.9,
+    centerX: 0,
+    centerY: 0,
+    haloPx: Math.max(1.5, 260 / 110),
+    spacingPx: Math.max(1.2, 260 / 150),
+    baseAngleDeg: 90,
+    angleDriftDeg: 25,
+    densityContrast: 0.6,
+    waviness: 0.5,
+    patchiness: 0.55,
+    faults: 0,
+    featureScale: 260 / TUNING_DIM,
+  });
+
+  it('outlines add strokes but never trace the background field', () => {
+    const base = { ...BASE, wobble: 0, optimize: false };
+    const plain = generateLapidary(base);
+    const outlined = generateLapidary({ ...base, outlines: true });
+    expect(outlined.lines.length).toBeGreaterThan(plain.lines.length);
+    // The field's silhouette is the margin rect: an outlined field would put
+    // a stroke through several of its corners exactly (wobble is off).
+    const corners = [
+      { x: 20, y: 20 },
+      { x: 280, y: 20 },
+      { x: 280, y: 380 },
+      { x: 20, y: 380 },
+    ];
+    for (const line of outlined.lines) {
+      let hit = 0;
+      for (const c of corners) {
+        if (line.points.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < 1)) hit++;
+      }
+      expect(hit).toBeLessThan(3);
+    }
+  });
+
+  it('coverage scales the outermost silhouette', () => {
+    const reach = (coverage: number): number => {
+      const r = generateLapidary({ ...BASE, field: false, coverage, wobble: 0, optimize: false });
+      let max = 0;
+      for (const line of r.lines) {
+        for (const p of line.points) {
+          max = Math.max(max, Math.hypot(p.x - 150, p.y - 200));
+        }
+      }
+      return max;
+    };
+    expect(reach(0.95)).toBeGreaterThan(reach(0.7));
+    expect(reach(0.7)).toBeGreaterThan(reach(0.5));
+  });
+
+  it('centre offsets move the composition', () => {
+    const centroid = (opts: Partial<Parameters<typeof generateLapidary>[0]>) => {
+      const r = generateLapidary({ ...BASE, field: false, wobble: 0, optimize: false, ...opts });
+      let x = 0;
+      let y = 0;
+      let n = 0;
+      for (const line of r.lines) {
+        for (const p of line.points) {
+          x += p.x;
+          y += p.y;
+          n++;
+        }
+      }
+      return { x: x / n, y: y / n };
+    };
+    const at0 = centroid({});
+    const shifted = centroid({ centerX: 0.3, centerY: -0.3 });
+    expect(shifted.x).toBeGreaterThan(at0.x + 5);
+    expect(shifted.y).toBeLessThan(at0.y - 5);
+  });
+
+  it('refMinDim only binds below the page size', () => {
+    const plain = generateLapidary(BASE);
+    const unclamped = generateLapidary({ ...BASE, refMinDim: 10_000 });
+    expect(JSON.stringify(unclamped)).toEqual(JSON.stringify(plain));
+    const clamped = generateLapidary({ ...BASE, refMinDim: 130 });
+    expect(JSON.stringify(clamped.lines)).not.toEqual(JSON.stringify(plain.lines));
+  });
+
+  it('angle drift 0 keeps every ruled line on the base angle', () => {
+    const r = generateLapidary({
+      ...BASE,
+      textures: ['lines'],
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    expect(r.lines.length).toBeGreaterThan(50);
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const dx = Math.abs(line.points[i].x - line.points[i - 1].x);
+        const dy = Math.abs(line.points[i].y - line.points[i - 1].y);
+        expect(dx).toBeLessThan(dy * 0.02 + 0.01);
+      }
+    }
+  });
+
+  it('density contrast spreads the band pitches', () => {
+    const flat = generateLapidary({ ...BASE, densityContrast: 0 });
+    const spread = generateLapidary({ ...BASE, densityContrast: 1 });
+    expect(JSON.stringify(flat.lines)).not.toEqual(JSON.stringify(spread.lines));
+  });
+
+  it('ignores veins outside breccia and field in strata', () => {
+    for (const mode of ['agate', 'strata'] as const) {
+      const off = generateLapidary({ ...BASE, mode, veins: false });
+      const on = generateLapidary({ ...BASE, mode, veins: true });
+      expect(JSON.stringify(on)).toEqual(JSON.stringify(off));
+    }
+    const withField = generateLapidary({ ...BASE, mode: 'strata', field: true });
+    const without = generateLapidary({ ...BASE, mode: 'strata', field: false });
+    expect(JSON.stringify(without)).toEqual(JSON.stringify(withField));
+  });
+
+  it('renders per-region pens with fewer regions than pens', () => {
+    const r = generateLapidary({ ...BASE, bands: 2, pens: 4, penAssignment: 'per-region' });
+    expect(r.lines.length).toBeGreaterThan(20);
+    const allowed = new Set([0, 1, 2, 3].map((g) => inkLayerName(g)));
+    for (const line of r.lines) expect(allowed.has(line.layer!)).toBe(true);
+  });
+
+  it('delivers the requested region count in agate and breccia', () => {
+    // Agate used to drop rings whose clamped table collapsed and breccia
+    // could exhaust its placement budget — both silently under-delivering
+    // on `bands`. The grow-retry / relaxed second phase must close the gap
+    // at ordinary settings.
+    for (const mode of ['agate', 'breccia'] as const) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const { regions } = buildRegions(layoutFor(mode, seed, 8));
+        expect(regions.length, `${mode} seed ${seed}`).toBe(8);
+      }
+    }
+  });
+
+  it('degrades gracefully when the geometry cannot fit the request', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const { regions } = buildRegions({
+        ...layoutFor('agate', seed, 10),
+        coverage: 0.4,
+        haloPx: 12,
+      });
+      expect(regions.length).toBeGreaterThanOrEqual(2);
+      expect(regions.length).toBeLessThanOrEqual(10);
+    }
   });
 });

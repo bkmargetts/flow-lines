@@ -3,8 +3,7 @@ import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { optimizePlot } from '../optimize.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { clamp } from '../lib/math.js';
-import { inkLayerName } from '../marbling/index.js';
-import { buildRegions, LayoutConfig, Region, RegionRadial } from './layout.js';
+import { buildRegions, LayoutConfig, Region, RegionRadial, TUNING_DIM } from './layout.js';
 import { fillRegion } from './textures.js';
 import { carveRegions, PenAssignment } from './carve.js';
 
@@ -17,6 +16,11 @@ export type {
 } from './layout.js';
 export type { PenAssignment } from './carve.js';
 import type { LapidaryMode, LapidaryTexture, BandTexture, LapidaryShapes } from './layout.js';
+
+/** The kintsugi veins' dedicated accent pen layer — separate from the
+ *  ink-0..ink-3 pens so the veins can be plotted in their own ink (gold)
+ *  without spending one of the four region pens. */
+export const VEIN_LAYER = 'vein';
 
 /**
  * Lapidary — layered pattern artworks in the style of a cut and polished
@@ -45,9 +49,9 @@ export interface LapidaryOptions {
   seed?: number;
   /**
    * Reference min dimension in px — clamps the dimension feature sizes
-   * (seam width, line pitch, wobble) derive from, so the pattern keeps its
-   * tuned physical scale on sheets larger than the tuning anchor. Same
-   * contract as marbling's / fracture's.
+   * (seam width, line pitch, wobble, detail sampling) derive from, so the
+   * pattern keeps its tuned physical scale on sheets larger than the tuning
+   * anchor. Same contract as marbling's / fracture's.
    */
   refMinDim?: number;
 
@@ -74,8 +78,8 @@ export interface LapidaryOptions {
    *  geological tell. Strata only. */
   faults?: number;
   /** Trace the reserved-paper seams between breccia fragments as strokes on
-   *  the LAST pen (default false) — load it with gold for the kintsugi
-   *  look. Breccia only. */
+   *  the dedicated `VEIN_LAYER` accent pen (default false) — load it with
+   *  gold for the kintsugi look. Breccia only. */
   veins?: boolean;
   /** Outermost silhouette size as a fraction of the frame, 0.4..1 (default 0.9) */
   coverage?: number;
@@ -87,7 +91,8 @@ export interface LapidaryOptions {
   /** Reserved-paper seam width between regions in px (default sizingDim/110) */
   haloPx?: number;
   /** Ink each region silhouette as a stroke (default false — in the
-   *  reference the seam itself does the work) */
+   *  reference the seam itself does the work). The full-frame background
+   *  band is never outlined — its silhouette is the page edge. */
   outlines?: boolean;
 
   // ---- Textures ----
@@ -105,9 +110,11 @@ export interface LapidaryOptions {
   spacingPx?: number;
   /** 0..1 spread between dense and sparse bands (default 0.6) */
   densityContrast?: number;
-  /** Wavy-texture amplitude 0..1 (default 0.5) */
+  /** Line undulation 0..1 (default 0.5): wavy-texture amplitude, and how far
+   *  contour bands drift off the silhouette they echo */
   waviness?: number;
-  /** Patchy/cross hole amount 0..1 (default 0.55) */
+  /** Patchy/cross hole amount 0..1 (default 0.55); cross keeps its second
+   *  family legible by flooring its gate at 0.25 */
   patchiness?: number;
 
   // ---- Pens ----
@@ -220,6 +227,7 @@ function brecciaVeins(
   regions: Region[],
   rect: { x0: number; y0: number; x1: number; y1: number },
   haloPx: number,
+  stepPx: number,
   pen: string
 ): FlowLine[] {
   const frags = regions.filter((r) => r.z > 0 && r.radial);
@@ -264,7 +272,7 @@ function brecciaVeins(
     for (let i = 1; i < loop.length; i++) {
       const a = loop[i - 1];
       const b = loop[i];
-      const segs = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 5));
+      const segs = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / stepPx));
       for (let s = i === 1 ? 0 : 1; s <= segs; s++) {
         const p = { x: a.x + ((b.x - a.x) * s) / segs, y: a.y + ((b.y - a.y) * s) / segs };
         if (keep(p)) arc.push(p);
@@ -292,6 +300,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
 
   const haloPx = Math.max(1.5, options.haloPx ?? sizingDim / 110);
   const spacingPx = Math.max(1.2, options.spacingPx ?? sizingDim / 150);
+  const featureScale = sizingDim / TUNING_DIM;
 
   const layout: LayoutConfig = {
     seed,
@@ -313,6 +322,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     waviness: clamp(options.waviness ?? 0.5, 0, 1),
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
     faults: clamp(Math.round(options.faults ?? 0), 0, 4),
+    featureScale,
   };
 
   const pens = clamp(Math.round(options.pens ?? 1), 1, 4);
@@ -326,10 +336,12 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     penAssignment: options.penAssignment ?? 'interleave',
     outlines: options.outlines ?? false,
     geometricGaps,
+    featureScale,
   });
 
   if ((options.veins ?? false) && layout.mode === 'breccia') {
-    lines.push(...brecciaVeins(regions, layout.rect, haloPx, inkLayerName(pens - 1)));
+    const veinStep = Math.max(1, 5 * featureScale);
+    lines.push(...brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER));
   }
 
   let result: FlowLinesResult = { lines, width, height, seed };
@@ -338,7 +350,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
   if (wobble > 0) {
     result = applyHandDrawnStyle(result, {
       amplitude: wobble,
-      wavelength: 70,
+      wavelength: Math.max(8, 70 * featureScale),
       seed: subSeed(seed, 501),
       // The seams are reserved paper carved before the hand pass; the wobble
       // tail must never bend surviving ink back into them.

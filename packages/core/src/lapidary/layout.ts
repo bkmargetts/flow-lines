@@ -34,13 +34,21 @@ export interface BandTexture {
   angleDeg?: number;
   /** Multiplier on the kind's resolved line pitch. */
   spacingScale?: number;
-  /** Per-band override of the global waviness (wavy only). */
+  /** Per-band override of the global waviness (wavy amplitude / contour
+   *  undulation). */
   waviness?: number;
   /** Per-band override of the global patchiness (patchy/cross only). */
   patchiness?: number;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
 }
+
+/** The tuning anchor: the A3 short edge at 3 px/mm. Feature sizes (seam
+ *  width, line pitch, wobble amplitude) derive from the sizing dimension
+ *  directly; fixed detail steps (densify sampling, wobble wavelength, vein
+ *  sampling) scale by `sizingDim / TUNING_DIM` so they keep their tuned
+ *  physical size on other sheets too. */
+export const TUNING_DIM = 891;
 
 /** A band texture with every knob resolved to concrete numbers. */
 export interface ResolvedTexture {
@@ -52,6 +60,8 @@ export interface ResolvedTexture {
   /** Slides the hatch family so no two bands' lines register alike. */
   phase: number;
   seed: number;
+  /** sizingDim / TUNING_DIM — see `TUNING_DIM`. */
+  featureScale: number;
 }
 
 /** Radial geometry behind a table-built region (agate rings, breccia
@@ -106,6 +116,8 @@ export interface LayoutConfig {
   patchiness: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
+  /** sizingDim / TUNING_DIM — see `TUNING_DIM`. */
+  featureScale: number;
 }
 
 /** Baseline pitch multiplier per texture kind, spread further apart by
@@ -174,6 +186,7 @@ function resolveTexture(cfg: LayoutConfig, z: number, prevKind: LapidaryTexture 
     patchiness: clamp(spec.patchiness ?? cfg.patchiness, 0, 1),
     phase: rng(),
     seed: subSeed(cfg.seed, 400 + z),
+    featureScale: cfg.featureScale,
   };
 }
 
@@ -272,6 +285,36 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
     const rx = Math.min(f * halfW, cx - x0, x1 - cx);
     const ry = Math.min(f * halfH, cy - y0, y1 - cy);
     if (rx < cfg.haloPx * 2 || ry < cfg.haloPx * 2) continue;
+    frags.push({ cx, cy, rx, ry, seed: fragSeed });
+  }
+  // Relaxed second phase, entered only when the strict deal under-delivered
+  // (those seeds silently returned fewer fragments than `bands` promised):
+  // a tighter core-rejection ellipse and a smaller radius floor let the
+  // remaining fragments tuck into leftover pockets. Draws continue from the
+  // same rng stream — seeds the strict phase satisfied never reach this loop
+  // and stay byte-identical. Fragment shape seeds come from a fresh sub-seed
+  // channel: the strict phase's 120+ channel runs past 200 at high attempt
+  // counts, into the 200+z texture streams.
+  let relaxed = 0;
+  while (frags.length < want && relaxed < want * 12) {
+    relaxed++;
+    const cx = x0 + halfW * (0.24 + 1.52 * rng()) + cfg.centerX * halfW;
+    const cy = y0 + halfH * (0.24 + 1.52 * rng()) + cfg.centerY * halfH;
+    const f = lerp(0.16, 0.42, rng()) * cfg.coverage;
+    const fragSeed = subSeed(cfg.seed, 700 + relaxed);
+    let coreHit = false;
+    for (const e of frags) {
+      const dx = (cx - e.cx) / (e.rx * 0.3);
+      const dy = (cy - e.cy) / (e.ry * 0.3);
+      if (dx * dx + dy * dy < 1) {
+        coreHit = true;
+        break;
+      }
+    }
+    if (coreHit) continue;
+    const rx = Math.min(f * halfW, cx - x0, x1 - cx);
+    const ry = Math.min(f * halfH, cy - y0, y1 - cy);
+    if (rx < cfg.haloPx || ry < cfg.haloPx) continue;
     frags.push({ cx, cy, rx, ry, seed: fragSeed });
   }
   const regions: Region[] = [];
