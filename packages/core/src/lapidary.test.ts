@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateLapidary, LAPIDARY_PRESETS } from './lapidary/index.js';
+import { buildRegions, TUNING_DIM, type LayoutConfig } from './lapidary/layout.js';
 import { inkLayerName } from './marbling/index.js';
 import type { LapidaryMode } from './lapidary/index.js';
 
@@ -321,5 +322,53 @@ describe('generateLapidary', () => {
     const at12 = medianTick(12);
     expect(at12 / at4).toBeGreaterThan(2);
     expect(at12 / at4).toBeLessThan(4.5);
+  });
+
+  // Mirrors generateLapidary's option resolution at BASE geometry.
+  const layoutFor = (mode: LayoutConfig['mode'], seed: number, bands: number): LayoutConfig => ({
+    seed,
+    mode,
+    rect: { x0: 20, y0: 20, x1: 280, y1: 380 },
+    bands,
+    field: true,
+    shapes: 'organic',
+    irregularity: 0.55,
+    coverage: 0.9,
+    centerX: 0,
+    centerY: 0,
+    haloPx: Math.max(1.5, 260 / 110),
+    spacingPx: Math.max(1.2, 260 / 150),
+    baseAngleDeg: 90,
+    angleDriftDeg: 25,
+    densityContrast: 0.6,
+    waviness: 0.5,
+    patchiness: 0.55,
+    faults: 0,
+    featureScale: 260 / TUNING_DIM,
+  });
+
+  it('delivers the requested region count in agate and breccia', () => {
+    // Agate used to drop rings whose clamped table collapsed and breccia
+    // could exhaust its placement budget — both silently under-delivering
+    // on `bands`. The grow-retry / relaxed second phase must close the gap
+    // at ordinary settings.
+    for (const mode of ['agate', 'breccia'] as const) {
+      for (let seed = 1; seed <= 20; seed++) {
+        const { regions } = buildRegions(layoutFor(mode, seed, 8));
+        expect(regions.length, `${mode} seed ${seed}`).toBe(8);
+      }
+    }
+  });
+
+  it('degrades gracefully when the geometry cannot fit the request', () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const { regions } = buildRegions({
+        ...layoutFor('agate', seed, 10),
+        coverage: 0.4,
+        haloPx: 12,
+      });
+      expect(regions.length).toBeGreaterThanOrEqual(2);
+      expect(regions.length).toBeLessThanOrEqual(10);
+    }
   });
 });

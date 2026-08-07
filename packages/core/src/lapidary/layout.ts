@@ -287,6 +287,36 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
     if (rx < cfg.haloPx * 2 || ry < cfg.haloPx * 2) continue;
     frags.push({ cx, cy, rx, ry, seed: fragSeed });
   }
+  // Relaxed second phase, entered only when the strict deal under-delivered
+  // (those seeds silently returned fewer fragments than `bands` promised):
+  // a tighter core-rejection ellipse and a smaller radius floor let the
+  // remaining fragments tuck into leftover pockets. Draws continue from the
+  // same rng stream — seeds the strict phase satisfied never reach this loop
+  // and stay byte-identical. Fragment shape seeds come from a fresh sub-seed
+  // channel: the strict phase's 120+ channel runs past 200 at high attempt
+  // counts, into the 200+z texture streams.
+  let relaxed = 0;
+  while (frags.length < want && relaxed < want * 12) {
+    relaxed++;
+    const cx = x0 + halfW * (0.24 + 1.52 * rng()) + cfg.centerX * halfW;
+    const cy = y0 + halfH * (0.24 + 1.52 * rng()) + cfg.centerY * halfH;
+    const f = lerp(0.16, 0.42, rng()) * cfg.coverage;
+    const fragSeed = subSeed(cfg.seed, 700 + relaxed);
+    let coreHit = false;
+    for (const e of frags) {
+      const dx = (cx - e.cx) / (e.rx * 0.3);
+      const dy = (cy - e.cy) / (e.ry * 0.3);
+      if (dx * dx + dy * dy < 1) {
+        coreHit = true;
+        break;
+      }
+    }
+    if (coreHit) continue;
+    const rx = Math.min(f * halfW, cx - x0, x1 - cx);
+    const ry = Math.min(f * halfH, cy - y0, y1 - cy);
+    if (rx < cfg.haloPx || ry < cfg.haloPx) continue;
+    frags.push({ cx, cy, rx, ry, seed: fragSeed });
+  }
   const regions: Region[] = [];
   let prevKind: LapidaryTexture | null = null;
   const push = (z: number, poly: Point[], radial?: RegionRadial): void => {

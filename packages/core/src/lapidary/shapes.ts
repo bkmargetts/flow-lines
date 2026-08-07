@@ -102,8 +102,10 @@ export function ringPolygon(
  * their parent for family resemblance; angular facets never blend — the
  * corners are the point). The per-θ clamp keeps every ring at least
  * `minGapPx` inside its parent regardless of irregularity — rings can never
- * invert, so the halo carve always has a real annulus to work with. Rings
- * whose clamped table collapses are dropped (deep nests at small coverage).
+ * invert, so the halo carve always has a real annulus to work with. A ring
+ * whose clamped table collapses is regrown against the parent envelope
+ * (target size stepped up, no extra rng draws — seeds that never collapsed
+ * are byte-identical); only geometrically impossible rings are dropped.
  */
 export function nestedRingTables(
   seed: number,
@@ -132,23 +134,46 @@ export function nestedRingTables(
       shapeFor(i) === 'angular'
         ? angularBoundaryTable(subSeed(seed, 100 + i), irregularity)
         : blobBoundaryTable(subSeed(seed, 100 + i), irregularity, parentShape, 0.4);
-    const scaled = new Float64Array(THETA_SAMPLES);
-    let alive = false;
-    for (let j = 0; j < THETA_SAMPLES; j++) {
-      const theta = (j / THETA_SAMPLES) * Math.PI * 2;
-      const baseLen = Math.hypot(Math.cos(theta) * halfW, Math.sin(theta) * halfH);
-      let g = f * shape[j];
-      if (parentScaled != null) {
-        g = Math.min(g, parentScaled[j] - minGapPx / Math.max(1e-6, baseLen));
+    // Scale the shape at a target size, growing the target while the ring
+    // can't fit the rest of the nest: each remaining descendant needs a
+    // `minGapPx` step, so the feasibility bound on this ring's max radius is
+    // minGapPx * (1.5 + remaining). The per-θ parent clamp presses a grown
+    // ring against the feasible envelope, so growth can only fill the
+    // annulus, never escape it — and any seed that already delivered every
+    // ring satisfies the bound (each nesting step adds a full gap), so the
+    // retry consumes no rng draws and leaves those seeds byte-identical.
+    const need = minGapPx * (1.5 + (count - 1 - i));
+    let fTry = f;
+    let scaled: Float64Array | null = null;
+    for (;;) {
+      const attempt = new Float64Array(THETA_SAMPLES);
+      let maxR = 0;
+      for (let j = 0; j < THETA_SAMPLES; j++) {
+        const theta = (j / THETA_SAMPLES) * Math.PI * 2;
+        const baseLen = Math.hypot(Math.cos(theta) * halfW, Math.sin(theta) * halfH);
+        let g = fTry * shape[j];
+        if (parentScaled != null) {
+          g = Math.min(g, parentScaled[j] - minGapPx / Math.max(1e-6, baseLen));
+        }
+        attempt[j] = Math.max(0, g);
+        maxR = Math.max(maxR, attempt[j] * baseLen);
       }
-      scaled[j] = Math.max(0, g);
-      if (scaled[j] * baseLen > minGapPx * 1.5) alive = true;
+      if (maxR > need || fTry >= coverage) {
+        // Grown to the bound, or pressed flat against the envelope: keep it
+        // if it at least clears the bare survival size.
+        if (maxR > minGapPx * 1.5) scaled = attempt;
+        break;
+      }
+      fTry = Math.min(coverage, fTry * 1.15);
     }
-    if (!alive) break;
+    if (!scaled) break;
     out.push(scaled);
     parentShape = shape;
     parentScaled = scaled;
-    f *= ratio * lerp(0.9, 1.1, rng());
+    // Grouped exactly like the pre-retry `f *= ratio * lerp(...)`: float
+    // multiplication isn't associative, and a last-ulp drift here would
+    // shift every fully-delivered seed's hash for nothing.
+    f = fTry * (ratio * lerp(0.9, 1.1, rng()));
   }
   return out;
 }
