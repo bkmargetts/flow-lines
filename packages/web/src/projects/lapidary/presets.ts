@@ -50,6 +50,24 @@ export const LAPIDARY_WEB_PRESETS: LapidaryWebPreset[] = [
     },
   },
   {
+    id: 'fortification',
+    label: 'Fortification',
+    state: {
+      preset: 'fortification',
+      mode: 'agate',
+      bands: 6,
+      field: true,
+      shapes: 'organic',
+      textureMix: 'fortification',
+      irregularity: 0.55,
+      coverage: 0.92,
+      angleDeg: 90,
+      angleDriftDeg: 25,
+      penAssignment: 'interleave',
+      palette: 'specimen',
+    },
+  },
+  {
     id: 'breccia',
     label: 'Breccia',
     state: {
@@ -113,7 +131,15 @@ function pick<T>(rng: () => number, values: readonly T[]): T {
   return values[Math.min(values.length - 1, Math.floor(rng() * values.length))];
 }
 
-const MIXES: LapidaryTextureMix[] = ['specimen', 'geode', 'facet', 'linework', 'tonal', 'shuffle'];
+const MIXES: LapidaryTextureMix[] = [
+  'specimen',
+  'geode',
+  'fortification',
+  'facet',
+  'linework',
+  'tonal',
+  'shuffle',
+];
 
 /**
  * Randomise-everything genome: a whole new arrangement within the sliders'

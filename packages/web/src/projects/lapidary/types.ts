@@ -3,7 +3,14 @@ import { randomSeed } from '../../lib/random';
 
 /** Which curated band-texture sequence the sheet deals outer→inner.
  *  'shuffle' hands the deal to the core's seeded pick. */
-export type LapidaryTextureMix = 'specimen' | 'geode' | 'facet' | 'linework' | 'tonal' | 'shuffle';
+export type LapidaryTextureMix =
+  | 'specimen'
+  | 'geode'
+  | 'fortification'
+  | 'facet'
+  | 'linework'
+  | 'tonal'
+  | 'shuffle';
 
 /**
  * UI state for Lapidary (mm / degrees / 0..1 units). `render.ts` converts it

@@ -19,6 +19,7 @@ const TEXTURE_MIXES: Record<
 > = {
   specimen: LAPIDARY_PRESETS.specimen.textures!,
   geode: LAPIDARY_PRESETS.geode.textures!,
+  fortification: LAPIDARY_PRESETS.fortification.textures!,
   facet: LAPIDARY_PRESETS.facet.textures!,
   linework: [
     { kind: 'lines', spacingScale: 1.1 },

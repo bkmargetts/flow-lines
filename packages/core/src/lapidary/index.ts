@@ -20,9 +20,10 @@ import type { LapidaryMode, LapidaryTexture, BandTexture, LapidaryShapes } from 
 /**
  * Lapidary — layered pattern artworks in the style of a cut and polished
  * stone cross-section: organic regions, each filled with its own line
- * texture (ruled lines, wavy combing, dense hatch, mottled patchy hatch,
- * shallow cross-hatch, stipple, or held paper), separated by clean
- * reserved-paper seams the way stacked stencil layers hold off one another.
+ * texture (ruled lines, wavy combing, concentric contour banding, dense
+ * hatch, mottled patchy hatch, shallow cross-hatch, stipple, or held
+ * paper), separated by clean reserved-paper seams the way stacked stencil
+ * layers hold off one another.
  *
  * Three arrangements: `agate` nests concentric blob bands around a centre
  * (the reference piece), `breccia` scatters overlapping fragments over the
@@ -152,6 +153,20 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     pens: 2,
     baseAngleDeg: 0,
     angleDriftDeg: 14,
+  },
+  fortification: {
+    mode: 'agate',
+    bands: 6,
+    pens: 2,
+    coverage: 0.92,
+    textures: [
+      { kind: 'lines', spacingScale: 1.2 },
+      { kind: 'contour', spacingScale: 1 },
+      { kind: 'contour', spacingScale: 0.7 },
+      { kind: 'lines', angleDeg: 90, spacingScale: 1.4 },
+      { kind: 'contour', spacingScale: 0.9 },
+      { kind: 'stipple', spacingScale: 1.1 },
+    ],
   },
   facet: {
     mode: 'agate',

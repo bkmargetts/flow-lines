@@ -20,6 +20,7 @@ const PRESET_LABELS = Object.fromEntries(
 const MIX_LABELS: Record<LapidaryTextureMix, string> = {
   specimen: 'Specimen (lines · wavy · mottle · hatch)',
   geode: 'Geode (cross · stipple · paper band)',
+  fortification: 'Fortification (concentric banding)',
   facet: 'Facet (hatch · lines · cross)',
   linework: 'Linework (lines & waves only)',
   tonal: 'Tonal (hatch · mottle · stipple)',

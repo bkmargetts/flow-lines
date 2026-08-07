@@ -187,6 +187,40 @@ describe('generateLapidary', () => {
     expect(r.lines).toEqual([]);
   });
 
+  it('contour strokes follow the band silhouette', () => {
+    // Zero irregularity on a square page makes every ring a circle, so a
+    // silhouette-following loop keeps a near-constant distance to the centre
+    // along its whole length — straight hatching would sweep the ring's full
+    // radial extent.
+    const opts = {
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 3,
+      field: false,
+      irregularity: 0,
+      textures: ['contour' as const],
+      wobble: 0,
+      waviness: 0,
+      optimize: false,
+    };
+    const r = generateLapidary(opts);
+    expect(r.lines.length).toBeGreaterThan(20);
+    for (const line of r.lines) {
+      const radii = line.points.map((p) => Math.hypot(p.x - 150, p.y - 150));
+      expect(Math.max(...radii) - Math.min(...radii)).toBeLessThan(3);
+    }
+    expect(JSON.stringify(generateLapidary(opts))).toEqual(JSON.stringify(r));
+  });
+
+  it('renders contour in every mode and on the field without throwing', () => {
+    for (const mode of MODES) {
+      const r = generateLapidary({ ...BASE, mode, textures: ['contour'] });
+      expect(r.lines.length).toBeGreaterThan(50);
+    }
+  });
+
   it('scales stipple tick length with the line pitch', () => {
     // Ticks used to be an absolute px length; they must ride the pitch so
     // dots keep their weight on big sheets.

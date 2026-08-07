@@ -13,7 +13,16 @@ import {
 import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 
-const TEXTURE_KINDS = new Set(['lines', 'wavy', 'hatch', 'patchy', 'cross', 'stipple', 'blank']);
+const TEXTURE_KINDS = new Set([
+  'lines',
+  'wavy',
+  'contour',
+  'hatch',
+  'patchy',
+  'cross',
+  'stipple',
+  'blank',
+]);
 
 export function registerLapidary(program: Command) {
   addTileOptions(addSketchOptions(program.command('lapidary')))
@@ -50,7 +59,7 @@ export function registerLapidary(program: Command) {
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
-      'Outer→inner band textures, cycled (lines,wavy,hatch,patchy,cross,stipple,blank); ' +
+      'Outer→inner band textures, cycled (lines,wavy,contour,hatch,patchy,cross,stipple,blank); ' +
         'omit for a seeded deal. Per-band overrides: kind[:angle[:spacingScale]], ' +
         'e.g. lines:45,hatch:125:0.6,wavy::0.8'
     )
