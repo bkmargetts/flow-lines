@@ -73,11 +73,11 @@ export function registerLapidary(program: Command) {
     .option('--angle-drift <number>', 'Seeded per-band drift off the base angle in degrees')
     .option('--spacing <number>', 'Base line pitch in px')
     .option('--density-contrast <number>', 'Spread between dense and sparse bands (0-1)')
-    .option('--waviness <number>', 'Wavy-texture amplitude (0-1)')
-    .option('--patchiness <number>', 'Patchy/cross hole amount (0-1)')
+    .option('--waviness <number>', 'Wavy-texture amplitude / contour-band undulation (0-1)')
+    .option('--patchiness <number>', 'Patchy/cross hole amount (0-1; cross floors its gate at 0.25)')
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')
-    .option('--outlines', 'Ink each region silhouette as a stroke')
+    .option('--outlines', 'Ink each region silhouette as a stroke (the background field is never outlined)')
     .option('--wobble <number>', 'Hand-drawn wobble amplitude in px')
     .option(
       '--split-layers',
@@ -182,7 +182,8 @@ export function registerLapidary(program: Command) {
       // Strata bands always partition the full sheet — flag options that only
       // shape agate/breccia silhouettes so the ignore isn't silent (the web
       // Controls disable the same sliders in strata).
-      if ((lapidaryOptions.mode ?? 'agate') === 'strata') {
+      const resolvedMode = lapidaryOptions.mode ?? 'agate';
+      if (resolvedMode === 'strata') {
         const ignored: string[] = [];
         if (options.coverage) ignored.push('--coverage');
         if (options.centerX) ignored.push('--center-x');
@@ -191,6 +192,12 @@ export function registerLapidary(program: Command) {
         if (ignored.length > 0) {
           console.error(`Note: strata spans the full sheet; ${ignored.join(', ')} ignored`);
         }
+      }
+      if (resolvedMode !== 'breccia' && options.veins) {
+        console.error('Note: veins are breccia-only; --veins ignored');
+      }
+      if (resolvedMode !== 'strata' && options.faults) {
+        console.error('Note: faults are strata-only; --faults ignored');
       }
 
       console.log('Rendering lapidary...');

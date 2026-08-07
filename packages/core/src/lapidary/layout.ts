@@ -34,7 +34,8 @@ export interface BandTexture {
   angleDeg?: number;
   /** Multiplier on the kind's resolved line pitch. */
   spacingScale?: number;
-  /** Per-band override of the global waviness (wavy only). */
+  /** Per-band override of the global waviness (wavy amplitude / contour
+   *  undulation). */
   waviness?: number;
   /** Per-band override of the global patchiness (patchy/cross only). */
   patchiness?: number;

@@ -87,7 +87,8 @@ export interface LapidaryOptions {
   /** Reserved-paper seam width between regions in px (default sizingDim/110) */
   haloPx?: number;
   /** Ink each region silhouette as a stroke (default false — in the
-   *  reference the seam itself does the work) */
+   *  reference the seam itself does the work). The full-frame background
+   *  band is never outlined — its silhouette is the page edge. */
   outlines?: boolean;
 
   // ---- Textures ----
@@ -105,9 +106,11 @@ export interface LapidaryOptions {
   spacingPx?: number;
   /** 0..1 spread between dense and sparse bands (default 0.6) */
   densityContrast?: number;
-  /** Wavy-texture amplitude 0..1 (default 0.5) */
+  /** Line undulation 0..1 (default 0.5): wavy-texture amplitude, and how far
+   *  contour bands drift off the silhouette they echo */
   waviness?: number;
-  /** Patchy/cross hole amount 0..1 (default 0.55) */
+  /** Patchy/cross hole amount 0..1 (default 0.55); cross keeps its second
+   *  family legible by flooring its gate at 0.25 */
   patchiness?: number;
 
   // ---- Pens ----

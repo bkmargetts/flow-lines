@@ -188,10 +188,11 @@ describe('generateLapidary', () => {
   });
 
   it('contour strokes follow the band silhouette', () => {
-    // Zero irregularity on a square page makes every ring a circle, so a
-    // silhouette-following loop keeps a near-constant distance to the centre
-    // along its whole length — straight hatching would sweep the ring's full
-    // radial extent.
+    // Zero irregularity on a square page makes every ring a circle, and
+    // waviness: 0 is the documented way to switch off the contour bands'
+    // undulation — so a silhouette-following loop keeps a near-constant
+    // distance to the centre along its whole length; straight hatching
+    // would sweep the ring's full radial extent.
     const opts = {
       width: 300,
       height: 300,
