@@ -206,6 +206,10 @@ describe('running commands end to end', () => {
     ],
     ['lapidary veins', ['lapidary', ...SMALL, '--mode', 'breccia', '--pens', '3', '--veins']],
     ['lapidary faults', ['lapidary', ...SMALL, '--mode', 'strata', '--faults', '2']],
+    [
+      'lapidary palette',
+      ['lapidary', ...SMALL, '--mode', 'breccia', '--veins', '--palette', 'garden', '--vein-color', '#c9a227'],
+    ],
     ['meander', ['meander', ...SMALL]],
     ['coral', ['coral', ...SMALL]],
     ['warp-grid', ['warp-grid', ...SMALL]],

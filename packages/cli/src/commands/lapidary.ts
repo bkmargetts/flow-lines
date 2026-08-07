@@ -2,6 +2,7 @@ import type { Command } from 'commander';
 import {
   generateLapidary,
   LAPIDARY_PRESETS,
+  VEIN_LAYER,
   type LapidaryMode,
   type LapidaryOptions,
   type LapidaryShapes,
@@ -12,6 +13,7 @@ import {
 } from '@flow-lines/core';
 import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
+import { LAPIDARY_PALETTES } from '../palettes.js';
 
 const TEXTURE_KINDS = new Set([
   'lines',
@@ -59,6 +61,7 @@ export function registerLapidary(program: Command) {
       '--veins',
       'Trace the seams between breccia fragments on the dedicated "vein" accent layer (kintsugi; breccia only)'
     )
+    .option('--no-veins', 'Switch veins off (overrides a preset that enables them)')
     .option('--coverage <number>', 'Outer silhouette size as a fraction of the frame (0.4-1)')
     .option('--center-x <number>', 'Composition centre X offset (-0.5..0.5)')
     .option('--center-y <number>', 'Composition centre Y offset (-0.5..0.5)')
@@ -77,7 +80,14 @@ export function registerLapidary(program: Command) {
     .option('--patchiness <number>', 'Patchy/cross hole amount (0-1; cross floors its gate at 0.25)')
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')
+    .option(
+      '--palette <p>',
+      `Curated pen set: ${Object.keys(LAPIDARY_PALETTES).join(' | ')} — sets the pen count ` +
+        'and per-pen colours incl. the vein accent (--pens and --vein-color override)'
+    )
+    .option('--vein-color <color>', 'Ink colour for the "vein" accent layer')
     .option('--outlines', 'Ink each region silhouette as a stroke (the background field is never outlined)')
+    .option('--no-outlines', 'Switch outlines off (overrides a preset that enables them)')
     .option('--wobble <number>', 'Hand-drawn wobble amplitude in px')
     .option(
       '--split-layers',
@@ -97,6 +107,14 @@ export function registerLapidary(program: Command) {
       if (options.preset && !preset) {
         console.error(
           `Unknown preset "${options.preset}". Valid: ${Object.keys(LAPIDARY_PRESETS).join(' | ')}`
+        );
+        process.exit(1);
+      }
+
+      const palette = options.palette ? LAPIDARY_PALETTES[String(options.palette)] : undefined;
+      if (options.palette && !palette) {
+        console.error(
+          `Unknown palette "${options.palette}". Valid: ${Object.keys(LAPIDARY_PALETTES).join(' | ')}`
         );
         process.exit(1);
       }
@@ -144,7 +162,10 @@ export function registerLapidary(program: Command) {
         bands: options.bands ? parseInt(options.bands, 10) : undefined,
         irregularity: options.irregularity ? parseFloat(options.irregularity) : undefined,
         faults: options.faults ? parseInt(options.faults, 10) : undefined,
-        veins: options.veins ? true : undefined,
+        // Three-state: --veins true, --no-veins false, neither leaves the
+        // preset's value in charge (commander sets nothing when both forms
+        // are registered and neither is passed).
+        veins: typeof options.veins === 'boolean' ? options.veins : undefined,
         coverage: options.coverage ? parseFloat(options.coverage) : undefined,
         centerX: options.centerX ? parseFloat(options.centerX) : undefined,
         centerY: options.centerY ? parseFloat(options.centerY) : undefined,
@@ -158,7 +179,7 @@ export function registerLapidary(program: Command) {
         patchiness: options.patchiness ? parseFloat(options.patchiness) : undefined,
         pens: options.pens ? parseInt(options.pens, 10) : undefined,
         penAssignment: options.penAssignment as PenAssignment | undefined,
-        outlines: options.outlines ? true : undefined,
+        outlines: typeof options.outlines === 'boolean' ? options.outlines : undefined,
         wobble: options.wobble ? parseFloat(options.wobble) : undefined,
       };
       for (const key of Object.keys(flagOptions) as Array<keyof LapidaryOptions>) {
@@ -167,6 +188,10 @@ export function registerLapidary(program: Command) {
 
       const lapidaryOptions: LapidaryOptions = {
         ...preset,
+        // The palette carries the pen count (as in the web app) — it beats a
+        // preset's pens so every stroke gets a mapped colour, but an explicit
+        // --pens (in flagOptions) still wins.
+        ...(palette ? { pens: palette.inks.length } : {}),
         ...flagOptions,
         width,
         height,
@@ -213,11 +238,22 @@ export function registerLapidary(program: Command) {
       console.log(`  Seed: ${result.seed}`);
       console.log(`  Generated ${result.lines.length} strokes`);
 
+      const veinColor = options.veinColor ? String(options.veinColor) : palette?.vein;
+      let layerColors: Record<string, string> | undefined;
+      if (palette || veinColor) {
+        layerColors = {};
+        palette?.inks.forEach((ink, i) => {
+          layerColors![`ink-${i}`] = ink;
+        });
+        if (veinColor) layerColors[VEIN_LAYER] = veinColor;
+      }
+
       const svgOptions: SVGOptions = {
-        strokeColor: options.strokeColor,
+        strokeColor: palette ? palette.inks[0] : options.strokeColor,
         strokeWidth: paperStrokeWidth ?? parseFloat(options.strokeWidth),
         includeBackground: options.background ?? false,
         backgroundColor: options.backgroundColor,
+        layerColors,
         ...paperSvg,
       };
 
