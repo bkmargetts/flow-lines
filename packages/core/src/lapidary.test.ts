@@ -347,6 +347,115 @@ describe('generateLapidary', () => {
     featureScale: 260 / TUNING_DIM,
   });
 
+  it('outlines add strokes but never trace the background field', () => {
+    const base = { ...BASE, wobble: 0, optimize: false };
+    const plain = generateLapidary(base);
+    const outlined = generateLapidary({ ...base, outlines: true });
+    expect(outlined.lines.length).toBeGreaterThan(plain.lines.length);
+    // The field's silhouette is the margin rect: an outlined field would put
+    // a stroke through several of its corners exactly (wobble is off).
+    const corners = [
+      { x: 20, y: 20 },
+      { x: 280, y: 20 },
+      { x: 280, y: 380 },
+      { x: 20, y: 380 },
+    ];
+    for (const line of outlined.lines) {
+      let hit = 0;
+      for (const c of corners) {
+        if (line.points.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < 1)) hit++;
+      }
+      expect(hit).toBeLessThan(3);
+    }
+  });
+
+  it('coverage scales the outermost silhouette', () => {
+    const reach = (coverage: number): number => {
+      const r = generateLapidary({ ...BASE, field: false, coverage, wobble: 0, optimize: false });
+      let max = 0;
+      for (const line of r.lines) {
+        for (const p of line.points) {
+          max = Math.max(max, Math.hypot(p.x - 150, p.y - 200));
+        }
+      }
+      return max;
+    };
+    expect(reach(0.95)).toBeGreaterThan(reach(0.7));
+    expect(reach(0.7)).toBeGreaterThan(reach(0.5));
+  });
+
+  it('centre offsets move the composition', () => {
+    const centroid = (opts: Partial<Parameters<typeof generateLapidary>[0]>) => {
+      const r = generateLapidary({ ...BASE, field: false, wobble: 0, optimize: false, ...opts });
+      let x = 0;
+      let y = 0;
+      let n = 0;
+      for (const line of r.lines) {
+        for (const p of line.points) {
+          x += p.x;
+          y += p.y;
+          n++;
+        }
+      }
+      return { x: x / n, y: y / n };
+    };
+    const at0 = centroid({});
+    const shifted = centroid({ centerX: 0.3, centerY: -0.3 });
+    expect(shifted.x).toBeGreaterThan(at0.x + 5);
+    expect(shifted.y).toBeLessThan(at0.y - 5);
+  });
+
+  it('refMinDim only binds below the page size', () => {
+    const plain = generateLapidary(BASE);
+    const unclamped = generateLapidary({ ...BASE, refMinDim: 10_000 });
+    expect(JSON.stringify(unclamped)).toEqual(JSON.stringify(plain));
+    const clamped = generateLapidary({ ...BASE, refMinDim: 130 });
+    expect(JSON.stringify(clamped.lines)).not.toEqual(JSON.stringify(plain.lines));
+  });
+
+  it('angle drift 0 keeps every ruled line on the base angle', () => {
+    const r = generateLapidary({
+      ...BASE,
+      textures: ['lines'],
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    expect(r.lines.length).toBeGreaterThan(50);
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const dx = Math.abs(line.points[i].x - line.points[i - 1].x);
+        const dy = Math.abs(line.points[i].y - line.points[i - 1].y);
+        expect(dx).toBeLessThan(dy * 0.02 + 0.01);
+      }
+    }
+  });
+
+  it('density contrast spreads the band pitches', () => {
+    const flat = generateLapidary({ ...BASE, densityContrast: 0 });
+    const spread = generateLapidary({ ...BASE, densityContrast: 1 });
+    expect(JSON.stringify(flat.lines)).not.toEqual(JSON.stringify(spread.lines));
+  });
+
+  it('ignores veins outside breccia and field in strata', () => {
+    for (const mode of ['agate', 'strata'] as const) {
+      const off = generateLapidary({ ...BASE, mode, veins: false });
+      const on = generateLapidary({ ...BASE, mode, veins: true });
+      expect(JSON.stringify(on)).toEqual(JSON.stringify(off));
+    }
+    const withField = generateLapidary({ ...BASE, mode: 'strata', field: true });
+    const without = generateLapidary({ ...BASE, mode: 'strata', field: false });
+    expect(JSON.stringify(without)).toEqual(JSON.stringify(withField));
+  });
+
+  it('renders per-region pens with fewer regions than pens', () => {
+    const r = generateLapidary({ ...BASE, bands: 2, pens: 4, penAssignment: 'per-region' });
+    expect(r.lines.length).toBeGreaterThan(20);
+    const allowed = new Set([0, 1, 2, 3].map((g) => inkLayerName(g)));
+    for (const line of r.lines) expect(allowed.has(line.layer!)).toBe(true);
+  });
+
   it('delivers the requested region count in agate and breccia', () => {
     // Agate used to drop rings whose clamped table collapsed and breccia
     // could exhaust its placement budget — both silently under-delivering
