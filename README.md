@@ -97,6 +97,7 @@ lives in a collapsed Advanced group.
 | Warp Grid | pure | Op-art gratings deformed by hidden relief |
 | Harmonograph | pure | Decaying pendulum curves, spirograph wheels, engine-turned guilloché rosettes |
 | Impact Grid | pure | A hand-ruled grid struck along a drawn path — displaced, torqued, shattered |
+| Lapidary | pure | Agate bands, breccia fragments or strata — textured regions split by paper seams |
 | Pattern | pure | Background hatch / grid / dot textures |
 | Grating (multi-ink) | pure | Interleaved multi-pen gratings |
 | Blank (template) | pure | Empty module, the template for new ones |
@@ -214,6 +215,7 @@ Run `flow-lines <command> --help` for the full, authoritative flag list.
 | `machine` | Page-sized generative machines |
 | `fracture` | Crack-propagation networks |
 | `marbling` | Mathematical paper marbling |
+| `lapidary` | Layered pattern artworks — textured regions split by paper seams |
 | `meander` | River-migration cartography |
 | `coral` | Differential-growth organisms |
 | `warp-grid` | Op-art gratings deformed by hidden relief |

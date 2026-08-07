@@ -37,12 +37,13 @@ const roll = (seed: number) => rollRandomArtwork(seededRng(seed), mintFactory())
 
 const HEX = /^#[0-9a-f]{6}$/;
 const PALETTE_IDS = PALETTES.map((p) => p.id);
-/** The four modules whose genomes roll their own named palette. */
+/** The modules whose genomes roll their own named palette. */
 const SELF_INKED = new Set([
   'botanical-generator',
   'landscape-generator',
   'planet-generator',
   'impact-grid',
+  'lapidary',
 ]);
 
 describe('rollRandomArtwork', () => {

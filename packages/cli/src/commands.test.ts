@@ -15,6 +15,7 @@ import { registerGesture } from './commands/gesture.js';
 import { registerMachine } from './commands/machine.js';
 import { registerFracture } from './commands/fracture.js';
 import { registerMarbling } from './commands/marbling.js';
+import { registerLapidary } from './commands/lapidary.js';
 import { registerMeander } from './commands/meander.js';
 import { registerTangles } from './commands/tangles.js';
 import { registerCoral } from './commands/coral.js';
@@ -46,6 +47,7 @@ const REGISTRARS = [
   registerMachine,
   registerFracture,
   registerMarbling,
+  registerLapidary,
   registerMeander,
   registerCoral,
   registerWarpGrid,
@@ -66,6 +68,7 @@ const EXPECTED_COMMANDS = [
   'machine',
   'fracture',
   'marbling',
+  'lapidary',
   'meander',
   'coral',
   'warp-grid',
@@ -192,6 +195,11 @@ describe('running commands end to end', () => {
     ['gesture', ['gesture', ...SMALL]],
     ['fracture', ['fracture', ...SMALL]],
     ['marbling', ['marbling', ...SMALL]],
+    ['lapidary', ['lapidary', ...SMALL]],
+    ['lapidary breccia', ['lapidary', ...SMALL, '--preset', 'breccia', '--pens', '3']],
+    ['lapidary strata', ['lapidary', ...SMALL, '--mode', 'strata', '--textures', 'lines,hatch']],
+    ['lapidary facet', ['lapidary', ...SMALL, '--preset', 'facet']],
+    ['lapidary angular', ['lapidary', ...SMALL, '--shapes', 'angular', '--no-field']],
     ['meander', ['meander', ...SMALL]],
     ['coral', ['coral', ...SMALL]],
     ['warp-grid', ['warp-grid', ...SMALL]],

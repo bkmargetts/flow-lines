@@ -30,6 +30,7 @@ import { coralModule } from '../projects/coral';
 import { warpGridModule } from '../projects/warp-grid';
 import { harmonographModule } from '../projects/harmonograph';
 import { impactGridModule } from '../projects/impact-grid';
+import { lapidaryModule } from '../projects/lapidary';
 
 /**
  * Every module, in panel order — the one flat registry the layer stack draws
@@ -70,6 +71,7 @@ export const MODULES: Module<any>[] = [
   warpGridModule,
   harmonographModule,
   impactGridModule,
+  lapidaryModule,
   classicTexture,
   gratingTexture,
   blankTexture,

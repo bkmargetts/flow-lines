@@ -25,6 +25,7 @@ import { randomCoralGenome } from '../projects/coral/Controls';
 import { randomWarpGridGenome } from '../projects/warp-grid/presets';
 import { randomHarmonographGenome } from '../projects/harmonograph/presets';
 import { randomImpactGridGenome } from '../projects/impact-grid/types';
+import { randomLapidaryGenome } from '../projects/lapidary/presets';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
 import { randomPlanetGenome } from '../projects/planet-generator/presets';
@@ -75,7 +76,18 @@ const ART_TREATMENT_BOUNDS: Record<string, [number, number]> = {
  * reads as a decision rather than an oversight, and so a *new* module can't
  * quietly join them.
  */
-const PALETTE_ROLLERS = ['botanical-generator', 'landscape-generator', 'planet-generator', 'impact-grid'];
+// Lapidary joins for the impact-grid reason: its identity is multi-pen
+// interplay (strokes interleaved across 2-3 pens within every texture), so a
+// surprise that never re-dealt the pen set wouldn't be one. Like impact-grid
+// it rolls a NAMED palette — hexes come from its curated table (which also
+// fixes `pens` to the palette's size), never generated colours.
+const PALETTE_ROLLERS = [
+  'botanical-generator',
+  'landscape-generator',
+  'planet-generator',
+  'impact-grid',
+  'lapidary',
+];
 
 const SPECS: GenomeSpec[] = [
   {
@@ -213,6 +225,37 @@ const SPECS: GenomeSpec[] = [
     // a NAMED palette (inkColors/pathColor come from the table, never
     // generated colours).
     forbidden: ['seed', 'penWidthMm', 'wobbleMm', 'maskPath', 'drawMode'],
+  },
+  {
+    name: 'lapidary',
+    genome: randomLapidaryGenome,
+    bounds: {
+      bands: [2, 10],
+      irregularity: [0, 1],
+      coverage: [0.4, 1],
+      centerX: [-0.5, 0.5],
+      centerY: [-0.5, 0.5],
+      haloMm: [0.8, 5],
+      spacingMm: [0.6, 3],
+      angleDeg: [0, 180],
+      angleDriftDeg: [0, 60],
+      densityContrast: [0, 1],
+      waviness: [0, 1],
+      patchiness: [0, 1],
+      pens: [1, 4],
+    },
+    ints: ['bands', 'angleDriftDeg', 'pens'],
+    bools: ['outlines', 'field'],
+    enums: {
+      mode: ['agate', 'breccia', 'strata'],
+      shapes: ['organic', 'angular', 'mixed'],
+      textureMix: ['specimen', 'geode', 'linework', 'tonal', 'shuffle'],
+      penAssignment: ['interleave', 'per-region'],
+    },
+    // Ink fields are absent from forbidden by design: lapidary is in
+    // PALETTE_ROLLERS and rolls a NAMED palette — strokeColor/ink2..4Color
+    // and `pens` come from the curated table, never generated colours.
+    forbidden: ['seed', 'penWidthMm', 'wobbleMm'],
   },
   {
     name: 'meander',

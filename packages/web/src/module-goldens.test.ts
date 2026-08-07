@@ -63,6 +63,9 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
     inkGroups: 2,
   },
   'ink-field': { style: 'lattice' },
+  // Strata beds through the geometric-gap path plus per-region pens, so both
+  // the second layout family and the pen-per-band assignment are pinned.
+  lapidary: { mode: 'strata', textureMix: 'shuffle', angleDeg: 0, penAssignment: 'per-region' },
   'impact-grid': {
     // A fixed synthetic strike (page px for the A4 × 1.5 test frame) so the
     // crush/shatter/fill code path is pinned, not just the pristine grid.
@@ -162,6 +165,14 @@ for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
   const grating = pureModules.find((m) => m.id === 'grating')!;
   CASES['grating/blob'] = () =>
     grating.render(stateFor(grating, { maskMode: 'blob', maskIrregularity: 0.6 }), env);
+  // Lapidary's PRESET_VARIANTS slot pins strata; the angular/no-field shape
+  // language gets its own explicit case.
+  const lapidary = pureModules.find((m) => m.id === 'lapidary')!;
+  CASES['lapidary/facet'] = () =>
+    lapidary.render(
+      stateFor(lapidary, { field: false, shapes: 'angular', textureMix: 'tonal', irregularity: 0.7 }),
+      env
+    );
 }
 
 // One small stack through the compositor: a texture under two generative
