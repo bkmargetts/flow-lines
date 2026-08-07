@@ -25,6 +25,8 @@ export type LapidaryTexture =
   | 'patchy'
   | 'cross'
   | 'stipple'
+  | 'mottle'
+  | 'grain'
   | 'blank';
 
 /** Per-band texture spec; a plain kind string means "defaults for that kind". */
@@ -35,9 +37,10 @@ export interface BandTexture {
   /** Multiplier on the kind's resolved line pitch. */
   spacingScale?: number;
   /** Per-band override of the global waviness (wavy amplitude / contour
-   *  undulation). */
+   *  undulation / grain bend). */
   waviness?: number;
-  /** Per-band override of the global patchiness (patchy/cross only). */
+  /** Per-band override of the global patchiness (patchy/cross hole amount;
+   *  mottle weave amount). */
   patchiness?: number;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
@@ -132,6 +135,12 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   patchy: 0.55,
   cross: 0.95,
   stipple: 1.3,
+  // Two interleaved same-pitch gratings (the noise-texture module's
+  // mechanism): overall pitch 0.5·base when evenly spread, opening to
+  // 1·base where the weave stacks the families — the dense mottled ring
+  // of the reference, with paper showing through the stacked passages.
+  mottle: 0.5,
+  grain: 0.7,
   blank: 1,
 };
 
@@ -146,6 +155,8 @@ const RANDOM_KINDS: LapidaryTexture[] = [
   'patchy',
   'cross',
   'stipple',
+  'mottle',
+  'grain',
 ];
 
 /**

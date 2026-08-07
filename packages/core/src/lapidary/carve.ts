@@ -25,20 +25,33 @@ export interface CarveConfig {
  *  round-robin over emission order — hatch fills emit in scanline order, so
  *  adjacent strokes alternate pens the way the reference's black/orange
  *  field does — with an occasional skipped step so the alternation reads
- *  hand-fed, not machine-cycled. */
+ *  hand-fed, not machine-cycled. Strokes pre-tagged with a `fam-K` family
+ *  marker (mottle's interwoven gratings) map to a dedicated pen per family
+ *  in every mode — the two-ink weave is the point of that texture — with
+ *  the z offset alternating which ink gets the straight family band to
+ *  band. */
 function assignPens(lines: FlowLine[], region: Region, cfg: CarveConfig): void {
+  const famPen = (line: FlowLine): boolean => {
+    if (line.layer !== 'fam-0' && line.layer !== 'fam-1') return false;
+    const k = line.layer === 'fam-0' ? 0 : 1;
+    line.layer = inkLayerName(cfg.pens <= 1 ? 0 : (region.z + k) % cfg.pens);
+    return true;
+  };
   if (cfg.pens <= 1) {
     for (const line of lines) line.layer = inkLayerName(0);
     return;
   }
   if (cfg.penAssignment === 'per-region') {
     const layer = inkLayerName(region.z % cfg.pens);
-    for (const line of lines) line.layer = layer;
+    for (const line of lines) {
+      if (!famPen(line)) line.layer = layer;
+    }
     return;
   }
   const rng = makeRandom(subSeed(cfg.seed, 300 + region.z));
   let counter = Math.floor(rng() * cfg.pens);
   for (const line of lines) {
+    if (famPen(line)) continue;
     line.layer = inkLayerName(counter % cfg.pens);
     counter++;
     if (rng() < 0.15) counter++;

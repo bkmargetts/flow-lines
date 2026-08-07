@@ -3,6 +3,7 @@ import { hatchPolygon } from '../hearts/heart.js';
 import { emitStroke, Craft } from '../landscape/hatching.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { createNoise } from '../noise.js';
+import { generateOverlappedLines, bandLayerName } from '../overlapped-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { Region } from './layout.js';
 
@@ -75,9 +76,11 @@ function gatedRun(
 }
 
 /**
- * Fill one region's polygon with its resolved texture. All strokes come back
+ * Fill one region's polygon with its resolved texture. Strokes come back
  * with no layer tag — the carve pass assigns pens after clipping, so the
- * interleave counter only counts strokes that survive.
+ * interleave counter only counts strokes that survive — except mottle,
+ * whose strokes carry transient `fam-K` family markers the carve maps to
+ * dedicated pens (the two-ink weave).
  */
 export function fillRegion(region: Region): RegionFill {
   const t = region.tex;
@@ -392,6 +395,156 @@ export function fillRegion(region: Region): RegionFill {
       const minLen = t.spacing * 1.5;
       for (const run of hatchPolygon(poly, ang2, t.spacing * 1.25, 1 - t.phase)) {
         gatedRun(run[0], run[1], Math.min(8, patchScale / 4), gate, minLen, 0, emitTapered);
+      }
+      break;
+    }
+
+    case 'mottle': {
+      // The noise-texture module's interleaved grating, verbatim: two
+      // same-pitch line families whose inter-family offset drifts across
+      // the block, along each line, and by noise, so the families weave
+      // between sitting on top of one another (paper shows through) and
+      // spreading into an even fill — generateOverlappedLines IS the
+      // mechanism, run over the region bbox and clipped to the band.
+      // Patchiness scales the whole deviation budget (0 = clean even
+      // interleave); at 0.55 the module's default-look ratios reproduce
+      // exactly. Families keep their identity as fam-K markers so the
+      // carve can plot each in its own ink (the module's riso weave).
+      let bx0 = Infinity;
+      let by0 = Infinity;
+      let bx1 = -Infinity;
+      let by1 = -Infinity;
+      for (const p of poly) {
+        if (p.x < bx0) bx0 = p.x;
+        if (p.y < by0) by0 = p.y;
+        if (p.x > bx1) bx1 = p.x;
+        if (p.y > by1) by1 = p.y;
+      }
+      // Module spacing is the per-ink pitch; two interleaved inks put the
+      // overall pitch back at t.spacing, so band tone matches the table.
+      const s = t.spacing * 2;
+      const rngM = makeRandom(subSeed(t.seed, 2));
+      const woven = generateOverlappedLines({
+        width: bx1 - bx0,
+        height: by1 - by0,
+        margin: 0,
+        // Module 0° = vertical (dx=sin,dy=cos); lapidary 90° = vertical.
+        angleDeg: 90 - (t.angleRad * 180) / Math.PI,
+        spacingPx: s,
+        colorCount: 2,
+        // Hotter than the module's default ratios (across 0.75·s, noise
+        // 0.3·s): band pitches are roughly half the module's default and
+        // the sheet-wide wobble pass runs on top, so the deviation budget
+        // must clear both for the weave to read. At 0.55 the across ramp
+        // sweeps ±1·s (two full pitches of crossing per band width).
+        phaseDriftAcrossPx: s * 1.8 * t.patchiness,
+        phaseNoiseAmpPx: s * 0.8 * t.patchiness,
+        phaseNoiseScale: 1 / Math.max(64, s * 16),
+        // Seeded down-line weave, direction dealt per band.
+        phaseDriftAlongPx: s * (rngM() * 2 - 1) * 0.8 * t.patchiness,
+        jitterPx: s * 0.05,
+        wobbleAmpPx: 0, // the sheet-wide hand-drawn pass runs downstream
+        edgeSmoothPx: 0, // bbox edges are not the silhouette
+        seed: subSeed(t.seed, 2),
+        optimize: false, // the whole plot is optimized at the end
+      });
+      const minKeep = t.spacing * 0.8;
+      for (const line of woven.lines) {
+        if (ink.length >= REGION_LINE_CAP) break;
+        const fam = line.layer === bandLayerName(0) ? 'fam-0' : 'fam-1';
+        // Re-densify at the wobble step (the module samples at up to 8px)
+        // and clip to the band silhouette.
+        let kept: Point[] = [];
+        const flush = (): void => {
+          if (kept.length >= 2) {
+            let l = 0;
+            for (let i = 1; i < kept.length; i++) {
+              l += Math.hypot(kept[i].x - kept[i - 1].x, kept[i].y - kept[i - 1].y);
+            }
+            if (l >= minKeep && ink.length < REGION_LINE_CAP) {
+              ink.push({ points: kept, layer: fam });
+            }
+          }
+          kept = [];
+        };
+        for (let i = 1; i < line.points.length; i++) {
+          const a = line.points[i - 1];
+          const b = line.points[i];
+          const seg = densify(
+            { x: a.x + bx0, y: a.y + by0 },
+            { x: b.x + bx0, y: b.y + by0 },
+            fineStep
+          );
+          for (let j = i === 1 ? 0 : 1; j < seg.length; j++) {
+            const q = seg[j];
+            if (pointInPolygon(poly, q.x, q.y)) kept.push(q);
+            else flush();
+          }
+        }
+        flush();
+      }
+      break;
+    }
+
+    case 'grain': {
+      // Stone grain: short curved dashes combed along one shared noise flow
+      // field, lengths stretched by a decorrelated fBm — reads as worked
+      // material, distinct from stipple's isotropic ticks and wavy's
+      // unbroken combing. Waviness is the bend knob.
+      const grainNoise = createNoise(subSeed(t.seed, 3));
+      const flowScale = Math.max(36, t.spacing * 16);
+      const bend = 0.7 * (0.4 + 0.6 * t.waviness);
+      const dir = (x: number, y: number): number =>
+        t.angleRad + bend * grainNoise.fbm(x / flowScale, y / flowScale, 3, 0.5, 2);
+      // Seed pitch and dash lengths tuned together: at 1.4× pitch with
+      // longer dashes the overlap reads near-solid fur, not grain.
+      const pitch = t.spacing * 1.7;
+      const minKeep = t.spacing * 1.2;
+      let bx0 = Infinity;
+      let by0 = Infinity;
+      let bx1 = -Infinity;
+      let by1 = -Infinity;
+      for (const p of poly) {
+        if (p.x < bx0) bx0 = p.x;
+        if (p.y < by0) by0 = p.y;
+        if (p.x > bx1) bx1 = p.x;
+        if (p.y > by1) by1 = p.y;
+      }
+      for (let gy = by0 + pitch / 2; gy <= by1; gy += pitch) {
+        for (let gx = bx0 + pitch / 2; gx <= bx1; gx += pitch) {
+          const sx = gx + (rng() - 0.5) * pitch * 0.8;
+          const sy = gy + (rng() - 0.5) * pitch * 0.8;
+          if (!pointInPolygon(poly, sx, sy)) continue;
+          // The +41.7 domain offset decorrelates length from direction
+          // (the cross-gate idiom).
+          const v =
+            0.5 +
+            0.5 * grainNoise.fbm(sx / (flowScale * 0.6) + 41.7, sy / (flowScale * 0.6), 2, 0.5, 2);
+          const half = t.spacing * (2.2 + 3.8 * v) * 0.5;
+          // Walk the streamline both ways from the seed, re-sampling the
+          // flow each step (curved dashes); raw polylines — the wobble
+          // pass supplies the hand feel.
+          const pts: Point[] = [{ x: sx, y: sy }];
+          for (const sgn of [1, -1] as const) {
+            let x = sx;
+            let y = sy;
+            let s = 0;
+            while (s < half) {
+              const a = dir(x, y);
+              x += Math.cos(a) * fineStep * sgn;
+              y += Math.sin(a) * fineStep * sgn;
+              s += fineStep;
+              if (!pointInPolygon(poly, x, y)) break;
+              if (sgn === 1) pts.push({ x, y });
+              else pts.unshift({ x, y });
+            }
+          }
+          let l = 0;
+          for (let i = 1; i < pts.length; i++) {
+            l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+          }
+          if (l >= minKeep) push(ink, pts);
+        }
       }
       break;
     }

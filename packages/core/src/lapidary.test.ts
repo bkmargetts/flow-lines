@@ -348,10 +348,21 @@ describe('generateLapidary', () => {
   });
 
   it('outlines add strokes but never trace the background field', () => {
-    const base = { ...BASE, wobble: 0, optimize: false };
-    const plain = generateLapidary(base);
-    const outlined = generateLapidary({ ...base, outlines: true });
-    expect(outlined.lines.length).toBeGreaterThan(plain.lines.length);
+    // Count on a single floating band: outline strokes are also stamped
+    // into the avoid mask, so with bands below, clipped slivers can cancel
+    // out the added loops in a raw line count.
+    const solo = {
+      ...BASE,
+      bands: 1,
+      field: false,
+      textures: ['hatch'] as ['hatch'],
+      wobble: 0,
+      optimize: false,
+    };
+    expect(generateLapidary({ ...solo, outlines: true }).lines.length).toBeGreaterThan(
+      generateLapidary(solo).lines.length
+    );
+    const outlined = generateLapidary({ ...BASE, wobble: 0, optimize: false, outlines: true });
     // The field's silhouette is the margin rect: an outlined field would put
     // a stroke through several of its corners exactly (wobble is off).
     const corners = [
@@ -467,6 +478,142 @@ describe('generateLapidary', () => {
         expect(regions.length, `${mode} seed ${seed}`).toBe(8);
       }
     }
+  });
+
+  it('mottle plots its two families on their own pens', () => {
+    // The noise-texture module's riso weave: with two pens the straight
+    // grating takes one ink and the weaving grating the other, instead of
+    // the stroke-by-stroke interleave every other texture gets.
+    const base = {
+      ...BASE,
+      bands: 1,
+      textures: ['mottle'] as ['mottle'],
+      patchiness: 0.9,
+      wobble: 0,
+      optimize: false,
+    };
+    const r = generateLapidary({ ...base, pens: 2 });
+    const layers = new Set(r.lines.map((l) => l.layer));
+    expect([...layers].sort()).toEqual([inkLayerName(0), inkLayerName(1)]);
+    const share = r.lines.filter((l) => l.layer === inkLayerName(0)).length / r.lines.length;
+    expect(share).toBeGreaterThan(0.3);
+    expect(share).toBeLessThan(0.7);
+    // One family stays ruled while the other weaves: their long lines'
+    // lateral extents separate by a wide margin.
+    const medianSpan = (layer: string): number => {
+      const spans = r.lines
+        .filter((l) => l.layer === layer && l.points.length > 50)
+        .map((l) => {
+          const xs = l.points.map((p) => p.x);
+          return Math.max(...xs) - Math.min(...xs);
+        })
+        .sort((a, b) => a - b);
+      expect(spans.length).toBeGreaterThan(10);
+      return spans[Math.floor(spans.length / 2)];
+    };
+    const m0 = medianSpan(inkLayerName(0));
+    const m1 = medianSpan(inkLayerName(1));
+    expect(Math.max(m0, m1)).toBeGreaterThan(Math.min(m0, m1) * 3);
+    // One pen folds both families onto it.
+    const mono = generateLapidary({ ...base, pens: 1 });
+    expect(new Set(mono.lines.map((l) => l.layer))).toEqual(new Set([inkLayerName(0)]));
+  });
+
+  it('mottle patchiness deepens the tonal clouds', () => {
+    // The weave amount is what patchiness buys: near zero the two
+    // families hold an almost even interleave, with amplitude the drift
+    // terms slide one family across the other until lines stack and
+    // cross. Crowding redistributes ink without changing ink-per-area, so
+    // the measurable signal is the share of near-zero gaps between
+    // successive scanline crossings (stacked pairs) — a full-page single
+    // mottle band keeps the lines exactly vertical. The share saturates
+    // once the sweep exceeds a pitch, so assert the low-end contrast, not
+    // monotonicity.
+    const stackedShare = (patchiness: number): number => {
+      const r = generateLapidary({
+        ...BASE,
+        bands: 1,
+        textures: ['mottle'],
+        patchiness,
+        wobble: 0,
+        optimize: false,
+      });
+      const gaps: number[] = [];
+      for (const scanY of [120, 200, 280]) {
+        const xs: number[] = [];
+        for (const line of r.lines) {
+          for (let i = 1; i < line.points.length; i++) {
+            const a = line.points[i - 1];
+            const b = line.points[i];
+            // Half-open straddle: a vertex sitting exactly on the scanline
+            // must not be counted by both segments that share it.
+            const lo = Math.min(a.y, b.y);
+            const hi = Math.max(a.y, b.y);
+            if (!(lo < scanY && scanY <= hi)) continue;
+            const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (scanY - a.y) / (b.y - a.y);
+            xs.push(a.x + (b.x - a.x) * f);
+          }
+        }
+        xs.sort((p, q) => p - q);
+        for (let i = 1; i < xs.length; i++) {
+          if (xs[i] > BASE.margin + 10 && xs[i] < BASE.width - BASE.margin - 10) {
+            gaps.push(xs[i] - xs[i - 1]);
+          }
+        }
+      }
+      const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+      return gaps.filter((g) => g < mean * 0.2).length / gaps.length;
+    };
+    expect(stackedShare(0.05)).toBeLessThan(0.02);
+    expect(stackedShare(0.9)).toBeGreaterThan(0.05);
+  });
+
+  it('grain dashes stay short and comb along the band angle', () => {
+    const spacingPx = 8;
+    const spacing = spacingPx * 0.7; // grain's KIND_SPACING baseline
+    const r = generateLapidary({
+      ...BASE,
+      textures: [{ kind: 'grain', spacingScale: 1 }],
+      spacingPx,
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      waviness: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    expect(r.lines.length).toBeGreaterThan(100);
+    for (const line of r.lines) {
+      let len = 0;
+      for (let i = 1; i < line.points.length; i++) {
+        len += Math.hypot(
+          line.points[i].x - line.points[i - 1].x,
+          line.points[i].y - line.points[i - 1].y
+        );
+      }
+      // Length cap: spacing * (2.2 + 3.8) plus one step of walk overshoot
+      // per side — a dash is a mark, never a streamline.
+      expect(len).toBeLessThan(spacing * 8.5);
+      // At waviness 0 the bend budget is 0.28 rad: every dash chord stays
+      // near the vertical base angle.
+      const a = line.points[0];
+      const b = line.points[line.points.length - 1];
+      if (Math.hypot(b.x - a.x, b.y - a.y) < spacing) continue;
+      let diff = Math.abs(Math.atan2(b.y - a.y, b.x - a.x) - Math.PI / 2) % Math.PI;
+      if (diff > Math.PI / 2) diff = Math.PI - diff;
+      expect(diff).toBeLessThan(0.4);
+    }
+  });
+
+  it('mottle and grain are deterministic and distinct', () => {
+    for (const kind of ['mottle', 'grain'] as const) {
+      const a = generateLapidary({ ...BASE, textures: [kind] });
+      const b = generateLapidary({ ...BASE, textures: [kind] });
+      expect(JSON.stringify(a)).toEqual(JSON.stringify(b));
+      expect(a.lines.length).toBeGreaterThan(50);
+    }
+    expect(JSON.stringify(generateLapidary({ ...BASE, textures: ['mottle'] }).lines)).not.toEqual(
+      JSON.stringify(generateLapidary({ ...BASE, textures: ['grain'] }).lines)
+    );
   });
 
   it('degrades gracefully when the geometry cannot fit the request', () => {

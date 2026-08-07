@@ -28,7 +28,7 @@ const TEXTURE_MIXES: Record<
     { kind: 'lines', spacingScale: 0.7 },
     { kind: 'wavy', spacingScale: 1.2 },
   ],
-  tonal: ['hatch', 'patchy', 'stipple', 'cross'],
+  tonal: ['hatch', 'mottle', 'stipple', 'cross'],
 };
 
 /** The inks the plot actually uses: a named palette carries its own pen
