@@ -84,7 +84,7 @@ export function registerLapidary(program: Command) {
     )
     .option(
       '--patchiness <number>',
-      'Patchy/cross hole amount and mottle beat amplitude (0-1; cross floors its gate at 0.25)'
+      'Patchy/cross hole amount and mottle weave amount (0-1; cross floors its gate at 0.25)'
     )
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')

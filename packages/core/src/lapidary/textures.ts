@@ -3,6 +3,7 @@ import { hatchPolygon } from '../hearts/heart.js';
 import { emitStroke, Craft } from '../landscape/hatching.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { createNoise } from '../noise.js';
+import { generateOverlappedLines, bandLayerName } from '../overlapped-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { Region } from './layout.js';
 
@@ -75,9 +76,11 @@ function gatedRun(
 }
 
 /**
- * Fill one region's polygon with its resolved texture. All strokes come back
+ * Fill one region's polygon with its resolved texture. Strokes come back
  * with no layer tag — the carve pass assigns pens after clipping, so the
- * interleave counter only counts strokes that survive.
+ * interleave counter only counts strokes that survive — except mottle,
+ * whose strokes carry transient `fam-K` family markers the carve maps to
+ * dedicated pens (the two-ink weave).
  */
 export function fillRegion(region: Region): RegionFill {
   const t = region.tex;
@@ -397,31 +400,16 @@ export function fillRegion(region: Region): RegionFill {
     }
 
     case 'mottle': {
-      // Interleaved-grating beat (the noise-texture module's mark,
-      // generateOverlappedLines): a straight family plus a second family at
-      // the SAME pitch, phase-shifted half a gap, whose perpendicular offset
-      // rides one low-frequency fBm field. Where the offset carries it onto
-      // the straight family the pair stacks and paper shows through; where
-      // it sits between, the fill closes to an even half-pitch grating —
-      // soft cloudy mottling from line crowding, no discrete shapes.
-      // Patchiness is the beat amplitude.
-      const mottleNoise = createNoise(subSeed(t.seed, 2));
-      // The module's tuned ratios: cloud wavelength ~16 pitches, deviation
-      // swinging past a full pitch at the top of the knob so the beat
-      // crosses coincidence rather than only approaching it.
-      const lambda = Math.max(40, t.spacing * 16);
-      const amp = t.spacing * (0.35 + 0.9 * t.patchiness);
-      const minKeep = t.spacing * 0.8;
-      // The straight family keeps exact registration: emitStroke's per-line
-      // angle jitter swings a band-long line by more than the pitch at the
-      // crossing, which scrambles the interleave the beat plays against.
-      const straightCraft: Craft = { rng, taper: 0.45, jitter: 0, subStep: step };
-      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
-        if (ink.length >= REGION_LINE_CAP) break;
-        emitStroke(ink, run[0], run[1], '', straightCraft);
-      }
-      // Second family: the wavy deform-then-clip idiom, displaced by the
-      // shared field so neighbouring lines crowd coherently.
+      // The noise-texture module's interleaved grating, verbatim: two
+      // same-pitch line families whose inter-family offset drifts across
+      // the block, along each line, and by noise, so the families weave
+      // between sitting on top of one another (paper shows through) and
+      // spreading into an even fill — generateOverlappedLines IS the
+      // mechanism, run over the region bbox and clipped to the band.
+      // Patchiness scales the whole deviation budget (0 = clean even
+      // interleave); at 0.55 the module's default-look ratios reproduce
+      // exactly. Families keep their identity as fam-K markers so the
+      // carve can plot each in its own ink (the module's riso weave).
       let bx0 = Infinity;
       let by0 = Infinity;
       let bx1 = -Infinity;
@@ -432,35 +420,40 @@ export function fillRegion(region: Region): RegionFill {
         if (p.x > bx1) bx1 = p.x;
         if (p.y > by1) by1 = p.y;
       }
-      const box: Point[] = [
-        { x: bx0, y: by0 },
-        { x: bx1, y: by0 },
-        { x: bx1, y: by1 },
-        { x: bx0, y: by1 },
-      ];
-      // Register the second family exactly half a pitch off the first:
-      // hatchPolygon scans from each polygon's own min-extent (and maps
-      // phase through 0.3+0.7·p), so the box family's raw offset against
-      // the poly family is arbitrary — fold the exact correction into the
-      // perpendicular displacement instead.
-      const scanNx = -Math.sin(t.angleRad);
-      const scanNy = Math.cos(t.angleRad);
-      const minOver = (pts: Point[]): number => {
-        let m = Infinity;
-        for (const p of pts) m = Math.min(m, p.x * scanNx + p.y * scanNy);
-        return m;
-      };
-      const firstA = minOver(poly) + t.spacing * (0.3 + 0.7 * t.phase);
-      const firstB = minOver(box) + t.spacing * 0.3;
-      const register =
-        ((((firstA + t.spacing / 2 - firstB) % t.spacing) + t.spacing) % t.spacing);
-      for (const run of hatchPolygon(box, t.angleRad, t.spacing, 0)) {
-        const base = densify(run[0], run[1], fineStep);
-        const dx = run[1].x - run[0].x;
-        const dy = run[1].y - run[0].y;
-        const len = Math.hypot(dx, dy) || 1;
-        const nx = -dy / len;
-        const ny = dx / len;
+      // Module spacing is the per-ink pitch; two interleaved inks put the
+      // overall pitch back at t.spacing, so band tone matches the table.
+      const s = t.spacing * 2;
+      const rngM = makeRandom(subSeed(t.seed, 2));
+      const woven = generateOverlappedLines({
+        width: bx1 - bx0,
+        height: by1 - by0,
+        margin: 0,
+        // Module 0° = vertical (dx=sin,dy=cos); lapidary 90° = vertical.
+        angleDeg: 90 - (t.angleRad * 180) / Math.PI,
+        spacingPx: s,
+        colorCount: 2,
+        // Hotter than the module's default ratios (across 0.75·s, noise
+        // 0.3·s): band pitches are roughly half the module's default and
+        // the sheet-wide wobble pass runs on top, so the deviation budget
+        // must clear both for the weave to read. At 0.55 the across ramp
+        // sweeps ±1·s (two full pitches of crossing per band width).
+        phaseDriftAcrossPx: s * 1.8 * t.patchiness,
+        phaseNoiseAmpPx: s * 0.8 * t.patchiness,
+        phaseNoiseScale: 1 / Math.max(64, s * 16),
+        // Seeded down-line weave, direction dealt per band.
+        phaseDriftAlongPx: s * (rngM() * 2 - 1) * 0.8 * t.patchiness,
+        jitterPx: s * 0.05,
+        wobbleAmpPx: 0, // the sheet-wide hand-drawn pass runs downstream
+        edgeSmoothPx: 0, // bbox edges are not the silhouette
+        seed: subSeed(t.seed, 2),
+        optimize: false, // the whole plot is optimized at the end
+      });
+      const minKeep = t.spacing * 0.8;
+      for (const line of woven.lines) {
+        if (ink.length >= REGION_LINE_CAP) break;
+        const fam = line.layer === bandLayerName(0) ? 'fam-0' : 'fam-1';
+        // Re-densify at the wobble step (the module samples at up to 8px)
+        // and clip to the band silhouette.
         let kept: Point[] = [];
         const flush = (): void => {
           if (kept.length >= 2) {
@@ -468,15 +461,25 @@ export function fillRegion(region: Region): RegionFill {
             for (let i = 1; i < kept.length; i++) {
               l += Math.hypot(kept[i].x - kept[i - 1].x, kept[i].y - kept[i - 1].y);
             }
-            if (l >= minKeep) push(ink, kept);
+            if (l >= minKeep && ink.length < REGION_LINE_CAP) {
+              ink.push({ points: kept, layer: fam });
+            }
           }
           kept = [];
         };
-        for (const p of base) {
-          const d = register + amp * mottleNoise.fbm(p.x / lambda, p.y / lambda, 2, 0.5, 2);
-          const q = { x: p.x + nx * d, y: p.y + ny * d };
-          if (pointInPolygon(poly, q.x, q.y)) kept.push(q);
-          else flush();
+        for (let i = 1; i < line.points.length; i++) {
+          const a = line.points[i - 1];
+          const b = line.points[i];
+          const seg = densify(
+            { x: a.x + bx0, y: a.y + by0 },
+            { x: b.x + bx0, y: b.y + by0 },
+            fineStep
+          );
+          for (let j = i === 1 ? 0 : 1; j < seg.length; j++) {
+            const q = seg[j];
+            if (pointInPolygon(poly, q.x, q.y)) kept.push(q);
+            else flush();
+          }
         }
         flush();
       }

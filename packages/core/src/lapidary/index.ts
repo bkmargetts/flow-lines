@@ -26,8 +26,8 @@ export const VEIN_LAYER = 'vein';
  * Lapidary — layered pattern artworks in the style of a cut and polished
  * stone cross-section: organic regions, each filled with its own line
  * texture (ruled lines, wavy combing, concentric contour banding, dense
- * hatch, mottled patchy hatch, shallow cross-hatch, stipple, cloudy
- * grating-beat mottle, flowing grain dashes, or held paper), separated by
+ * hatch, mottled patchy hatch, shallow cross-hatch, stipple, interwoven
+ * grating mottle, flowing grain dashes, or held paper), separated by
  * clean reserved-paper seams the way stacked stencil layers hold off one
  * another.
  *
@@ -115,9 +115,9 @@ export interface LapidaryOptions {
    *  contour bands drift off the silhouette they echo, and how hard grain
    *  dashes bend off the band angle */
   waviness?: number;
-  /** Patchy/cross hole amount and mottle grating-beat amplitude, 0..1
-   *  (default 0.55); cross keeps its second family legible by flooring its
-   *  gate at 0.25 */
+  /** Patchy/cross hole amount and mottle weave amount, 0..1 (default
+   *  0.55); cross keeps its second family legible by flooring its gate at
+   *  0.25 */
   patchiness?: number;
 
   // ---- Pens ----

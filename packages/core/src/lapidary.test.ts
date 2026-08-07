@@ -480,37 +480,55 @@ describe('generateLapidary', () => {
     }
   });
 
-  it('mottle lays a second line family over the plain hatch', () => {
-    // Pin both kinds to the same resolved pitch (mottle's 0.7 baseline vs
-    // hatch's 0.45): the beating second family must add ink beyond the
-    // identical straight family — mottle is crowding between two live
-    // gratings, not the patchy gate's holes.
-    const totalLen = (textures: Parameters<typeof generateLapidary>[0]['textures']): number => {
-      const r = generateLapidary({ ...BASE, textures, wobble: 0, optimize: false });
-      let len = 0;
-      for (const line of r.lines) {
-        for (let i = 1; i < line.points.length; i++) {
-          len += Math.hypot(
-            line.points[i].x - line.points[i - 1].x,
-            line.points[i].y - line.points[i - 1].y
-          );
-        }
-      }
-      return len;
+  it('mottle plots its two families on their own pens', () => {
+    // The noise-texture module's riso weave: with two pens the straight
+    // grating takes one ink and the weaving grating the other, instead of
+    // the stroke-by-stroke interleave every other texture gets.
+    const base = {
+      ...BASE,
+      bands: 1,
+      textures: ['mottle'] as ['mottle'],
+      patchiness: 0.9,
+      wobble: 0,
+      optimize: false,
     };
-    const hatch = totalLen([{ kind: 'hatch', spacingScale: 0.7 / 0.45 }]);
-    const mottle = totalLen([{ kind: 'mottle', spacingScale: 1 }]);
-    expect(mottle).toBeGreaterThan(hatch * 1.1);
+    const r = generateLapidary({ ...base, pens: 2 });
+    const layers = new Set(r.lines.map((l) => l.layer));
+    expect([...layers].sort()).toEqual([inkLayerName(0), inkLayerName(1)]);
+    const share = r.lines.filter((l) => l.layer === inkLayerName(0)).length / r.lines.length;
+    expect(share).toBeGreaterThan(0.3);
+    expect(share).toBeLessThan(0.7);
+    // One family stays ruled while the other weaves: their long lines'
+    // lateral extents separate by a wide margin.
+    const medianSpan = (layer: string): number => {
+      const spans = r.lines
+        .filter((l) => l.layer === layer && l.points.length > 50)
+        .map((l) => {
+          const xs = l.points.map((p) => p.x);
+          return Math.max(...xs) - Math.min(...xs);
+        })
+        .sort((a, b) => a - b);
+      expect(spans.length).toBeGreaterThan(10);
+      return spans[Math.floor(spans.length / 2)];
+    };
+    const m0 = medianSpan(inkLayerName(0));
+    const m1 = medianSpan(inkLayerName(1));
+    expect(Math.max(m0, m1)).toBeGreaterThan(Math.min(m0, m1) * 3);
+    // One pen folds both families onto it.
+    const mono = generateLapidary({ ...base, pens: 1 });
+    expect(new Set(mono.lines.map((l) => l.layer))).toEqual(new Set([inkLayerName(0)]));
   });
 
   it('mottle patchiness deepens the tonal clouds', () => {
-    // The beat amplitude is what patchiness buys: near zero the two
-    // families hold an almost even interleave, high amplitude slides one
-    // family across the other until lines stack. Crowding redistributes
-    // ink without changing ink-per-area, so the measurable signal is the
-    // share of near-zero gaps between successive scanline crossings
-    // (stacked pairs) — a full-page single mottle band keeps the lines
-    // exactly vertical.
+    // The weave amount is what patchiness buys: near zero the two
+    // families hold an almost even interleave, with amplitude the drift
+    // terms slide one family across the other until lines stack and
+    // cross. Crowding redistributes ink without changing ink-per-area, so
+    // the measurable signal is the share of near-zero gaps between
+    // successive scanline crossings (stacked pairs) — a full-page single
+    // mottle band keeps the lines exactly vertical. The share saturates
+    // once the sweep exceeds a pitch, so assert the low-end contrast, not
+    // monotonicity.
     const stackedShare = (patchiness: number): number => {
       const r = generateLapidary({
         ...BASE,
@@ -527,7 +545,11 @@ describe('generateLapidary', () => {
           for (let i = 1; i < line.points.length; i++) {
             const a = line.points[i - 1];
             const b = line.points[i];
-            if ((a.y - scanY) * (b.y - scanY) > 0) continue;
+            // Half-open straddle: a vertex sitting exactly on the scanline
+            // must not be counted by both segments that share it.
+            const lo = Math.min(a.y, b.y);
+            const hi = Math.max(a.y, b.y);
+            if (!(lo < scanY && scanY <= hi)) continue;
             const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (scanY - a.y) / (b.y - a.y);
             xs.push(a.x + (b.x - a.x) * f);
           }
@@ -542,9 +564,8 @@ describe('generateLapidary', () => {
       const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
       return gaps.filter((g) => g < mean * 0.2).length / gaps.length;
     };
-    const flat = stackedShare(0.05);
-    expect(flat).toBeLessThan(0.06);
-    expect(stackedShare(0.9)).toBeGreaterThan(flat * 2.5);
+    expect(stackedShare(0.05)).toBeLessThan(0.02);
+    expect(stackedShare(0.9)).toBeGreaterThan(0.05);
   });
 
   it('grain dashes stay short and comb along the band angle', () => {

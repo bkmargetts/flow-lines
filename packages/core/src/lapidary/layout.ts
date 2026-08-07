@@ -40,7 +40,7 @@ export interface BandTexture {
    *  undulation / grain bend). */
   waviness?: number;
   /** Per-band override of the global patchiness (patchy/cross hole amount;
-   *  mottle grating-beat amplitude). */
+   *  mottle weave amount). */
   patchiness?: number;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
@@ -135,10 +135,11 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   patchy: 0.55,
   cross: 0.95,
   stipple: 1.3,
-  // Two same-pitch families: the fill swings between an effective 0.35
-  // (even interleave) and 0.7 (families stacked) as the beat crowds the
-  // lines — airier than patchy so the light clouds actually show paper.
-  mottle: 0.7,
+  // Two interleaved same-pitch gratings (the noise-texture module's
+  // mechanism): overall pitch 0.5·base when evenly spread, opening to
+  // 1·base where the weave stacks the families — the dense mottled ring
+  // of the reference, with paper showing through the stacked passages.
+  mottle: 0.5,
   grain: 0.7,
   blank: 1,
 };
