@@ -1,6 +1,5 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { hatchPolygon } from '../hearts/heart.js';
-import { traceIsoContours } from '../iso-contours.js';
 import { emitStroke, Craft } from '../landscape/hatching.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { createNoise } from '../noise.js';
@@ -398,88 +397,88 @@ export function fillRegion(region: Region): RegionFill {
     }
 
     case 'mottle': {
-      // Two-tone blob pattern (the reference's leopard/wood-grain ring): a
-      // low-frequency field deals organic blobs, and a second half-pitch
-      // hatch family fills only their interiors — two committed density
-      // levels, where the patchy gate only removes ink below one. The gate
-      // and the wall raster share one noise instance so the drawn cell
-      // walls sit exactly on the density boundary. Per-blob pen splitting
-      // would need RegionFill to carry sub-tags through the carve — pens
-      // stay a downstream per-region/interleave decision.
+      // Interleaved-grating beat (the noise-texture module's mark,
+      // generateOverlappedLines): a straight family plus a second family at
+      // the SAME pitch, phase-shifted half a gap, whose perpendicular offset
+      // rides one low-frequency fBm field. Where the offset carries it onto
+      // the straight family the pair stacks and paper shows through; where
+      // it sits between, the fill closes to an even half-pitch grating —
+      // soft cloudy mottling from line crowding, no discrete shapes.
+      // Patchiness is the beat amplitude.
       const mottleNoise = createNoise(subSeed(t.seed, 2));
-      // Blob cells stay hand-sized even at tight pitch (the patchScale
-      // idiom, but larger — leopard patches, not flecks); patchiness is
-      // the blob coverage knob.
-      const blobScale = Math.max(40, t.spacing * 16);
-      const blobCut = 0.8 - t.patchiness * 1.3;
-      const inBlob = (x: number, y: number): boolean =>
-        mottleNoise.noise2D(x / blobScale, y / blobScale) > blobCut;
-
+      // The module's tuned ratios: cloud wavelength ~16 pitches, deviation
+      // swinging past a full pitch at the top of the knob so the beat
+      // crosses coincidence rather than only approaching it.
+      const lambda = Math.max(40, t.spacing * 16);
+      const amp = t.spacing * (0.35 + 0.9 * t.patchiness);
+      const minKeep = t.spacing * 0.8;
+      // The straight family keeps exact registration: emitStroke's per-line
+      // angle jitter swings a band-long line by more than the pitch at the
+      // crossing, which scrambles the interleave the beat plays against.
+      const straightCraft: Craft = { rng, taper: 0.45, jitter: 0, subStep: step };
       for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
-        emitTapered(run[0], run[1]);
+        if (ink.length >= REGION_LINE_CAP) break;
+        emitStroke(ink, run[0], run[1], '', straightCraft);
       }
-      // Infill lands exactly between the base lines. edgeBand 0 — unlike
-      // patchy, blob ink must not smear onto the silhouette seam.
-      const minLen = t.spacing * 1.5;
-      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, (t.phase + 0.5) % 1)) {
-        gatedRun(run[0], run[1], Math.min(8, blobScale / 4), inBlob, minLen, 0, emitTapered);
+      // Second family: the wavy deform-then-clip idiom, displaced by the
+      // shared field so neighbouring lines crowd coherently.
+      let bx0 = Infinity;
+      let by0 = Infinity;
+      let bx1 = -Infinity;
+      let by1 = -Infinity;
+      for (const p of poly) {
+        if (p.x < bx0) bx0 = p.x;
+        if (p.y < by0) by0 = p.y;
+        if (p.x > bx1) bx1 = p.x;
+        if (p.y > by1) by1 = p.y;
       }
-
-      if (t.blobOutlines) {
-        let bx0 = Infinity;
-        let by0 = Infinity;
-        let bx1 = -Infinity;
-        let by1 = -Infinity;
-        for (const p of poly) {
-          if (p.x < bx0) bx0 = p.x;
-          if (p.y < by0) by0 = p.y;
-          if (p.x > bx1) bx1 = p.x;
-          if (p.y > by1) by1 = p.y;
-        }
-        const cellPx = Math.max(3, blobScale / 8);
-        const gw = Math.max(2, Math.ceil((bx1 - bx0) / cellPx) + 3);
-        const gh = Math.max(2, Math.ceil((by1 - by0) / cellPx) + 3);
-        const data = new Float32Array(gw * gh);
-        for (let gy = 0; gy < gh; gy++) {
-          for (let gx = 0; gx < gw; gx++) {
-            const x = bx0 + (gx - 1) * cellPx;
-            const y = by0 + (gy - 1) * cellPx;
-            data[gy * gw + gx] = mottleNoise.noise2D(x / blobScale, y / blobScale);
-          }
-        }
-        const minKeep = t.spacing * 4;
-        for (const loop of traceIsoContours({ width: gw, height: gh, data }, blobCut)) {
-          const pts = loop.map((p) => ({
-            x: bx0 + (p.x - 1) * cellPx,
-            y: by0 + (p.y - 1) * cellPx,
-          }));
-          const wholeLoop =
-            pts.length >= 4 &&
-            Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 1e-6;
-          let kept: Point[] = [];
-          let clipped = false;
-          const flush = (): void => {
-            if (kept.length >= 2) {
-              let l = 0;
-              for (let i = 1; i < kept.length; i++) {
-                l += Math.hypot(kept[i].x - kept[i - 1].x, kept[i].y - kept[i - 1].y);
-              }
-              // Confetti guard: wall fragments shorter than a few pitches
-              // read as stray ticks, not cell walls.
-              if (l >= minKeep) dashPolyline(kept, wholeLoop && !clipped);
+      const box: Point[] = [
+        { x: bx0, y: by0 },
+        { x: bx1, y: by0 },
+        { x: bx1, y: by1 },
+        { x: bx0, y: by1 },
+      ];
+      // Register the second family exactly half a pitch off the first:
+      // hatchPolygon scans from each polygon's own min-extent (and maps
+      // phase through 0.3+0.7·p), so the box family's raw offset against
+      // the poly family is arbitrary — fold the exact correction into the
+      // perpendicular displacement instead.
+      const scanNx = -Math.sin(t.angleRad);
+      const scanNy = Math.cos(t.angleRad);
+      const minOver = (pts: Point[]): number => {
+        let m = Infinity;
+        for (const p of pts) m = Math.min(m, p.x * scanNx + p.y * scanNy);
+        return m;
+      };
+      const firstA = minOver(poly) + t.spacing * (0.3 + 0.7 * t.phase);
+      const firstB = minOver(box) + t.spacing * 0.3;
+      const register =
+        ((((firstA + t.spacing / 2 - firstB) % t.spacing) + t.spacing) % t.spacing);
+      for (const run of hatchPolygon(box, t.angleRad, t.spacing, 0)) {
+        const base = densify(run[0], run[1], fineStep);
+        const dx = run[1].x - run[0].x;
+        const dy = run[1].y - run[0].y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len;
+        const ny = dx / len;
+        let kept: Point[] = [];
+        const flush = (): void => {
+          if (kept.length >= 2) {
+            let l = 0;
+            for (let i = 1; i < kept.length; i++) {
+              l += Math.hypot(kept[i].x - kept[i - 1].x, kept[i].y - kept[i - 1].y);
             }
-            kept = [];
-          };
-          for (const q of pts) {
-            if (pointInPolygon(poly, q.x, q.y)) {
-              kept.push(q);
-            } else {
-              clipped = true;
-              flush();
-            }
+            if (l >= minKeep) push(ink, kept);
           }
-          flush();
+          kept = [];
+        };
+        for (const p of base) {
+          const d = register + amp * mottleNoise.fbm(p.x / lambda, p.y / lambda, 2, 0.5, 2);
+          const q = { x: p.x + nx * d, y: p.y + ny * d };
+          if (pointInPolygon(poly, q.x, q.y)) kept.push(q);
+          else flush();
         }
+        flush();
       }
       break;
     }

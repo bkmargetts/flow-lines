@@ -480,11 +480,11 @@ describe('generateLapidary', () => {
     }
   });
 
-  it('mottle lays a second density level over the plain hatch', () => {
-    // Pin both kinds to the same resolved pitch (mottle's 0.6 baseline vs
-    // hatch's 0.45): the blob infill and cell walls must add ink beyond the
-    // identical base family — the two-tone pattern is extra committed
-    // density, not the patchy gate's holes.
+  it('mottle lays a second line family over the plain hatch', () => {
+    // Pin both kinds to the same resolved pitch (mottle's 0.7 baseline vs
+    // hatch's 0.45): the beating second family must add ink beyond the
+    // identical straight family — mottle is crowding between two live
+    // gratings, not the patchy gate's holes.
     const totalLen = (textures: Parameters<typeof generateLapidary>[0]['textures']): number => {
       const r = generateLapidary({ ...BASE, textures, wobble: 0, optimize: false });
       let len = 0;
@@ -503,48 +503,48 @@ describe('generateLapidary', () => {
     expect(mottle).toBeGreaterThan(hatch * 1.1);
   });
 
-  it('mottle blob coverage rides the patchiness knob', () => {
-    const totalLen = (patchiness: number): number => {
+  it('mottle patchiness deepens the tonal clouds', () => {
+    // The beat amplitude is what patchiness buys: near zero the two
+    // families hold an almost even interleave, high amplitude slides one
+    // family across the other until lines stack. Crowding redistributes
+    // ink without changing ink-per-area, so the measurable signal is the
+    // share of near-zero gaps between successive scanline crossings
+    // (stacked pairs) — a full-page single mottle band keeps the lines
+    // exactly vertical.
+    const stackedShare = (patchiness: number): number => {
       const r = generateLapidary({
         ...BASE,
+        bands: 1,
         textures: ['mottle'],
         patchiness,
         wobble: 0,
         optimize: false,
       });
-      let len = 0;
-      for (const line of r.lines) {
-        for (let i = 1; i < line.points.length; i++) {
-          len += Math.hypot(
-            line.points[i].x - line.points[i - 1].x,
-            line.points[i].y - line.points[i - 1].y
-          );
+      const gaps: number[] = [];
+      for (const scanY of [120, 200, 280]) {
+        const xs: number[] = [];
+        for (const line of r.lines) {
+          for (let i = 1; i < line.points.length; i++) {
+            const a = line.points[i - 1];
+            const b = line.points[i];
+            if ((a.y - scanY) * (b.y - scanY) > 0) continue;
+            const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (scanY - a.y) / (b.y - a.y);
+            xs.push(a.x + (b.x - a.x) * f);
+          }
+        }
+        xs.sort((p, q) => p - q);
+        for (let i = 1; i < xs.length; i++) {
+          if (xs[i] > BASE.margin + 10 && xs[i] < BASE.width - BASE.margin - 10) {
+            gaps.push(xs[i] - xs[i - 1]);
+          }
         }
       }
-      return len;
+      const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+      return gaps.filter((g) => g < mean * 0.2).length / gaps.length;
     };
-    expect(totalLen(0.85)).toBeGreaterThan(totalLen(0.15) * 1.1);
-  });
-
-  it('blobOutlines: false drops the mottle cell walls', () => {
-    const base = { ...BASE, wobble: 0, optimize: false };
-    const walled = generateLapidary({ ...base, textures: [{ kind: 'mottle' as const }] });
-    const bare = generateLapidary({
-      ...base,
-      textures: [{ kind: 'mottle' as const, blobOutlines: false }],
-    });
-    expect(bare.lines.length).toBeGreaterThan(50);
-    expect(bare.lines.length).toBeLessThan(walled.lines.length);
-    for (const r of [walled, bare]) {
-      for (const line of r.lines) {
-        for (const p of line.points) {
-          expect(p.x).toBeGreaterThanOrEqual(0);
-          expect(p.x).toBeLessThanOrEqual(BASE.width);
-          expect(p.y).toBeGreaterThanOrEqual(0);
-          expect(p.y).toBeLessThanOrEqual(BASE.height);
-        }
-      }
-    }
+    const flat = stackedShare(0.05);
+    expect(flat).toBeLessThan(0.06);
+    expect(stackedShare(0.9)).toBeGreaterThan(flat * 2.5);
   });
 
   it('grain dashes stay short and comb along the band angle', () => {
