@@ -200,6 +200,10 @@ describe('running commands end to end', () => {
     ['lapidary strata', ['lapidary', ...SMALL, '--mode', 'strata', '--textures', 'lines,hatch']],
     ['lapidary facet', ['lapidary', ...SMALL, '--preset', 'facet']],
     ['lapidary angular', ['lapidary', ...SMALL, '--shapes', 'angular', '--no-field']],
+    [
+      'lapidary textures override',
+      ['lapidary', ...SMALL, '--textures', 'lines:45,hatch:125:0.6,wavy::0.8'],
+    ],
     ['meander', ['meander', ...SMALL]],
     ['coral', ['coral', ...SMALL]],
     ['warp-grid', ['warp-grid', ...SMALL]],

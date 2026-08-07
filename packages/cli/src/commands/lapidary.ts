@@ -6,6 +6,7 @@ import {
   type LapidaryOptions,
   type LapidaryShapes,
   type LapidaryTexture,
+  type BandTexture,
   type PenAssignment,
   type SVGOptions,
 } from '@flow-lines/core';
@@ -33,7 +34,7 @@ export function registerLapidary(program: Command) {
     .option('-s, --seed <number>', 'Seed: silhouettes, texture deal, angles, interleave')
     .option(
       '--preset <name>',
-      'Curated look: specimen | geode | breccia | terraces | mono (explicit flags override)'
+      `Curated look: ${Object.keys(LAPIDARY_PRESETS).join(' | ')} (explicit flags override)`
     )
     .option('--mode <name>', 'Arrangement: agate | breccia | strata')
     .option('--bands <number>', 'Region count incl. the background field when present (2-10)')
@@ -49,7 +50,9 @@ export function registerLapidary(program: Command) {
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
-      'Outer→inner band textures, cycled (lines,wavy,hatch,patchy,cross,stipple,blank); omit for a seeded deal'
+      'Outer→inner band textures, cycled (lines,wavy,hatch,patchy,cross,stipple,blank); ' +
+        'omit for a seeded deal. Per-band overrides: kind[:angle[:spacingScale]], ' +
+        'e.g. lines:45,hatch:125:0.6,wavy::0.8'
     )
     .option('--angle <number>', 'Base stroke direction in degrees (90 = vertical)')
     .option('--angle-drift <number>', 'Seeded per-band drift off the base angle in degrees')
@@ -83,16 +86,37 @@ export function registerLapidary(program: Command) {
         process.exit(1);
       }
 
-      let textures: LapidaryTexture[] | undefined;
+      let textures: Array<LapidaryTexture | BandTexture> | undefined;
       if (options.textures) {
         textures = String(options.textures)
           .split(',')
-          .map((t) => t.trim()) as LapidaryTexture[];
-        const bad = textures.find((t) => !TEXTURE_KINDS.has(t));
-        if (bad) {
-          console.error(`Unknown texture "${bad}". Valid: ${[...TEXTURE_KINDS].join(' | ')}`);
-          process.exit(1);
-        }
+          .map((item) => {
+            const [kind, angle, spacingScale] = item.trim().split(':');
+            if (!TEXTURE_KINDS.has(kind)) {
+              console.error(`Unknown texture "${kind}". Valid: ${[...TEXTURE_KINDS].join(' | ')}`);
+              process.exit(1);
+            }
+            // A bare kind stays a plain string — the exact pre-override path.
+            if (angle === undefined && spacingScale === undefined) {
+              return kind as LapidaryTexture;
+            }
+            const spec: BandTexture = { kind: kind as LapidaryTexture };
+            if (angle !== undefined && angle !== '') {
+              spec.angleDeg = parseFloat(angle);
+              if (Number.isNaN(spec.angleDeg)) {
+                console.error(`Bad angle "${angle}" in --textures item "${item.trim()}"`);
+                process.exit(1);
+              }
+            }
+            if (spacingScale !== undefined && spacingScale !== '') {
+              spec.spacingScale = parseFloat(spacingScale);
+              if (Number.isNaN(spec.spacingScale)) {
+                console.error(`Bad spacing scale "${spacingScale}" in --textures item "${item.trim()}"`);
+                process.exit(1);
+              }
+            }
+            return spec;
+          });
       }
 
       // Explicit flags override the preset — but only when actually given.
@@ -137,6 +161,20 @@ export function registerLapidary(program: Command) {
         // A4-and-below. Raw px mode: legacy behaviour, untouched.
         refMinDim: frame.page ? 297 * frame.page.pxPerMm : undefined,
       };
+
+      // Strata bands always partition the full sheet — flag options that only
+      // shape agate/breccia silhouettes so the ignore isn't silent (the web
+      // Controls disable the same sliders in strata).
+      if ((lapidaryOptions.mode ?? 'agate') === 'strata') {
+        const ignored: string[] = [];
+        if (options.coverage) ignored.push('--coverage');
+        if (options.centerX) ignored.push('--center-x');
+        if (options.centerY) ignored.push('--center-y');
+        if (options.field === false) ignored.push('--no-field');
+        if (ignored.length > 0) {
+          console.error(`Note: strata spans the full sheet; ${ignored.join(', ')} ignored`);
+        }
+      }
 
       console.log('Rendering lapidary...');
       console.log(`  Size: ${width}x${height}`);
