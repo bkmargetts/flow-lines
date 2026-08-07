@@ -271,6 +271,16 @@ CASES['lapidary/geode/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.geode });
 CASES['lapidary/breccia/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.breccia });
+CASES['lapidary/veins/42'] = () =>
+  generateLapidary({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    ...LAPIDARY_PRESETS.breccia,
+    pens: 2,
+    veins: true,
+  });
 CASES['lapidary/terraces/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.terraces });
 CASES['lapidary/facet/42'] = () =>

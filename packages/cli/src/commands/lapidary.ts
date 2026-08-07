@@ -57,7 +57,7 @@ export function registerLapidary(program: Command) {
     .option('--faults <number>', 'Vertical fault planes across the strata stack (0-4, strata only)')
     .option(
       '--veins',
-      'Trace the seams between breccia fragments on the last pen (kintsugi; breccia only)'
+      'Trace the seams between breccia fragments on the dedicated "vein" accent layer (kintsugi; breccia only)'
     )
     .option('--coverage <number>', 'Outer silhouette size as a fraction of the frame (0.4-1)')
     .option('--center-x <number>', 'Composition centre X offset (-0.5..0.5)')

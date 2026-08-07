@@ -3,7 +3,6 @@ import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { optimizePlot } from '../optimize.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { clamp } from '../lib/math.js';
-import { inkLayerName } from '../marbling/index.js';
 import { buildRegions, LayoutConfig, Region, RegionRadial, TUNING_DIM } from './layout.js';
 import { fillRegion } from './textures.js';
 import { carveRegions, PenAssignment } from './carve.js';
@@ -17,6 +16,11 @@ export type {
 } from './layout.js';
 export type { PenAssignment } from './carve.js';
 import type { LapidaryMode, LapidaryTexture, BandTexture, LapidaryShapes } from './layout.js';
+
+/** The kintsugi veins' dedicated accent pen layer — separate from the
+ *  ink-0..ink-3 pens so the veins can be plotted in their own ink (gold)
+ *  without spending one of the four region pens. */
+export const VEIN_LAYER = 'vein';
 
 /**
  * Lapidary — layered pattern artworks in the style of a cut and polished
@@ -74,8 +78,8 @@ export interface LapidaryOptions {
    *  geological tell. Strata only. */
   faults?: number;
   /** Trace the reserved-paper seams between breccia fragments as strokes on
-   *  the LAST pen (default false) — load it with gold for the kintsugi
-   *  look. Breccia only. */
+   *  the dedicated `VEIN_LAYER` accent pen (default false) — load it with
+   *  gold for the kintsugi look. Breccia only. */
   veins?: boolean;
   /** Outermost silhouette size as a fraction of the frame, 0.4..1 (default 0.9) */
   coverage?: number;
@@ -337,7 +341,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
 
   if ((options.veins ?? false) && layout.mode === 'breccia') {
     const veinStep = Math.max(1, 5 * featureScale);
-    lines.push(...brecciaVeins(regions, layout.rect, haloPx, veinStep, inkLayerName(pens - 1)));
+    lines.push(...brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER));
   }
 
   let result: FlowLinesResult = { lines, width, height, seed };

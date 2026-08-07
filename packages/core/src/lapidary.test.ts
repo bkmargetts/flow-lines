@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateLapidary, LAPIDARY_PRESETS } from './lapidary/index.js';
+import { generateLapidary, LAPIDARY_PRESETS, VEIN_LAYER } from './lapidary/index.js';
 import { buildRegions, TUNING_DIM, type LayoutConfig } from './lapidary/layout.js';
 import { inkLayerName } from './marbling/index.js';
 import type { LapidaryMode } from './lapidary/index.js';
@@ -252,7 +252,7 @@ describe('generateLapidary', () => {
     expect(radial / r.lines.length).toBeGreaterThan(0.6);
   });
 
-  it('breccia veins land on the last pen and only add strokes', () => {
+  it('breccia veins land on the dedicated vein layer and only add strokes', () => {
     const base = { ...BASE, mode: 'breccia' as const, pens: 3, wobble: 0, optimize: false };
     const without = generateLapidary(base);
     const withVeins = generateLapidary({ ...base, veins: true });
@@ -262,7 +262,7 @@ describe('generateLapidary', () => {
       JSON.stringify(without.lines)
     );
     const veins = withVeins.lines.slice(without.lines.length);
-    for (const line of veins) expect(line.layer).toBe(inkLayerName(2));
+    for (const line of veins) expect(line.layer).toBe(VEIN_LAYER);
     for (const line of veins) {
       for (const p of line.points) {
         expect(p.x).toBeGreaterThanOrEqual(0);
