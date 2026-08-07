@@ -250,7 +250,10 @@ export function fillRegion(region: Region): RegionFill {
           const x = gx + (rng() - 0.5) * pitch * 0.8;
           const y = gy + (rng() - 0.5) * pitch * 0.8;
           const ang = rng() * Math.PI * 2;
-          const l = 0.35 + rng() * 0.3;
+          // Tick half-length rides the pitch (≈0.35-0.65 px at the default
+          // stipple pitch) so dots keep their weight on big sheets instead of
+          // staying sub-pixel while everything else scales.
+          const l = pitch * (0.045 + rng() * 0.04);
           if (!pointInPolygon(poly, x, y)) continue;
           push(ink, [
             { x: x - Math.cos(ang) * l, y: y - Math.sin(ang) * l },

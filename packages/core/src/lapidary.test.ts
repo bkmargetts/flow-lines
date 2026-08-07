@@ -186,4 +186,35 @@ describe('generateLapidary', () => {
     const r = generateLapidary({ width: 40, height: 40, margin: 15, seed: 42 });
     expect(r.lines).toEqual([]);
   });
+
+  it('scales stipple tick length with the line pitch', () => {
+    // Ticks used to be an absolute px length; they must ride the pitch so
+    // dots keep their weight on big sheets.
+    const medianTick = (spacingPx: number): number => {
+      const r = generateLapidary({
+        ...BASE,
+        textures: ['stipple'],
+        spacingPx,
+        wobble: 0,
+        optimize: false,
+      });
+      const lens = r.lines
+        .map((l) => {
+          let len = 0;
+          for (let i = 1; i < l.points.length; i++) {
+            len += Math.hypot(
+              l.points[i].x - l.points[i - 1].x,
+              l.points[i].y - l.points[i - 1].y
+            );
+          }
+          return len;
+        })
+        .sort((a, b) => a - b);
+      return lens[Math.floor(lens.length / 2)];
+    };
+    const at4 = medianTick(4);
+    const at12 = medianTick(12);
+    expect(at12 / at4).toBeGreaterThan(2);
+    expect(at12 / at4).toBeLessThan(4.5);
+  });
 });
