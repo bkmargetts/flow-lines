@@ -196,6 +196,13 @@ export interface SweepHatchOptions {
    * use it to stop neighbours registering identically.
    */
   phase01?: number;
+  /**
+   * How finely the row is chopped before `tone` and `gate` are sampled
+   * (default 30px). A gate carrying hand-sized organic holes needs sampling
+   * well under the hole size, or its boundaries come out as blocky steps at
+   * the piece length.
+   */
+  pieceLenPx?: number;
 }
 
 /** A family of parallel hatch lines across `poly` at `angleDeg`. Local spacing
@@ -215,6 +222,7 @@ export function sweepHatch(
   opts: SweepHatchOptions = {}
 ): void {
   const edgeKeep = opts.edgeKeepPx ?? 0;
+  const pieceLen = Math.max(1, opts.pieceLenPx ?? 30);
   const ang = angleDeg * DEG;
   const dir: Point = { x: Math.cos(ang), y: Math.sin(ang) };
   const nrm: Point = { x: -Math.sin(ang), y: Math.cos(ang) };
@@ -241,7 +249,7 @@ export function sweepHatch(
       const prePieces = breakFn ? breakFn(t0, t1, O, dir, craft.rng) : ([[t0, t1]] as [number, number][]);
       for (const [a0, b0] of prePieces) {
         const plen = b0 - a0;
-        const nPieces = Math.max(1, Math.ceil(plen / 30));
+        const nPieces = Math.max(1, Math.ceil(plen / pieceLen));
         // null sentinel, NOT -1: the line parameter t is signed and goes
         // negative whenever the row origin lands past the polygon — a -1
         // sentinel silently swallowed every stroke in those regions.

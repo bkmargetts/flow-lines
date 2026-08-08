@@ -10,6 +10,7 @@ import {
   strataCurves,
   type LapidaryShape,
 } from './shapes.js';
+import { compileTextureRegion } from '../texture-region.js';
 import { spiralRegions } from './spiral.js';
 
 export type LapidaryMode = 'agate' | 'breccia' | 'strata' | 'spiral';
@@ -133,6 +134,10 @@ export interface Region {
   z: number;
   poly: Point[];
   tex: ResolvedTexture;
+  /** Optional extra test every *ink* sample must pass — the ragged edge on the
+   *  full-frame field. Never applied to the phantom coverage: the seams are
+   *  geometry and must not fray. */
+  clear?: (x: number, y: number) => boolean;
   radial?: RegionRadial;
   strataBand?: RegionStrataBand;
   ribbon?: RegionRibbon;
@@ -170,6 +175,8 @@ export interface LayoutConfig {
   gradation: number;
   /** Snap per-band angle drift to multiples of this, 0 = free drift. */
   angleQuantumDeg: number;
+  /** How far the full-frame field trails off before the page edge, 0..1. */
+  fieldEdge: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
   /** Spiral cross-section form (spiral only). */
@@ -521,7 +528,10 @@ const BUSY: ReadonlySet<LapidaryTexture> = new Set<LapidaryTexture>([
  *  can take the loudest thing on the sheet because everything around it is
  *  holding still. */
 const ROLE_WEIGHT: Record<BandRole, Partial<Record<LapidaryTexture, number>>> = {
-  field: { lines: 2.4, wavy: 1.5, stipple: 1.3, grain: 0.8, hatch: 0.6, mottle: 0.5, cross: 0.4 },
+  // The ground is a datum the shapes drift against, so it leans hard on the
+  // ruled field of the reference — but not exclusively, or every sheet opens
+  // the same way.
+  field: { lines: 4, wavy: 1.5, stipple: 1.2, grain: 0.9, hatch: 0.5, mottle: 0.4, cross: 0.3 },
   rim: { contour: 1.9, wavy: 1.6, lines: 1.2, grain: 1.1 },
   mid: {},
   core: { contour: 1.5, hatch: 1.4, mottle: 1.2, cross: 1.2, stipple: 0.9 },
@@ -598,8 +608,6 @@ export function resolveTexture(
     // The plan asked for held paper here, so this band is a decision rather
     // than a hole — which is the whole reason `blank` stays out of the deal.
     spec = { kind: 'blank' };
-  } else if (z === 0) {
-    spec = { kind: 'lines' };
   } else {
     spec = { kind: dealKind(cfg, rng, state, value, role) };
   }
@@ -647,6 +655,38 @@ export function resolveTexture(
     role,
     angleDeg,
   };
+}
+
+/**
+ * The ragged edge for a full-frame background field.
+ *
+ * Filling the margin rect wall to wall is, in `texture-region.ts`'s own words,
+ * the strongest "computer" tell a background layer has: a hand hatching a
+ * ground stops short of the edge at varying depths, it does not rule to a
+ * boundary. Strata is excluded — it partitions the whole sheet, so a ragged
+ * band would open a hole in the middle of the stack rather than soften an
+ * outer edge.
+ */
+export function fieldClear(cfg: LayoutConfig): ((x: number, y: number) => boolean) | undefined {
+  if (cfg.fieldEdge <= 0 || cfg.mode === 'strata') return undefined;
+  const field = compileTextureRegion(
+    {
+      frame: 'rect',
+      coverage: 1,
+      irregularity: 0.5,
+      offsetX: 0,
+      offsetY: 0,
+      patches: 1,
+      fade: 0,
+      falloff: cfg.fieldEdge,
+    },
+    cfg.rect,
+    Math.max(1, 3 * cfg.featureScale),
+    subSeed(cfg.seed, 930)
+  );
+  // The helper returns null when the settings are inert, so fieldEdge 0 leaves
+  // the drawing bit-identical rather than merely almost so.
+  return field ? (x, y) => field.clear(x, y) : undefined;
 }
 
 function rectPolygon(rect: LayoutConfig['rect']): Point[] {
@@ -712,7 +752,9 @@ function agateRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
   // not change when the ground is simply left off the page.
   const fieldTex = resolveTexture(cfg, 0, state, plan);
   advance(fieldTex);
-  if (cfg.field) regions.push({ z: 0, poly: rectPolygon(cfg.rect), tex: fieldTex });
+  if (cfg.field) {
+    regions.push({ z: 0, poly: rectPolygon(cfg.rect), tex: fieldTex, clear: fieldClear(cfg) });
+  }
   tables.forEach((g, i) =>
     push(i + 1, ringPolygon(cx, cy, halfW, halfH, g), { cx, cy, rx: halfW, ry: halfH, table: g })
   );
@@ -803,7 +845,9 @@ function brecciaRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
   // not change when the ground is simply left off the page.
   const fieldTex = resolveTexture(cfg, 0, state, plan);
   advance(fieldTex);
-  if (cfg.field) regions.push({ z: 0, poly: rectPolygon(cfg.rect), tex: fieldTex });
+  if (cfg.field) {
+    regions.push({ z: 0, poly: rectPolygon(cfg.rect), tex: fieldTex, clear: fieldClear(cfg) });
+  }
   frags.forEach((fr, i) => {
     const table =
       shapeFor(cfg, i + 1) === 'angular'

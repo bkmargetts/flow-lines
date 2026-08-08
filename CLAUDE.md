@@ -212,6 +212,11 @@ pnpm monorepo:
   (`compare`). The flag→options mapping has no other coverage; run it
   around any CLI change. The manifest is a working artifact — don't
   commit it.
+- **Per-generator galleries** — `scripts/<name>-gallery.mjs` (botanical,
+  planet, city, machine, ribbons, lapidary) drive the built CLI across a
+  generator's presets and knobs into one HTML contact sheet. The lapidary one
+  also sweeps seeds: a generator is only as good as its worst seed, and a
+  tonal plan that works for one deal and not the rest shows up nowhere else.
 - **`test-images/` + `node scripts/gallery.mjs`** — the eyeball
   regression suite: renders the photo bank through every preset into one
   HTML contact sheet. Judge any tuning change against the whole album.

@@ -71,7 +71,8 @@ function blueNoiseSeeds(
   poly: Point[],
   pitch: number,
   tone: ToneFn,
-  rng: () => number
+  rng: () => number,
+  inside: (x: number, y: number) => boolean
 ): Array<[number, number]> {
   let bx0 = Infinity;
   let by0 = Infinity;
@@ -93,7 +94,7 @@ function blueNoiseSeeds(
   for (let i = 0; i < darts && out.length < REGION_LINE_CAP; i++) {
     const x = bx0 + rng() * w;
     const y = by0 + rng() * h;
-    if (!pointInPolygon(poly, x, y)) continue;
+    if (!inside(x, y)) continue;
     // Dark passages pack tighter; light ones open out.
     const r = pitch * Math.sqrt(TONE_REF / Math.max(0.18, tone(x, y))) * 0.78;
     if (grid.hasNear(x - bx0, y - by0, r)) continue;
@@ -174,13 +175,20 @@ export function fillRegion(region: Region): RegionFill {
   // family as tone falls, so the value-derived pitch is handed over scaled by
   // TONE_REF and the field then swings either side of it.
   const tone: ToneFn = regionTone(region, createNoise(subSeed(t.seed, 6)));
+  // The region's optional ragged edge (the background field's). Ink only —
+  // `phantom` coverage is geometry and must not fray, or the seams move.
+  const clear = region.clear;
+  const inRegion = clear
+    ? (x: number, y: number): boolean => pointInPolygon(poly, x, y) && clear(x, y)
+    : (x: number, y: number): boolean => pointInPolygon(poly, x, y);
   const sweep = (
     angleRad: number,
     pitch: number,
     gate: (x: number, y: number, tv: number) => boolean,
     edgeKeepPx: number,
     breakFn?: BreakFn,
-    maxLen = 0
+    maxLen = 0,
+    pieceLenPx?: number
   ): void => {
     if (ink.length >= REGION_LINE_CAP) return;
     sweepHatch(
@@ -194,10 +202,10 @@ export function fillRegion(region: Region): RegionFill {
       craft,
       breakFn,
       maxLen,
-      { edgeKeepPx, phase01: t.phase }
+      { edgeKeepPx, phase01: t.phase, pieceLenPx }
     );
   };
-  const openGate = (): boolean => true;
+  const openGate = clear ? (x: number, y: number): boolean => clear(x, y) : (): boolean => true;
 
   // Long ruled lines break into hand-fed dashes with small pen-lift gaps
   // at irregular heights (the reference's airy background field); short
@@ -510,7 +518,20 @@ export function fillRegion(region: Region): RegionFill {
     case 'patchy': {
       // The edge band is load-bearing: holes eating into the run ends would
       // shred the crisp seam edge the whole layered look depends on.
-      sweep(t.angleRad, t.spacing, patchKeep, t.spacing * 2.5, undefined, t.spacing * 30);
+      const keep = clear
+        ? (x: number, y: number): boolean => patchKeep(x, y) && clear(x, y)
+        : patchKeep;
+      // Sampled well under the hole size — at the default piece length the
+      // organic patch mask came out as blocky rectangular steps.
+      sweep(
+        t.angleRad,
+        t.spacing,
+        keep,
+        t.spacing * 2.5,
+        undefined,
+        t.spacing * 30,
+        Math.min(8, patchScale / 4)
+      );
       break;
     }
 
@@ -521,7 +542,7 @@ export function fillRegion(region: Region): RegionFill {
       const ang2 = t.angleRad + (32 * Math.PI) / 180;
       const gate = (x: number, y: number): boolean =>
         noise.noise2D(x / patchScale + 41.7, y / patchScale) >
-        -1 + Math.max(0.25, t.patchiness) * 1.2;
+          -1 + Math.max(0.25, t.patchiness) * 1.2 && (clear ? clear(x, y) : true);
       sweepHatch(
         ink,
         poly,
@@ -533,7 +554,7 @@ export function fillRegion(region: Region): RegionFill {
         craft,
         undefined,
         t.spacing * 30,
-        { edgeKeepPx: 0, phase01: 1 - t.phase }
+        { edgeKeepPx: 0, phase01: 1 - t.phase, pieceLenPx: Math.min(8, patchScale / 4) }
       );
       break;
     }
@@ -616,7 +637,7 @@ export function fillRegion(region: Region): RegionFill {
           );
           for (let j = i === 1 ? 0 : 1; j < seg.length; j++) {
             const q = seg[j];
-            if (pointInPolygon(poly, q.x, q.y)) kept.push(q);
+            if (inRegion(q.x, q.y)) kept.push(q);
             else flush();
           }
         }
@@ -640,7 +661,7 @@ export function fillRegion(region: Region): RegionFill {
       const pitch = t.spacing * 1.7;
       const minKeep = t.spacing * 1.2;
       {
-        for (const [sx, sy] of blueNoiseSeeds(poly, pitch, tone, rng)) {
+        for (const [sx, sy] of blueNoiseSeeds(poly, pitch, tone, rng, inRegion)) {
           // The +41.7 domain offset decorrelates length from direction
           // (the cross-gate idiom).
           const v =
@@ -660,7 +681,7 @@ export function fillRegion(region: Region): RegionFill {
               x += Math.cos(a) * fineStep * sgn;
               y += Math.sin(a) * fineStep * sgn;
               s += fineStep;
-              if (!pointInPolygon(poly, x, y)) break;
+              if (!inRegion(x, y)) break;
               if (sgn === 1) pts.push({ x, y });
               else pts.unshift({ x, y });
             }
@@ -757,7 +778,7 @@ export function fillRegion(region: Region): RegionFill {
         for (const p of base) {
           const d = amp * noise.fbm(p.x / lambda, p.y / lambda, 2, 0.5, 2);
           const q = { x: p.x + nx * d, y: p.y + ny * d };
-          if (pointInPolygon(poly, q.x, q.y)) kept.push(q);
+          if (inRegion(q.x, q.y)) kept.push(q);
           else flush();
         }
         flush();
@@ -767,7 +788,7 @@ export function fillRegion(region: Region): RegionFill {
 
     case 'stipple': {
       const pitch = t.spacing;
-      for (const [x, y] of blueNoiseSeeds(poly, pitch, tone, rng)) {
+      for (const [x, y] of blueNoiseSeeds(poly, pitch, tone, rng, inRegion)) {
         const ang = rng() * Math.PI * 2;
         // Tick half-length rides the pitch (≈0.35-0.65 px at the default
         // stipple pitch) so dots keep their weight on big sheets instead of

@@ -7,6 +7,42 @@ import type { LapidaryMode } from './lapidary/index.js';
 const BASE = { width: 300, height: 400, margin: 20, seed: 42 } as const;
 const MODES: LapidaryMode[] = ['agate', 'breccia', 'strata', 'spiral'];
 
+const layoutFor = (over: Partial<LayoutConfig> = {}): LayoutConfig => ({
+  seed: 42,
+  mode: 'agate',
+  rect: { x0: 20, y0: 20, x1: 280, y1: 380 },
+  bands: 5,
+  field: true,
+  shapes: 'organic',
+  irregularity: 0.55,
+  coverage: 0.9,
+  centerX: 0,
+  centerY: 0,
+  haloPx: Math.max(1.5, 260 / 110),
+  spacingPx: Math.max(1.2, 260 / 150),
+  baseAngleDeg: 90,
+  angleDriftDeg: 25,
+  densityContrast: 0.6,
+  waviness: 0.5,
+  patchiness: 0.55,
+  valueStructure: 0.65,
+  valueRhythm: 'auto',
+  paperBand: true,
+  gradation: 0.45,
+  angleQuantumDeg: 15,
+  fieldEdge: 0.35,
+  faults: 0,
+  spiralForm: 'circular',
+  spiralDirection: 'inward',
+  spiralJoin: 'cells',
+  spiralWidth: 0.55,
+  spiralTaper: 0.35,
+  spiralPulse: 0.35,
+  featureScale: 260 / TUNING_DIM,
+  ...over,
+});
+
+
 describe('generateLapidary', () => {
   it('is deterministic for the same seed and options', () => {
     for (const mode of MODES) {
@@ -237,6 +273,60 @@ describe('generateLapidary', () => {
     expect(handDrawn).toBe(steady);
   });
 
+  it('composes a value ladder with a dark anchor and separated neighbours', () => {
+    // The plan is the whole point of the generator now: a sheet without a
+    // dark to hang on, or with two neighbours at the same weight, is the
+    // undifferentiated read this replaced.
+    for (const seed of [1, 7, 42, 99, 1337]) {
+      const { plan } = buildRegions(layoutFor({ seed, bands: 6 }));
+      expect(plan.values.length).toBe(7);
+      expect(plan.anchor).toBeGreaterThan(0);
+      expect(Math.max(...plan.values)).toBeGreaterThan(0.5);
+      expect(plan.values[plan.anchor]).toBe(Math.max(...plan.values));
+      // The full-frame ground never carries the sheet's weight.
+      expect(plan.values[0]).toBeLessThanOrEqual(0.42);
+      for (let z = 1; z < plan.values.length; z++) {
+        expect(Math.abs(plan.values[z] - plan.values[z - 1])).toBeGreaterThan(0.02);
+      }
+    }
+  });
+
+  it('the value plan does not move when the field is merely undrawn', () => {
+    // Slot 0 belongs to the ground whether or not it is drawn, so `field`
+    // toggles what is on the page, never what the shapes were dealt.
+    const withField = buildRegions(layoutFor({ field: true, bands: 6 }));
+    const without = buildRegions(layoutFor({ field: false, bands: 6 }));
+    expect(without.plan.values).toEqual(withField.plan.values);
+    const shapesOf = (r: typeof withField) =>
+      r.regions
+        .filter((x) => x.z > 0)
+        .map((x) => `${x.z}:${x.tex.kind}:${x.tex.spacing.toFixed(4)}:${x.tex.angleDeg.toFixed(4)}`);
+    // The ring count differs by one (the field's slot frees a ring), so
+    // compare the bands they share.
+    const a = shapesOf(withField);
+    const b = shapesOf(without);
+    expect(b.slice(0, a.length)).toEqual(a);
+  });
+
+  it('holds neighbouring bands apart in direction', () => {
+    const gap = (a: number, b: number): number => {
+      const d = (((a - b) % 180) + 180) % 180;
+      return Math.min(d, 180 - d);
+    };
+    for (const seed of [3, 11, 42, 77]) {
+      const { regions } = buildRegions(layoutFor({ seed, bands: 7 }));
+      const byZ = [...regions].sort((p, q) => p.z - q.z);
+      for (let i = 1; i < byZ.length; i++) {
+        expect(gap(byZ[i].tex.angleDeg, byZ[i - 1].tex.angleDeg)).toBeGreaterThanOrEqual(13.9);
+      }
+    }
+  });
+
+  it('angle drift 0 still overrides the separation rule', () => {
+    const { regions } = buildRegions(layoutFor({ angleDriftDeg: 0, bands: 6 }));
+    for (const r of regions) expect(r.tex.angleDeg).toBeCloseTo(90, 6);
+  });
+
   it('returns empty output when the margin swallows the page', () => {
     const r = generateLapidary({ width: 40, height: 40, margin: 15, seed: 42 });
     expect(r.lines).toEqual([]);
@@ -379,33 +469,6 @@ describe('generateLapidary', () => {
   });
 
   // Mirrors generateLapidary's option resolution at BASE geometry.
-  const layoutFor = (mode: LayoutConfig['mode'], seed: number, bands: number): LayoutConfig => ({
-    seed,
-    mode,
-    rect: { x0: 20, y0: 20, x1: 280, y1: 380 },
-    bands,
-    field: true,
-    shapes: 'organic',
-    irregularity: 0.55,
-    coverage: 0.9,
-    centerX: 0,
-    centerY: 0,
-    haloPx: Math.max(1.5, 260 / 110),
-    spacingPx: Math.max(1.2, 260 / 150),
-    baseAngleDeg: 90,
-    angleDriftDeg: 25,
-    densityContrast: 0.6,
-    waviness: 0.5,
-    patchiness: 0.55,
-    faults: 0,
-    spiralForm: 'circular',
-    spiralDirection: 'inward',
-    spiralJoin: 'cells',
-    spiralWidth: 0.55,
-    spiralTaper: 0.35,
-    spiralPulse: 0.35,
-    featureScale: 260 / TUNING_DIM,
-  });
 
   it('outlines add strokes but never trace the background field', () => {
     // Count on a single floating band: outline strokes are also stamped
@@ -534,7 +597,7 @@ describe('generateLapidary', () => {
     // at ordinary settings.
     for (const mode of ['agate', 'breccia'] as const) {
       for (let seed = 1; seed <= 20; seed++) {
-        const { regions } = buildRegions(layoutFor(mode, seed, 8));
+        const { regions } = buildRegions(layoutFor({ mode, seed, bands: 8 }));
         expect(regions.length, `${mode} seed ${seed}`).toBe(8);
       }
     }
@@ -679,7 +742,7 @@ describe('generateLapidary', () => {
   it('degrades gracefully when the geometry cannot fit the request', () => {
     for (let seed = 1; seed <= 5; seed++) {
       const { regions } = buildRegions({
-        ...layoutFor('agate', seed, 10),
+        ...layoutFor({ mode: 'agate', seed, bands: 10 }),
         coverage: 0.4,
         haloPx: 12,
       });
@@ -959,9 +1022,9 @@ describe('generateLapidary', () => {
     });
 
     it('width and taper knobs never reshuffle the cells or their textures', () => {
-      const a = buildRegions(layoutFor('spiral', 7, 5)).regions;
+      const a = buildRegions(layoutFor({ mode: 'spiral', seed: 7, bands: 5 })).regions;
       const b = buildRegions({
-        ...layoutFor('spiral', 7, 5),
+        ...layoutFor({ mode: 'spiral', seed: 7, bands: 5 }),
         spiralWidth: 0.2,
         spiralTaper: -1,
         spiralPulse: 1,

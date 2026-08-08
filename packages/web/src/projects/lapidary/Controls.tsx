@@ -1,6 +1,7 @@
 import type {
   LapidaryMode,
   LapidaryShapes,
+  LapidaryValueRhythm,
   PenAssignment,
   SpiralDirection,
   SpiralForm,
@@ -188,6 +189,38 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         </>
       )}
 
+      <h3 className="section-title">Value</h3>
+
+      <Slider
+        label="Value structure"
+        value={state.valueStructure}
+        min={0}
+        max={1}
+        step={0.01}
+        onChange={(v) => update({ valueStructure: v })}
+        format={(v) => `${Math.round(v * 100)}%`}
+      />
+      <label className="field">
+        <span>Tonal rhythm</span>
+        <select
+          value={state.valueRhythm}
+          onChange={(e) => update({ valueRhythm: e.target.value as LapidaryValueRhythm })}
+        >
+          <option value="auto">Auto — seeded pick</option>
+          <option value="dark-core">Dark core — weight sinks to the centre</option>
+          <option value="dark-rim">Dark rim — a vignette</option>
+          <option value="alternating">Alternating — banded agate</option>
+          <option value="ramp">Ramp — light walks to dark</option>
+          <option value="flat">Flat — no ladder</option>
+        </select>
+      </label>
+      <Toggle
+        label="Hold a paper band"
+        checked={state.paperBand}
+        onChange={(v) => update({ paperBand: v })}
+      />
+      <Slider label="Band gradation" value={state.gradation} min={0} max={1} step={0.01} onChange={(v) => update({ gradation: v })} format={(v) => `${Math.round(v * 100)}%`} />
+
       <h3 className="section-title">Marks</h3>
 
       <label className="field">
@@ -207,6 +240,9 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
       <Slider label="Line pitch" value={state.spacingMm} min={0.6} max={3} step={0.1} onChange={(v) => update({ spacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Seam width" value={state.haloMm} min={0.8} max={5} step={0.1} onChange={(v) => update({ haloMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
+      {state.outlines && (
+        <Slider label="Keyline weight" value={state.outlineWeight} min={0} max={1} step={0.01} onChange={(v) => update({ outlineWeight: v })} format={(v) => `${Math.round(v * 100)}%`} />
+      )}
       {breccia && (
         <Toggle label="Kintsugi veins" checked={state.veins} onChange={(v) => update({ veins: v })} />
       )}
@@ -275,6 +311,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         <AdvGroup title="Texture detail">
           <Slider label="Angle" value={state.angleDeg} min={0} max={180} step={1} onChange={(v) => update({ angleDeg: v })} format={(v) => `${Math.round(v)}°`} />
           <Slider label="Angle drift" value={state.angleDriftDeg} min={0} max={60} step={1} onChange={(v) => update({ angleDriftDeg: v })} format={(v) => `${Math.round(v)}°`} />
+          <Slider label="Angle quantum" value={state.angleQuantumDeg} min={0} max={45} step={1} onChange={(v) => update({ angleQuantumDeg: v })} format={(v) => (v > 0 ? `${Math.round(v)}°` : 'free')} />
           <Slider label="Density contrast" value={state.densityContrast} min={0} max={1} step={0.01} onChange={(v) => update({ densityContrast: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Waviness" value={state.waviness} min={0} max={1} step={0.01} onChange={(v) => update({ waviness: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Patchiness" value={state.patchiness} min={0} max={1} step={0.01} onChange={(v) => update({ patchiness: v })} format={(v) => `${Math.round(v * 100)}%`} />
@@ -283,6 +320,12 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         <AdvGroup title="Pen & finish">
           <Slider label="Pen width" value={state.penWidthMm} min={0.15} max={1.2} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
           <Slider label="Wobble" value={state.wobbleMm} min={0} max={1.2} step={0.05} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
+          {inks.length > 1 && (
+            <Slider label="Misregistration" value={state.misregistration} min={0} max={1} step={0.01} onChange={(v) => update({ misregistration: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          )}
+          {!strata && state.field && (
+            <Slider label="Field edge" value={state.fieldEdge} min={0} max={1} step={0.01} onChange={(v) => update({ fieldEdge: v })} format={(v) => (v > 0 ? `${Math.round(v * 100)}%` : 'flush')} />
+          )}
         </AdvGroup>
       </AdvancedSection>
     </div>

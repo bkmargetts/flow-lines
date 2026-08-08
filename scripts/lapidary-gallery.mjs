@@ -84,13 +84,13 @@ const SECTIONS = {
 
   // Tone: the composed value ladder against the knobs that shape it.
   'Value plan': {
-    'plan off': ['--value-plan', '0', '--bands', '6', '--palette', 'mono'],
+    'plan off': ['--value-structure', '0', '--bands', '6', '--palette', 'mono'],
     'plan · auto': ['--bands', '6', '--palette', 'mono'],
-    'rhythm core': ['--value-rhythm', 'core', '--bands', '6', '--palette', 'mono'],
-    'rhythm rim': ['--value-rhythm', 'rim', '--bands', '6', '--palette', 'mono'],
-    'rhythm alternate': ['--value-rhythm', 'alternate', '--bands', '6', '--palette', 'mono'],
+    'rhythm dark-core': ['--value-rhythm', 'dark-core', '--bands', '6', '--palette', 'mono'],
+    'rhythm dark-rim': ['--value-rhythm', 'dark-rim', '--bands', '6', '--palette', 'mono'],
+    'rhythm alternating': ['--value-rhythm', 'alternating', '--bands', '6', '--palette', 'mono'],
     'rhythm ramp': ['--value-rhythm', 'ramp', '--bands', '6', '--palette', 'mono'],
-    'rhythm anchor': ['--value-rhythm', 'anchor', '--bands', '6', '--palette', 'mono'],
+    'rhythm flat': ['--value-rhythm', 'flat', '--bands', '6', '--palette', 'mono'],
     'no paper band': ['--no-paper-band', '--bands', '6', '--palette', 'mono'],
     'low contrast': ['--density-contrast', '0.15', '--bands', '6', '--palette', 'mono'],
     'high contrast': ['--density-contrast', '1', '--bands', '6', '--palette', 'mono'],
@@ -98,16 +98,16 @@ const SECTIONS = {
 
   // Gradation across a band, and the finish knobs that carry the hand.
   Finish: {
-    'gradient off': ['--band-gradient', '0', '--bands', '5', '--palette', 'mono'],
-    'gradient full': ['--band-gradient', '1', '--bands', '5', '--palette', 'mono'],
+    'gradient off': ['--gradation', '0', '--bands', '5', '--palette', 'mono'],
+    'gradient full': ['--gradation', '1', '--bands', '5', '--palette', 'mono'],
     'keyline off': ['--outline-weight', '0', '--bands', '5', '--palette', 'mono'],
     'keyline drawn': ['--outlines', '--outline-weight', '0.6', '--bands', '5', '--palette', 'mono'],
-    'field flush': ['--field-falloff', '0', '--bands', '5', '--palette', 'mono'],
-    'field ragged': ['--field-falloff', '0.5', '--bands', '5', '--palette', 'mono'],
-    'misregistration off': ['--misregister', '0', '--bands', '5', '--pens', '2', '--palette', 'specimen'],
-    'misregistration wide': ['--misregister', '1.4', '--bands', '5', '--pens', '2', '--palette', 'specimen'],
-    'veins · agate': ['--mode', 'agate', '--veins', '--bands', '5', '--palette', 'specimen'],
-    'veins · strata': ['--mode', 'strata', '--veins', '--bands', '6', '--angle', '0', '--palette', 'specimen'],
+    'field flush': ['--field-edge', '0', '--bands', '5', '--palette', 'mono'],
+    'field ragged': ['--field-edge', '0.5', '--bands', '5', '--palette', 'mono'],
+    'misregistration off': ['--misregistration', '0', '--bands', '5', '--pens', '2', '--palette', 'specimen'],
+    'misregistration wide': ['--misregistration', '1', '--bands', '5', '--pens', '2', '--palette', 'specimen'],
+    'kintsugi veins': ['--mode', 'breccia', '--veins', '--bands', '8', '--palette', 'specimen'],
+    'angle free': ['--angle-quantum', '0', '--bands', '6', '--palette', 'mono'],
   },
 
   // Same knobs, different seeds: the row that catches a plan which only works

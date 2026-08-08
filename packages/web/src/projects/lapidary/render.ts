@@ -82,12 +82,20 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     spiralTaper: state.spiralTaper,
     spiralPulse: state.spiralPulse,
 
+    valueStructure: state.valueStructure,
+    valueRhythm: state.valueRhythm,
+    paperBand: state.paperBand,
+    gradation: state.gradation,
+    fieldEdge: state.fieldEdge,
+
     haloPx: state.haloMm * mm,
     outlines: state.outlines,
+    outlineWeight: state.outlineWeight,
 
     textures: state.textureMix === 'shuffle' ? undefined : TEXTURE_MIXES[state.textureMix],
     baseAngleDeg: state.angleDeg,
     angleDriftDeg: state.angleDriftDeg,
+    angleQuantumDeg: state.angleQuantumDeg,
     spacingPx: state.spacingMm * mm,
     densityContrast: state.densityContrast,
     waviness: state.waviness,
@@ -96,6 +104,8 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     pens: inks.length,
     penAssignment: state.penAssignment,
 
+    penPx: state.penWidthMm * mm,
+    misregistration: state.misregistration,
     wobble: state.wobbleMm * mm,
   };
 

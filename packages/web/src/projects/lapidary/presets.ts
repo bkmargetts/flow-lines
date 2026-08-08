@@ -1,4 +1,5 @@
 import { LAPIDARY_PALETTES, randomLapidaryPalette } from './palettes';
+import type { LapidaryValueRhythm } from '@flow-lines/core';
 import type { LapidaryLook, LapidaryState, LapidaryTextureMix } from './types';
 
 /**
@@ -28,11 +29,18 @@ const PRESET_BASE = {
   centerY: 0,
   faults: 0,
   veins: false,
+  valueStructure: 0.65,
+  valueRhythm: 'auto',
+  paperBand: true,
+  gradation: 0.45,
+  fieldEdge: 0.35,
   haloMm: 2.2,
   outlines: false,
+  outlineWeight: 0.5,
   spacingMm: 1.3,
   angleDeg: 90,
   angleDriftDeg: 25,
+  angleQuantumDeg: 15,
   densityContrast: 0.6,
   waviness: 0.5,
   patchiness: 0.55,
@@ -217,6 +225,15 @@ function pick<T>(rng: () => number, values: readonly T[]): T {
   return values[Math.min(values.length - 1, Math.floor(rng() * values.length))];
 }
 
+const RHYTHMS: LapidaryValueRhythm[] = [
+  'auto',
+  'dark-core',
+  'dark-rim',
+  'alternating',
+  'ramp',
+  'flat',
+];
+
 const MIXES: LapidaryTextureMix[] = [
   'specimen',
   'geode',
@@ -264,16 +281,26 @@ export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> 
     spiralWidth: Number((0.3 + rng() * 0.7).toFixed(2)),
     spiralTaper: Number((rng() * 1.6 - 0.8).toFixed(2)),
     spiralPulse: Number((rng() * 0.9).toFixed(2)),
+    // The sheet's tonal composition is the biggest single lever on what a
+    // roll looks like, so it is rolled properly rather than pinned.
+    valueStructure: Number((0.35 + rng() * 0.6).toFixed(2)),
+    valueRhythm: pick(rng, RHYTHMS),
+    paperBand: rng() < 0.7,
+    gradation: Number((0.15 + rng() * 0.75).toFixed(2)),
+    fieldEdge: Number((rng() * 0.7).toFixed(2)),
     haloMm: Number((1.4 + rng() * 1.8).toFixed(1)),
     outlines: rng() < 0.2,
+    outlineWeight: Number((0.25 + rng() * 0.75).toFixed(2)),
     textureMix: pick(rng, MIXES),
     spacingMm: Number((0.9 + rng() * 1.1).toFixed(1)),
     angleDeg: mode === 'strata' ? (rng() < 0.6 ? 0 : 90) : rng() < 0.6 ? 90 : Math.round(rng() * 180),
     angleDriftDeg: Math.round(5 + rng() * 35),
+    angleQuantumDeg: pick(rng, [0, 10, 15, 15, 30]),
     densityContrast: Number((0.3 + rng() * 0.7).toFixed(2)),
     waviness: Number((0.3 + rng() * 0.7).toFixed(2)),
     patchiness: Number((0.25 + rng() * 0.6).toFixed(2)),
     penAssignment: rng() < 0.7 ? 'interleave' : 'per-region',
+    misregistration: Number((rng() * 0.9).toFixed(2)),
     palette: pal.id,
     pens: inks.length,
     strokeColor: inks[0],

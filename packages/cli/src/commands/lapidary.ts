@@ -12,11 +12,14 @@ import {
   type SpiralDirection,
   type SpiralForm,
   type SpiralJoin,
+  type LapidaryValueRhythm,
   type SVGOptions,
 } from '@flow-lines/core';
 import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
 import { addSketchOptions, applySketchFromFlags, sketchScale } from '../sketch.js';
 import { LAPIDARY_PALETTES } from '../palettes.js';
+
+const VALUE_RHYTHMS = ['auto', 'dark-core', 'dark-rim', 'alternating', 'ramp', 'flat'];
 
 const TEXTURE_KINDS = new Set([
   'lines',
@@ -99,6 +102,28 @@ export function registerLapidary(program: Command) {
       '--spiral-pulse <number>',
       'Low-frequency organic width modulation along the arc (0-1, spiral only)'
     )
+    .option(
+      '--value-structure <number>',
+      'How hard the sheet\'s tonal composition is committed (0-1). The value ladder is composed ' +
+        'first and every band\'s pitch derived from it, with a guaranteed dark anchor, a held-paper ' +
+        'band and real separation between neighbours. 0 = flat and undifferentiated'
+    )
+    .option(
+      '--value-rhythm <name>',
+      `Which way the darks run across the stack: ${VALUE_RHYTHMS.join(' | ')}`
+    )
+    .option('--paper-band', 'Let the plan hold its lightest band as bare paper (never the field)')
+    .option('--no-paper-band', 'Never hold a band as bare paper')
+    .option(
+      '--gradation <number>',
+      'How far a band graduates across its own width (0-1) — real agate darkens from one edge ' +
+        'of a band to the other; a flat tone everywhere is the printed-screen tell'
+    )
+    .option(
+      '--field-edge <number>',
+      'How far the full-frame background field trails off before the page edge (0-1, 0 = flush ' +
+        'to the margin rect). Ignored by strata, which partitions the whole sheet'
+    )
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
@@ -108,6 +133,11 @@ export function registerLapidary(program: Command) {
     )
     .option('--angle <number>', 'Base stroke direction in degrees (90 = vertical)')
     .option('--angle-drift <number>', 'Seeded per-band drift off the base angle in degrees')
+    .option(
+      '--angle-quantum <number>',
+      'Snap the per-band angle drift to multiples of this many degrees (0-45, 0 = free drift); ' +
+        'neighbouring bands are also held at least 14° apart so they read as two decisions'
+    )
     .option('--spacing <number>', 'Base line pitch in px')
     .option('--density-contrast <number>', 'Spread between dense and sparse bands (0-1)')
     .option(
@@ -128,6 +158,16 @@ export function registerLapidary(program: Command) {
     .option('--vein-color <color>', 'Ink colour for the "vein" accent layer')
     .option('--outlines', 'Ink each region silhouette as a stroke (the background field is never outlined)')
     .option('--no-outlines', 'Switch outlines off (overrides a preset that enables them)')
+    .option(
+      '--outline-weight <number>',
+      'Built-up weight on the value plan\'s anchor band keyline (0-1, with --outlines) — ' +
+        'repeated offset passes of the same pen, so one silhouette carries the focus'
+    )
+    .option(
+      '--misregistration <number>',
+      'How far each pen after the first lands off the datum (0-1) — the second pass through ' +
+        'the plotter never registers as well as the first'
+    )
     .option('--wobble <number>', 'Hand-drawn wobble amplitude in px')
     .option(
       '--split-layers',
@@ -147,6 +187,13 @@ export function registerLapidary(program: Command) {
       if (options.preset && !preset) {
         console.error(
           `Unknown preset "${options.preset}". Valid: ${Object.keys(LAPIDARY_PRESETS).join(' | ')}`
+        );
+        process.exit(1);
+      }
+
+      if (options.valueRhythm && !VALUE_RHYTHMS.includes(String(options.valueRhythm))) {
+        console.error(
+          `Unknown value rhythm "${options.valueRhythm}". Valid: ${VALUE_RHYTHMS.join(' | ')}`
         );
         process.exit(1);
       }
@@ -219,6 +266,19 @@ export function registerLapidary(program: Command) {
         textures,
         baseAngleDeg: options.angle ? parseFloat(options.angle) : undefined,
         angleDriftDeg: options.angleDrift ? parseFloat(options.angleDrift) : undefined,
+        angleQuantumDeg:
+          options.angleQuantum !== undefined ? parseFloat(options.angleQuantum) : undefined,
+        valueStructure:
+          options.valueStructure !== undefined ? parseFloat(options.valueStructure) : undefined,
+        valueRhythm: options.valueRhythm as LapidaryValueRhythm | undefined,
+        // Three-state like --veins: neither form given leaves the preset alone.
+        paperBand: typeof options.paperBand === 'boolean' ? options.paperBand : undefined,
+        gradation: options.gradation !== undefined ? parseFloat(options.gradation) : undefined,
+        fieldEdge: options.fieldEdge !== undefined ? parseFloat(options.fieldEdge) : undefined,
+        outlineWeight:
+          options.outlineWeight !== undefined ? parseFloat(options.outlineWeight) : undefined,
+        misregistration:
+          options.misregistration !== undefined ? parseFloat(options.misregistration) : undefined,
         spacingPx: options.spacing ? parseFloat(options.spacing) : undefined,
         densityContrast: options.densityContrast ? parseFloat(options.densityContrast) : undefined,
         waviness: options.waviness ? parseFloat(options.waviness) : undefined,
@@ -248,6 +308,10 @@ export function registerLapidary(program: Command) {
         // sheets keep the tuned physical seam/pitch scale; a no-op at
         // A4-and-below. Raw px mode: legacy behaviour, untouched.
         refMinDim: frame.page ? 297 * frame.page.pxPerMm : undefined,
+        // The built-up keyline and the per-pen misregistration are sized
+        // against the mark the pen actually makes, so hand core the plotted
+        // pen width when the paper path knows it.
+        penPx: paperStrokeWidth,
       };
 
       // Strata bands always partition the full sheet — flag options that only

@@ -248,9 +248,15 @@ const SPECS: GenomeSpec[] = [
       spiralWidth: [0.15, 1],
       spiralTaper: [-1, 1],
       spiralPulse: [0, 1],
+      valueStructure: [0, 1],
+      gradation: [0, 1],
+      fieldEdge: [0, 1],
+      outlineWeight: [0, 1],
+      angleQuantumDeg: [0, 45],
+      misregistration: [0, 1],
     },
-    ints: ['bands', 'angleDriftDeg', 'pens', 'faults'],
-    bools: ['outlines', 'field', 'veins'],
+    ints: ['bands', 'angleDriftDeg', 'pens', 'faults', 'angleQuantumDeg'],
+    bools: ['outlines', 'field', 'veins', 'paperBand'],
     enums: {
       // 'custom' resets the Look picker's label — a rolled state is no
       // preset's reference artwork.
@@ -271,6 +277,7 @@ const SPECS: GenomeSpec[] = [
       spiralForm: ['circular', 'rectangular', 'page'],
       spiralDirection: ['inward', 'outward'],
       spiralJoin: ['cells', 'blend'],
+      valueRhythm: ['auto', 'dark-core', 'dark-rim', 'alternating', 'ramp', 'flat'],
     },
     // Ink fields are absent from forbidden by design: lapidary is in
     // PALETTE_ROLLERS and rolls the palette — strokeColor/ink2..4Color,

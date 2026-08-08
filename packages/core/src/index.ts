@@ -235,6 +235,9 @@ export type {
   SpiralForm,
   SpiralDirection,
   SpiralJoin,
+  LapidaryValueRhythm,
+  BandRole,
+  ValuePlan,
 } from './lapidary/index.js';
 
 // Harmonograph / guilloché (damped pendulums, spirograph wheels, engine turning)
