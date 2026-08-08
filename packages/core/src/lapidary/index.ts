@@ -269,6 +269,9 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     bands: 7,
     pens: 3,
     coverage: 0.95,
+    // Plain kind names, so the value plan sets every band's weight — and a
+    // geode's whole character is banding, light against dark against light.
+    valueRhythm: 'alternating',
     textures: ['lines', 'cross', 'stipple', 'hatch', 'blank', 'grain', 'crystal'],
   },
   breccia: {
@@ -284,6 +287,9 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     baseAngleDeg: 0,
     angleDriftDeg: 14,
     faults: 1,
+    // Beds compact and darken with depth, which is what a road cutting
+    // actually looks like.
+    valueRhythm: 'ramp',
   },
   fortification: {
     mode: 'agate',
@@ -331,6 +337,8 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     mode: 'spiral',
     bands: 6,
     pens: 2,
+    // Chambers darken as they wind toward the centre.
+    valueRhythm: 'dark-core',
     spiralJoin: 'blend',
     spiralWidth: 0.62,
     spiralTaper: 0.45,
