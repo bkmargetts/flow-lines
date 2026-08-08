@@ -93,6 +93,12 @@ export function fillRegion(region: Region): RegionFill {
   // explode point counts).
   const step = Math.max(1, 6 * t.featureScale);
   const fineStep = Math.max(1, 4 * t.featureScale);
+  // The pen-lift gap between hand-fed dashes — a physical distance like every
+  // other detail step here. It used to be a raw 1.8-3.8px while the dashes
+  // themselves scale with the sheet, so at high render density the lifts shrank
+  // to a hairline and the dashing closed back up into ruled lines (at 6 px/mm
+  // the gap measured half its A3-tuned width).
+  const liftGap = (): number => Math.max(1, (1.8 + rng() * 2) * t.featureScale);
 
   // The patchy gate: hand-sized low-frequency holes (the landscape
   // makePatchMask idiom — a floor keeps the holes hand-sized even at very
@@ -135,7 +141,7 @@ export function fillRegion(region: Region): RegionFill {
             step
           )
         );
-        s = e + 1.8 + rng() * 2;
+        s = e + liftGap();
       }
     }
   };
@@ -189,7 +195,7 @@ export function fillRegion(region: Region): RegionFill {
         if (total - sa > 2) push(ink, slice(sa, total));
         if (sb > 2) push(ink, slice(0, sb));
       }
-      s = e + 1.8 + rng() * 2;
+      s = e + liftGap();
     }
   };
 

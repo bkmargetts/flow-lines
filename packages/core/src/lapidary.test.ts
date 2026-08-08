@@ -183,6 +183,60 @@ describe('generateLapidary', () => {
     expect(a.lines.length).toBeGreaterThanOrEqual(b.lines.length);
   });
 
+  it('keeps the hand-fed dash lift a fixed physical size at any render density', () => {
+    // The lift gap is a physical distance like every other detail step. Left
+    // unscaled it stayed 1.8-3.8px while the dashes grew with the sheet, so a
+    // denser render quietly closed the dashing up into ruled lines.
+    const medianLift = (pxPerMm: number): number => {
+      const r = generateLapidary({
+        width: 210 * pxPerMm,
+        height: 297 * pxPerMm,
+        margin: 12 * pxPerMm,
+        seed: 7,
+        textures: ['lines'],
+        bands: 3,
+        wobble: 0,
+        optimize: false,
+      });
+      const gaps: number[] = [];
+      for (let i = 1; i < r.lines.length; i++) {
+        const a = r.lines[i - 1].points[r.lines[i - 1].points.length - 1];
+        const b = r.lines[i].points[0];
+        const d = Math.hypot(b.x - a.x, b.y - a.y) / pxPerMm;
+        // Consecutive dashes of one run sit a lift apart; anything larger is
+        // the jump to the next hatch row.
+        if (d > 0.05 && d < 3) gaps.push(d);
+      }
+      gaps.sort((p, q) => p - q);
+      return gaps[Math.floor(gaps.length / 2)];
+    };
+    const coarse = medianLift(3);
+    const dense = medianLift(6);
+    expect(coarse).toBeGreaterThan(0);
+    expect(dense).toBeGreaterThan(coarse * 0.75);
+    expect(dense).toBeLessThan(coarse * 1.35);
+  });
+
+  it('optimize never welds the hand-fed dashing back into continuous lines', () => {
+    // optimizePlot chains endpoints within a tolerance, and the hand pass
+    // displaces consecutive dashes by uncorrelated offsets. Chaining after the
+    // wobble closed gaps the generator had deliberately opened, so a `lines`
+    // band must keep its stroke count whether or not the hand pass ran.
+    const base = {
+      width: 210 * 6,
+      height: 297 * 6,
+      margin: 72,
+      seed: 7,
+      textures: ['lines' as const],
+      bands: 3,
+      pens: 1,
+    };
+    const steady = generateLapidary({ ...base, wobble: 0, optimize: true }).lines.length;
+    const handDrawn = generateLapidary({ ...base, optimize: true }).lines.length;
+    expect(steady).toBeGreaterThan(0);
+    expect(handDrawn).toBe(steady);
+  });
+
   it('returns empty output when the margin swallows the page', () => {
     const r = generateLapidary({ width: 40, height: 40, margin: 15, seed: 42 });
     expect(r.lines).toEqual([]);

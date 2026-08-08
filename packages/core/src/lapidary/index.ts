@@ -459,6 +459,19 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
 
   let result: FlowLinesResult = { lines, width, height, seed };
 
+  if (optimize) {
+    // Chain within pens, but never far enough to bridge a seam — and chain
+    // BEFORE the hand pass. Chaining afterwards compared a fixed merge
+    // tolerance against dash gaps the wobble had already closed: consecutive
+    // dashes are separate strokes with uncorrelated misregistration offsets,
+    // so a 1.8px pen lift routinely fell under the 1.5px tolerance and the
+    // hand-fed dashing was welded back into continuous ruled lines (5.8% of
+    // dashes at plot density, and worse the denser the sheet). Chaining first
+    // also means one pen-down carries one wobble track, which is what a real
+    // stroke is.
+    result = optimizePlot(result, { mergeTolerance: Math.min(1.5, haloPx * 0.4) });
+  }
+
   const wobble = options.wobble ?? sizingDim / 500;
   if (wobble > 0) {
     result = applyHandDrawnStyle(result, {
@@ -466,14 +479,10 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
       wavelength: Math.max(8, 70 * featureScale),
       seed: subSeed(seed, 501),
       // The seams are reserved paper carved before the hand pass; the wobble
-      // tail must never bend surviving ink back into them.
+      // tail must never bend surviving ink back into them. The cap is
+      // per-point, so it binds identically on a long chained polyline.
       maxDisplacement: haloPx * 0.35,
     });
-  }
-
-  if (optimize) {
-    // Chain within pens, but never far enough to bridge a seam.
-    result = optimizePlot(result, { mergeTolerance: Math.min(1.5, haloPx * 0.4) });
   }
 
   return result;
