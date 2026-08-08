@@ -8,7 +8,7 @@ import { Slider } from '../../components/controls/Slider';
 import { Toggle } from '../../components/controls/Toggle';
 import { randomSeed } from '../../lib/random';
 import type { ControlsProps } from '../../modules/types';
-import { CUSTOM_PALETTE, LAPIDARY_PALETTES } from './palettes';
+import { CUSTOM_PALETTE, LAPIDARY_PALETTES, randomLapidaryPalette } from './palettes';
 import { LAPIDARY_WEB_PRESETS, getLapidaryPreset, randomLapidaryGenome } from './presets';
 import { resolveLapidaryInks, resolveLapidaryVein } from './render';
 import type { LapidaryState, LapidaryTextureMix } from './types';
@@ -17,12 +17,15 @@ const PRESET_LABELS = Object.fromEntries(
   LAPIDARY_WEB_PRESETS.map((p) => [p.id, p.label])
 ) as Record<string, string>;
 
-const PALETTE_LABELS = Object.fromEntries(
-  LAPIDARY_PALETTES.map((p) => [
-    p.id,
-    `${p.label} (${p.inks.length} pen${p.inks.length > 1 ? 's' : ''})`,
-  ])
-) as Record<string, string>;
+const PALETTE_LABELS = {
+  ...(Object.fromEntries(
+    LAPIDARY_PALETTES.map((p) => [
+      p.id,
+      `${p.label} (${p.inks.length} pen${p.inks.length > 1 ? 's' : ''})`,
+    ])
+  ) as Record<string, string>),
+  [CUSTOM_PALETTE]: 'Custom…',
+};
 
 const MIX_LABELS: Record<LapidaryTextureMix, string> = {
   specimen: 'Specimen (lines · wavy · mottle · hatch)',
@@ -34,9 +37,13 @@ const MIX_LABELS: Record<LapidaryTextureMix, string> = {
   shuffle: 'Shuffle (seeded deal)',
 };
 
-/** Sidebar controls for Lapidary. The arrangement (mode, bands, shape) is
- *  the identity; texture and seam knobs follow; per-band fine-tuning and the
- *  pen kit live in Advanced. */
+/**
+ * Sidebar controls for Lapidary, laid out the scene-generator way: flat named
+ * sections (Stone → Marks → Ink) with mode-dependent knobs shown only when
+ * their mode is active — a strata sheet never shows the coverage/centre knobs
+ * it ignores, breccia is the only place the kintsugi controls appear — and
+ * one Advanced drawer at the end for the fine texture/pen tuning.
+ */
 export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>) {
   const selectPreset = (id: string) => {
     // Only real preset ids restore anything; 'custom' is a label, not a look.
@@ -62,14 +69,30 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
       ...patch,
     });
 
+  const inventPalette = () => {
+    const pal = randomLapidaryPalette(Math.random);
+    update({
+      palette: CUSTOM_PALETTE,
+      pens: pal.inks.length,
+      strokeColor: pal.inks[0],
+      ink2Color: pal.inks[1] ?? pal.inks[0],
+      ink3Color: pal.inks[2] ?? pal.inks[pal.inks.length - 1],
+      ink4Color: pal.inks[3] ?? pal.inks[pal.inks.length - 1],
+      veinColor: pal.vein,
+    });
+  };
+
+  const strata = state.mode === 'strata';
+  const breccia = state.mode === 'breccia';
+
   return (
     <div className="controls">
-      <h3 className="section-title">Lapidary</h3>
-
       <RandomiseButton
         onClick={() => update({ ...randomLapidaryGenome(Math.random), seed: randomSeed() })}
         hint="One roll for a whole new specimen — or tune anything below."
       />
+
+      <h3 className="section-title">Stone</h3>
 
       <PresetPicker
         label="Look"
@@ -105,17 +128,19 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         </select>
       </label>
 
-      <Toggle
-        label="Background field"
-        checked={state.field}
-        onChange={(v) => update({ field: v })}
-        disabled={state.mode === 'strata'}
-      />
-
       <Slider label="Bands" value={state.bands} min={2} max={10} step={1} onChange={(v) => update({ bands: v })} format={(v) => `${Math.round(v)}`} />
       <Slider label="Irregularity" value={state.irregularity} min={0} max={1} step={0.01} onChange={(v) => update({ irregularity: v })} format={(v) => `${Math.round(v * 100)}%`} />
-      <Slider label="Coverage" value={state.coverage} min={0.4} max={1} step={0.01} onChange={(v) => update({ coverage: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.mode === 'strata'} />
-      <Slider label="Seam width" value={state.haloMm} min={0.8} max={5} step={0.1} onChange={(v) => update({ haloMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      {!strata && (
+        <>
+          <Slider label="Coverage" value={state.coverage} min={0.4} max={1} step={0.01} onChange={(v) => update({ coverage: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Toggle label="Background field" checked={state.field} onChange={(v) => update({ field: v })} />
+        </>
+      )}
+      {strata && (
+        <Slider label="Faults" value={state.faults} min={0} max={4} step={1} onChange={(v) => update({ faults: v })} format={(v) => `${Math.round(v)}`} />
+      )}
+
+      <h3 className="section-title">Marks</h3>
 
       <label className="field">
         <span>Textures</span>
@@ -132,58 +157,32 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
       </label>
 
       <Slider label="Line pitch" value={state.spacingMm} min={0.6} max={3} step={0.1} onChange={(v) => update({ spacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
-
-      <AdvancedSection>
-        <AdvGroup title="Composition">
-          <Slider label="Centre X" value={state.centerX} min={-0.5} max={0.5} step={0.01} onChange={(v) => update({ centerX: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.mode === 'strata'} />
-          <Slider label="Centre Y" value={state.centerY} min={-0.5} max={0.5} step={0.01} onChange={(v) => update({ centerY: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.mode === 'strata'} />
-          <Slider label="Faults" value={state.faults} min={0} max={4} step={1} onChange={(v) => update({ faults: v })} format={(v) => `${Math.round(v)}`} disabled={state.mode !== 'strata'} />
-        </AdvGroup>
-
-        <AdvGroup title="Texture detail">
-          <Slider label="Angle" value={state.angleDeg} min={0} max={180} step={1} onChange={(v) => update({ angleDeg: v })} format={(v) => `${Math.round(v)}°`} />
-          <Slider label="Angle drift" value={state.angleDriftDeg} min={0} max={60} step={1} onChange={(v) => update({ angleDriftDeg: v })} format={(v) => `${Math.round(v)}°`} />
-          <Slider label="Density contrast" value={state.densityContrast} min={0} max={1} step={0.01} onChange={(v) => update({ densityContrast: v })} format={(v) => `${Math.round(v * 100)}%`} />
-          <Slider label="Waviness" value={state.waviness} min={0} max={1} step={0.01} onChange={(v) => update({ waviness: v })} format={(v) => `${Math.round(v * 100)}%`} />
-          <Slider label="Patchiness" value={state.patchiness} min={0} max={1} step={0.01} onChange={(v) => update({ patchiness: v })} format={(v) => `${Math.round(v * 100)}%`} />
-        </AdvGroup>
-
-        <AdvGroup title="Seams & pens">
-          <label className="field">
-            <span>Pen assignment</span>
-            <select
-              value={state.penAssignment}
-              onChange={(e) => update({ penAssignment: e.target.value as PenAssignment })}
-            >
-              <option value="interleave">Interleave strokes</option>
-              <option value="per-region">One pen per region</option>
-            </select>
-          </label>
-          <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
-          <Toggle label="Kintsugi veins" checked={state.veins} onChange={(v) => update({ veins: v })} disabled={state.mode !== 'breccia'} />
-          {state.mode === 'breccia' && (
-            <ColorField
-              label="Vein ink"
-              value={vein}
-              onChange={(v) => (custom ? update({ veinColor: v }) : goCustom({ veinColor: v }))}
-            />
-          )}
-        </AdvGroup>
-
-        <AdvGroup title="Pen & finish">
-          <Slider label="Pen width" value={state.penWidthMm} min={0.15} max={1.2} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
-          <Slider label="Wobble" value={state.wobbleMm} min={0} max={1.2} step={0.05} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
-        </AdvGroup>
-      </AdvancedSection>
+      <Slider label="Seam width" value={state.haloMm} min={0.8} max={5} step={0.1} onChange={(v) => update({ haloMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
+      {breccia && (
+        <Toggle label="Kintsugi veins" checked={state.veins} onChange={(v) => update({ veins: v })} />
+      )}
 
       <h3 className="section-title">Ink</h3>
+
       <PresetPicker
         label="Palette"
-        info="A named pen set — the palette carries the pen count and the vein accent. Edit any ink to go custom."
-        labels={custom ? { ...PALETTE_LABELS, [CUSTOM_PALETTE]: 'Custom' } : PALETTE_LABELS}
+        info="A named pen set — the palette carries the pen count and the vein accent. Pick Custom (or edit any ink) to mix your own."
+        labels={PALETTE_LABELS}
         value={state.palette}
-        onChange={(id) => update({ palette: id })}
+        onChange={(id) => (id === CUSTOM_PALETTE && !custom ? goCustom({}) : update({ palette: id }))}
       />
+      <div className="control-group">
+        <button
+          type="button"
+          className="secondary"
+          style={{ width: '100%' }}
+          onClick={inventPalette}
+          title="Deal a brand-new pen set — seeded ink-plausible colours, not from the named list"
+        >
+          🎨 Invent a palette
+        </button>
+      </div>
       {custom && (
         <Slider label="Pens" value={state.pens} min={1} max={4} step={1} onChange={(v) => update({ pens: v })} format={(v) => `${Math.round(v)}`} />
       )}
@@ -197,6 +196,47 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
             onChange={(v) => (custom ? update({ [field]: v }) : goCustom({ [field]: v }))}
           />
         ))}
+      {breccia && state.veins && (
+        <ColorField
+          label="Vein ink"
+          value={vein}
+          onChange={(v) => (custom ? update({ veinColor: v }) : goCustom({ veinColor: v }))}
+        />
+      )}
+      {inks.length > 1 && (
+        <label className="field">
+          <span>Pen assignment</span>
+          <select
+            value={state.penAssignment}
+            onChange={(e) => update({ penAssignment: e.target.value as PenAssignment })}
+          >
+            <option value="interleave">Interleave strokes</option>
+            <option value="per-region">One pen per region</option>
+          </select>
+        </label>
+      )}
+
+      <AdvancedSection>
+        {!strata && (
+          <AdvGroup title="Composition">
+            <Slider label="Centre X" value={state.centerX} min={-0.5} max={0.5} step={0.01} onChange={(v) => update({ centerX: v })} format={(v) => `${Math.round(v * 100)}%`} />
+            <Slider label="Centre Y" value={state.centerY} min={-0.5} max={0.5} step={0.01} onChange={(v) => update({ centerY: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          </AdvGroup>
+        )}
+
+        <AdvGroup title="Texture detail">
+          <Slider label="Angle" value={state.angleDeg} min={0} max={180} step={1} onChange={(v) => update({ angleDeg: v })} format={(v) => `${Math.round(v)}°`} />
+          <Slider label="Angle drift" value={state.angleDriftDeg} min={0} max={60} step={1} onChange={(v) => update({ angleDriftDeg: v })} format={(v) => `${Math.round(v)}°`} />
+          <Slider label="Density contrast" value={state.densityContrast} min={0} max={1} step={0.01} onChange={(v) => update({ densityContrast: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Waviness" value={state.waviness} min={0} max={1} step={0.01} onChange={(v) => update({ waviness: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Patchiness" value={state.patchiness} min={0} max={1} step={0.01} onChange={(v) => update({ patchiness: v })} format={(v) => `${Math.round(v * 100)}%`} />
+        </AdvGroup>
+
+        <AdvGroup title="Pen & finish">
+          <Slider label="Pen width" value={state.penWidthMm} min={0.15} max={1.2} step={0.05} onChange={(v) => update({ penWidthMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
+          <Slider label="Wobble" value={state.wobbleMm} min={0} max={1.2} step={0.05} onChange={(v) => update({ wobbleMm: v })} format={(v) => `${v.toFixed(2)}mm`} />
+        </AdvGroup>
+      </AdvancedSection>
     </div>
   );
 }
