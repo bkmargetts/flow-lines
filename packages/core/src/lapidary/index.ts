@@ -116,9 +116,14 @@ export interface LapidaryOptions {
    *  reserved-paper seam at every cut; 'blend' lets abutting cells' textures
    *  morph into one another with no seam. Spiral only. */
   spiralJoin?: SpiralJoin;
-  /** Ribbon width as a fraction of the local winding pitch, 0.15..0.9
-   *  (default 0.55) — self-scaling with the turn count and sheet. Clamped so
-   *  ribbon + seam can never swallow the inter-winding paper. Spiral only. */
+  /** Ribbon width as a fraction of the local winding pitch, 0.15..1
+   *  (default 0.55) — self-scaling with the turn count and sheet. The
+   *  reserved inter-winding paper collapses as this approaches 1: at full
+   *  width the coil closes up and covers the page, the carved halo (cells)
+   *  or a hairline gap (blend) supplying the seam. Pair with a low turn
+   *  count for bands that claim real acreage. Edges are clamped against
+   *  each neighbouring winding's true centreline, so they can meet but
+   *  never cross. Spiral only. */
   spiralWidth?: number;
   /** Signed width taper toward the leading end, -1..1 (default 0.35):
    *  positive thins the ribbon as it approaches the leading end, negative
@@ -289,6 +294,18 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     irregularity: 0.35,
     coverage: 0.95,
   },
+  coil: {
+    mode: 'spiral',
+    bands: 3,
+    pens: 3,
+    penAssignment: 'per-region',
+    field: false,
+    spiralWidth: 1,
+    spiralTaper: 0,
+    spiralPulse: 0.1,
+    coverage: 0.97,
+    irregularity: 0.25,
+  },
 };
 
 /**
@@ -400,7 +417,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     spiralForm: options.spiralForm ?? 'circular',
     spiralDirection: options.spiralDirection ?? 'inward',
     spiralJoin: options.spiralJoin ?? 'cells',
-    spiralWidth: clamp(options.spiralWidth ?? 0.55, 0.15, 0.9),
+    spiralWidth: clamp(options.spiralWidth ?? 0.55, 0.15, 1),
     spiralTaper: clamp(options.spiralTaper ?? 0.35, -1, 1),
     spiralPulse: clamp(options.spiralPulse ?? 0.35, 0, 1),
     featureScale,

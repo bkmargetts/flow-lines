@@ -88,7 +88,7 @@ export function registerLapidary(program: Command) {
     )
     .option(
       '--spiral-width <number>',
-      'Ribbon width as a fraction of the local winding pitch (0.15-0.9, spiral only)'
+      'Ribbon width as a fraction of the local winding pitch (0.15-1; at 1 the coil closes up and covers the page; spiral only)'
     )
     .option(
       '--spiral-taper <number>',

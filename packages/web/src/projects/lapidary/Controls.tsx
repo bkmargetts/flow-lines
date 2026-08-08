@@ -181,7 +181,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
               <option value="blend">Blended — patterns morph</option>
             </select>
           </label>
-          <Slider label="Ribbon width" value={state.spiralWidth} min={0.15} max={0.9} step={0.01} onChange={(v) => update({ spiralWidth: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Ribbon width" value={state.spiralWidth} min={0.15} max={1} step={0.01} onChange={(v) => update({ spiralWidth: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Taper" value={state.spiralTaper} min={-1} max={1} step={0.01} onChange={(v) => update({ spiralTaper: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Width pulse" value={state.spiralPulse} min={0} max={1} step={0.01} onChange={(v) => update({ spiralPulse: v })} format={(v) => `${Math.round(v * 100)}%`} />
         </>

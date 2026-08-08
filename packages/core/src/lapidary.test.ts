@@ -794,6 +794,54 @@ describe('generateLapidary', () => {
       expect(coreShare(-0.9)).toBeGreaterThan(coreShare(0.9) * 1.2);
     });
 
+    it('full width closes the windings and the carve still seams the cells', () => {
+      // At spiralWidth 1 the reserved inter-winding paper collapses and the
+      // ribbon edges meet their neighbours — the coil covers the page, and
+      // the only seams left are the ones the halo carve cuts between cells.
+      const haloPx = 8;
+      const opts = {
+        ...SPIRAL,
+        spiralWidth: 1,
+        spiralTaper: 0,
+        spiralPulse: 0,
+        haloPx,
+        field: false,
+        pens: 4,
+        penAssignment: 'per-region' as const,
+        textures: ['lines', 'hatch'] as ['lines', 'hatch'],
+        wobble: 0,
+        optimize: false,
+      };
+      const full = generateLapidary(opts);
+      const slim = generateLapidary({ ...opts, spiralWidth: 0.4 });
+      const count = (r: typeof full): number => r.lines.reduce((n, l) => n + l.points.length, 0);
+      expect(count(full)).toBeGreaterThan(count(slim) * 1.5);
+      const byLayer = new Map<string, { x: number; y: number }[]>();
+      for (const line of full.lines) {
+        const arr = byLayer.get(line.layer!) ?? [];
+        for (let i = 0; i < line.points.length; i += 3) arr.push(line.points[i]);
+        byLayer.set(line.layer!, arr);
+      }
+      const pairs: [string, string][] = [
+        [inkLayerName(1), inkLayerName(2)],
+        [inkLayerName(2), inkLayerName(3)],
+      ];
+      for (const [la, lb] of pairs) {
+        const a = byLayer.get(la) ?? [];
+        const b = byLayer.get(lb) ?? [];
+        expect(a.length).toBeGreaterThan(10);
+        expect(b.length).toBeGreaterThan(10);
+        let min = Infinity;
+        for (const p of a) {
+          for (const q of b) {
+            const d = Math.hypot(p.x - q.x, p.y - q.y);
+            if (d < min) min = d;
+          }
+        }
+        expect(min).toBeGreaterThanOrEqual(haloPx * 0.45);
+      }
+    });
+
     it('ribbon width scales the ink budget', () => {
       const points = (spiralWidth: number): number => {
         const r = generateLapidary({

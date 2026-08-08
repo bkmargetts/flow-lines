@@ -144,6 +144,7 @@ CASES['lapidary/palette'] = [
 ];
 CASES['lapidary/faults'] = ['lapidary', ...SIZE, ...SEED, '--mode', 'strata', '--faults', '2'];
 CASES['lapidary/ammonite'] = ['lapidary', ...SIZE, ...SEED, '--preset', 'ammonite'];
+CASES['lapidary/coil'] = ['lapidary', ...SIZE, ...SEED, '--preset', 'coil'];
 CASES['lapidary/spiral-flags'] = [
   'lapidary', ...SIZE, ...SEED, '--mode', 'spiral', '--spiral-form', 'rectangular',
   '--spiral-direction', 'outward', '--spiral-join', 'blend', '--spiral-width', '0.4',

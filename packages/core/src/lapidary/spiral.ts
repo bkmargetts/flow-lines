@@ -150,25 +150,49 @@ export function spiralRegions(
 
   // ---- Pass 2: ribbon edges. Width = base fraction of the local winding
   // pitch × signed taper (t = arc fraction from the trailing end) × the
-  // low-frequency pulse, then hard-clamped so ribbon + seam can never
-  // swallow the inter-winding paper.
+  // low-frequency pulse, then hard-clamped against each neighbouring
+  // winding's true (drift-aware) centreline so edges can meet but never
+  // cross. The reserved inter-winding paper collapses as the width
+  // approaches 1 — at full width the coil closes up and covers the page,
+  // with the carve (cells) or a hairline floor (blend) supplying the seam.
+  const driftAt = (tt: number): number =>
+    driftAmp > 0 ? driftAmp * noise.fbm(tt / 4.4, 3.7, 2, 0.5, 2) : 0;
+  // Blend cells are never clipped, so windings keep a pen-width hairline
+  // even at full width — the wobble cap (0.35·halo per side) can narrow it
+  // but not cross it. Cells rely on the halo carve for their seam instead.
+  const seamPad = Math.max(
+    cfg.spiralJoin === 'blend' ? cfg.haloPx : 0,
+    2.2 * cfg.haloPx * clamp((1 - cfg.spiralWidth) / 0.45, 0, 1)
+  );
   const outer: Point[] = [];
   const inner: Point[] = [];
   for (let i = 0; i < thetas.length; i++) {
-    const theta = thetas[i] % TWO_PI;
+    const tt = thetas[i];
+    const theta = tt % TWO_PI;
+    const b = bAt(theta);
     const bl = baseLen(theta);
-    const gapPx = pitchNorm * bAt(theta) * bl;
+    const gapPx = pitchNorm * b * bl;
+    const dNow = driftAt(tt);
+    // Each winding stays on its own side of the midline to its neighbours,
+    // so per-winding taper/pulse differences can never make edges cross.
+    const gapInPx = (pitchNorm + dNow - driftAt(tt + TWO_PI)) * b * bl;
+    const gapOutPx = (pitchNorm + driftAt(tt - TWO_PI) - dNow) * b * bl;
     const tFrac = cum[i] / total;
     const t = cfg.spiralDirection === 'inward' ? tFrac : 1 - tFrac;
     const taperF = Math.max(0.12, lerp(1, 1 - 0.75 * cfg.spiralTaper, t));
-    const pulseF = 1 + cfg.spiralPulse * 0.45 * noise.fbm(thetas[i] / 2.2, 7.3, 2, 0.5, 2);
+    const pulseF = 1 + cfg.spiralPulse * 0.45 * noise.fbm(tt / 2.2, 7.3, 2, 0.5, 2);
     const desired = 0.5 * cfg.spiralWidth * gapPx * taperF * pulseF;
-    const ceilHalf = 0.5 * (gapPx - 2.2 * cfg.haloPx);
     const floorHalf = Math.max(2, 0.8 * cfg.spacingPx);
-    const half = Math.max(1, Math.min(ceilHalf, Math.max(floorHalf, desired)));
-    const dRho = half / bl;
-    const rhoOut = rhos[i] + dRho;
-    const rhoIn = Math.max(0.004, rhos[i] - dRho);
+    const halfIn = Math.max(
+      1,
+      Math.min(0.5 * (gapInPx - seamPad), Math.max(floorHalf, desired))
+    );
+    const halfOut = Math.max(
+      1,
+      Math.min(0.5 * (gapOutPx - seamPad), Math.max(floorHalf, desired))
+    );
+    const rhoOut = rhos[i] + halfOut / bl;
+    const rhoIn = Math.max(0.004, rhos[i] - halfIn / bl);
     outer.push({ x: cx + Math.cos(theta) * rx * rhoOut, y: cy + Math.sin(theta) * ry * rhoOut });
     inner.push({ x: cx + Math.cos(theta) * rx * rhoIn, y: cy + Math.sin(theta) * ry * rhoIn });
   }

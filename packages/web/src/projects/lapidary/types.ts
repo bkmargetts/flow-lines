@@ -30,6 +30,7 @@ export type LapidaryLook =
   | 'facet'
   | 'ammonite'
   | 'labyrinth'
+  | 'coil'
   | 'mono'
   | 'custom';
 
@@ -56,7 +57,7 @@ export interface LapidaryState {
   spiralForm: SpiralForm; // round vs squared-off coil (spiral only)
   spiralDirection: SpiralDirection; // winds to the centre vs unwinds from it
   spiralJoin: SpiralJoin; // carved cell seams vs seamless pattern morphing
-  spiralWidth: number; // 0.15..0.9 of the local winding pitch
+  spiralWidth: number; // 0.15..1 of the local winding pitch (1 = windings close up)
   spiralTaper: number; // -1..1 signed taper toward the leading end
   spiralPulse: number; // 0..1 organic width modulation along the arc
 

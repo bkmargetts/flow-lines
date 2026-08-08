@@ -245,7 +245,7 @@ const SPECS: GenomeSpec[] = [
       patchiness: [0, 1],
       pens: [1, 4],
       faults: [0, 4],
-      spiralWidth: [0.15, 0.9],
+      spiralWidth: [0.15, 1],
       spiralTaper: [-1, 1],
       spiralPulse: [0, 1],
     },
