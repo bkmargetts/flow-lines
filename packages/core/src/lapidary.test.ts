@@ -5,7 +5,7 @@ import { inkLayerName } from './marbling/index.js';
 import type { LapidaryMode } from './lapidary/index.js';
 
 const BASE = { width: 300, height: 400, margin: 20, seed: 42 } as const;
-const MODES: LapidaryMode[] = ['agate', 'breccia', 'strata'];
+const MODES: LapidaryMode[] = ['agate', 'breccia', 'strata', 'spiral'];
 
 describe('generateLapidary', () => {
   it('is deterministic for the same seed and options', () => {
@@ -344,6 +344,12 @@ describe('generateLapidary', () => {
     waviness: 0.5,
     patchiness: 0.55,
     faults: 0,
+    spiralForm: 'circular',
+    spiralDirection: 'inward',
+    spiralJoin: 'cells',
+    spiralWidth: 0.55,
+    spiralTaper: 0.35,
+    spiralPulse: 0.35,
     featureScale: 260 / TUNING_DIM,
   });
 
@@ -626,5 +632,316 @@ describe('generateLapidary', () => {
       expect(regions.length).toBeGreaterThanOrEqual(2);
       expect(regions.length).toBeLessThanOrEqual(10);
     }
+  });
+
+  describe('spiral arrangement', () => {
+    const SPIRAL = { ...BASE, mode: 'spiral' as const };
+
+    it('every spiral knob is deterministic and distinct', () => {
+      const variants: Partial<Parameters<typeof generateLapidary>[0]>[] = [
+        {},
+        { spiralForm: 'rectangular' },
+        { spiralDirection: 'outward' },
+        { spiralJoin: 'blend' },
+        { spiralWidth: 0.2 },
+        { spiralTaper: -0.9 },
+        { spiralPulse: 1 },
+        { shapes: 'angular' },
+        { spiralForm: 'rectangular', shapes: 'angular' },
+        { spiralForm: 'page' },
+      ];
+      const hashes = variants.map((v) => {
+        const a = generateLapidary({ ...SPIRAL, ...v });
+        expect(JSON.stringify(generateLapidary({ ...SPIRAL, ...v }))).toEqual(JSON.stringify(a));
+        expect(a.lines.length).toBeGreaterThan(50);
+        return JSON.stringify(a.lines);
+      });
+      expect(new Set(hashes).size).toBe(variants.length);
+    });
+
+    it('subdivided cells reserve a paper seam (the halo property)', () => {
+      // Per-region pens map cell z → pen, so adjacent cells (which abut at
+      // the cuts before the carve) land on different pens and the seam is
+      // measurable as the min distance between their point sets.
+      const haloPx = 8;
+      const r = generateLapidary({
+        ...SPIRAL,
+        haloPx,
+        field: false,
+        pens: 4,
+        penAssignment: 'per-region',
+        textures: ['lines', 'hatch'],
+        wobble: 0,
+        optimize: false,
+      });
+      const byLayer = new Map<string, { x: number; y: number }[]>();
+      for (const line of r.lines) {
+        const arr = byLayer.get(line.layer!) ?? [];
+        for (let i = 0; i < line.points.length; i += 3) arr.push(line.points[i]);
+        byLayer.set(line.layer!, arr);
+      }
+      const pairs: [string, string][] = [
+        [inkLayerName(1), inkLayerName(2)],
+        [inkLayerName(2), inkLayerName(3)],
+      ];
+      for (const [la, lb] of pairs) {
+        const a = byLayer.get(la) ?? [];
+        const b = byLayer.get(lb) ?? [];
+        expect(a.length).toBeGreaterThan(10);
+        expect(b.length).toBeGreaterThan(10);
+        let min = Infinity;
+        for (const p of a) {
+          for (const q of b) {
+            const d = Math.hypot(p.x - q.x, p.y - q.y);
+            if (d < min) min = d;
+          }
+        }
+        expect(min).toBeGreaterThanOrEqual(haloPx * 0.45);
+      }
+    });
+
+    it('blend join lets abutting cells meet without a seam', () => {
+      // Same measurement as above: with the seamless join, adjacent cells'
+      // hatch runs both end on the shared cut, so different-pen point sets
+      // come far closer than any carved seam would allow.
+      const r = generateLapidary({
+        ...SPIRAL,
+        spiralJoin: 'blend',
+        haloPx: 8,
+        field: false,
+        pens: 4,
+        penAssignment: 'per-region',
+        textures: ['hatch'],
+        wobble: 0,
+        optimize: false,
+      });
+      const byLayer = new Map<string, { x: number; y: number }[]>();
+      for (const line of r.lines) {
+        const arr = byLayer.get(line.layer!) ?? [];
+        for (const p of line.points) arr.push(p);
+        byLayer.set(line.layer!, arr);
+      }
+      const a = byLayer.get(inkLayerName(1)) ?? [];
+      const b = byLayer.get(inkLayerName(2)) ?? [];
+      expect(a.length).toBeGreaterThan(10);
+      expect(b.length).toBeGreaterThan(10);
+      let min = Infinity;
+      for (const p of a) {
+        for (const q of b) {
+          const d = Math.hypot(p.x - q.x, p.y - q.y);
+          if (d < min) min = d;
+        }
+      }
+      expect(min).toBeLessThan(3);
+    });
+
+    it('blend cells still carve the background field', () => {
+      // The field draws last (z = 0), so with identical explicit textures
+      // the cells are a byte-identical prefix and the field's strokes are
+      // the suffix — which must hold a halo off the seamless ribbon.
+      const haloPx = 8;
+      const base = {
+        ...SPIRAL,
+        spiralJoin: 'blend' as const,
+        haloPx,
+        textures: ['lines', 'hatch'] as ['lines', 'hatch'],
+        wobble: 0,
+        optimize: false,
+      };
+      const without = generateLapidary({ ...base, field: false });
+      const withField = generateLapidary({ ...base, field: true });
+      expect(withField.lines.length).toBeGreaterThan(without.lines.length);
+      expect(JSON.stringify(withField.lines.slice(0, without.lines.length))).toEqual(
+        JSON.stringify(without.lines)
+      );
+      const cells: { x: number; y: number }[] = [];
+      for (const line of without.lines) {
+        for (let i = 0; i < line.points.length; i += 3) cells.push(line.points[i]);
+      }
+      const fieldLines = withField.lines.slice(without.lines.length);
+      let min = Infinity;
+      for (const line of fieldLines) {
+        for (let i = 0; i < line.points.length; i += 3) {
+          const p = line.points[i];
+          for (const q of cells) {
+            const d = Math.hypot(p.x - q.x, p.y - q.y);
+            if (d < min) min = d;
+          }
+        }
+      }
+      expect(min).toBeGreaterThanOrEqual(haloPx * 0.45);
+    });
+
+    it('taper sign moves the ink weight between core and rim', () => {
+      const coreShare = (spiralTaper: number): number => {
+        const r = generateLapidary({
+          ...SPIRAL,
+          field: false,
+          spiralTaper,
+          wobble: 0,
+          optimize: false,
+        });
+        let near = 0;
+        let total = 0;
+        for (const line of r.lines) {
+          for (const p of line.points) {
+            total++;
+            if (Math.hypot(p.x - 150, p.y - 200) < 70) near++;
+          }
+        }
+        expect(total).toBeGreaterThan(1000);
+        return near / total;
+      };
+      expect(coreShare(-0.9)).toBeGreaterThan(coreShare(0.9) * 1.2);
+    });
+
+    it('full width closes the windings and the carve still seams the cells', () => {
+      // At spiralWidth 1 the reserved inter-winding paper collapses and the
+      // ribbon edges meet their neighbours — the coil covers the page, and
+      // the only seams left are the ones the halo carve cuts between cells.
+      const haloPx = 8;
+      const opts = {
+        ...SPIRAL,
+        spiralWidth: 1,
+        spiralTaper: 0,
+        spiralPulse: 0,
+        haloPx,
+        field: false,
+        pens: 4,
+        penAssignment: 'per-region' as const,
+        textures: ['lines', 'hatch'] as ['lines', 'hatch'],
+        wobble: 0,
+        optimize: false,
+      };
+      const full = generateLapidary(opts);
+      const slim = generateLapidary({ ...opts, spiralWidth: 0.4 });
+      const count = (r: typeof full): number => r.lines.reduce((n, l) => n + l.points.length, 0);
+      expect(count(full)).toBeGreaterThan(count(slim) * 1.5);
+      const byLayer = new Map<string, { x: number; y: number }[]>();
+      for (const line of full.lines) {
+        const arr = byLayer.get(line.layer!) ?? [];
+        for (let i = 0; i < line.points.length; i += 3) arr.push(line.points[i]);
+        byLayer.set(line.layer!, arr);
+      }
+      const pairs: [string, string][] = [
+        [inkLayerName(1), inkLayerName(2)],
+        [inkLayerName(2), inkLayerName(3)],
+      ];
+      for (const [la, lb] of pairs) {
+        const a = byLayer.get(la) ?? [];
+        const b = byLayer.get(lb) ?? [];
+        expect(a.length).toBeGreaterThan(10);
+        expect(b.length).toBeGreaterThan(10);
+        let min = Infinity;
+        for (const p of a) {
+          for (const q of b) {
+            const d = Math.hypot(p.x - q.x, p.y - q.y);
+            if (d < min) min = d;
+          }
+        }
+        expect(min).toBeGreaterThanOrEqual(haloPx * 0.45);
+      }
+    });
+
+    it('page form runs the coil flush to the margin rect, corners included', () => {
+      // The page form's boundary table IS the margin rectangle — at high
+      // width the coil fills the sheet corner to corner while never
+      // spilling past the page.
+      const r = generateLapidary({
+        ...SPIRAL,
+        spiralForm: 'page',
+        spiralWidth: 1,
+        spiralTaper: 0,
+        spiralPulse: 0,
+        coverage: 1,
+        field: false,
+        wobble: 0,
+        optimize: false,
+      });
+      expect(r.lines.length).toBeGreaterThan(100);
+      const corners = [
+        { x: 20, y: 20 },
+        { x: 280, y: 20 },
+        { x: 280, y: 380 },
+        { x: 20, y: 380 },
+      ];
+      for (const c of corners) {
+        let min = Infinity;
+        for (const line of r.lines) {
+          for (const p of line.points) {
+            expect(p.x).toBeGreaterThanOrEqual(0);
+            expect(p.x).toBeLessThanOrEqual(BASE.width);
+            expect(p.y).toBeGreaterThanOrEqual(0);
+            expect(p.y).toBeLessThanOrEqual(BASE.height);
+            const d = Math.hypot(p.x - c.x, p.y - c.y);
+            if (d < min) min = d;
+          }
+        }
+        // The adaptive walk chamfers the extreme tip slightly on a tiny
+        // page; 20px on this 260px frame still pins corner-reach.
+        expect(min, `corner ${c.x},${c.y}`).toBeLessThan(20);
+      }
+    });
+
+    it('ribbon width scales the ink budget', () => {
+      const points = (spiralWidth: number): number => {
+        const r = generateLapidary({
+          ...SPIRAL,
+          field: false,
+          spiralWidth,
+          wobble: 0,
+          optimize: false,
+        });
+        return r.lines.reduce((n, l) => n + l.points.length, 0);
+      };
+      expect(points(0.85)).toBeGreaterThan(points(0.2) * 1.15);
+    });
+
+    it('width and taper knobs never reshuffle the cells or their textures', () => {
+      const a = buildRegions(layoutFor('spiral', 7, 5)).regions;
+      const b = buildRegions({
+        ...layoutFor('spiral', 7, 5),
+        spiralWidth: 0.2,
+        spiralTaper: -1,
+        spiralPulse: 1,
+      }).regions;
+      expect(b.length).toBe(a.length);
+      expect(b.map((r) => r.z)).toEqual(a.map((r) => r.z));
+      expect(b.map((r) => r.tex.kind)).toEqual(a.map((r) => r.tex.kind));
+    });
+
+    it('sheds windings gracefully on hostile geometry', () => {
+      const hostile = generateLapidary({
+        ...SPIRAL,
+        bands: 10,
+        haloPx: 14,
+        spiralWidth: 0.9,
+        spiralPulse: 1,
+      });
+      expect(hostile.lines.length).toBeGreaterThan(20);
+      for (const line of hostile.lines) {
+        for (const p of line.points) {
+          expect(p.x).toBeGreaterThanOrEqual(0);
+          expect(p.x).toBeLessThanOrEqual(BASE.width);
+          expect(p.y).toBeGreaterThanOrEqual(0);
+          expect(p.y).toBeLessThanOrEqual(BASE.height);
+        }
+      }
+      const tiny = generateLapidary({ width: 80, height: 80, margin: 10, seed: 42, mode: 'spiral' });
+      for (const line of tiny.lines) {
+        for (const p of line.points) {
+          expect(p.x).toBeGreaterThanOrEqual(0);
+          expect(p.x).toBeLessThanOrEqual(80);
+          expect(p.y).toBeGreaterThanOrEqual(0);
+          expect(p.y).toBeLessThanOrEqual(80);
+        }
+      }
+    });
+
+    it('ignores faults and veins', () => {
+      expect(
+        JSON.stringify(generateLapidary({ ...SPIRAL, faults: 3, veins: true }))
+      ).toEqual(JSON.stringify(generateLapidary(SPIRAL)));
+    });
   });
 });

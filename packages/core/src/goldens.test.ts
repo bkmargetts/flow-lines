@@ -297,6 +297,24 @@ CASES['lapidary/mottle/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, textures: ['mottle'] });
 CASES['lapidary/grain/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, textures: ['grain'] });
+CASES['lapidary/ammonite/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.ammonite });
+CASES['lapidary/labyrinth/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.labyrinth });
+CASES['lapidary/coil/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.coil });
+CASES['lapidary/slab/42'] = () =>
+  generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.slab });
+CASES['lapidary/spiral-outward/42'] = () =>
+  generateLapidary({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    mode: 'spiral',
+    spiralDirection: 'outward',
+    pens: 2,
+  });
 CASES['marbling/feather/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'feather', inkGroups: 2 });
 CASES['marbling/vortex/42'] = () =>

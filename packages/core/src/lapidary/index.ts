@@ -13,9 +13,20 @@ export type {
   BandTexture,
   LapidaryShape,
   LapidaryShapes,
+  SpiralForm,
+  SpiralDirection,
+  SpiralJoin,
 } from './layout.js';
 export type { PenAssignment } from './carve.js';
-import type { LapidaryMode, LapidaryTexture, BandTexture, LapidaryShapes } from './layout.js';
+import type {
+  LapidaryMode,
+  LapidaryTexture,
+  BandTexture,
+  LapidaryShapes,
+  SpiralForm,
+  SpiralDirection,
+  SpiralJoin,
+} from './layout.js';
 
 /** The kintsugi veins' dedicated accent pen layer — separate from the
  *  ink-0..ink-3 pens so the veins can be plotted in their own ink (gold)
@@ -31,9 +42,12 @@ export const VEIN_LAYER = 'vein';
  * clean reserved-paper seams the way stacked stencil layers hold off one
  * another.
  *
- * Three arrangements: `agate` nests concentric blob bands around a centre
+ * Four arrangements: `agate` nests concentric blob bands around a centre
  * (the reference piece), `breccia` scatters overlapping fragments over the
- * field, `strata` splits the sheet into noisy horizontal beds.
+ * field, `strata` splits the sheet into noisy horizontal beds, `spiral`
+ * winds one textured ribbon from the rim into the centre (or outward from
+ * it), chopped into cells that either carve seams or blend into one
+ * another.
  *
  * Ink: strokes are tagged `ink-<group>` (`inkLayerName`) across 1–4 pens,
  * either interleaved stroke-by-stroke within each region (the hand-fed
@@ -60,7 +74,8 @@ export interface LapidaryOptions {
   /** Layout mode (default 'agate') */
   mode?: LapidaryMode;
   /** Region count incl. the background field when present: agate bands /
-   *  breccia fragments+field / strata beds. 2..10 (default 5) */
+   *  breccia fragments+field / strata beds / spiral windings. 2..10
+   *  (default 5) */
   bands?: number;
   /** Draw the full-frame background band (default true). Off, the layered
    *  shapes float on clean paper. Agate/breccia only — strata partitions
@@ -82,11 +97,44 @@ export interface LapidaryOptions {
    *  the dedicated `VEIN_LAYER` accent pen (default false) — load it with
    *  gold for the kintsugi look. Breccia only. */
   veins?: boolean;
-  /** Outermost silhouette size as a fraction of the frame, 0.4..1 (default 0.9) */
+  /** Outermost silhouette size as a fraction of the frame, 0.4..1 (default
+   *  0.9). For the spiral this is where the outermost winding starts. */
   coverage?: number;
   /** Composition centre offset as a fraction of the half-extents, -0.5..0.5 */
   centerX?: number;
   centerY?: number;
+  /** Spiral cross-section (default 'circular'): a round coil, a
+   *  'rectangular' superellipse coil that squares off to the sheet's
+   *  aspect, or 'page' — the margin rectangle itself, corners included:
+   *  the rim runs flush with the page edge and the whole sheet becomes the
+   *  coil (pair with spiralWidth 1 for a full-bleed spiral). Spiral only. */
+  spiralForm?: SpiralForm;
+  /** Which end of the ribbon leads (default 'inward'): 'inward' winds from
+   *  the rim into the centre; 'outward' unwinds from the centre, loosening
+   *  toward the page edge. Flips the taper, the texture deal's origin, and
+   *  which end is drawn on top. Spiral only. */
+  spiralDirection?: SpiralDirection;
+  /** How the ribbon's patterns meet (default 'cells'): 'cells' carves a
+   *  reserved-paper seam at every cut; 'blend' lets abutting cells' textures
+   *  morph into one another with no seam. Spiral only. */
+  spiralJoin?: SpiralJoin;
+  /** Ribbon width as a fraction of the local winding pitch, 0.15..1
+   *  (default 0.55) — self-scaling with the turn count and sheet. The
+   *  reserved inter-winding paper collapses as this approaches 1: at full
+   *  width the coil closes up and covers the page, the carved halo (cells)
+   *  or a hairline gap (blend) supplying the seam. Pair with a low turn
+   *  count for bands that claim real acreage. Edges are clamped against
+   *  each neighbouring winding's true centreline, so they can meet but
+   *  never cross. Spiral only. */
+  spiralWidth?: number;
+  /** Signed width taper toward the leading end, -1..1 (default 0.35):
+   *  positive thins the ribbon as it approaches the leading end, negative
+   *  grows it. Spiral only. */
+  spiralTaper?: number;
+  /** Low-frequency organic width modulation along the arc, 0..1 (default
+   *  0.35) — the ribbon breathes instead of holding a drafted width.
+   *  Spiral only. */
+  spiralPulse?: number;
 
   // ---- Seams ----
   /** Reserved-paper seam width between regions in px (default sizingDim/110) */
@@ -217,6 +265,62 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
       { kind: 'lines', angleDeg: 90, spacingScale: 1.3 },
     ],
   },
+  ammonite: {
+    mode: 'spiral',
+    bands: 6,
+    pens: 2,
+    spiralJoin: 'blend',
+    spiralWidth: 0.62,
+    spiralTaper: 0.45,
+    spiralPulse: 0.5,
+    coverage: 0.94,
+    textures: [
+      { kind: 'lines', spacingScale: 1.2 },
+      { kind: 'contour' },
+      { kind: 'stipple', spacingScale: 1.1 },
+      { kind: 'contour', spacingScale: 0.7 },
+      { kind: 'hatch', spacingScale: 1.2 },
+      { kind: 'contour', spacingScale: 0.9 },
+    ],
+  },
+  labyrinth: {
+    mode: 'spiral',
+    bands: 5,
+    pens: 3,
+    penAssignment: 'per-region',
+    shapes: 'angular',
+    spiralForm: 'rectangular',
+    spiralWidth: 0.6,
+    spiralTaper: 0.1,
+    spiralPulse: 0.15,
+    irregularity: 0.35,
+    coverage: 0.95,
+  },
+  coil: {
+    mode: 'spiral',
+    bands: 3,
+    pens: 3,
+    penAssignment: 'per-region',
+    field: false,
+    spiralWidth: 1,
+    spiralTaper: 0,
+    spiralPulse: 0.1,
+    coverage: 0.97,
+    irregularity: 0.25,
+  },
+  slab: {
+    mode: 'spiral',
+    spiralForm: 'page',
+    bands: 4,
+    pens: 3,
+    penAssignment: 'per-region',
+    field: false,
+    spiralWidth: 0.9,
+    spiralTaper: 0,
+    spiralPulse: 0.05,
+    coverage: 1,
+    irregularity: 0.3,
+  },
 };
 
 /**
@@ -325,6 +429,12 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     waviness: clamp(options.waviness ?? 0.5, 0, 1),
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
     faults: clamp(Math.round(options.faults ?? 0), 0, 4),
+    spiralForm: options.spiralForm ?? 'circular',
+    spiralDirection: options.spiralDirection ?? 'inward',
+    spiralJoin: options.spiralJoin ?? 'cells',
+    spiralWidth: clamp(options.spiralWidth ?? 0.55, 0.15, 1),
+    spiralTaper: clamp(options.spiralTaper ?? 0.35, -1, 1),
+    spiralPulse: clamp(options.spiralPulse ?? 0.35, 0, 1),
     featureScale,
   };
 

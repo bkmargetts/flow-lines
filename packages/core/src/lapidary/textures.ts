@@ -289,6 +289,41 @@ export function fillRegion(region: Region): RegionFill {
         break;
       }
 
+      if (region.ribbon) {
+        // Lamination between a spiral cell's edges — the strata onion-skin
+        // bent along the coil: interior curves interpolate both coordinates
+        // between the index-aligned edges, and the wave pushes across the
+        // ribbon so neighbouring laminae undulate together without ever
+        // crossing. Edge samples are already a few px apart, so waving
+        // before the densify pass loses nothing.
+        const { outer, inner } = region.ribbon;
+        const m = Math.min(outer.length, inner.length);
+        let gap = 0;
+        for (let i = 0; i < m; i++) {
+          gap += Math.hypot(inner[i].x - outer[i].x, inner[i].y - outer[i].y);
+        }
+        gap /= Math.max(1, m);
+        const rows = Math.max(1, Math.round(gap / pitch));
+        for (let r = 1; r < rows && ink.length < REGION_LINE_CAP; r++) {
+          const f = r / rows;
+          const pts: Point[] = new Array(m);
+          for (let i = 0; i < m; i++) {
+            const ax = inner[i].x - outer[i].x;
+            const ay = inner[i].y - outer[i].y;
+            const p = { x: outer[i].x + ax * f, y: outer[i].y + ay * f };
+            if (amp > 0) {
+              const al = Math.hypot(ax, ay) || 1;
+              const d = amp * noise.fbm(p.x / lambda, p.y / lambda, 2, 0.5, 2);
+              p.x += (ax / al) * d;
+              p.y += (ay / al) * d;
+            }
+            pts[i] = p;
+          }
+          dashPolyline(densifyRun(pts), false);
+        }
+        break;
+      }
+
       if (region.strataBand) {
         // Onion-skin lamination between the band's bounding curves: interior
         // curves only — the boundaries themselves are the seam edges.
@@ -318,7 +353,8 @@ export function fillRegion(region: Region): RegionFill {
       // the silhouette, with jittered reach — the length scatter is the
       // sparkle. On a non-innermost band the carve clips the fan's middle
       // out, leaving spikes fringing the annulus wall for free. Regions
-      // without silhouette geometry fall back to ruled lines.
+      // without silhouette geometry (the background field, spiral ribbon
+      // cells) fall back to ruled lines.
       if (!region.radial) {
         fillLines();
         break;

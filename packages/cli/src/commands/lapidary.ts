@@ -9,6 +9,9 @@ import {
   type LapidaryTexture,
   type BandTexture,
   type PenAssignment,
+  type SpiralDirection,
+  type SpiralForm,
+  type SpiralJoin,
   type SVGOptions,
 } from '@flow-lines/core';
 import { addTileOptions, resolvePageFrame, writePlotOutput, PAPER_SPEC_HELP } from '../page.js';
@@ -33,9 +36,10 @@ export function registerLapidary(program: Command) {
   addTileOptions(addSketchOptions(program.command('lapidary')))
     .description(
       'Render layered pattern artworks: organic regions — concentric agate ' +
-        'bands, scattered breccia fragments or horizontal strata — each filled ' +
-        'with its own line texture and split by clean reserved-paper seams, ' +
-        'over 1-4 interleaved pens'
+        'bands, scattered breccia fragments, horizontal strata or a spiral ' +
+        'ribbon winding into the centre — each filled with its own line ' +
+        'texture and split by clean reserved-paper seams, over 1-4 ' +
+        'interleaved pens'
     )
     .option('-w, --width <number>', 'Canvas width in pixels (ignored with --paper)', '630')
     .option('-h, --height <number>', 'Canvas height in pixels (ignored with --paper)', '891')
@@ -50,8 +54,11 @@ export function registerLapidary(program: Command) {
       '--preset <name>',
       `Curated look: ${Object.keys(LAPIDARY_PRESETS).join(' | ')} (explicit flags override)`
     )
-    .option('--mode <name>', 'Arrangement: agate | breccia | strata')
-    .option('--bands <number>', 'Region count incl. the background field when present (2-10)')
+    .option('--mode <name>', 'Arrangement: agate | breccia | strata | spiral')
+    .option(
+      '--bands <number>',
+      'Region count incl. the background field when present (2-10); spiral windings in spiral mode'
+    )
     .option(
       '--shapes <style>',
       'Silhouette language: organic | angular | mixed (angular = straight-edged facets/shards; stepped terraces in strata)'
@@ -67,6 +74,31 @@ export function registerLapidary(program: Command) {
     .option('--coverage <number>', 'Outer silhouette size as a fraction of the frame (0.4-1)')
     .option('--center-x <number>', 'Composition centre X offset (-0.5..0.5)')
     .option('--center-y <number>', 'Composition centre Y offset (-0.5..0.5)')
+    .option(
+      '--spiral-form <form>',
+      'Spiral cross-section: circular | rectangular (superellipse coil matching the sheet aspect) | ' +
+        'page (full-bleed — the margin rect itself is the coil, corners included; spiral only)'
+    )
+    .option(
+      '--spiral-direction <dir>',
+      'inward winds from the rim to the centre; outward unwinds from it, loosening toward the edge (spiral only)'
+    )
+    .option(
+      '--spiral-join <join>',
+      'cells (carved reserved-paper seams between ribbon cells) | blend (textures morph seamlessly; spiral only)'
+    )
+    .option(
+      '--spiral-width <number>',
+      'Ribbon width as a fraction of the local winding pitch (0.15-1; at 1 the coil closes up and covers the page; spiral only)'
+    )
+    .option(
+      '--spiral-taper <number>',
+      'Signed width taper toward the leading end (-1..1; positive thins, negative grows; spiral only)'
+    )
+    .option(
+      '--spiral-pulse <number>',
+      'Low-frequency organic width modulation along the arc (0-1, spiral only)'
+    )
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
@@ -178,6 +210,12 @@ export function registerLapidary(program: Command) {
         centerX: options.centerX ? parseFloat(options.centerX) : undefined,
         centerY: options.centerY ? parseFloat(options.centerY) : undefined,
         haloPx: options.halo ? parseFloat(options.halo) : undefined,
+        spiralForm: options.spiralForm as SpiralForm | undefined,
+        spiralDirection: options.spiralDirection as SpiralDirection | undefined,
+        spiralJoin: options.spiralJoin as SpiralJoin | undefined,
+        spiralWidth: options.spiralWidth ? parseFloat(options.spiralWidth) : undefined,
+        spiralTaper: options.spiralTaper ? parseFloat(options.spiralTaper) : undefined,
+        spiralPulse: options.spiralPulse ? parseFloat(options.spiralPulse) : undefined,
         textures,
         baseAngleDeg: options.angle ? parseFloat(options.angle) : undefined,
         angleDriftDeg: options.angleDrift ? parseFloat(options.angleDrift) : undefined,
@@ -231,6 +269,18 @@ export function registerLapidary(program: Command) {
       }
       if (resolvedMode !== 'strata' && options.faults) {
         console.error('Note: faults are strata-only; --faults ignored');
+      }
+      if (resolvedMode !== 'spiral') {
+        const spiralFlags: string[] = [];
+        if (options.spiralForm) spiralFlags.push('--spiral-form');
+        if (options.spiralDirection) spiralFlags.push('--spiral-direction');
+        if (options.spiralJoin) spiralFlags.push('--spiral-join');
+        if (options.spiralWidth) spiralFlags.push('--spiral-width');
+        if (options.spiralTaper) spiralFlags.push('--spiral-taper');
+        if (options.spiralPulse) spiralFlags.push('--spiral-pulse');
+        if (spiralFlags.length > 0) {
+          console.error(`Note: spiral options are spiral-only; ${spiralFlags.join(', ')} ignored`);
+        }
       }
 
       console.log('Rendering lapidary...');

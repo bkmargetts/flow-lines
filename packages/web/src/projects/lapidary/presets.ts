@@ -37,6 +37,12 @@ const PRESET_BASE = {
   waviness: 0.5,
   patchiness: 0.55,
   penAssignment: 'interleave',
+  spiralForm: 'circular',
+  spiralDirection: 'inward',
+  spiralJoin: 'cells',
+  spiralWidth: 0.55,
+  spiralTaper: 0.35,
+  spiralPulse: 0.35,
 } satisfies Partial<LapidaryState>;
 
 export const LAPIDARY_WEB_PRESETS: LapidaryWebPreset[] = [
@@ -117,6 +123,82 @@ export const LAPIDARY_WEB_PRESETS: LapidaryWebPreset[] = [
     },
   },
   {
+    id: 'ammonite',
+    label: 'Ammonite',
+    state: {
+      ...PRESET_BASE,
+      preset: 'ammonite',
+      mode: 'spiral',
+      bands: 6,
+      textureMix: 'ammonite',
+      spiralJoin: 'blend',
+      spiralWidth: 0.62,
+      spiralTaper: 0.45,
+      spiralPulse: 0.5,
+      coverage: 0.94,
+      palette: 'specimen',
+    },
+  },
+  {
+    id: 'labyrinth',
+    label: 'Labyrinth',
+    state: {
+      ...PRESET_BASE,
+      preset: 'labyrinth',
+      mode: 'spiral',
+      bands: 5,
+      shapes: 'angular',
+      spiralForm: 'rectangular',
+      spiralWidth: 0.6,
+      spiralTaper: 0.1,
+      spiralPulse: 0.15,
+      irregularity: 0.35,
+      coverage: 0.95,
+      textureMix: 'shuffle',
+      penAssignment: 'per-region',
+      palette: 'graphite-rust-teal',
+    },
+  },
+  {
+    id: 'coil',
+    label: 'Coil',
+    state: {
+      ...PRESET_BASE,
+      preset: 'coil',
+      mode: 'spiral',
+      bands: 3,
+      field: false,
+      spiralWidth: 1,
+      spiralTaper: 0,
+      spiralPulse: 0.1,
+      coverage: 0.97,
+      irregularity: 0.25,
+      textureMix: 'shuffle',
+      penAssignment: 'per-region',
+      palette: 'graphite-rust-teal',
+    },
+  },
+  {
+    id: 'slab',
+    label: 'Slab',
+    state: {
+      ...PRESET_BASE,
+      preset: 'slab',
+      mode: 'spiral',
+      spiralForm: 'page',
+      bands: 4,
+      field: false,
+      spiralWidth: 0.9,
+      spiralTaper: 0,
+      spiralPulse: 0.05,
+      coverage: 1,
+      irregularity: 0.3,
+      textureMix: 'shuffle',
+      penAssignment: 'per-region',
+      palette: 'graphite-rust-teal',
+    },
+  },
+  {
     id: 'mono',
     label: 'Mono',
     state: {
@@ -140,6 +222,7 @@ const MIXES: LapidaryTextureMix[] = [
   'geode',
   'fortification',
   'facet',
+  'ammonite',
   'linework',
   'tonal',
   'shuffle',
@@ -157,7 +240,9 @@ const MIXES: LapidaryTextureMix[] = [
  * button rolls it), pen width, or wobble.
  */
 export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> {
-  const mode = rng() < 0.5 ? 'agate' : rng() < 0.5 ? 'breccia' : 'strata';
+  const modeRoll = rng();
+  const mode =
+    modeRoll < 0.35 ? 'agate' : modeRoll < 0.6 ? 'breccia' : modeRoll < 0.8 ? 'strata' : 'spiral';
   const pal = rng() < 0.65 ? pick(rng, LAPIDARY_PALETTES) : randomLapidaryPalette(rng);
   const inks = pal.inks;
   const shapesRoll = rng();
@@ -173,6 +258,12 @@ export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> 
     centerY: Number(((rng() - 0.5) * 0.4).toFixed(2)),
     faults: mode === 'strata' ? Math.floor(rng() * 3) : 0,
     veins: mode === 'breccia' && rng() < 0.25,
+    spiralForm: ((r) => (r < 0.5 ? 'circular' : r < 0.8 ? 'rectangular' : 'page'))(rng()),
+    spiralDirection: rng() < 0.7 ? 'inward' : 'outward',
+    spiralJoin: rng() < 0.5 ? 'cells' : 'blend',
+    spiralWidth: Number((0.3 + rng() * 0.7).toFixed(2)),
+    spiralTaper: Number((rng() * 1.6 - 0.8).toFixed(2)),
+    spiralPulse: Number((rng() * 0.9).toFixed(2)),
     haloMm: Number((1.4 + rng() * 1.8).toFixed(1)),
     outlines: rng() < 0.2,
     textureMix: pick(rng, MIXES),

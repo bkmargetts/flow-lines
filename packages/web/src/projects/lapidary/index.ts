@@ -10,7 +10,8 @@ export const lapidaryModule: PureModule<LapidaryState> = {
   id: 'lapidary',
   label: 'Lapidary',
   category: 'textures',
-  description: 'Agate bands, breccia fragments or strata — textured regions split by paper seams',
+  description:
+    'Agate bands, breccia fragments, strata or spirals — textured regions split by paper seams',
   defaultState: () => ({ ...defaultLapidaryState }),
   Controls: LapidaryControls,
   render: renderLapidary,
