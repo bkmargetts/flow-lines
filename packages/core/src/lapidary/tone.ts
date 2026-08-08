@@ -1,6 +1,7 @@
 import { Point } from '../flow-lines.js';
 import type { ToneFn } from '../landscape/hatching.js';
 import { clamp } from '../lib/math.js';
+import { pointInPolygon } from '../lib/polyline.js';
 import { SimplexNoise } from '../noise.js';
 import type { Region, RegionRadial } from './layout.js';
 
@@ -21,19 +22,24 @@ export const TONE_REF = 0.6;
 const TONE_LO = TONE_REF * 0.35;
 const TONE_HI = Math.min(1, TONE_REF * 1.55);
 
-/** Normalized radius inside a table-built silhouette: 0 at the centre, 1 on
- *  the boundary. The interpolated table lookup that three call sites were each
+/** Interpolated per-θ table lookup — the idiom three call sites were each
  *  rolling by hand. */
+function tableAt(table: Float64Array, theta: number): number {
+  const n = table.length;
+  const fi = ((((theta / (Math.PI * 2)) * n) % n) + n) % n;
+  const j = Math.floor(fi);
+  return table[j] + (table[(j + 1) % n] - table[j]) * (fi - j);
+}
+
+/** Normalized radius inside a table-built silhouette: 0 at the centre, 1 on
+ *  the boundary. */
 export function radialRho(f: RegionRadial): (x: number, y: number) => number {
-  const n = f.table.length;
   return (x: number, y: number): number => {
     const ex = (x - f.cx) / f.rx;
     const ey = (y - f.cy) / f.ry;
     const r = Math.hypot(ex, ey);
     if (r === 0) return 0;
-    const fi = ((((Math.atan2(ey, ex) / (Math.PI * 2)) * n) % n) + n) % n;
-    const j = Math.floor(fi);
-    const g = f.table[j] + (f.table[(j + 1) % n] - f.table[j]) * (fi - j);
+    const g = tableAt(f.table, Math.atan2(ey, ex));
     return g > 1e-9 ? r / g : 1;
   };
 }
@@ -75,8 +81,20 @@ function nearestIndex(edge: Point[], x: number, y: number): number {
  */
 export function acrossBandCoord(region: Region): ((x: number, y: number) => number) | null {
   if (region.radial) {
-    const rho = radialRho(region.radial);
-    return (x, y) => clamp(1 - rho(x, y), 0, 1);
+    const f = region.radial;
+    const rho = radialRho(f);
+    const inner = f.innerTable;
+    if (!inner) return (x, y) => clamp(1 - rho(x, y), 0, 1);
+    // Renormalise onto the annulus that survives the carve. Measured across
+    // the whole disc, a ring's drawn band occupies only `across` 0..0.35 or
+    // so, which turned the gradient into a mostly-uniform tone offset.
+    return (x, y) => {
+      const theta = Math.atan2((y - f.cy) / f.ry, (x - f.cx) / f.rx);
+      const outerG = tableAt(f.table, theta);
+      const innerG = tableAt(inner, theta);
+      const rhoInner = outerG > 1e-9 ? clamp(innerG / outerG, 0, 0.98) : 0;
+      return clamp((1 - rho(x, y)) / (1 - rhoInner), 0, 1);
+    };
   }
 
   if (region.strataBand) {
@@ -122,6 +140,13 @@ export function acrossBandCoord(region: Region): ((x: number, y: number) => numb
  * down by hand. The ramp carries a little low-frequency noise so it reads as
  * worked material rather than as a mathematical gradient.
  */
+/** Points sampled over the region to learn how `across` is actually
+ *  distributed there. A ring is a disc, a strata bed is a slab and a spiral
+ *  cell is a curved quad, so `across` is emphatically *not* uniform over any of
+ *  them — normalising against a uniform assumption overshoots as badly as not
+ *  normalising at all undershoots. */
+const AREA_SAMPLES = 512;
+
 export function regionTone(region: Region, noise: SimplexNoise): ToneFn {
   const t = region.tex;
   const across = acrossBandCoord(region);
@@ -131,9 +156,64 @@ export function regionTone(region: Region, noise: SimplexNoise): ToneFn {
   }
   const g = t.gradient;
   const lambda = Math.max(36, t.spacing * 16);
+
+  // Hold the tone field's AREA MEAN on TONE_REF, and a gradation redistributes
+  // ink instead of deleting it.
+  //
+  // Worth spelling out, because the obvious guess is wrong. `sweepHatch` steps
+  // `s += base / meanTone`, so rows crowd where tone is high and the row *count*
+  // follows a harmonic law — but ink is rows times chord length, and
+  // `chord(s) x meanTone(s)` integrates to the tone integral over the area. So
+  // ink is `(1/base) x ∫∫ tone dA` and the invariant is the plain arithmetic
+  // mean over the region. `blueNoiseSeeds` lands a dot density proportional to
+  // tone, giving the same integral, so one normalisation serves both.
+  //
+  // It has to be measured over the region's own geometry, not assumed uniform:
+  // on a disc, area density goes as rho, so `across = 1 - rho` averages 1/3
+  // rather than 1/2 and an un-normalised ramp comes out `1 - g/3` light — which
+  // is the 18% loss that started this.
+  //
+  // Sample the polygon once by area, then iterate on the cached values, since
+  // the clamps make the solve implicit.
+  const ws: number[] = [];
+  {
+    let bx0 = Infinity;
+    let by0 = Infinity;
+    let bx1 = -Infinity;
+    let by1 = -Infinity;
+    for (const p of region.poly) {
+      if (p.x < bx0) bx0 = p.x;
+      if (p.y < by0) by0 = p.y;
+      if (p.x > bx1) bx1 = p.x;
+      if (p.y > by1) by1 = p.y;
+    }
+    // A fixed low-discrepancy lattice, so the factor is deterministic and does
+    // not consume any of the band's seeded stream.
+    const golden = 0.618033988749895;
+    for (let i = 0; i < AREA_SAMPLES; i++) {
+      const u = (i + 0.5) / AREA_SAMPLES;
+      const v = (i * golden) % 1;
+      const x = bx0 + u * (bx1 - bx0);
+      const y = by0 + v * (by1 - by0);
+      if (pointInPolygon(region.poly, x, y)) ws.push(across(x, y));
+    }
+  }
+  const shaped = (w: number, k: number): number =>
+    clamp(TONE_REF * k * (1 + g * (2 * w - 1)), TONE_LO, TONE_HI);
+  let k = 1;
+  if (ws.length > 8) {
+    for (let pass = 0; pass < 4; pass++) {
+      let acc = 0;
+      for (const w of ws) acc += shaped(w, k);
+      const got = acc / ws.length;
+      if (Math.abs(got - TONE_REF) < 1e-4) break;
+      k *= TONE_REF / got;
+    }
+  }
+
   return (x, y) => {
     const ramp = 1 + g * (2 * across(x, y) - 1);
     const grain = 1 + 0.12 * Math.abs(g) * noise.fbm(x / lambda, y / lambda, 2, 0.5, 2);
-    return clamp(TONE_REF * ramp * grain, TONE_LO, TONE_HI);
+    return clamp(TONE_REF * k * ramp * grain, TONE_LO, TONE_HI);
   };
 }

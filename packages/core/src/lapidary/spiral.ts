@@ -8,6 +8,7 @@ import {
   angularBoundaryTable,
   type LapidaryShape,
 } from './shapes.js';
+import { withRealisedAnchor } from './layout.js';
 import type {
   DealState,
   LayoutConfig,
@@ -97,7 +98,7 @@ function spiralBoundaryTable(cfg: LayoutConfig, shape: LapidaryShape): Float64Ar
 export function spiralRegions(
   cfg: LayoutConfig,
   resolve: (cfg: LayoutConfig, z: number, state: DealState, plan: ValuePlan) => ResolvedTexture,
-  buildPlan: (cfg: LayoutConfig, slots: number) => ValuePlan
+  buildPlan: (cfg: LayoutConfig, slots: number, lastDrawnZ: number) => ValuePlan
 ): { regions: Region[]; plan: ValuePlan } {
   const { x0, y0, x1, y1 } = cfg.rect;
   const rx = (x1 - x0) / 2;
@@ -169,7 +170,7 @@ export function spiralRegions(
   const total = cum[cum.length - 1];
   // Degenerate coil: hand back an empty sheet with a plan the caller can
   // still read (the keyline's hero band comes off it).
-  if (!(total > stepPx * 4)) return { regions: [], plan: buildPlan(cfg, 1) };
+  if (!(total > stepPx * 4)) return { regions: [], plan: buildPlan(cfg, 1, 0) };
 
   // ---- Pass 2: ribbon edges. Width = base fraction of the local winding
   // pitch × signed taper (t = arc fraction from the trailing end) × the
@@ -260,7 +261,8 @@ export function spiralRegions(
   // over the slots the coil actually produced — plus slot 0 for the field,
   // which is reserved whether or not the field is drawn so toggling it never
   // reshuffles the cells.
-  const plan = buildPlan(cfg, n + 1);
+  // Cells run z 1..n, so n is the last band that gets drawn.
+  const plan = buildPlan(cfg, n + 1, n);
   const regions: Region[] = [];
   const state: DealState = { prevKind: null, prevKind2: null, prevAngleDeg: null };
   // Resolved whether or not it is drawn — see the same note in `agateRegions`.
@@ -334,5 +336,5 @@ export function spiralRegions(
       seamless: seamless || undefined,
     });
   }
-  return { regions, plan };
+  return { regions, plan: withRealisedAnchor(plan, regions) };
 }

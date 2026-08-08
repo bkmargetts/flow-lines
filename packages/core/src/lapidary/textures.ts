@@ -12,6 +12,7 @@ import { pointInPolygon, trimPolyline } from '../lib/polyline.js';
 import { createNoise } from '../noise.js';
 import { generateOverlappedLines, bandLayerName } from '../overlapped-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
+import { clamp } from '../lib/math.js';
 import { ProximityGrid } from '../lib/spatial.js';
 import { Region, type LapidaryTexture } from './layout.js';
 import { regionTone, TONE_REF } from './tone.js';
@@ -129,10 +130,13 @@ export function fillRegion(region: Region): RegionFill {
   const liftGap = (): number => Math.max(1, (1.8 + rng() * 2) * t.featureScale);
 
   // The patchy gate: hand-sized low-frequency holes (the landscape
-  // makePatchMask idiom — a floor keeps the holes hand-sized even at very
-  // tight pitch, or they shrink to stroke-sized flecks that read as
-  // dropout, not mottling).
-  const patchScale = Math.max(24, t.spacing * 16);
+  // makePatchMask idiom). The floor keeps them hand-sized at very tight pitch,
+  // where they would otherwise shrink to stroke-sized flecks reading as
+  // dropout rather than mottling — and the ceiling does the same job at the
+  // other end. A light band has a wide pitch, and 16 pitches of a wide one is
+  // 40mm of hole: on a full-frame ground that stops reading as mottling and
+  // starts reading as rectangular blocks punched out of the field.
+  const patchScale = clamp(t.spacing * 16, 24, 55 * t.featureScale);
   const patchCut = -1 + t.patchiness * 1.6;
   const patchKeep = (x: number, y: number): boolean =>
     noise.noise2D(x / patchScale, y / patchScale) > patchCut;

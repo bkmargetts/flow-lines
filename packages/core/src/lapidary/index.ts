@@ -586,6 +586,9 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
       // misregistration shift already spent part of the budget, so the rest
       // is what wobble may claim.
       maxDisplacement: haloPx * 0.35 - misregisterPx,
+      // The keyline is the one mark on the sheet drawn with commitment, so
+      // steady its registration as well as its wobble.
+      boldJitterScale: 0.55,
     });
   }
 

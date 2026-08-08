@@ -107,6 +107,17 @@ export interface RegionRadial {
   rx: number;
   ry: number;
   table: Float64Array;
+  /**
+   * The next ring inward, in the same table space — i.e. where this band's ink
+   * actually stops.
+   *
+   * A ring's polygon is the whole *disc*: the annulus only exists because the
+   * carve clips it outside everything above. So anything asking "how far across
+   * this band am I" from `table` alone is measuring across the disc, and on a
+   * log-spaced nest the drawn annulus is only the outer third of that. Absent
+   * on the innermost ring, which really is a disc.
+   */
+  innerTable?: Float64Array;
 }
 
 /** A strata band's bounding curves, index-aligned left→right on the shared
@@ -210,31 +221,53 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
 };
 
 /**
- * Ink coverage each kind delivers at its own baseline pitch
- * (`KIND_SPACING × spacingPx`). The kinds are not interchangeable at equal
- * pitch — a stipple field at the hatch pitch carries a third of its weight —
- * so a plan that wants to compose *value* has to speak in coverage and derive
- * the pitch, not the other way round.
+ * Ink coverage each kind actually delivers at its own baseline pitch
+ * (`KIND_SPACING x spacingPx`), measured rather than estimated:
+ * ink *area* over band area, one kind alone in an uncarved region at
+ * `spacingScale: 1`, `gradation: 0`, `penPx = spacingPx / 4`. Each stroke is
+ * measured as a capsule — `length x pen` plus a round cap — because a stipple
+ * tick is drawn shorter than the pen is wide, so the cap is most of the mark
+ * and counting only `length x pen` under-reports dots threefold.
+ *
+ * These were guessed once and the guesses were wrong by up to 25x *relative to
+ * each other* — stipple was declared 1.4x lighter than `lines` when it is 16x
+ * lighter — so a band asked to be dark and dealt stipple rendered near-blank.
+ * The numbers are only meaningful as a set, and only against the current
+ * `KIND_SPACING` and mark geometry: change either and re-measure. The test
+ * `coverage model matches what the marks deliver` pins them.
  */
 const KIND_VALUE: Record<LapidaryTexture, number> = {
-  lines: 0.3, // dashed and airy — the reference's ruled datum field
-  wavy: 0.42,
-  contour: 0.44,
-  crystal: 0.3, // sparse rays with big paper between them
-  hatch: 0.72,
-  patchy: 0.52, // the gate eats roughly a third of the family
-  cross: 0.66, // two families, the second lightly gated
-  stipple: 0.22,
-  mottle: 0.6, // two interleaved gratings
-  grain: 0.38,
+  lines: 0.165,
+  wavy: 0.24,
+  contour: 0.244,
+  crystal: 0.349,
+  hatch: 0.591,
+  patchy: 0.304,
+  cross: 0.46,
+  stipple: 0.023,
+  mottle: 0.565,
+  grain: 0.174,
   blank: 0,
 };
 
 /**
- * How hard a pitch change moves the value: 1 for a line family (coverage runs
- * as 1/pitch), closer to 2 for fields seeded on a 2-D lattice, where halving
- * the pitch quadruples the marks. Inverting with the wrong exponent overshoots
- * a stipple band straight into a black mass.
+ * The coverage a plan value of 1.0 asks for.
+ *
+ * `KIND_VALUE` is now literal coverage, but the ladder speaks in 0..1, so one
+ * constant maps between them. Set to the ruled field's own figure: the field is
+ * the largest region on the sheet and is dealt `lines` most of the time, so
+ * pinning it here leaves the most visible area drawing exactly as it did and
+ * lets every other kind move by however far its guess was out.
+ */
+const COVERAGE_AT_FULL_VALUE = 0.55;
+
+/**
+ * How hard a pitch change moves the coverage. A line family scales as 1/pitch.
+ * A field of fixed-size dots would scale as 1/pitch squared. Stipple and grain
+ * sit between the two: their seeds are two-dimensional, so the mark count goes
+ * as 1/pitch squared, but their marks also ride the pitch and shrink with it,
+ * which pulls the exponent back down. Measured at the reference pitch, stipple
+ * is roughly 57% cap area and 43% stroke, hence 1.6.
  */
 const KIND_VALUE_EXP: Record<LapidaryTexture, number> = {
   lines: 1,
@@ -245,8 +278,8 @@ const KIND_VALUE_EXP: Record<LapidaryTexture, number> = {
   patchy: 1,
   cross: 1,
   mottle: 1,
-  stipple: 2,
-  grain: 1.7,
+  stipple: 1.6,
+  grain: 1.4,
   blank: 1,
 };
 
@@ -258,18 +291,29 @@ const VALUE_SCALE_MAX = 2.6;
 /** The pitch multiplier that lands `kind` on ink value `target`. */
 export function valueSpacingScale(kind: LapidaryTexture, target: number): number {
   if (kind === 'blank' || target <= 0) return 1;
-  const raw = Math.pow(KIND_VALUE[kind] / Math.max(0.02, target), 1 / KIND_VALUE_EXP[kind]);
+  const want = Math.max(0.005, target * COVERAGE_AT_FULL_VALUE);
+  const raw = Math.pow(KIND_VALUE[kind] / want, 1 / KIND_VALUE_EXP[kind]);
   return clamp(raw, VALUE_SCALE_MIN, VALUE_SCALE_MAX);
 }
 
-/** How honestly `kind` can reach `target` — 1 when its own pitch gets there,
- *  falling off as the clamp starts doing the work instead. The deal uses this
- *  so a near-paper slot is never handed a mottled grating. */
+/**
+ * How honestly `kind` can reach `target` — 1 when its own pitch gets there,
+ * falling off as the clamp starts doing the work instead.
+ *
+ * Deliberately asymmetric. Being clamped at the *tight* end means the mark
+ * cannot get dark enough and the band renders near-blank where the plan wanted
+ * weight — unrecoverable, and the defect this exists to prevent. Being clamped
+ * at the *open* end only means the mark is denser than the slot needs and opens
+ * out sparse, which still reads as marks. So under-delivery is punished hard
+ * and over-delivery only mildly.
+ */
 export function valueFit(kind: LapidaryTexture, target: number): number {
   if (kind === 'blank') return target <= 0.09 ? 1 : 0;
-  const raw = Math.pow(KIND_VALUE[kind] / Math.max(0.02, target), 1 / KIND_VALUE_EXP[kind]);
+  const want = Math.max(0.005, target * COVERAGE_AT_FULL_VALUE);
+  const raw = Math.pow(KIND_VALUE[kind] / want, 1 / KIND_VALUE_EXP[kind]);
   const held = clamp(raw, VALUE_SCALE_MIN, VALUE_SCALE_MAX);
-  return clamp(1 - Math.abs(Math.log(raw / held)) * 1.1, 0.12, 1);
+  if (raw >= held) return clamp(1 - Math.log(raw / held) * 1.1, 0.12, 1);
+  return clamp(1 - Math.log(held / raw) * 3.2, 0.02, 1);
 }
 
 /** Kinds the seeded picker may deal a band (blank and crystal are
@@ -320,6 +364,10 @@ export interface ValuePlan {
   reserve: number;
   /** Whether `reserve` is light enough to be held as bare paper. */
   reserveIsPaper: boolean;
+  /** The highest z that will actually be drawn. `values` is deliberately one
+   *  slot longer in the modes with a field, so role and pin placement have to
+   *  measure against this rather than against `values.length`. */
+  lastDrawnZ: number;
   rhythm: Exclude<LapidaryValueRhythm, 'auto'>;
 }
 
@@ -346,7 +394,7 @@ export function roleFor(z: number, slots: number, fieldSlot: boolean): BandRole 
 /** Compose the sheet's value ladder. All draws come from one dedicated
  *  sub-seed channel, so re-rolling a texture or a silhouette never reshuffles
  *  the tonal composition. */
-export function buildValuePlan(cfg: LayoutConfig, slots: number): ValuePlan {
+export function buildValuePlan(cfg: LayoutConfig, slots: number, lastDrawnZ: number): ValuePlan {
   const rng = makeRandom(subSeed(cfg.seed, 900));
   const n = Math.max(1, slots);
   const structure = clamp(cfg.valueStructure, 0, 1);
@@ -413,13 +461,21 @@ export function buildValuePlan(cfg: LayoutConfig, slots: number): ValuePlan {
   // whole generator is built on, and a field the plan had spent its dark on
   // would leave a `field: false` sheet with no anchor at all. The outermost
   // ring can still carry the dark, which is the same vignette read.
+  //
+  // The upper bound is the last band that will actually be DRAWN, not the last
+  // slot. The ladder is deliberately allocated one slot wider than the drawn
+  // range so its shape does not move when the field is toggled off — which
+  // means the top slot is a phantom whenever the field is on, and searching to
+  // it pinned the sheet's dark to a band nothing renders. That silently cost a
+  // quarter of agate sheets their anchor, and left the keyline with no hero.
   const first = hasFieldSlot(cfg) ? Math.min(1, n - 1) : 0;
+  const last = clamp(lastDrawnZ, first, n - 1);
   let anchor = first;
-  for (let z = first + 1; z < n; z++) if (values[z] > values[anchor]) anchor = z;
+  for (let z = first + 1; z <= last; z++) if (values[z] > values[anchor]) anchor = z;
   values[anchor] = vDark;
 
   let reserve = first;
-  for (let z = first + 1; z < n; z++) if (values[z] < values[reserve]) reserve = z;
+  for (let z = first + 1; z <= last; z++) if (values[z] < values[reserve]) reserve = z;
   if (reserve !== anchor) values[reserve] = vLight;
   else reserve = -1;
 
@@ -455,6 +511,7 @@ export function buildValuePlan(cfg: LayoutConfig, slots: number): ValuePlan {
     // when the ladder is composed hard enough that a paper band reads as the
     // lightest step of a plan rather than as a hole.
     reserveIsPaper: cfg.paperBand && paperRoll && reserve > 0 && structure >= 0.4,
+    lastDrawnZ: last,
     rhythm,
   };
 }
@@ -505,6 +562,9 @@ export interface DealState {
   prevAngleDeg: number | null;
 }
 
+/** Below this `valueFit`, a mark simply cannot reach the value asked of it. */
+const FIT_VETO = 0.15;
+
 /** Marks that carry a lot of incident. Two of these abutting is the mud
  *  complaint — the eye has nowhere quiet to rest between them. */
 const BUSY: ReadonlySet<LapidaryTexture> = new Set<LapidaryTexture>([
@@ -536,11 +596,12 @@ const ROLE_WEIGHT: Record<BandRole, Partial<Record<LapidaryTexture, number>>> = 
  * beside a cross-hatch beside a patchy field — three loud marks at three
  * near-identical weights, which is how a sheet turns to mud.
  *
- * Three things steer it now: what the role wants, whether the kind can
- * honestly reach the value the plan asked for (so a near-paper slot is never
- * handed a grating it would have to be clamped into), and a busy/quiet
- * alternation. All three fade toward the old uniform draw as `valueStructure`
- * goes to 0, so the knob genuinely turns the composition off.
+ * Three things steer it now. What the role wants and a busy/quiet alternation
+ * are *preferences*: they discourage rather than forbid — measured, they take
+ * busy-next-to-busy from 41% of adjacent pairs down to 25% — and both fade to
+ * the old uniform draw as `valueStructure` goes to 0, so the knob genuinely
+ * turns the composition off. Whether the mark can physically reach the value
+ * the plan asked for is not a preference, so it gates the draw at any setting.
  */
 function dealKind(
   cfg: LayoutConfig,
@@ -551,17 +612,38 @@ function dealKind(
 ): LapidaryTexture {
   const strength = clamp(cfg.valueStructure, 0, 1);
   const prev = state.prevKind;
-  const weights = RANDOM_KINDS.map((kind) => {
+  const fits = RANDOM_KINDS.map((kind) => valueFit(kind, value));
+  const weights = RANDOM_KINDS.map((kind, i) => {
     if (kind === prev) return 0;
+    // A hard veto, not a light thumb on the scale: below this the mark cannot
+    // reach the planned value at any pitch a pen can plot, so dealing it here
+    // guarantees a band that renders as near-blank paper where the plan wanted
+    // weight. Better to deal something else.
+    if (fits[i] < FIT_VETO) return 0;
     const roleW = ROLE_WEIGHT[role][kind] ?? 1;
-    const fit = valueFit(kind, value);
     const rest = prev !== null && BUSY.has(kind) === BUSY.has(prev) ? 0.4 : 1;
     // Discourage, don't forbid, coming straight back to the band before last.
     const echo = kind === state.prevKind2 ? 0.45 : 1;
-    return Math.max(1e-4, lerp(1, roleW * fit * rest * echo, strength));
+    // Role and rhythm are preferences and fade out with `valueStructure`.
+    const preference = lerp(1, roleW * rest * echo, strength);
+    // Whether the mark can physically reach the planned value is not a
+    // preference — a stipple field asked to be the sheet's dark cannot become
+    // one at any pitch a pen can plot, it just renders as near-blank paper. So
+    // the fit gates the draw whatever the composition knob says.
+    return Math.max(1e-5, preference * Math.pow(fits[i], 1.6));
   });
   let total = 0;
   for (const w of weights) total += w;
+  // Every kind vetoed (a value nothing can honestly reach): fall back to the
+  // closest fit rather than to an arbitrary one.
+  if (total <= 0) {
+    let best = 0;
+    for (let i = 1; i < RANDOM_KINDS.length; i++) {
+      if (RANDOM_KINDS[i] !== prev && fits[i] > fits[best]) best = i;
+    }
+    return RANDOM_KINDS[best];
+  }
+  // One draw, at the same position in the stream the uniform pick used.
   let pick = rng() * total;
   for (let i = 0; i < RANDOM_KINDS.length; i++) {
     pick -= weights[i];
@@ -584,9 +666,8 @@ export function resolveTexture(
   plan: ValuePlan
 ): ResolvedTexture {
   const rng = makeRandom(subSeed(cfg.seed, 200 + z));
-  const slots = plan.values.length;
-  const planned = plan.values[Math.min(z, slots - 1)];
-  const role = roleFor(z, slots, hasFieldSlot(cfg));
+  const planned = plan.values[Math.min(z, plan.values.length - 1)];
+  const role = roleFor(z, plan.lastDrawnZ + 1, hasFieldSlot(cfg));
   // densityContrast is no longer the value model — it is how far this seed is
   // allowed to wander off the composition. Always consumed, so pinning a
   // band's spacingScale no longer shifts its own phase draw.
@@ -611,11 +692,13 @@ export function resolveTexture(
   // previous band. A free ±drift draw kept landing neighbours a degree or two
   // apart, which reads as one direction badly held rather than two decisions,
   // and it was the main reason a five-band sheet could look like one texture.
-  // The quantum is ignored when it is coarser than the whole budget, so a
-  // deliberately tight drift still varies.
-  const quantum = cfg.angleQuantumDeg > 0 && cfg.angleDriftDeg >= cfg.angleQuantumDeg
-    ? cfg.angleQuantumDeg
-    : 0;
+  // A quantum coarser than the whole drift budget is clamped down to it rather
+  // than switched off: set coarser than the budget it used to go silently dead,
+  // which at the default 25° drift made a third of the slider a no-op.
+  const quantum =
+    cfg.angleQuantumDeg > 0 && cfg.angleDriftDeg > 0
+      ? Math.min(cfg.angleQuantumDeg, cfg.angleDriftDeg)
+      : 0;
   let drift = z === 0 ? 0 : (rng() * 2 - 1) * cfg.angleDriftDeg;
   if (quantum > 0) drift = Math.round(drift / quantum) * quantum;
   let angleDeg = spec.angleDeg ?? cfg.baseAngleDeg + drift;
@@ -715,7 +798,14 @@ function agateRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
   advance(fieldTex);
   if (cfg.field) regions.push({ z: 0, poly: rectPolygon(cfg.rect), tex: fieldTex });
   tables.forEach((g, i) =>
-    push(i + 1, ringPolygon(cx, cy, halfW, halfH, g), { cx, cy, rx: halfW, ry: halfH, table: g })
+    push(i + 1, ringPolygon(cx, cy, halfW, halfH, g), {
+      cx,
+      cy,
+      rx: halfW,
+      ry: halfH,
+      table: g,
+      innerTable: tables[i + 1],
+    })
   );
   return regions;
 }
@@ -724,7 +814,10 @@ function agateRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
  *  confetti and the halo carve cost grows for nothing. */
 const BRECCIA_CAP = 14;
 
-function brecciaRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
+function brecciaRegions(
+  cfg: LayoutConfig,
+  buildPlan: (lastDrawnZ: number) => ValuePlan
+): { regions: Region[]; plan: ValuePlan } {
   const { x0, y0, x1, y1 } = cfg.rect;
   const halfW = (x1 - x0) / 2;
   const halfH = (y1 - y0) / 2;
@@ -787,6 +880,7 @@ function brecciaRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
     if (rx < cfg.haloPx || ry < cfg.haloPx) continue;
     frags.push({ cx, cy, rx, ry, seed: fragSeed });
   }
+  const plan = buildPlan(frags.length);
   const regions: Region[] = [];
   const state: DealState = { prevKind: null, prevKind2: null, prevAngleDeg: null };
   const advance = (tex: ResolvedTexture): void => {
@@ -818,7 +912,7 @@ function brecciaRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
       table,
     });
   });
-  return regions;
+  return { regions, plan };
 }
 
 function strataRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
@@ -875,6 +969,24 @@ function strataRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
   return regions;
 }
 
+/**
+ * Re-point the plan's anchor at a band that was actually built.
+ *
+ * The predicted range is not enough on its own: `nestedRingTables` stops early
+ * when a ring collapses on hostile geometry, so the realised band count can
+ * fall short of what the plan was told to expect. The anchor is only read
+ * after the fact (as the keyline's hero band), so deriving it from the built
+ * list is both cheap and impossible to get wrong.
+ */
+export function withRealisedAnchor(plan: ValuePlan, regions: Region[]): ValuePlan {
+  const shapes = regions.filter((r) => r.z > 0);
+  const pool = shapes.length > 0 ? shapes : regions;
+  if (pool.length === 0) return plan;
+  let anchor = pool[0];
+  for (const r of pool) if (r.tex.value > anchor.tex.value) anchor = r;
+  return anchor.z === plan.anchor ? plan : { ...plan, anchor: anchor.z };
+}
+
 /** Build the mode's region list. Strata partitions the sheet with geometric
  *  seam gaps already built into the polygons; the other modes rely on the
  *  z-order halo carve. */
@@ -892,12 +1004,18 @@ export function buildRegions(cfg: LayoutConfig): {
   // Slot 0 is the field's whether or not it is drawn, and the shape bands
   // number from 1, so the ladder spans `bands + 1` slots in the modes that
   // have a field. Strata has none — it partitions the whole sheet.
-  const plan = buildValuePlan(cfg, cfg.mode === 'strata' ? cfg.bands : cfg.bands + 1);
+  const strata = cfg.mode === 'strata';
+  const slots = strata ? cfg.bands : cfg.bands + 1;
   if (cfg.mode === 'breccia') {
-    return { regions: brecciaRegions(cfg, plan), geometricGaps: false, plan };
+    const built = brecciaRegions(cfg, (lastDrawnZ) => buildValuePlan(cfg, slots, lastDrawnZ));
+    return {
+      regions: built.regions,
+      geometricGaps: false,
+      plan: withRealisedAnchor(built.plan, built.regions),
+    };
   }
-  if (cfg.mode === 'strata') {
-    return { regions: strataRegions(cfg, plan), geometricGaps: true, plan };
-  }
-  return { regions: agateRegions(cfg, plan), geometricGaps: false, plan };
+  const lastDrawn = strata ? cfg.bands - 1 : cfg.field ? cfg.bands - 1 : cfg.bands;
+  const plan = buildValuePlan(cfg, slots, lastDrawn);
+  const regions = strata ? strataRegions(cfg, plan) : agateRegions(cfg, plan);
+  return { regions, geometricGaps: strata, plan: withRealisedAnchor(plan, regions) };
 }

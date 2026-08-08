@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateLapidary, LAPIDARY_PRESETS, VEIN_LAYER } from './lapidary/index.js';
-import { buildRegions, TUNING_DIM, type LayoutConfig } from './lapidary/layout.js';
+import { buildRegions, TUNING_DIM, valueFit, type LayoutConfig } from './lapidary/layout.js';
 import { inkLayerName } from './marbling/index.js';
 import type { LapidaryMode } from './lapidary/index.js';
 
@@ -272,39 +272,216 @@ describe('generateLapidary', () => {
     expect(handDrawn).toBe(steady);
   });
 
-  it('composes a value ladder with a dark anchor and separated neighbours', () => {
-    // The plan is the whole point of the generator now: a sheet without a
-    // dark to hang on, or with two neighbours at the same weight, is the
-    // undifferentiated read this replaced.
-    for (const seed of [1, 7, 42, 99, 1337]) {
-      const { plan } = buildRegions(layoutFor({ seed, bands: 6 }));
-      expect(plan.values.length).toBe(7);
-      expect(plan.anchor).toBeGreaterThan(0);
-      expect(Math.max(...plan.values)).toBeGreaterThan(0.5);
-      expect(plan.values[plan.anchor]).toBe(Math.max(...plan.values));
-      // The full-frame ground never carries the sheet's weight.
-      expect(plan.values[0]).toBeLessThanOrEqual(0.42);
-      for (let z = 1; z < plan.values.length; z++) {
-        expect(Math.abs(plan.values[z] - plan.values[z - 1])).toBeGreaterThan(0.02);
+  it('pins the dark anchor and the paper reserve to bands that are DRAWN', () => {
+    // The guarantee that matters is about the drawing, not about the plan
+    // object. Asserting `plan.anchor` against `plan.values` is exactly what let
+    // the anchor sit on a phantom slot on a quarter of agate sheets: the ladder
+    // is deliberately one slot wider than the drawn range so its shape survives
+    // the field being toggled off, and nothing checked the pins landed inside
+    // that range.
+    for (const mode of MODES) {
+      for (const field of [true, false]) {
+        for (const seed of [1, 7, 42, 99, 1337]) {
+          const { regions, plan } = buildRegions(layoutFor({ seed, mode, field, bands: 6 }));
+          if (regions.length === 0) continue;
+          const drawn = new Set(regions.map((r) => r.z));
+          expect(drawn.has(plan.anchor), `${mode}/${field}/${seed} anchor`).toBe(true);
+          if (plan.reserve >= 0) {
+            expect(drawn.has(plan.reserve), `${mode}/${field}/${seed} reserve`).toBe(true);
+          }
+          // And a drawn band really does carry the sheet's weight.
+          const darkest = Math.max(...regions.map((r) => r.tex.value));
+          expect(darkest, `${mode}/${field}/${seed} darkest`).toBeGreaterThan(0.5);
+          // The full-frame ground is a ground, never the subject. The plan
+          // caps it at 0.42; `densityContrast` is then allowed to wander the
+          // realised value up to 1.18x off the plan, which is what that knob
+          // is for.
+          const ground = regions.find((r) => r.z === 0 && mode !== 'strata');
+          if (ground) expect(ground.tex.value).toBeLessThanOrEqual(0.42 * 1.18);
+        }
       }
     }
   });
 
-  it('the value plan does not move when the field is merely undrawn', () => {
-    // Slot 0 belongs to the ground whether or not it is drawn, so `field`
-    // toggles what is on the page, never what the shapes were dealt.
-    const withField = buildRegions(layoutFor({ field: true, bands: 6 }));
-    const without = buildRegions(layoutFor({ field: false, bands: 6 }));
-    expect(without.plan.values).toEqual(withField.plan.values);
-    const shapesOf = (r: typeof withField) =>
-      r.regions
-        .filter((x) => x.z > 0)
-        .map((x) => `${x.z}:${x.tex.kind}:${x.tex.spacing.toFixed(4)}:${x.tex.angleDeg.toFixed(4)}`);
-    // The ring count differs by one (the field's slot frees a ring), so
-    // compare the bands they share.
-    const a = shapesOf(withField);
-    const b = shapesOf(without);
-    expect(b.slice(0, a.length)).toEqual(a);
+  it('the coverage model matches what the marks actually deliver', () => {
+    // The value plan is only as honest as this table: it states the ink each
+    // kind lays down at its own baseline pitch, and every pitch on the sheet is
+    // derived from it. The first version was estimated and was out by 25x
+    // relative across kinds, so a band asked to be dark and dealt stipple
+    // rendered as near-blank paper.
+    //
+    // Ink is measured as AREA — each stroke a capsule of `length x pen` plus a
+    // round cap — because a stipple tick is drawn shorter than the pen is wide,
+    // and counting only `length x pen` under-reports dots threefold.
+    const W = 600;
+    const M = 40;
+    const PEN = 1;
+    const declared: Record<string, number> = {
+      lines: 0.165,
+      wavy: 0.24,
+      contour: 0.244,
+      crystal: 0.349,
+      hatch: 0.591,
+      patchy: 0.304,
+      cross: 0.46,
+      stipple: 0.023,
+      mottle: 0.565,
+      grain: 0.174,
+    };
+    for (const [kind, want] of Object.entries(declared)) {
+      const textures = [{ kind, spacingScale: 1 }] as never;
+      const r = generateLapidary({
+        width: W,
+        height: W,
+        margin: M,
+        seed: 11,
+        bands: 1,
+        field: false,
+        coverage: 1,
+        irregularity: 0,
+        textures,
+        gradation: 0,
+        wobble: 0,
+        optimize: false,
+        penPx: PEN,
+      });
+      const { regions } = buildRegions(
+        layoutFor({
+          rect: { x0: M, y0: M, x1: W - M, y1: W - M },
+          seed: 11,
+          bands: 1,
+          field: false,
+          coverage: 1,
+          irregularity: 0,
+          spacingPx: (W - 2 * M) / 150,
+          angleDriftDeg: 0,
+          densityContrast: 0,
+          gradation: 0,
+          valueRhythm: 'flat',
+          paperBand: false,
+          featureScale: (W - 2 * M) / TUNING_DIM,
+          textures,
+        })
+      );
+      const poly = regions[0].poly;
+      let a2 = 0;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        a2 += poly[j].x * poly[i].y - poly[i].x * poly[j].y;
+      }
+      const bandArea = Math.abs(a2) / 2;
+      let ink = 0;
+      for (const l of r.lines) {
+        for (let i = 1; i < l.points.length; i++) {
+          ink +=
+            Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y) * PEN;
+        }
+        ink += Math.PI * (PEN / 2) * (PEN / 2);
+      }
+      const ratio = ink / bandArea / want;
+      expect(ratio, `${kind} declared ${want}`).toBeGreaterThan(0.8);
+      expect(ratio, `${kind} declared ${want}`).toBeLessThan(1.25);
+    }
+  });
+
+  it('gradation redistributes ink across a band rather than deleting it', () => {
+    // A graded band used to come out 18% lighter than a flat one, because the
+    // tone field's mean over the region's own geometry sagged: on a disc, area
+    // density rises with radius, so an `across` ramp centred at 0.5 averages to
+    // a third rather than a half.
+    const inkOf = (gradation: number): number => {
+      const r = generateLapidary({
+        width: 384,
+        height: 570,
+        margin: 30,
+        seed: 7,
+        bands: 2,
+        field: false,
+        textures: [{ kind: 'hatch' as const }],
+        gradation,
+        wobble: 0,
+        optimize: false,
+      });
+      let t = 0;
+      for (const l of r.lines) {
+        for (let i = 1; i < l.points.length; i++) {
+          t += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+        }
+      }
+      return t;
+    };
+    const flat = inkOf(0);
+    for (const g of [0.25, 0.45, 0.7, 1]) {
+      const ratio = inkOf(g) / flat;
+      expect(ratio, `gradation ${g}`).toBeGreaterThan(0.94);
+      expect(ratio, `gradation ${g}`).toBeLessThan(1.06);
+    }
+  });
+
+  it('never deals a band a mark that cannot reach the value asked of it', () => {
+    for (const mode of MODES) {
+      for (let seed = 0; seed < 40; seed++) {
+        const { regions } = buildRegions(layoutFor({ seed, mode, bands: 6 }));
+        for (const r of regions) {
+          if (r.tex.kind === 'blank') continue;
+          expect(
+            valueFit(r.tex.kind, r.tex.value),
+            `${mode}/${seed} z${r.z} ${r.tex.kind} @ ${r.tex.value.toFixed(2)}`
+          ).toBeGreaterThanOrEqual(0.15);
+        }
+      }
+    }
+  });
+
+  it('every knob changes the drawing', () => {
+    // The harness that caught `outlineWeight` doing nothing at all: a knob
+    // wired through core, the web module, the CLI and the genome, with a
+    // completely inert code path behind it.
+    const B = {
+      width: 384,
+      height: 570,
+      margin: 30,
+      seed: 7,
+      bands: 6,
+      pens: 2,
+      wobble: 0,
+      optimize: false,
+    };
+    const knobs: Array<[string, unknown, unknown, object]> = [
+      ['valueStructure', 0, 1, {}],
+      ['valueRhythm', 'dark-core', 'dark-rim', {}],
+      ['paperBand', true, false, {}],
+      ['gradation', 0, 1, {}],
+      ['angleQuantumDeg', 0, 15, {}],
+      ['misregistration', 0, 1, {}],
+      ['outlineWeight', 0, 1, { outlines: true }],
+      ['penPx', 0.4, 4, {}],
+    ];
+    for (const [key, a, b, extra] of knobs) {
+      const ja = JSON.stringify(generateLapidary({ ...B, ...extra, [key]: a } as never).lines);
+      const jb = JSON.stringify(generateLapidary({ ...B, ...extra, [key]: b } as never).lines);
+      expect(ja, `${key} is inert`).not.toEqual(jb);
+    }
+  });
+
+  it('the angle quantum stays live across its whole range', () => {
+    // A quantum coarser than the drift budget used to switch itself off, so
+    // above 25 the slider silently did nothing at the default drift.
+    const B = {
+      width: 384,
+      height: 570,
+      margin: 30,
+      seed: 7,
+      bands: 6,
+      wobble: 0,
+      optimize: false,
+    };
+    const free = JSON.stringify(generateLapidary({ ...B, angleQuantumDeg: 0 }).lines);
+    for (const q of [10, 15, 25, 35, 45]) {
+      expect(
+        JSON.stringify(generateLapidary({ ...B, angleQuantumDeg: q }).lines),
+        `quantum ${q} is inert`
+      ).not.toEqual(free);
+    }
   });
 
   it('holds neighbouring bands apart in direction', () => {

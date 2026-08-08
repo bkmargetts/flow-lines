@@ -30,6 +30,18 @@ export interface HandDrawnOptions {
    * back into a reserved gap. Unset = uncapped (the historical behavior).
    */
   maxDisplacement?: number;
+  /**
+   * Extra steadiness for `pen: 'bold'` strokes' whole-stroke misregistration,
+   * 0..1 (default 1 — unchanged).
+   *
+   * Bold strokes already get a calmer wobble, but the rigid per-stroke offset
+   * below is applied at full strength regardless of pen, so a bold line ends up
+   * only about 13% steadier overall rather than the 45% the wobble scale
+   * suggests. Generators that lean on `pen: 'bold'` for a confident keyline can
+   * damp the offset too; left at 1 every existing caller draws exactly as
+   * before.
+   */
+  boldJitterScale?: number;
 }
 
 /**
@@ -81,8 +93,9 @@ export function applyHandDrawnStyle(
       layerScale *
       (0.7 + 0.6 * (noise.noise2D(track, -7.3) * 0.5 + 0.5));
 
-    const offsetX = jitter * layerScale * noise.noise2D(track, 11.7);
-    const offsetY = jitter * layerScale * noise.noise2D(track, 23.1);
+    const boldJitter = line.pen === 'bold' ? (options.boldJitterScale ?? 1) : 1;
+    const offsetX = jitter * layerScale * boldJitter * noise.noise2D(track, 11.7);
+    const offsetY = jitter * layerScale * boldJitter * noise.noise2D(track, 23.1);
 
     const points: Point[] = new Array(line.points.length);
     let arc = 0;
