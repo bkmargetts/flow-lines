@@ -22,6 +22,7 @@ const TEXTURE_MIXES: Record<
   geode: LAPIDARY_PRESETS.geode.textures!,
   fortification: LAPIDARY_PRESETS.fortification.textures!,
   facet: LAPIDARY_PRESETS.facet.textures!,
+  ammonite: LAPIDARY_PRESETS.ammonite.textures!,
   linework: [
     { kind: 'lines', spacingScale: 1.1 },
     { kind: 'wavy', spacingScale: 0.8 },
@@ -74,6 +75,12 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     centerY: state.centerY,
     faults: state.faults,
     veins: state.veins,
+    spiralForm: state.spiralForm,
+    spiralDirection: state.spiralDirection,
+    spiralJoin: state.spiralJoin,
+    spiralWidth: state.spiralWidth,
+    spiralTaper: state.spiralTaper,
+    spiralPulse: state.spiralPulse,
 
     haloPx: state.haloMm * mm,
     outlines: state.outlines,

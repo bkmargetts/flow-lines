@@ -173,6 +173,19 @@ for (const [id, patch] of Object.entries(PRESET_VARIANTS)) {
       stateFor(lapidary, { field: false, shapes: 'angular', textureMix: 'facet', irregularity: 0.7 }),
       env
     );
+  // The spiral arrangement through the web passthrough: rectangular form +
+  // blend join pins the seamless-cell carve path and the new state fields.
+  CASES['lapidary/spiral'] = () =>
+    lapidary.render(
+      stateFor(lapidary, {
+        mode: 'spiral',
+        spiralForm: 'rectangular',
+        spiralJoin: 'blend',
+        spiralDirection: 'outward',
+        textureMix: 'shuffle',
+      }),
+      env
+    );
 }
 
 // One small stack through the compositor: a texture under two generative

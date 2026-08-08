@@ -143,6 +143,12 @@ CASES['lapidary/palette'] = [
   '--palette', 'graphite-rust-teal',
 ];
 CASES['lapidary/faults'] = ['lapidary', ...SIZE, ...SEED, '--mode', 'strata', '--faults', '2'];
+CASES['lapidary/ammonite'] = ['lapidary', ...SIZE, ...SEED, '--preset', 'ammonite'];
+CASES['lapidary/spiral-flags'] = [
+  'lapidary', ...SIZE, ...SEED, '--mode', 'spiral', '--spiral-form', 'rectangular',
+  '--spiral-direction', 'outward', '--spiral-join', 'blend', '--spiral-width', '0.4',
+  '--spiral-taper', '-0.5', '--spiral-pulse', '0.8', '--shapes', 'angular', '--pens', '2',
+];
 // Paper-size page path (the block repeated across commands) + hand-drawn wobble.
 CASES['botanical/paper-a5'] = ['botanical', ...SEED, '--paper', 'a5', ...BOTANICAL_SPECIES.fern];
 CASES['landscape/paper-a5'] = ['landscape', ...SEED, '--paper', 'a5', '--scene', 'rolling-hills'];

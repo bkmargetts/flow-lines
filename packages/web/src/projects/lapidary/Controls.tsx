@@ -1,4 +1,11 @@
-import type { LapidaryMode, LapidaryShapes, PenAssignment } from '@flow-lines/core';
+import type {
+  LapidaryMode,
+  LapidaryShapes,
+  PenAssignment,
+  SpiralDirection,
+  SpiralForm,
+  SpiralJoin,
+} from '@flow-lines/core';
 import { ColorField } from '../../components/ColorField';
 import { AdvancedSection, AdvGroup } from '../../components/controls/AdvancedSection';
 import { PresetPicker } from '../../components/controls/PresetPicker';
@@ -32,6 +39,7 @@ const MIX_LABELS: Record<LapidaryTextureMix, string> = {
   geode: 'Geode (cross · stipple · paper band)',
   fortification: 'Fortification (concentric banding)',
   facet: 'Facet (hatch · lines · cross)',
+  ammonite: 'Ammonite (contour-led lamination)',
   linework: 'Linework (lines & waves only)',
   tonal: 'Tonal (hatch · mottle · stipple)',
   shuffle: 'Shuffle (seeded deal)',
@@ -84,6 +92,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
 
   const strata = state.mode === 'strata';
   const breccia = state.mode === 'breccia';
+  const spiral = state.mode === 'spiral';
 
   return (
     <div className="controls">
@@ -113,6 +122,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
           <option value="agate">Agate — concentric bands</option>
           <option value="breccia">Breccia — scattered fragments</option>
           <option value="strata">Strata — horizontal beds</option>
+          <option value="spiral">Spiral — winding ribbon</option>
         </select>
       </label>
 
@@ -128,7 +138,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         </select>
       </label>
 
-      <Slider label="Bands" value={state.bands} min={2} max={10} step={1} onChange={(v) => update({ bands: v })} format={(v) => `${Math.round(v)}`} />
+      <Slider label={spiral ? 'Turns' : 'Bands'} value={state.bands} min={2} max={10} step={1} onChange={(v) => update({ bands: v })} format={(v) => `${Math.round(v)}`} />
       <Slider label="Irregularity" value={state.irregularity} min={0} max={1} step={0.01} onChange={(v) => update({ irregularity: v })} format={(v) => `${Math.round(v * 100)}%`} />
       {!strata && (
         <>
@@ -138,6 +148,43 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
       )}
       {strata && (
         <Slider label="Faults" value={state.faults} min={0} max={4} step={1} onChange={(v) => update({ faults: v })} format={(v) => `${Math.round(v)}`} />
+      )}
+      {spiral && (
+        <>
+          <label className="field">
+            <span>Spiral form</span>
+            <select
+              value={state.spiralForm}
+              onChange={(e) => update({ spiralForm: e.target.value as SpiralForm })}
+            >
+              <option value="circular">Circular coil</option>
+              <option value="rectangular">Rectangular coil</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Direction</span>
+            <select
+              value={state.spiralDirection}
+              onChange={(e) => update({ spiralDirection: e.target.value as SpiralDirection })}
+            >
+              <option value="inward">Inward — winds to the centre</option>
+              <option value="outward">Outward — unwinds from it</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Pattern join</span>
+            <select
+              value={state.spiralJoin}
+              onChange={(e) => update({ spiralJoin: e.target.value as SpiralJoin })}
+            >
+              <option value="cells">Subdivided — carved seams</option>
+              <option value="blend">Blended — patterns morph</option>
+            </select>
+          </label>
+          <Slider label="Ribbon width" value={state.spiralWidth} min={0.15} max={0.9} step={0.01} onChange={(v) => update({ spiralWidth: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Taper" value={state.spiralTaper} min={-1} max={1} step={0.01} onChange={(v) => update({ spiralTaper: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Width pulse" value={state.spiralPulse} min={0} max={1} step={0.01} onChange={(v) => update({ spiralPulse: v })} format={(v) => `${Math.round(v * 100)}%`} />
+        </>
       )}
 
       <h3 className="section-title">Marks</h3>

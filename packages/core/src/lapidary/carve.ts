@@ -101,7 +101,10 @@ export function carveRegions(
     let drawn =
       cfg.outlines && region.z > 0 ? [...ink, ...outlineLines(region, cfg.featureScale)] : ink;
     if (!cfg.geometricGaps) {
-      if (accHasInk && drawn.length > 0) {
+      // Seamless regions (blend-joined spiral cells) still stamp coverage —
+      // the field below carves around them — but are never clipped
+      // themselves, so abutting cells meet edge to edge with no seam.
+      if (accHasInk && drawn.length > 0 && !region.seamless) {
         drawn = clipLinesToMask(drawn, acc!.mask, {
           mode: 'outside',
           // Dust filter, sized to the texture: sliver hatch ticks at the seam

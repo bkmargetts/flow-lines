@@ -9,9 +9,24 @@ import {
   strataCurves,
   type LapidaryShape,
 } from './shapes.js';
+import { spiralRegions } from './spiral.js';
 
-export type LapidaryMode = 'agate' | 'breccia' | 'strata';
+export type LapidaryMode = 'agate' | 'breccia' | 'strata' | 'spiral';
 export type { LapidaryShape } from './shapes.js';
+
+/** Spiral cross-section: a round coil, or a superellipse coil that squares
+ *  off toward the page corners (matching the sheet's aspect). */
+export type SpiralForm = 'circular' | 'rectangular';
+
+/** Which end of the ribbon leads: 'inward' winds from the rim into the
+ *  centre (the taper thins and the deal runs toward the core); 'outward'
+ *  unwinds from the centre, loosening toward the page edge. */
+export type SpiralDirection = 'inward' | 'outward';
+
+/** How the ribbon's patterns meet: 'cells' chops it into segments separated
+ *  by carved reserved-paper seams; 'blend' lets abutting segments' textures
+ *  morph into one another with no seam between them. */
+export type SpiralJoin = 'cells' | 'blend';
 
 /** Sheet-wide silhouette language; 'mixed' deals organic/angular per band. */
 export type LapidaryShapes = LapidaryShape | 'mixed';
@@ -86,14 +101,27 @@ export interface RegionStrataBand {
   bottom: Point[];
 }
 
+/** A spiral cell's bounding edges, index-aligned along the ribbon's walk
+ *  direction — the curved analogue of a strata band's top/bottom, so
+ *  silhouette-following fills can laminate between them. */
+export interface RegionRibbon {
+  outer: Point[];
+  inner: Point[];
+}
+
 /** One drawable region: a closed silhouette plus its resolved texture.
- *  Higher z = drawn on top; lower-z ink is carved away around it. */
+ *  Higher z = drawn on top; lower-z ink is carved away around it.
+ *  `seamless` regions still stamp the avoid mask (so lower layers carve
+ *  around them) but are never clipped themselves — abutting blend cells
+ *  meet edge to edge instead of opening a seam. */
 export interface Region {
   z: number;
   poly: Point[];
   tex: ResolvedTexture;
   radial?: RegionRadial;
   strataBand?: RegionStrataBand;
+  ribbon?: RegionRibbon;
+  seamless?: boolean;
 }
 
 export interface LayoutConfig {
@@ -119,6 +147,18 @@ export interface LayoutConfig {
   patchiness: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
+  /** Spiral cross-section form (spiral only). */
+  spiralForm: SpiralForm;
+  /** Which end of the spiral ribbon leads (spiral only). */
+  spiralDirection: SpiralDirection;
+  /** Carved cell seams vs seamless texture morphing (spiral only). */
+  spiralJoin: SpiralJoin;
+  /** Ribbon width as a fraction of the local winding pitch, 0.15..0.9. */
+  spiralWidth: number;
+  /** Signed taper toward the leading end, -1..1. */
+  spiralTaper: number;
+  /** Low-frequency width modulation along the arc, 0..1. */
+  spiralPulse: number;
   /** sizingDim / TUNING_DIM — see `TUNING_DIM`. */
   featureScale: number;
 }
@@ -166,7 +206,11 @@ const RANDOM_KINDS: LapidaryTexture[] = [
  * adjacent bands. Every random draw comes from this band's own sub-seeded
  * stream, so re-rolling one knob never reshuffles a sibling band.
  */
-function resolveTexture(cfg: LayoutConfig, z: number, prevKind: LapidaryTexture | null): ResolvedTexture {
+export function resolveTexture(
+  cfg: LayoutConfig,
+  z: number,
+  prevKind: LapidaryTexture | null
+): ResolvedTexture {
   const rng = makeRandom(subSeed(cfg.seed, 200 + z));
   let spec: BandTexture;
   if (cfg.textures && cfg.textures.length > 0) {
@@ -410,5 +454,6 @@ function strataRegions(cfg: LayoutConfig): Region[] {
 export function buildRegions(cfg: LayoutConfig): { regions: Region[]; geometricGaps: boolean } {
   if (cfg.mode === 'breccia') return { regions: brecciaRegions(cfg), geometricGaps: false };
   if (cfg.mode === 'strata') return { regions: strataRegions(cfg), geometricGaps: true };
+  if (cfg.mode === 'spiral') return { regions: spiralRegions(cfg, resolveTexture), geometricGaps: false };
   return { regions: agateRegions(cfg), geometricGaps: false };
 }

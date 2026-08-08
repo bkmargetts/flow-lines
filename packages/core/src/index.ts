@@ -232,6 +232,9 @@ export type {
   LapidaryShapes,
   BandTexture,
   PenAssignment,
+  SpiralForm,
+  SpiralDirection,
+  SpiralJoin,
 } from './lapidary/index.js';
 
 // Harmonograph / guilloché (damped pendulums, spirograph wheels, engine turning)

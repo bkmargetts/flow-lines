@@ -1,4 +1,11 @@
-import type { LapidaryMode, LapidaryShapes, PenAssignment } from '@flow-lines/core';
+import type {
+  LapidaryMode,
+  LapidaryShapes,
+  PenAssignment,
+  SpiralDirection,
+  SpiralForm,
+  SpiralJoin,
+} from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /** Which curated band-texture sequence the sheet deals outer→inner.
@@ -8,6 +15,7 @@ export type LapidaryTextureMix =
   | 'geode'
   | 'fortification'
   | 'facet'
+  | 'ammonite'
   | 'linework'
   | 'tonal'
   | 'shuffle';
@@ -20,6 +28,8 @@ export type LapidaryLook =
   | 'breccia'
   | 'terraces'
   | 'facet'
+  | 'ammonite'
+  | 'labyrinth'
   | 'mono'
   | 'custom';
 
@@ -43,6 +53,12 @@ export interface LapidaryState {
   centerY: number;
   faults: number; // 0..4 vertical fault planes (strata only)
   veins: boolean; // trace fragment seams on the vein accent pen (breccia only)
+  spiralForm: SpiralForm; // round vs squared-off coil (spiral only)
+  spiralDirection: SpiralDirection; // winds to the centre vs unwinds from it
+  spiralJoin: SpiralJoin; // carved cell seams vs seamless pattern morphing
+  spiralWidth: number; // 0.15..0.9 of the local winding pitch
+  spiralTaper: number; // -1..1 signed taper toward the leading end
+  spiralPulse: number; // 0..1 organic width modulation along the arc
 
   // Seams
   haloMm: number; // reserved-paper seam width
@@ -88,6 +104,12 @@ export const defaultLapidaryState: LapidaryState = {
   centerY: 0,
   faults: 0,
   veins: false,
+  spiralForm: 'circular',
+  spiralDirection: 'inward',
+  spiralJoin: 'cells',
+  spiralWidth: 0.55,
+  spiralTaper: 0.35,
+  spiralPulse: 0.35,
 
   haloMm: 2.2,
   outlines: false,
