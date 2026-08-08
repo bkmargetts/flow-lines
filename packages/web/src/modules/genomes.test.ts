@@ -250,7 +250,6 @@ const SPECS: GenomeSpec[] = [
       spiralPulse: [0, 1],
       valueStructure: [0, 1],
       gradation: [0, 1],
-      fieldEdge: [0, 1],
       outlineWeight: [0, 1],
       angleQuantumDeg: [0, 45],
       misregistration: [0, 1],

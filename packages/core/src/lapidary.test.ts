@@ -30,7 +30,6 @@ const layoutFor = (over: Partial<LayoutConfig> = {}): LayoutConfig => ({
   paperBand: true,
   gradation: 0.45,
   angleQuantumDeg: 15,
-  fieldEdge: 0.35,
   faults: 0,
   spiralForm: 'circular',
   spiralDirection: 'inward',

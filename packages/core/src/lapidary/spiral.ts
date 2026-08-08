@@ -8,7 +8,6 @@ import {
   angularBoundaryTable,
   type LapidaryShape,
 } from './shapes.js';
-import { fieldClear } from './layout.js';
 import type {
   DealState,
   LayoutConfig,
@@ -273,7 +272,6 @@ export function spiralRegions(
     const tex = fieldTex;
     regions.push({
       z: 0,
-      clear: fieldClear(cfg),
       poly: [
         { x: x0, y: y0 },
         { x: x1, y: y0 },

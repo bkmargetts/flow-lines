@@ -86,7 +86,6 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     valueRhythm: state.valueRhythm,
     paperBand: state.paperBand,
     gradation: state.gradation,
-    fieldEdge: state.fieldEdge,
 
     haloPx: state.haloMm * mm,
     outlines: state.outlines,

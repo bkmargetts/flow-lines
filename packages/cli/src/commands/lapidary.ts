@@ -119,11 +119,6 @@ export function registerLapidary(program: Command) {
       'How far a band graduates across its own width (0-1) — real agate darkens from one edge ' +
         'of a band to the other; a flat tone everywhere is the printed-screen tell'
     )
-    .option(
-      '--field-edge <number>',
-      'How far the full-frame background field trails off before the page edge (0-1, 0 = flush ' +
-        'to the margin rect). Ignored by strata, which partitions the whole sheet'
-    )
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
@@ -274,7 +269,6 @@ export function registerLapidary(program: Command) {
         // Three-state like --veins: neither form given leaves the preset alone.
         paperBand: typeof options.paperBand === 'boolean' ? options.paperBand : undefined,
         gradation: options.gradation !== undefined ? parseFloat(options.gradation) : undefined,
-        fieldEdge: options.fieldEdge !== undefined ? parseFloat(options.fieldEdge) : undefined,
         outlineWeight:
           options.outlineWeight !== undefined ? parseFloat(options.outlineWeight) : undefined,
         misregistration:

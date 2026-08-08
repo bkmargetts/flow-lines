@@ -323,9 +323,6 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
           {inks.length > 1 && (
             <Slider label="Misregistration" value={state.misregistration} min={0} max={1} step={0.01} onChange={(v) => update({ misregistration: v })} format={(v) => `${Math.round(v * 100)}%`} />
           )}
-          {!strata && state.field && (
-            <Slider label="Field edge" value={state.fieldEdge} min={0} max={1} step={0.01} onChange={(v) => update({ fieldEdge: v })} format={(v) => (v > 0 ? `${Math.round(v * 100)}%` : 'flush')} />
-          )}
         </AdvGroup>
       </AdvancedSection>
     </div>

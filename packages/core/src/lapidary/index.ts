@@ -86,12 +86,6 @@ export interface LapidaryOptions {
    *  shapes float on clean paper. Agate/breccia only — strata partitions
    *  the whole sheet. */
   field?: boolean;
-  /** How far the background field trails off before the page edge, 0..1
-   *  (default 0.35). A ground ruled wall-to-wall against the margin rect is
-   *  the loudest machine tell a background has; a hand stops short of the
-   *  edge at varying depths. Ignored by strata, which partitions the whole
-   *  sheet. */
-  fieldEdge?: number;
   /** Silhouette language: 'organic' blobs (default), 'angular'
    *  straight-edged facets/shards (stepped terraces in strata), or 'mixed'
    *  (seeded per-band deal). Each band can override via
@@ -504,7 +498,6 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     paperBand: options.paperBand ?? true,
     gradation: clamp(options.gradation ?? 0.45, 0, 1),
     angleQuantumDeg: clamp(options.angleQuantumDeg ?? 15, 0, 45),
-    fieldEdge: clamp(options.fieldEdge ?? 0.35, 0, 1),
     faults: clamp(Math.round(options.faults ?? 0), 0, 4),
     spiralForm: options.spiralForm ?? 'circular',
     spiralDirection: options.spiralDirection ?? 'inward',

@@ -68,7 +68,6 @@ export interface LapidaryState {
   valueRhythm: LapidaryValueRhythm; // which way the darks run across the stack
   paperBand: boolean; // let the plan hold its lightest band as bare paper
   gradation: number; // 0..1 how far a band graduates across its own width
-  fieldEdge: number; // 0..1 how far the background field trails off the page edge
 
   // Seams
   haloMm: number; // reserved-paper seam width
@@ -128,7 +127,6 @@ export const defaultLapidaryState: LapidaryState = {
   valueRhythm: 'auto',
   paperBand: true,
   gradation: 0.45,
-  fieldEdge: 0.35,
 
   haloMm: 2.2,
   outlines: false,

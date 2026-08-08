@@ -102,8 +102,6 @@ const SECTIONS = {
     'gradient full': ['--gradation', '1', '--bands', '5', '--palette', 'mono'],
     'keyline off': ['--outline-weight', '0', '--bands', '5', '--palette', 'mono'],
     'keyline drawn': ['--outlines', '--outline-weight', '0.6', '--bands', '5', '--palette', 'mono'],
-    'field flush': ['--field-edge', '0', '--bands', '5', '--palette', 'mono'],
-    'field ragged': ['--field-edge', '0.5', '--bands', '5', '--palette', 'mono'],
     'misregistration off': ['--misregistration', '0', '--bands', '5', '--pens', '2', '--palette', 'specimen'],
     'misregistration wide': ['--misregistration', '1', '--bands', '5', '--pens', '2', '--palette', 'specimen'],
     'kintsugi veins': ['--mode', 'breccia', '--veins', '--bands', '8', '--palette', 'specimen'],
