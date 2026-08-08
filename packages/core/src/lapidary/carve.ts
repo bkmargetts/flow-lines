@@ -1,6 +1,8 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { CoverageAccumulator, createCoverageAccumulator, clipLinesToMask } from '../compose/index.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
+import { trimPolyline } from '../lib/polyline.js';
+import { offsetEmphasisPasses } from '../pen-ink/swell.js';
 import { inkLayerName } from '../marbling/index.js';
 import { Region } from './layout.js';
 import { RegionFill } from './textures.js';
@@ -15,6 +17,12 @@ export interface CarveConfig {
   pens: number;
   penAssignment: PenAssignment;
   outlines: boolean;
+  /** Built-up weight on the hero band's keyline, 0..1 (0 = every outline is a
+   *  single pass). */
+  outlineWeight: number;
+  /** The z of the band whose silhouette carries the extra weight — the sheet's
+   *  focal point. -1 = none. */
+  heroZ: number;
   /** Strata builds its seam gaps into the polygons — skip the masks. */
   geometricGaps: boolean;
   /** sizingDim / TUNING_DIM — scales the outline densify step. */
@@ -58,11 +66,28 @@ function assignPens(lines: FlowLine[], region: Region, cfg: CarveConfig): void {
   }
 }
 
-/** The region silhouette as a closed, densified stroke. */
-function outlineLines(region: Region, featureScale: number): FlowLine[] {
+/**
+ * The region silhouette as a *drawn* keyline rather than a traced loop.
+ *
+ * A closed, uniformly densified polygon is the one mark on the sheet that
+ * could only have been made by a machine: a hand draws a silhouette in two or
+ * three confident arcs, lands and lifts at each end, and leans on the pen
+ * where the form turns. So: break the loop at a seeded phase, trim each arc so
+ * it tapers instead of ending in a blunt bar, and tag the result `pen: 'bold'`
+ * — which also buys the steadier hand `applyHandDrawnStyle` gives bold strokes
+ * for free, and stops `optimizePlot` chaining the keyline into the fills.
+ *
+ * The hero band earns extra weight from repeated offset passes of the same pen
+ * (never a stroke-width trick — this has to plot). Those passes push ink
+ * sideways into the reserved seam, so the spread is clamped against the halo:
+ * at `haloPx * 0.12` even four passes travel under `haloPx * 0.18` outward,
+ * leaving the wobble budget intact. Do not loosen that clamp without redoing
+ * the arithmetic — the seam is the whole look.
+ */
+function outlineLines(region: Region, cfg: CarveConfig, hero: boolean): FlowLine[] {
   const poly = region.poly;
   const points: Point[] = [];
-  const step = Math.max(1, 6 * featureScale);
+  const step = Math.max(1, 6 * cfg.featureScale);
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i];
     const b = poly[(i + 1) % poly.length];
@@ -73,8 +98,37 @@ function outlineLines(region: Region, featureScale: number): FlowLine[] {
       points.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
     }
   }
-  if (points.length >= 2) points.push({ ...points[0] });
-  return points.length >= 2 ? [{ points }] : [];
+  if (points.length < 8) return points.length >= 2 ? [{ points }] : [];
+
+  const rng = makeRandom(subSeed(cfg.seed, 600 + region.z));
+  const n = points.length;
+  // Two to four arcs, each starting where the last lifted. The gaps are a
+  // fraction of an arc, not a fixed px count, so they read the same on any
+  // sheet.
+  const arcs = 2 + Math.floor(rng() * 3);
+  const phase = Math.floor(rng() * n);
+  const out: FlowLine[] = [];
+  const cuts: number[] = [];
+  for (let k = 0; k < arcs; k++) cuts.push(Math.floor((k / arcs) * n));
+  for (let k = 0; k < arcs; k++) {
+    const from = cuts[k];
+    const to = k + 1 < arcs ? cuts[k + 1] : n;
+    // Lift a short gap before the next arc picks up.
+    const lift = Math.max(1, Math.round((to - from) * (0.03 + 0.05 * rng())));
+    const arc: Point[] = [];
+    for (let i = from; i < to - lift; i++) arc.push(points[(i + phase) % n]);
+    if (arc.length < 3) continue;
+    const drawn = trimPolyline(arc, 0.03);
+    if (drawn.length < 2) continue;
+    out.push({ points: drawn, pen: 'bold' });
+    if (!hero || cfg.outlineWeight <= 0) continue;
+    const passes = 2 + Math.round(cfg.outlineWeight * 2);
+    const spread = Math.min(0.5 * cfg.featureScale, cfg.haloPx * 0.12);
+    for (const pass of offsetEmphasisPasses(drawn, passes, spread, 0.08)) {
+      out.push({ points: pass, pen: 'bold' });
+    }
+  }
+  return out;
 }
 
 /**
@@ -99,7 +153,9 @@ export function carveRegions(
   for (const region of sorted) {
     const { ink, phantom } = fill(region);
     let drawn =
-      cfg.outlines && region.z > 0 ? [...ink, ...outlineLines(region, cfg.featureScale)] : ink;
+      cfg.outlines && region.z > 0
+        ? [...ink, ...outlineLines(region, cfg, region.z === cfg.heroZ)]
+        : ink;
     if (!cfg.geometricGaps) {
       // Seamless regions (blend-joined spiral cells) still stamp coverage —
       // the field below carves around them — but are never clipped

@@ -84,6 +84,13 @@ export interface Craft {
   taper: number;
   jitter: number; // radians
   subStep: number;
+  /**
+   * Multiplier on the absolute px lengths below — the end-trim cap and the
+   * mid-stroke pen-lift gap. Both are physical distances, so a caller drawing
+   * the same artwork at a denser render density has to scale them or the
+   * taper and the lift shrink on the page. Defaults to 1 (unscaled).
+   */
+  scale?: number;
 }
 
 /** A tone field: darkness 0..1 at a location (1 = tight hatch / dark). */
@@ -98,7 +105,8 @@ export function emitStroke(out: FlowLine[], A: Point, B: Point, layer: string, c
   if (len < 1.5) return;
   const ux = dx / len;
   const uy = dy / len;
-  const maxTrim = Math.min(len * 0.35, 8) * craft.taper;
+  const craftScale = craft.scale ?? 1;
+  const maxTrim = Math.min(len * 0.35, 8 * craftScale) * craft.taper;
   let a = craft.rng() * maxTrim * 0.7;
   let b = len - craft.rng() * maxTrim * 0.7;
   if (b - a < 1.5) {
@@ -107,7 +115,7 @@ export function emitStroke(out: FlowLine[], A: Point, B: Point, layer: string, c
   }
   const segs: [number, number][] = [];
   if (craft.taper > 0 && b - a > 16 && craft.rng() < craft.taper * 0.22) {
-    const g = 2 + craft.rng() * 4;
+    const g = (2 + craft.rng() * 4) * craftScale;
     const m = a + (0.4 + 0.2 * craft.rng()) * (b - a);
     segs.push([a, m - g / 2]);
     segs.push([m + g / 2, b]);
@@ -173,6 +181,23 @@ function makePatchMask(noise: SimplexNoise, x: number, y: number, layer: number,
 
 export type BreakFn = (t0: number, t1: number, O: Point, D: Point, rng: () => number) => [number, number][];
 
+/** Optional refinements, both inert when omitted. */
+export interface SweepHatchOptions {
+  /**
+   * Always keep this much of each clipped run's two ends, whatever `gate`
+   * says. A gate that can bite into the ends of a run shreds the boundary the
+   * run was clipped against — fine for a hillside fading into mist, fatal for
+   * a shape whose crisp silhouette is the whole point.
+   */
+  edgeKeepPx?: number;
+  /**
+   * Fix the family's starting offset (0..1 of a pitch) instead of drawing it
+   * from `craft.rng`. Callers that deal several families over abutting shapes
+   * use it to stop neighbours registering identically.
+   */
+  phase01?: number;
+}
+
 /** A family of parallel hatch lines across `poly` at `angleDeg`. Local spacing
  *  opens where `tone` is light (atmospheric perspective). `gate` lets a layer
  *  fill only the dark/patchy parts (cross-hatch). `breakFn` dashes the run. */
@@ -186,8 +211,10 @@ export function sweepHatch(
   layer: string,
   craft: Craft,
   breakFn?: BreakFn,
-  maxLen = 0
+  maxLen = 0,
+  opts: SweepHatchOptions = {}
 ): void {
+  const edgeKeep = opts.edgeKeepPx ?? 0;
   const ang = angleDeg * DEG;
   const dir: Point = { x: Math.cos(ang), y: Math.sin(ang) };
   const nrm: Point = { x: -Math.sin(ang), y: Math.cos(ang) };
@@ -198,7 +225,8 @@ export function sweepHatch(
     if (s < sMin) sMin = s;
     if (s > sMax) sMax = s;
   }
-  let s = sMin + craft.rng() * baseSpacing;
+  let s =
+    sMin + (opts.phase01 === undefined ? craft.rng() : opts.phase01) * baseSpacing;
   let guard = 0;
   while (s <= sMax && guard++ < 6000) {
     const O: Point = { x: nrm.x * s, y: nrm.y * s };
@@ -232,8 +260,11 @@ export function sweepHatch(
           const tv = tone(mx, my);
           toneSum += tv;
           toneN++;
+          // The run's own ends are exempt: they sit on the boundary this row
+          // was clipped to, and letting the gate eat them frays that edge.
+          const atEnd = edgeKeep > 0 && (a - t0 < edgeKeep || t1 - b < edgeKeep);
           // Paper cutoff: genuinely light passages hold clean paper.
-          if (!gate(mx, my, tv) || tv < 0.15 + 0.04 * craft.rng()) {
+          if (!atEnd && (!gate(mx, my, tv) || tv < 0.15 + 0.04 * craft.rng())) {
             flushRun(a);
             continue;
           }

@@ -8,7 +8,13 @@ import {
   angularBoundaryTable,
   type LapidaryShape,
 } from './shapes.js';
-import type { LapidaryTexture, LayoutConfig, Region, ResolvedTexture } from './layout.js';
+import type {
+  DealState,
+  LayoutConfig,
+  Region,
+  ResolvedTexture,
+  ValuePlan,
+} from './layout.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -90,8 +96,9 @@ function spiralBoundaryTable(cfg: LayoutConfig, shape: LapidaryShape): Float64Ar
  */
 export function spiralRegions(
   cfg: LayoutConfig,
-  resolve: (cfg: LayoutConfig, z: number, prevKind: LapidaryTexture | null) => ResolvedTexture
-): Region[] {
+  resolve: (cfg: LayoutConfig, z: number, state: DealState, plan: ValuePlan) => ResolvedTexture,
+  buildPlan: (cfg: LayoutConfig, slots: number) => ValuePlan
+): { regions: Region[]; plan: ValuePlan } {
   const { x0, y0, x1, y1 } = cfg.rect;
   const rx = (x1 - x0) / 2;
   const ry = (y1 - y0) / 2;
@@ -160,7 +167,9 @@ export function spiralRegions(
     thetaT = Math.min(thetaEnd, thetaT + dTheta);
   }
   const total = cum[cum.length - 1];
-  if (!(total > stepPx * 4)) return [];
+  // Degenerate coil: hand back an empty sheet with a plan the caller can
+  // still read (the keyline's hero band comes off it).
+  if (!(total > stepPx * 4)) return { regions: [], plan: buildPlan(cfg, 1) };
 
   // ---- Pass 2: ribbon edges. Width = base fraction of the local winding
   // pitch × signed taper (t = arc fraction from the trailing end) × the
@@ -247,11 +256,20 @@ export function spiralRegions(
   // counts rim → core along the walk.
   const n = idx.length - 1;
   const seamless = cfg.spiralJoin === 'blend';
+  // The ribbon's cell count is only known now, so the value ladder is composed
+  // over the slots the coil actually produced — plus slot 0 for the field,
+  // which is reserved whether or not the field is drawn so toggling it never
+  // reshuffles the cells.
+  const plan = buildPlan(cfg, n + 1);
   const regions: Region[] = [];
-  let prevKind: LapidaryTexture | null = null;
+  const state: DealState = { prevKind: null, prevKind2: null, prevAngleDeg: null };
+  // Resolved whether or not it is drawn — see the same note in `agateRegions`.
+  const fieldTex = resolve(cfg, 0, state, plan);
+  state.prevKind2 = state.prevKind;
+  state.prevKind = fieldTex.kind;
+  state.prevAngleDeg = fieldTex.angleDeg;
   if (cfg.field) {
-    const tex = resolve(cfg, 0, null);
-    prevKind = tex.kind;
+    const tex = fieldTex;
     regions.push({
       z: 0,
       poly: [
@@ -273,14 +291,18 @@ export function spiralRegions(
   for (let z = 1; z <= n; z++) {
     let tex: ResolvedTexture;
     if (!seamless) {
-      tex = resolve(cfg, z, prevKind);
-      prevKind = tex.kind;
+      tex = resolve(cfg, z, state, plan);
+      state.prevKind2 = state.prevKind;
+      state.prevKind = tex.kind;
+      state.prevAngleDeg = tex.angleDeg;
     } else {
       let next: ResolvedTexture;
       if (runLeft <= 0 || !cur) {
         runZ++;
-        next = resolve(cfg, runZ, prevKind);
-        prevKind = next.kind;
+        next = resolve(cfg, runZ, state, plan);
+        state.prevKind2 = state.prevKind;
+        state.prevKind = next.kind;
+        state.prevAngleDeg = next.angleDeg;
         runBaseSpacing = next.spacing;
         runLeft = 3 + Math.floor(rng() * 3);
       } else {
@@ -312,5 +334,5 @@ export function spiralRegions(
       seamless: seamless || undefined,
     });
   }
-  return regions;
+  return { regions, plan };
 }

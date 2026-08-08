@@ -901,6 +901,11 @@ describe('generateLapidary', () => {
       // The page form's boundary table IS the margin rectangle — at high
       // width the coil fills the sheet corner to corner while never
       // spilling past the page.
+      //
+      // This is a claim about the ribbon's geometry, so the tone is pinned
+      // flat: left to the value plan the outermost cell can legitimately be
+      // dealt a near-paper value, and then the corner is short of ink for
+      // compositional reasons rather than geometric ones.
       const r = generateLapidary({
         ...SPIRAL,
         spiralForm: 'page',
@@ -911,6 +916,8 @@ describe('generateLapidary', () => {
         field: false,
         wobble: 0,
         optimize: false,
+        textures: [{ kind: 'hatch', spacingScale: 1 }],
+        gradation: 0,
       });
       expect(r.lines.length).toBeGreaterThan(100);
       const corners = [

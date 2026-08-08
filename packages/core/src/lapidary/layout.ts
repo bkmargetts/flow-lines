@@ -1,6 +1,7 @@
 import { Point } from '../flow-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { lerp, clamp } from '../lib/math.js';
+import { smoothstep } from '../lib/spatial.js';
 import {
   nestedRingTables,
   ringPolygon,
@@ -83,6 +84,17 @@ export interface ResolvedTexture {
   seed: number;
   /** sizingDim / TUNING_DIM — see `TUNING_DIM`. */
   featureScale: number;
+  /** Target ink coverage 0..1 — this band's place in the sheet's value plan.
+   *  The pitch above is derived from it. */
+  value: number;
+  /** Signed gradation across the band's width, -1..1: real agate graduates
+   *  from one edge to the other rather than holding a flat tone. */
+  gradient: number;
+  /** Where the band sits in the composition. */
+  role: BandRole;
+  /** The resolved direction in degrees — carried so the next band can be held
+   *  apart from it. */
+  angleDeg: number;
 }
 
 /** Radial geometry behind a table-built region (agate rings, breccia
@@ -148,6 +160,16 @@ export interface LayoutConfig {
   densityContrast: number;
   waviness: number;
   patchiness: number;
+  /** How hard the sheet's value ladder is composed, 0..1. */
+  valueStructure: number;
+  /** Which way the darks run across the stack. */
+  valueRhythm: LapidaryValueRhythm;
+  /** Let the plan hold its lightest band as bare paper. */
+  paperBand: boolean;
+  /** How far a band graduates across its own width, 0..1. */
+  gradation: number;
+  /** Snap per-band angle drift to multiples of this, 0 = free drift. */
+  angleQuantumDeg: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
   /** Spiral cross-section form (spiral only). */
@@ -187,6 +209,69 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   blank: 1,
 };
 
+/**
+ * Ink coverage each kind delivers at its own baseline pitch
+ * (`KIND_SPACING × spacingPx`). The kinds are not interchangeable at equal
+ * pitch — a stipple field at the hatch pitch carries a third of its weight —
+ * so a plan that wants to compose *value* has to speak in coverage and derive
+ * the pitch, not the other way round.
+ */
+const KIND_VALUE: Record<LapidaryTexture, number> = {
+  lines: 0.3, // dashed and airy — the reference's ruled datum field
+  wavy: 0.42,
+  contour: 0.44,
+  crystal: 0.3, // sparse rays with big paper between them
+  hatch: 0.72,
+  patchy: 0.52, // the gate eats roughly a third of the family
+  cross: 0.66, // two families, the second lightly gated
+  stipple: 0.22,
+  mottle: 0.6, // two interleaved gratings
+  grain: 0.38,
+  blank: 0,
+};
+
+/**
+ * How hard a pitch change moves the value: 1 for a line family (coverage runs
+ * as 1/pitch), closer to 2 for fields seeded on a 2-D lattice, where halving
+ * the pitch quadruples the marks. Inverting with the wrong exponent overshoots
+ * a stipple band straight into a black mass.
+ */
+const KIND_VALUE_EXP: Record<LapidaryTexture, number> = {
+  lines: 1,
+  wavy: 1,
+  contour: 1,
+  crystal: 1,
+  hatch: 1,
+  patchy: 1,
+  cross: 1,
+  mottle: 1,
+  stipple: 2,
+  grain: 1.7,
+  blank: 1,
+};
+
+/** Pitch multipliers outside this can't be honoured: below it the marks fuse
+ *  into a solid mass, above it the band is two strokes and a rumour. */
+const VALUE_SCALE_MIN = 0.45;
+const VALUE_SCALE_MAX = 2.6;
+
+/** The pitch multiplier that lands `kind` on ink value `target`. */
+export function valueSpacingScale(kind: LapidaryTexture, target: number): number {
+  if (kind === 'blank' || target <= 0) return 1;
+  const raw = Math.pow(KIND_VALUE[kind] / Math.max(0.02, target), 1 / KIND_VALUE_EXP[kind]);
+  return clamp(raw, VALUE_SCALE_MIN, VALUE_SCALE_MAX);
+}
+
+/** How honestly `kind` can reach `target` — 1 when its own pitch gets there,
+ *  falling off as the clamp starts doing the work instead. The deal uses this
+ *  so a near-paper slot is never handed a mottled grating. */
+export function valueFit(kind: LapidaryTexture, target: number): number {
+  if (kind === 'blank') return target <= 0.09 ? 1 : 0;
+  const raw = Math.pow(KIND_VALUE[kind] / Math.max(0.02, target), 1 / KIND_VALUE_EXP[kind]);
+  const held = clamp(raw, VALUE_SCALE_MIN, VALUE_SCALE_MAX);
+  return clamp(1 - Math.abs(Math.log(raw / held)) * 1.1, 0.12, 1);
+}
+
 /** Kinds the seeded picker may deal a band (blank and crystal are
  *  preset-only — a random paper band next to the background reads as a hole,
  *  not a decision, and a druzy ray-burst is too loud to land uninvited). */
@@ -202,6 +287,286 @@ const RANDOM_KINDS: LapidaryTexture[] = [
   'grain',
 ];
 
+/** How the sheet's darks are arranged across the stack. */
+export type LapidaryValueRhythm =
+  | 'auto'
+  | 'dark-core'
+  | 'dark-rim'
+  | 'alternating'
+  | 'ramp'
+  | 'flat';
+
+/** A band's place in the composition — the deal weights marks by it, and the
+ *  keyline hangs its extra weight on the anchor. */
+export type BandRole = 'field' | 'rim' | 'mid' | 'core';
+
+/**
+ * The sheet's tonal composition: what each band weighs, which one anchors the
+ * darks, which is held as near-paper.
+ *
+ * Without this a band's darkness was a pitch lottery — `KIND_SPACING` times a
+ * random draw — so nothing guaranteed a dark to hang the drawing on, nothing
+ * guaranteed reserved paper, and two neighbours could land a hair apart, which
+ * reads as a mistake rather than a decision. The image pipeline composes value
+ * before it draws anything (`valueBands`, then `massing`); a stone sheet needs
+ * the same decision made for it.
+ */
+export interface ValuePlan {
+  /** Target ink value 0..1 per band, indexed by z. */
+  values: number[];
+  /** z of the guaranteed dark band — the sheet's focal weight. */
+  anchor: number;
+  /** z of the guaranteed near-paper band, or -1. */
+  reserve: number;
+  /** Whether `reserve` is light enough to be held as bare paper. */
+  reserveIsPaper: boolean;
+  rhythm: Exclude<LapidaryValueRhythm, 'auto'>;
+}
+
+/** Whether z 0 is the full-frame field slot for this mode. Deliberately keyed
+ *  on the *mode*, not on `cfg.field`: agate/breccia/spiral number their bands
+ *  from z 1 whether or not the field is drawn, so the composition — like the
+ *  sub-seeded silhouettes — stays put when the field is toggled off. */
+function hasFieldSlot(cfg: LayoutConfig): boolean {
+  return cfg.mode !== 'strata';
+}
+
+/** Where band `z` sits in the composition. Agate/spiral z ascends outer→inner,
+ *  so low z is the rim and high z the core. */
+export function roleFor(z: number, slots: number, fieldSlot: boolean): BandRole {
+  if (fieldSlot && z === 0) return 'field';
+  const first = fieldSlot ? 1 : 0;
+  const span = Math.max(1, slots - 1 - first);
+  const u = (z - first) / span;
+  if (u < 0.34) return 'rim';
+  if (u > 0.72) return 'core';
+  return 'mid';
+}
+
+/** Compose the sheet's value ladder. All draws come from one dedicated
+ *  sub-seed channel, so re-rolling a texture or a silhouette never reshuffles
+ *  the tonal composition. */
+export function buildValuePlan(cfg: LayoutConfig, slots: number): ValuePlan {
+  const rng = makeRandom(subSeed(cfg.seed, 900));
+  const n = Math.max(1, slots);
+  const structure = clamp(cfg.valueStructure, 0, 1);
+
+  // The rhythm draw is consumed either way, so pinning the rhythm never shifts
+  // the rest of the plan's stream.
+  const roll = rng();
+  const rhythm: Exclude<LapidaryValueRhythm, 'auto'> =
+    cfg.valueRhythm !== 'auto'
+      ? cfg.valueRhythm
+      : roll < 0.3
+        ? 'dark-core'
+        : roll < 0.55
+          ? 'dark-rim'
+          : roll < 0.8
+            ? 'alternating'
+            : 'ramp';
+
+  // At structure 0 the ladder is nearly flat (the old undifferentiated read);
+  // at 1 it spans held paper to a near-solid mass.
+  const vDark = lerp(0.55, 0.92, structure);
+  const vLight = lerp(0.35, 0.06, structure);
+
+  // Whether this sheet holds a band as bare paper. A coin, not a threshold:
+  // reserved paper is a decision an artist makes on some pieces and not
+  // others, and a blank band on every single sheet would be its own tic.
+  const paperRoll = rng() < 0.5;
+  const dirUp = rng() < 0.5;
+  const kink = 0.3 + 0.4 * rng();
+  const values: number[] = new Array(n);
+  for (let z = 0; z < n; z++) {
+    const u = n > 1 ? z / (n - 1) : 0.5;
+    let v: number;
+    switch (rhythm) {
+      case 'dark-core':
+        v = lerp(vLight, vDark, smoothstep(u));
+        break;
+      case 'dark-rim':
+        v = lerp(vDark, vLight, smoothstep(u));
+        break;
+      case 'ramp': {
+        // A mid kink keeps the ramp from reading as a printed gradient.
+        const w = u < kink ? (u / kink) * 0.5 : 0.5 + ((u - kink) / (1 - kink)) * 0.5;
+        v = dirUp ? lerp(vLight, vDark, w) : lerp(vDark, vLight, w);
+        break;
+      }
+      case 'alternating':
+        v = z % 2 === 0 ? vLight : vDark;
+        break;
+      default:
+        v = (vDark + vLight) / 2;
+    }
+    values[z] = v;
+  }
+  // Nudge every rung so no rhythm lands mechanically exact — an alternating
+  // ladder especially must not read as a zebra.
+  const nudge = rhythm === 'alternating' ? 0.16 : 0.07;
+  for (let z = 0; z < n; z++) {
+    values[z] = clamp(values[z] + (rng() - 0.5) * nudge, 0.02, 0.98);
+  }
+
+  // The two guarantees are placed among the *shape* bands only, never on the
+  // full-frame field. A black background swallows the layered-stencil read the
+  // whole generator is built on, and a field the plan had spent its dark on
+  // would leave a `field: false` sheet with no anchor at all. The outermost
+  // ring can still carry the dark, which is the same vignette read.
+  const first = hasFieldSlot(cfg) ? Math.min(1, n - 1) : 0;
+  let anchor = first;
+  for (let z = first + 1; z < n; z++) if (values[z] > values[anchor]) anchor = z;
+  values[anchor] = vDark;
+
+  let reserve = first;
+  for (let z = first + 1; z < n; z++) if (values[z] < values[reserve]) reserve = z;
+  if (reserve !== anchor) values[reserve] = vLight;
+  else reserve = -1;
+
+  // The field is a ground, not a subject: hold it back so the shapes read off it.
+  if (hasFieldSlot(cfg) && n > 1) values[0] = Math.min(values[0], 0.42);
+
+  // Push neighbours apart until each reads as its own value. Pushing (rather
+  // than re-rolling) means one band's separation never reshuffles a sibling.
+  const minSep = lerp(0.05, 0.22, structure);
+  for (let pass = 0; pass < 3; pass++) {
+    let moved = false;
+    for (let z = 1; z < n; z++) {
+      const d = values[z] - values[z - 1];
+      if (Math.abs(d) >= minSep) continue;
+      const shove = (minSep - Math.abs(d)) * 0.5;
+      const sign = d === 0 ? (z % 2 === 0 ? 1 : -1) : Math.sign(d);
+      values[z] = clamp(values[z] + sign * shove, vLight, vDark);
+      values[z - 1] = clamp(values[z - 1] - sign * shove, vLight, vDark);
+      moved = true;
+    }
+    // The two guarantees outrank the separation sweep.
+    values[anchor] = vDark;
+    if (reserve >= 0) values[reserve] = vLight;
+    if (!moved) break;
+  }
+
+  return {
+    values,
+    anchor,
+    reserve,
+    // Never at z 0: a blank full-frame field is `field: false` wearing a
+    // disguise, and it would leave the sheet with no ground at all. And only
+    // when the ladder is composed hard enough that a paper band reads as the
+    // lightest step of a plan rather than as a hole.
+    reserveIsPaper: cfg.paperBand && paperRoll && reserve > 0 && structure >= 0.4,
+    rhythm,
+  };
+}
+
+/** How far apart two neighbouring bands' stroke directions have to sit before
+ *  they read as two decisions. Below this the eye sees one direction badly
+ *  held — a mistake rather than a choice — which is what an unconstrained
+ *  ±drift draw kept producing (bands landing 1° apart). */
+const ANGLE_MIN_SEP_DEG = 14;
+
+/** Separation between two undirected stroke directions, 0..90°. */
+function angleGap(a: number, b: number): number {
+  const d = (((a - b) % 180) + 180) % 180;
+  return Math.min(d, 180 - d);
+}
+
+/**
+ * Nudge `angleDeg` off `prevDeg` until the two bands read apart, walking the
+ * quantum lattice outward from the drawn angle and never leaving the drift
+ * budget. Returns the angle unchanged when the budget simply cannot pay for
+ * the separation — a deliberately tight drift must stay tight.
+ */
+function separateAngle(
+  angleDeg: number,
+  prevDeg: number,
+  baseDeg: number,
+  budget: number,
+  quantum: number
+): number {
+  if (angleGap(angleDeg, prevDeg) >= ANGLE_MIN_SEP_DEG) return angleDeg;
+  const step = quantum > 0 ? quantum : 3;
+  for (let k = 1; k * step <= budget * 2 + step; k++) {
+    for (const s of [1, -1]) {
+      const cand = angleDeg + s * k * step;
+      if (Math.abs(cand - baseDeg) > budget + 1e-6) continue;
+      if (angleGap(cand, prevDeg) >= ANGLE_MIN_SEP_DEG) return cand;
+    }
+  }
+  return angleDeg;
+}
+
+/** What the deal carries from one band to the next. */
+export interface DealState {
+  prevKind: LapidaryTexture | null;
+  /** Two bands back — without it the busy/quiet alternation collapses into a
+   *  strict ABAB, which is its own mechanical pattern. */
+  prevKind2: LapidaryTexture | null;
+  prevAngleDeg: number | null;
+}
+
+/** Marks that carry a lot of incident. Two of these abutting is the mud
+ *  complaint — the eye has nowhere quiet to rest between them. */
+const BUSY: ReadonlySet<LapidaryTexture> = new Set<LapidaryTexture>([
+  'mottle',
+  'cross',
+  'stipple',
+  'grain',
+  'crystal',
+  'patchy',
+]);
+
+/** What each compositional role wants. The field is the ruled datum the inner
+ *  bands drift against; a rim wants marks that follow the silhouette; a core
+ *  can take the loudest thing on the sheet because everything around it is
+ *  holding still. */
+const ROLE_WEIGHT: Record<BandRole, Partial<Record<LapidaryTexture, number>>> = {
+  field: { lines: 2.4, wavy: 1.5, stipple: 1.3, grain: 0.8, hatch: 0.6, mottle: 0.5, cross: 0.4 },
+  rim: { contour: 1.9, wavy: 1.6, lines: 1.2, grain: 1.1 },
+  mid: {},
+  core: { contour: 1.5, hatch: 1.4, mottle: 1.2, cross: 1.2, stipple: 0.9 },
+};
+
+/**
+ * Deal a band its mark. The old rule was a uniform pick with one constraint
+ * ("not the same as the previous band"), which happily put a mottled grating
+ * beside a cross-hatch beside a patchy field — three loud marks at three
+ * near-identical weights, which is how a sheet turns to mud.
+ *
+ * Three things steer it now: what the role wants, whether the kind can
+ * honestly reach the value the plan asked for (so a near-paper slot is never
+ * handed a grating it would have to be clamped into), and a busy/quiet
+ * alternation. All three fade toward the old uniform draw as `valueStructure`
+ * goes to 0, so the knob genuinely turns the composition off.
+ */
+function dealKind(
+  cfg: LayoutConfig,
+  rng: () => number,
+  state: DealState,
+  value: number,
+  role: BandRole
+): LapidaryTexture {
+  const strength = clamp(cfg.valueStructure, 0, 1);
+  const prev = state.prevKind;
+  const weights = RANDOM_KINDS.map((kind) => {
+    if (kind === prev) return 0;
+    const roleW = ROLE_WEIGHT[role][kind] ?? 1;
+    const fit = valueFit(kind, value);
+    const rest = prev !== null && BUSY.has(kind) === BUSY.has(prev) ? 0.4 : 1;
+    // Discourage, don't forbid, coming straight back to the band before last.
+    const echo = kind === state.prevKind2 ? 0.45 : 1;
+    return Math.max(1e-4, lerp(1, roleW * fit * rest * echo, strength));
+  });
+  let total = 0;
+  for (const w of weights) total += w;
+  let pick = rng() * total;
+  for (let i = 0; i < RANDOM_KINDS.length; i++) {
+    pick -= weights[i];
+    if (pick <= 0) return RANDOM_KINDS[i];
+  }
+  return RANDOM_KINDS[RANDOM_KINDS.length - 1];
+}
+
 /**
  * Resolve the texture for band `z` (0 = the background field). Explicit
  * specs are cycled outer→inner; otherwise a seeded pick that always opens
@@ -212,30 +577,62 @@ const RANDOM_KINDS: LapidaryTexture[] = [
 export function resolveTexture(
   cfg: LayoutConfig,
   z: number,
-  prevKind: LapidaryTexture | null
+  state: DealState,
+  plan: ValuePlan
 ): ResolvedTexture {
   const rng = makeRandom(subSeed(cfg.seed, 200 + z));
+  const slots = plan.values.length;
+  const planned = plan.values[Math.min(z, slots - 1)];
+  const role = roleFor(z, slots, hasFieldSlot(cfg));
+  // densityContrast is no longer the value model — it is how far this seed is
+  // allowed to wander off the composition. Always consumed, so pinning a
+  // band's spacingScale no longer shifts its own phase draw.
+  const wander = lerp(1, 0.82 + 0.36 * rng(), cfg.densityContrast);
+  const value = clamp(planned * wander, 0.02, 0.98);
+
   let spec: BandTexture;
   if (cfg.textures && cfg.textures.length > 0) {
     const raw = cfg.textures[z % cfg.textures.length];
     spec = typeof raw === 'string' ? { kind: raw } : raw;
+  } else if (plan.reserveIsPaper && z === plan.reserve) {
+    // The plan asked for held paper here, so this band is a decision rather
+    // than a hole — which is the whole reason `blank` stays out of the deal.
+    spec = { kind: 'blank' };
   } else if (z === 0) {
     spec = { kind: 'lines' };
   } else {
-    let kind = RANDOM_KINDS[Math.floor(rng() * RANDOM_KINDS.length)];
-    if (kind === prevKind) {
-      kind = RANDOM_KINDS[(RANDOM_KINDS.indexOf(kind) + 1) % RANDOM_KINDS.length];
-    }
-    spec = { kind };
+    spec = { kind: dealKind(cfg, rng, state, value, role) };
   }
   // The background band keeps the base angle exactly — the reference's ruled
   // vertical field is a datum the inner bands drift against.
-  const drift = z === 0 ? 0 : (rng() * 2 - 1) * cfg.angleDriftDeg;
-  const angleDeg = spec.angleDeg ?? cfg.baseAngleDeg + drift;
-  // densityContrast spreads per-band pitch around the kind baseline; explicit
-  // spacingScale pins it.
-  const contrast = spec.spacingScale ?? lerp(1, 0.7 + 0.9 * rng(), cfg.densityContrast);
+  //
+  // Off that datum the drift is quantized and then held apart from the
+  // previous band. A free ±drift draw kept landing neighbours a degree or two
+  // apart, which reads as one direction badly held rather than two decisions,
+  // and it was the main reason a five-band sheet could look like one texture.
+  // The quantum is ignored when it is coarser than the whole budget, so a
+  // deliberately tight drift still varies.
+  const quantum = cfg.angleQuantumDeg > 0 && cfg.angleDriftDeg >= cfg.angleQuantumDeg
+    ? cfg.angleQuantumDeg
+    : 0;
+  let drift = z === 0 ? 0 : (rng() * 2 - 1) * cfg.angleDriftDeg;
+  if (quantum > 0) drift = Math.round(drift / quantum) * quantum;
+  let angleDeg = spec.angleDeg ?? cfg.baseAngleDeg + drift;
+  if (spec.angleDeg === undefined && z > 0 && state.prevAngleDeg !== null) {
+    angleDeg = separateAngle(
+      angleDeg,
+      state.prevAngleDeg,
+      cfg.baseAngleDeg,
+      cfg.angleDriftDeg,
+      quantum
+    );
+  }
+  // Pitch is derived from the band's place in the value ladder; an explicit
+  // spacingScale still pins it (a preset that wrote its own tone means it).
+  const contrast = spec.spacingScale ?? valueSpacingScale(spec.kind, value);
   const spacing = Math.max(1.2, cfg.spacingPx * KIND_SPACING[spec.kind] * contrast);
+  // Which way the band graduates across its width, and how hard.
+  const gradient = cfg.gradation * (0.45 + 0.55 * rng()) * (rng() < 0.5 ? -1 : 1);
   return {
     kind: spec.kind,
     angleRad: (angleDeg * Math.PI) / 180,
@@ -245,6 +642,10 @@ export function resolveTexture(
     phase: rng(),
     seed: subSeed(cfg.seed, 400 + z),
     featureScale: cfg.featureScale,
+    value,
+    gradient,
+    role,
+    angleDeg,
   };
 }
 
@@ -272,7 +673,7 @@ function shapeFor(cfg: LayoutConfig, z: number): LapidaryShape {
   return cfg.shapes;
 }
 
-function agateRegions(cfg: LayoutConfig): Region[] {
+function agateRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
   const { x0, y0, x1, y1 } = cfg.rect;
   const halfW = (x1 - x0) / 2;
   const halfH = (y1 - y0) / 2;
@@ -295,13 +696,23 @@ function agateRegions(cfg: LayoutConfig): Region[] {
     (i) => shapeFor(cfg, i + 1)
   );
   const regions: Region[] = [];
-  let prevKind: LapidaryTexture | null = null;
+  const state: DealState = { prevKind: null, prevKind2: null, prevAngleDeg: null };
+  const advance = (tex: ResolvedTexture): void => {
+    state.prevKind2 = state.prevKind;
+    state.prevKind = tex.kind;
+    state.prevAngleDeg = tex.angleDeg;
+  };
   const push = (z: number, poly: Point[], radial?: RegionRadial): void => {
-    const tex = resolveTexture(cfg, z, prevKind);
-    prevKind = tex.kind;
+    const tex = resolveTexture(cfg, z, state, plan);
+    advance(tex);
     regions.push({ z, poly, tex, radial });
   };
-  if (cfg.field) push(0, rectPolygon(cfg.rect));
+  // Slot 0 is resolved whether or not the field is drawn, so what the shapes
+  // are dealt — and how far their angles are held off their neighbour — does
+  // not change when the ground is simply left off the page.
+  const fieldTex = resolveTexture(cfg, 0, state, plan);
+  advance(fieldTex);
+  if (cfg.field) regions.push({ z: 0, poly: rectPolygon(cfg.rect), tex: fieldTex });
   tables.forEach((g, i) =>
     push(i + 1, ringPolygon(cx, cy, halfW, halfH, g), { cx, cy, rx: halfW, ry: halfH, table: g })
   );
@@ -312,7 +723,7 @@ function agateRegions(cfg: LayoutConfig): Region[] {
  *  confetti and the halo carve cost grows for nothing. */
 const BRECCIA_CAP = 14;
 
-function brecciaRegions(cfg: LayoutConfig): Region[] {
+function brecciaRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
   const { x0, y0, x1, y1 } = cfg.rect;
   const halfW = (x1 - x0) / 2;
   const halfH = (y1 - y0) / 2;
@@ -376,13 +787,23 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
     frags.push({ cx, cy, rx, ry, seed: fragSeed });
   }
   const regions: Region[] = [];
-  let prevKind: LapidaryTexture | null = null;
+  const state: DealState = { prevKind: null, prevKind2: null, prevAngleDeg: null };
+  const advance = (tex: ResolvedTexture): void => {
+    state.prevKind2 = state.prevKind;
+    state.prevKind = tex.kind;
+    state.prevAngleDeg = tex.angleDeg;
+  };
   const push = (z: number, poly: Point[], radial?: RegionRadial): void => {
-    const tex = resolveTexture(cfg, z, prevKind);
-    prevKind = tex.kind;
+    const tex = resolveTexture(cfg, z, state, plan);
+    advance(tex);
     regions.push({ z, poly, tex, radial });
   };
-  if (cfg.field) push(0, rectPolygon(cfg.rect));
+  // Slot 0 is resolved whether or not the field is drawn, so what the shapes
+  // are dealt — and how far their angles are held off their neighbour — does
+  // not change when the ground is simply left off the page.
+  const fieldTex = resolveTexture(cfg, 0, state, plan);
+  advance(fieldTex);
+  if (cfg.field) regions.push({ z: 0, poly: rectPolygon(cfg.rect), tex: fieldTex });
   frags.forEach((fr, i) => {
     const table =
       shapeFor(cfg, i + 1) === 'angular'
@@ -399,7 +820,7 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
   return regions;
 }
 
-function strataRegions(cfg: LayoutConfig): Region[] {
+function strataRegions(cfg: LayoutConfig, plan: ValuePlan): Region[] {
   const { x0, y0, x1, y1 } = cfg.rect;
   const curves = strataCurves(
     cfg.seed,
@@ -415,7 +836,7 @@ function strataRegions(cfg: LayoutConfig): Region[] {
   );
   const half = cfg.haloPx / 2;
   const regions: Region[] = [];
-  let prevKind: LapidaryTexture | null = null;
+  const state: DealState = { prevKind: null, prevKind2: null, prevAngleDeg: null };
   for (let k = 0; k < cfg.bands; k++) {
     const topCurve = k === 0 ? null : curves[k - 1].map((p) => ({ x: p.x, y: p.y + half }));
     const bottomCurve =
@@ -436,8 +857,10 @@ function strataRegions(cfg: LayoutConfig): Region[] {
     // opposite curve's grid.
     const bandTop = topCurve ?? (bottomCurve ?? []).map((p) => ({ x: p.x, y: y0 }));
     const bandBottom = bottomCurve ?? (topCurve ?? []).map((p) => ({ x: p.x, y: y1 }));
-    const tex = resolveTexture(cfg, k, prevKind);
-    prevKind = tex.kind;
+    const tex = resolveTexture(cfg, k, state, plan);
+    state.prevKind2 = state.prevKind;
+    state.prevKind = tex.kind;
+    state.prevAngleDeg = tex.angleDeg;
     regions.push({
       z: k,
       poly,
@@ -454,9 +877,26 @@ function strataRegions(cfg: LayoutConfig): Region[] {
 /** Build the mode's region list. Strata partitions the sheet with geometric
  *  seam gaps already built into the polygons; the other modes rely on the
  *  z-order halo carve. */
-export function buildRegions(cfg: LayoutConfig): { regions: Region[]; geometricGaps: boolean } {
-  if (cfg.mode === 'breccia') return { regions: brecciaRegions(cfg), geometricGaps: false };
-  if (cfg.mode === 'strata') return { regions: strataRegions(cfg), geometricGaps: true };
-  if (cfg.mode === 'spiral') return { regions: spiralRegions(cfg, resolveTexture), geometricGaps: false };
-  return { regions: agateRegions(cfg), geometricGaps: false };
+export function buildRegions(cfg: LayoutConfig): {
+  regions: Region[];
+  geometricGaps: boolean;
+  plan: ValuePlan;
+} {
+  // The spiral's slot count isn't known until the coil has been walked, so it
+  // builds its own plan and hands it back.
+  if (cfg.mode === 'spiral') {
+    const { regions, plan } = spiralRegions(cfg, resolveTexture, buildValuePlan);
+    return { regions, geometricGaps: false, plan };
+  }
+  // Slot 0 is the field's whether or not it is drawn, and the shape bands
+  // number from 1, so the ladder spans `bands + 1` slots in the modes that
+  // have a field. Strata has none — it partitions the whole sheet.
+  const plan = buildValuePlan(cfg, cfg.mode === 'strata' ? cfg.bands : cfg.bands + 1);
+  if (cfg.mode === 'breccia') {
+    return { regions: brecciaRegions(cfg, plan), geometricGaps: false, plan };
+  }
+  if (cfg.mode === 'strata') {
+    return { regions: strataRegions(cfg, plan), geometricGaps: true, plan };
+  }
+  return { regions: agateRegions(cfg, plan), geometricGaps: false, plan };
 }

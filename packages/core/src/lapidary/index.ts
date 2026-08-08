@@ -1,8 +1,9 @@
 import { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { optimizePlot } from '../optimize.js';
-import { randomSeed, subSeed } from '../lib/rng.js';
+import { makeRandom, randomSeed, subSeed } from '../lib/rng.js';
 import { clamp } from '../lib/math.js';
+import { inkLayerName } from '../marbling/index.js';
 import { buildRegions, LayoutConfig, Region, RegionRadial, TUNING_DIM } from './layout.js';
 import { fillRegion } from './textures.js';
 import { carveRegions, PenAssignment } from './carve.js';
@@ -16,6 +17,9 @@ export type {
   SpiralForm,
   SpiralDirection,
   SpiralJoin,
+  LapidaryValueRhythm,
+  BandRole,
+  ValuePlan,
 } from './layout.js';
 export type { PenAssignment } from './carve.js';
 import type {
@@ -26,6 +30,7 @@ import type {
   SpiralForm,
   SpiralDirection,
   SpiralJoin,
+  LapidaryValueRhythm,
 } from './layout.js';
 
 /** The kintsugi veins' dedicated accent pen layer — separate from the
@@ -141,8 +146,15 @@ export interface LapidaryOptions {
   haloPx?: number;
   /** Ink each region silhouette as a stroke (default false — in the
    *  reference the seam itself does the work). The full-frame background
-   *  band is never outlined — its silhouette is the page edge. */
+   *  band is never outlined — its silhouette is the page edge. Drawn as two
+   *  to four confident arcs with tapered ends rather than one closed loop. */
   outlines?: boolean;
+  /** Built-up weight on the value plan's anchor band, 0..1 (default 0.5),
+   *  consulted only when `outlines` is on. The sheet's focal silhouette earns
+   *  repeated offset passes of the same pen, so one shape carries more weight
+   *  than the rest — the hierarchy a drawing needs and a traced loop can't
+   *  give. Never a stroke-width trick: this has to plot. */
+  outlineWeight?: number;
 
   // ---- Textures ----
   /** Explicit outer→inner band textures, cycled if shorter than `bands`.
@@ -155,6 +167,12 @@ export interface LapidaryOptions {
   /** Seeded per-band drift off the base angle in degrees (default 25);
    *  the background band never drifts */
   angleDriftDeg?: number;
+  /** Snap that drift to multiples of this many degrees, 0..45 (default 15;
+   *  0 = free drift). Related angles read as a decision; a free draw kept
+   *  landing neighbouring bands a degree or two apart, which reads as one
+   *  direction badly held. Ignored when it is coarser than `angleDriftDeg`,
+   *  so a deliberately tight drift still varies. */
+  angleQuantumDeg?: number;
   /** Base line pitch in px (default sizingDim/150) */
   spacingPx?: number;
   /** 0..1 spread between dense and sparse bands (default 0.6) */
@@ -168,6 +186,34 @@ export interface LapidaryOptions {
    *  0.25 */
   patchiness?: number;
 
+  // ---- Value ----
+  /**
+   * How hard the sheet's tonal composition is committed, 0..1 (default 0.65).
+   *
+   * Band darkness used to be a pitch lottery, so nothing guaranteed a dark to
+   * hang the drawing on, nothing guaranteed reserved paper, and two
+   * neighbours could land a hair apart — which reads as a mistake rather than
+   * a decision. This composes a value ladder first and derives every band's
+   * pitch from it, the way the image pipeline commits `valueBands` before it
+   * draws. At 0 the ladder is nearly flat and the sheet reads undifferentiated;
+   * at 1 it spans held paper to a near-solid mass. It also scales how hard the
+   * texture deal weights marks by role and value.
+   */
+  valueStructure?: number;
+  /** Which way the darks run across the stack (default 'auto' — a seeded
+   *  pick). 'dark-core' sinks the weight to the centre, 'dark-rim' vignettes,
+   *  'alternating' is the classic banded agate, 'ramp' walks it across, and
+   *  'flat' opts out. */
+  valueRhythm?: LapidaryValueRhythm;
+  /** Let the plan hold its lightest band as bare paper (default true) — the
+   *  restraint that makes the rest of the sheet read as marks rather than as
+   *  a veil. Never applies to the full-frame field. */
+  paperBand?: boolean;
+  /** How far a band graduates across its own width, 0..1 (default 0.45).
+   *  Real agate darkens from one edge of a band to the other; a flat tone
+   *  across every band is the printed-screen tell. */
+  gradation?: number;
+
   // ---- Pens ----
   /** Pen count 1..4 (default 1) — strokes are tagged ink-0..ink-3 */
   pens?: number;
@@ -177,6 +223,16 @@ export interface LapidaryOptions {
   penAssignment?: PenAssignment;
 
   // ---- Finish ----
+  /** Plotted pen width in px (default spacingPx/4) — sizes the built-up
+   *  keyline's offset passes and the per-pen misregistration, both of which
+   *  are only meaningful relative to the mark the pen actually makes. */
+  penPx?: number;
+  /** Per-pen misregistration, 0..1 (default 0.5). Real multi-pen work never
+   *  registers perfectly: the sheet comes off the bed and goes back for the
+   *  next pen, and the whole plate lands a hair off. Pen 0 is the datum;
+   *  each later pen takes its own seeded shift, scaled by the pen width and
+   *  hard-capped at 0.3 of the seam so the drift can never close a seam. */
+  misregistration?: number;
   /** Hand-drawn wobble amplitude in px (default sizingDim/500); capped so
    *  it can never bend ink into a seam */
   wobble?: number;
@@ -408,6 +464,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
   const haloPx = Math.max(1.5, options.haloPx ?? sizingDim / 110);
   const spacingPx = Math.max(1.2, options.spacingPx ?? sizingDim / 150);
   const featureScale = sizingDim / TUNING_DIM;
+  const penPx = Math.max(0.2, options.penPx ?? spacingPx * 0.25);
 
   const layout: LayoutConfig = {
     seed,
@@ -428,6 +485,11 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     densityContrast: clamp(options.densityContrast ?? 0.6, 0, 1),
     waviness: clamp(options.waviness ?? 0.5, 0, 1),
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
+    valueStructure: clamp(options.valueStructure ?? 0.65, 0, 1),
+    valueRhythm: options.valueRhythm ?? 'auto',
+    paperBand: options.paperBand ?? true,
+    gradation: clamp(options.gradation ?? 0.45, 0, 1),
+    angleQuantumDeg: clamp(options.angleQuantumDeg ?? 15, 0, 45),
     faults: clamp(Math.round(options.faults ?? 0), 0, 4),
     spiralForm: options.spiralForm ?? 'circular',
     spiralDirection: options.spiralDirection ?? 'inward',
@@ -439,7 +501,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
   };
 
   const pens = clamp(Math.round(options.pens ?? 1), 1, 4);
-  const { regions, geometricGaps } = buildRegions(layout);
+  const { regions, geometricGaps, plan } = buildRegions(layout);
   const lines = carveRegions(regions, fillRegion, {
     width,
     height,
@@ -448,6 +510,10 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     pens,
     penAssignment: options.penAssignment ?? 'interleave',
     outlines: options.outlines ?? false,
+    outlineWeight: clamp(options.outlineWeight ?? 0.5, 0, 1),
+    // The value plan's dark anchor is the sheet's focal shape, so it is the
+    // silhouette that earns the built-up keyline.
+    heroZ: plan.anchor,
     geometricGaps,
     featureScale,
   });
@@ -458,6 +524,34 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
   }
 
   let result: FlowLinesResult = { lines, width, height, seed };
+
+  // Misregistration: a systematic per-pen plate shift, not extra shake. Pen 0
+  // is the registration datum; every later pen lands a hair off it. Capped at
+  // 0.3 of the seam and subtracted from the wobble budget below, so the total
+  // per-point displacement is exactly what it was before — the seam survives
+  // by construction, not by luck.
+  const misregisterPx = clamp(
+    (options.misregistration ?? 0.5) * penPx * 1.2,
+    0,
+    haloPx * 0.3
+  );
+  if (misregisterPx > 0 && pens > 1) {
+    const mr = makeRandom(subSeed(seed, 502));
+    const shift = new Map<string, Point>();
+    for (let g = 1; g < pens; g++) {
+      const a = mr() * Math.PI * 2;
+      const r = misregisterPx * (0.5 + 0.5 * mr());
+      shift.set(inkLayerName(g), { x: Math.cos(a) * r, y: Math.sin(a) * r });
+    }
+    for (const line of result.lines) {
+      const off = line.layer === undefined ? undefined : shift.get(line.layer);
+      if (!off) continue;
+      for (const p of line.points) {
+        p.x += off.x;
+        p.y += off.y;
+      }
+    }
+  }
 
   if (optimize) {
     // Chain within pens, but never far enough to bridge a seam — and chain
@@ -480,8 +574,10 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
       seed: subSeed(seed, 501),
       // The seams are reserved paper carved before the hand pass; the wobble
       // tail must never bend surviving ink back into them. The cap is
-      // per-point, so it binds identically on a long chained polyline.
-      maxDisplacement: haloPx * 0.35,
+      // per-point, so it binds identically on a long chained polyline. The
+      // misregistration shift already spent part of the budget, so the rest
+      // is what wobble may claim.
+      maxDisplacement: haloPx * 0.35 - misregisterPx,
     });
   }
 
