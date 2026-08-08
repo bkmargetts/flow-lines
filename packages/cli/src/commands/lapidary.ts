@@ -76,7 +76,8 @@ export function registerLapidary(program: Command) {
     .option('--center-y <number>', 'Composition centre Y offset (-0.5..0.5)')
     .option(
       '--spiral-form <form>',
-      'Spiral cross-section: circular | rectangular (superellipse coil matching the sheet aspect; spiral only)'
+      'Spiral cross-section: circular | rectangular (superellipse coil matching the sheet aspect) | ' +
+        'page (full-bleed — the margin rect itself is the coil, corners included; spiral only)'
     )
     .option(
       '--spiral-direction <dir>',

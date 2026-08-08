@@ -268,7 +268,7 @@ const SPECS: GenomeSpec[] = [
         'shuffle',
       ],
       penAssignment: ['interleave', 'per-region'],
-      spiralForm: ['circular', 'rectangular'],
+      spiralForm: ['circular', 'rectangular', 'page'],
       spiralDirection: ['inward', 'outward'],
       spiralJoin: ['cells', 'blend'],
     },

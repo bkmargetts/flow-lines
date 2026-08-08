@@ -14,9 +14,12 @@ import { spiralRegions } from './spiral.js';
 export type LapidaryMode = 'agate' | 'breccia' | 'strata' | 'spiral';
 export type { LapidaryShape } from './shapes.js';
 
-/** Spiral cross-section: a round coil, or a superellipse coil that squares
- *  off toward the page corners (matching the sheet's aspect). */
-export type SpiralForm = 'circular' | 'rectangular';
+/** Spiral cross-section: a round coil, a superellipse coil that squares
+ *  off toward the page corners (matching the sheet's aspect), or 'page' —
+ *  the true margin rectangle itself, corners and all, so the sheet IS the
+ *  spiral: the rim runs flush with the page edge and the coil insets from
+ *  there. */
+export type SpiralForm = 'circular' | 'rectangular' | 'page';
 
 /** Which end of the ribbon leads: 'inward' winds from the rim into the
  *  centre (the taper thins and the deal runs toward the core); 'outward'

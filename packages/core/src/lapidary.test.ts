@@ -648,6 +648,7 @@ describe('generateLapidary', () => {
         { spiralPulse: 1 },
         { shapes: 'angular' },
         { spiralForm: 'rectangular', shapes: 'angular' },
+        { spiralForm: 'page' },
       ];
       const hashes = variants.map((v) => {
         const a = generateLapidary({ ...SPIRAL, ...v });
@@ -839,6 +840,46 @@ describe('generateLapidary', () => {
           }
         }
         expect(min).toBeGreaterThanOrEqual(haloPx * 0.45);
+      }
+    });
+
+    it('page form runs the coil flush to the margin rect, corners included', () => {
+      // The page form's boundary table IS the margin rectangle — at high
+      // width the coil fills the sheet corner to corner while never
+      // spilling past the page.
+      const r = generateLapidary({
+        ...SPIRAL,
+        spiralForm: 'page',
+        spiralWidth: 1,
+        spiralTaper: 0,
+        spiralPulse: 0,
+        coverage: 1,
+        field: false,
+        wobble: 0,
+        optimize: false,
+      });
+      expect(r.lines.length).toBeGreaterThan(100);
+      const corners = [
+        { x: 20, y: 20 },
+        { x: 280, y: 20 },
+        { x: 280, y: 380 },
+        { x: 20, y: 380 },
+      ];
+      for (const c of corners) {
+        let min = Infinity;
+        for (const line of r.lines) {
+          for (const p of line.points) {
+            expect(p.x).toBeGreaterThanOrEqual(0);
+            expect(p.x).toBeLessThanOrEqual(BASE.width);
+            expect(p.y).toBeGreaterThanOrEqual(0);
+            expect(p.y).toBeLessThanOrEqual(BASE.height);
+            const d = Math.hypot(p.x - c.x, p.y - c.y);
+            if (d < min) min = d;
+          }
+        }
+        // The adaptive walk chamfers the extreme tip slightly on a tiny
+        // page; 20px on this 260px frame still pins corner-reach.
+        expect(min, `corner ${c.x},${c.y}`).toBeLessThan(20);
       }
     });
 

@@ -159,6 +159,7 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
             >
               <option value="circular">Circular coil</option>
               <option value="rectangular">Rectangular coil</option>
+              <option value="page">Page — full-bleed, the sheet is the coil</option>
             </select>
           </label>
           <label className="field">

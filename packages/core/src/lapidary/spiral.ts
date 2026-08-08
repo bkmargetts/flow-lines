@@ -31,6 +31,20 @@ function spiralBoundaryTable(cfg: LayoutConfig, shape: LapidaryShape): Float64Ar
       ? angularBoundaryTable(subSeed(cfg.seed, 20), cfg.irregularity)
       : blobBoundaryTable(subSeed(cfg.seed, 20), cfg.irregularity * 0.7, null, 0);
   }
+  if (cfg.spiralForm === 'page') {
+    // The margin rect itself, exactly: g·e(θ) lands on the rectangle's
+    // boundary, so values run 1..√2 (the corners) and are deliberately NOT
+    // normalized — the coil's rim is the page, not its inscribed ellipse.
+    // 45° falls on a table sample, so the corners are hit exactly. The
+    // shape language keeps its say through the centreline drift alone
+    // (organic interiors breathe; the page-true rim is capped in pass 2).
+    const table = new Float64Array(THETA_SAMPLES);
+    for (let j = 0; j < THETA_SAMPLES; j++) {
+      const theta = (j / THETA_SAMPLES) * TWO_PI;
+      table[j] = Math.min(1 / Math.max(1e-9, Math.abs(Math.cos(theta))), 1 / Math.max(1e-9, Math.abs(Math.sin(theta))));
+    }
+    return table;
+  }
   const p = shape === 'angular' ? 8 : 4.5;
   const mod =
     shape === 'organic'
@@ -191,8 +205,12 @@ export function spiralRegions(
       1,
       Math.min(0.5 * (gapOutPx - seamPad), Math.max(floorHalf, desired))
     );
-    const rhoOut = rhos[i] + halfOut / bl;
-    const rhoIn = Math.max(0.004, rhos[i] - halfIn / bl);
+    let rhoOut = rhos[i] + halfOut / bl;
+    // The page form's rim runs flush with the margin rect and never
+    // overshoots into the margin — the outermost band IS the page edge for
+    // the opening stretch, then peels inward as the coil descends.
+    if (cfg.spiralForm === 'page') rhoOut = Math.min(rhoOut, cfg.coverage * b);
+    const rhoIn = Math.max(0.004, Math.min(rhos[i] - halfIn / bl, rhoOut - 0.5 / bl));
     outer.push({ x: cx + Math.cos(theta) * rx * rhoOut, y: cy + Math.sin(theta) * ry * rhoOut });
     inner.push({ x: cx + Math.cos(theta) * rx * rhoIn, y: cy + Math.sin(theta) * ry * rhoIn });
   }

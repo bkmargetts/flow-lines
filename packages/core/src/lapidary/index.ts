@@ -103,9 +103,11 @@ export interface LapidaryOptions {
   /** Composition centre offset as a fraction of the half-extents, -0.5..0.5 */
   centerX?: number;
   centerY?: number;
-  /** Spiral cross-section (default 'circular'): a round coil, or a
+  /** Spiral cross-section (default 'circular'): a round coil, a
    *  'rectangular' superellipse coil that squares off to the sheet's
-   *  aspect. Spiral only. */
+   *  aspect, or 'page' — the margin rectangle itself, corners included:
+   *  the rim runs flush with the page edge and the whole sheet becomes the
+   *  coil (pair with spiralWidth 1 for a full-bleed spiral). Spiral only. */
   spiralForm?: SpiralForm;
   /** Which end of the ribbon leads (default 'inward'): 'inward' winds from
    *  the rim into the centre; 'outward' unwinds from the centre, loosening
@@ -305,6 +307,19 @@ export const LAPIDARY_PRESETS: Record<string, Partial<LapidaryOptions>> = {
     spiralPulse: 0.1,
     coverage: 0.97,
     irregularity: 0.25,
+  },
+  slab: {
+    mode: 'spiral',
+    spiralForm: 'page',
+    bands: 4,
+    pens: 3,
+    penAssignment: 'per-region',
+    field: false,
+    spiralWidth: 0.9,
+    spiralTaper: 0,
+    spiralPulse: 0.05,
+    coverage: 1,
+    irregularity: 0.3,
   },
 };
 

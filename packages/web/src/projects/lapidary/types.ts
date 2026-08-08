@@ -31,6 +31,7 @@ export type LapidaryLook =
   | 'ammonite'
   | 'labyrinth'
   | 'coil'
+  | 'slab'
   | 'mono'
   | 'custom';
 
