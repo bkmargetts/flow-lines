@@ -26,6 +26,7 @@ export interface ImpactGridState {
   granularity: number; // 0..1 mosaic scale mixture (slabs vs patch clusters)
 
   // Impact
+  strikes: number; // 0..24 invisible point strikes when no path is drawn (0 = off)
   paneStress: number; // 0..1 pane-wide crack/damage reach from the strike
   energy: number; // 0..1 impact violence, scales the gesture's speed
   focus: number; // 0..1 carve concentration: 1 = one crater, 0 = whole path
@@ -77,6 +78,7 @@ export const defaultImpactGridState: ImpactGridState = {
   gap: 0.06,
   granularity: 0.6,
 
+  strikes: 0,
   paneStress: 0.6,
   energy: 0.6,
   focus: 0.35,
@@ -128,6 +130,9 @@ export function randomImpactGridGenome(rng: () => number): Partial<ImpactGridSta
     gap: Number((rng() * 0.4).toFixed(2)),
     granularity: Number((rng()).toFixed(2)),
     impactRadiusMm: Math.round(20 + rng() * 100),
+    // Point-strike mode fires only with no drawn path — half the rolls turn
+    // it on so an undrawn pane comes alive too.
+    strikes: rng() < 0.5 ? 0 : 2 + Math.floor(rng() * 9),
     paneStress: Number((0.3 + rng() * 0.7).toFixed(2)),
     energy: Number((0.3 + rng() * 0.7).toFixed(2)),
     focus: Number((rng()).toFixed(2)),

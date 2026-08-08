@@ -196,6 +196,7 @@ const SPECS: GenomeSpec[] = [
       rotationJitter: [0, 1],
       gap: [0, 0.6],
       impactRadiusMm: [10, 150],
+      strikes: [0, 24],
       impactStrength: [0, 1],
       shatter: [0, 1],
       scatter: [0, 1],
@@ -211,7 +212,7 @@ const SPECS: GenomeSpec[] = [
       drift: [0, 1],
       granularity: [0, 1],
     },
-    ints: ['frameDepth', 'impactRadiusMm'],
+    ints: ['frameDepth', 'impactRadiusMm', 'strikes'],
     bools: ['inkPath'],
     enums: {
       layout: ['mosaic', 'grid', 'frame', 'bars'],
