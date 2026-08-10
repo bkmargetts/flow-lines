@@ -149,6 +149,10 @@ CASES['lapidary/slab'] = ['lapidary', ...SIZE, ...SEED, '--preset', 'slab'];
 CASES['lapidary/craft'] = [
   'lapidary', ...SIZE, ...SEED, '--taper', '0.9', '--jitter-deg', '2.5',
 ];
+CASES['lapidary/outlines'] = [
+  'lapidary', ...SIZE, ...SEED, '--outlines', '--outline-emphasis', '3',
+  '--textures', 'lines,solid,hatch',
+];
 CASES['lapidary/tone'] = [
   'lapidary', ...SIZE, ...SEED, '--tone-shape', 'light', '--tone-strength', '0.8',
   '--light-angle', '45',

@@ -66,6 +66,7 @@ export interface LapidaryState {
   // Seams
   haloMm: number; // reserved-paper seam width
   outlines: boolean;
+  outlineEmphasis: number; // 1..3 offset passes each outline dash builds from
 
   // Textures
   textureMix: LapidaryTextureMix;
@@ -121,6 +122,7 @@ export const defaultLapidaryState: LapidaryState = {
 
   haloMm: 2.2,
   outlines: false,
+  outlineEmphasis: 2,
 
   textureMix: 'specimen',
   spacingMm: 1.3,

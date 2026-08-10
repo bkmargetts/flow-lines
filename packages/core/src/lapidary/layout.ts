@@ -51,6 +51,7 @@ export type LapidaryTexture =
   | 'stipple'
   | 'mottle'
   | 'grain'
+  | 'solid'
   | 'blank';
 
 /** Per-band texture spec; a plain kind string means "defaults for that kind". */
@@ -229,12 +230,16 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   // of the reference, with paper showing through the stacked passages.
   mottle: 0.5,
   grain: 0.7,
+  // Committed black: serpentine rows at pen-width pitch. Pair with a pen
+  // width near 0.3× the base spacing so the rows close up into ink.
+  solid: 0.3,
   blank: 1,
 };
 
-/** Kinds the seeded picker may deal a band (blank and crystal are
+/** Kinds the seeded picker may deal a band (blank, crystal and solid are
  *  preset-only — a random paper band next to the background reads as a hole,
- *  not a decision, and a druzy ray-burst is too loud to land uninvited). */
+ *  not a decision, a druzy ray-burst is too loud to land uninvited, and a
+ *  committed black mass must be an artist's call, not a dice roll). */
 const RANDOM_KINDS: LapidaryTexture[] = [
   'lines',
   'wavy',

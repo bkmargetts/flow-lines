@@ -651,6 +651,83 @@ describe('generateLapidary', () => {
     }
   });
 
+  it('outline emphasis stacks bold passes and everything bold is outline ink', () => {
+    const solo = {
+      ...BASE,
+      bands: 2,
+      field: false,
+      textures: ['lines', 'blank', 'hatch'] as ['lines', 'blank', 'hatch'],
+      outlines: true,
+      wobble: 0,
+      optimize: false,
+    };
+    const n1 = generateLapidary({ ...solo, outlineEmphasis: 1 }).lines.length;
+    const n3 = generateLapidary({ ...solo, outlineEmphasis: 3 }).lines.length;
+    expect(n3).toBeGreaterThan(n1);
+    // Outline strokes carry the bold pen (calmer wobble, heavier weight);
+    // fills never do. The un-outlined render has no bold ink at all.
+    const outlined = generateLapidary(solo);
+    expect(outlined.lines.filter((l) => l.pen === 'bold').length).toBeGreaterThan(2);
+    const plain = generateLapidary({ ...solo, outlines: false });
+    expect(plain.lines.some((l) => l.pen === 'bold')).toBe(false);
+  });
+
+  it('veins carry the bold pen and an emphasis pass', () => {
+    const base = { ...BASE, mode: 'breccia' as const, pens: 3, wobble: 0, optimize: false };
+    const without = generateLapidary(base);
+    const withVeins = generateLapidary({ ...base, veins: true });
+    const veins = withVeins.lines.slice(without.lines.length);
+    expect(veins.length).toBeGreaterThan(0);
+    for (const line of veins) {
+      expect(line.layer).toBe(VEIN_LAYER);
+      expect(line.pen).toBe('bold');
+    }
+  });
+
+  it('solid bands serpentine into long chains and respect the seams', () => {
+    const haloPx = 8;
+    const r = generateLapidary({
+      ...BASE,
+      mode: 'agate',
+      bands: 3,
+      pens: 4,
+      penAssignment: 'per-region',
+      textures: ['lines', 'solid', 'lines'],
+      haloPx,
+      wobble: 0,
+      optimize: false,
+    });
+    // The solid band (z=1) plots as a few continuous serpentine strokes,
+    // not one stroke per row.
+    const solid = r.lines.filter((l) => l.layer === inkLayerName(1));
+    expect(solid.length).toBeGreaterThan(0);
+    expect(Math.max(...solid.map((l) => l.points.length))).toBeGreaterThan(100);
+    // And the halo property holds around it.
+    const byLayer = new Map<string, { x: number; y: number }[]>();
+    for (const line of r.lines) {
+      const arr = byLayer.get(line.layer!) ?? [];
+      for (let i = 0; i < line.points.length; i += 3) arr.push(line.points[i]);
+      byLayer.set(line.layer!, arr);
+    }
+    for (const [la, lb] of [
+      [inkLayerName(0), inkLayerName(1)],
+      [inkLayerName(1), inkLayerName(2)],
+    ] as [string, string][]) {
+      const a = byLayer.get(la) ?? [];
+      const b = byLayer.get(lb) ?? [];
+      expect(a.length).toBeGreaterThan(10);
+      expect(b.length).toBeGreaterThan(10);
+      let min = Infinity;
+      for (const p of a) {
+        for (const q of b) {
+          const d = Math.hypot(p.x - q.x, p.y - q.y);
+          if (d < min) min = d;
+        }
+      }
+      expect(min).toBeGreaterThanOrEqual(haloPx * 0.45);
+    }
+  });
+
   it('coverage scales the outermost silhouette', () => {
     const reach = (coverage: number): number => {
       const r = generateLapidary({ ...BASE, field: false, coverage, wobble: 0, optimize: false });

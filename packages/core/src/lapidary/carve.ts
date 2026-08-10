@@ -1,7 +1,9 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { CoverageAccumulator, createCoverageAccumulator, clipLinesToMask } from '../compose/index.js';
+import { smoothPolyline } from '../lib/polyline.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { inkLayerName } from '../marbling/index.js';
+import { offsetEmphasisPasses } from '../pen-ink/swell.js';
 import { Region } from './layout.js';
 import { RegionFill } from './textures.js';
 
@@ -15,6 +17,8 @@ export interface CarveConfig {
   pens: number;
   penAssignment: PenAssignment;
   outlines: boolean;
+  /** Offset single-pen passes each outline dash is built from (1-3). */
+  outlineEmphasis: number;
   /** Strata builds its seam gaps into the polygons — skip the masks. */
   geometricGaps: boolean;
   /** sizingDim / TUNING_DIM — scales the outline densify step. */
@@ -58,11 +62,20 @@ function assignPens(lines: FlowLine[], region: Region, cfg: CarveConfig): void {
   }
 }
 
-/** The region silhouette as a closed, densified stroke. */
-function outlineLines(region: Region, featureScale: number): FlowLine[] {
+/**
+ * The region silhouette as a bold, broken, hand-drawn stroke: the closed
+ * loop is smoothed a touch, broken into dashes with pen-lift gaps (the
+ * botanical broken-outline idiom — a suggestion, not a coloring-book
+ * border), and each dash is built up from trimmed offset passes of the
+ * same pen so it swells like a real ink stroke instead of a uniform rail.
+ * Every stroke is tagged `pen: 'bold'` — drawn with commitment, so the
+ * hand pass wobbles it less and the SVG gives it the heavier weight.
+ */
+function outlineLines(region: Region, cfg: CarveConfig): FlowLine[] {
   const poly = region.poly;
+  const fs = cfg.featureScale;
   const points: Point[] = [];
-  const step = Math.max(1, 6 * featureScale);
+  const step = Math.max(1, 6 * fs);
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i];
     const b = poly[(i + 1) % poly.length];
@@ -73,8 +86,63 @@ function outlineLines(region: Region, featureScale: number): FlowLine[] {
       points.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
     }
   }
-  if (points.length >= 2) points.push({ ...points[0] });
-  return points.length >= 2 ? [{ points }] : [];
+  if (points.length < 3) return [];
+  const loop = smoothPolyline(points, 1);
+  loop.push({ ...loop[0] });
+  const cum: number[] = new Array(loop.length);
+  cum[0] = 0;
+  for (let i = 1; i < loop.length; i++) {
+    cum[i] = cum[i - 1] + Math.hypot(loop[i].x - loop[i - 1].x, loop[i].y - loop[i - 1].y);
+  }
+  const total = cum[loop.length - 1];
+  const at = (s: number): Point => {
+    let i = 1;
+    while (i < loop.length - 1 && cum[i] < s) i++;
+    const span = cum[i] - cum[i - 1] || 1;
+    const f = (s - cum[i - 1]) / span;
+    return {
+      x: loop[i - 1].x + (loop[i].x - loop[i - 1].x) * f,
+      y: loop[i - 1].y + (loop[i].y - loop[i - 1].y) * f,
+    };
+  };
+  const rng = makeRandom(subSeed(cfg.seed, 950 + region.z));
+  const out: FlowLine[] = [];
+  const emitDash = (sa: number, sb: number): void => {
+    const dash: Point[] = [at(sa)];
+    for (let i = 0; i < loop.length; i++) {
+      if (cum[i] > sa && cum[i] < sb) dash.push(loop[i]);
+    }
+    dash.push(at(sb));
+    if (dash.length < 2) return;
+    out.push({ points: dash, pen: 'bold' });
+    for (const pass of offsetEmphasisPasses(dash, cfg.outlineEmphasis, 0.7 * Math.max(0.5, fs), 0.15)) {
+      out.push({ points: pass, pen: 'bold' });
+    }
+  };
+  // Tiny loops (collapsed cores) stay whole — dashing them leaves confetti.
+  if (total < 60 * fs) {
+    out.push({ points: loop, pen: 'bold' });
+    for (const pass of offsetEmphasisPasses(loop, cfg.outlineEmphasis, 0.7 * Math.max(0.5, fs), 0.15)) {
+      out.push({ points: pass, pen: 'bold' });
+    }
+    return out;
+  }
+  const phase = total * rng();
+  let s = 0;
+  let guard = 0;
+  while (s < total - 2 && guard++ < 400) {
+    const e = Math.min(total, s + (30 + rng() * 40) * fs);
+    const sa = (s + phase) % total;
+    const sb = (e + phase) % total;
+    if (sa < sb) {
+      emitDash(sa, sb);
+    } else {
+      if (total - sa > 2) emitDash(sa, total);
+      if (sb > 2) emitDash(0, sb);
+    }
+    s = e + (8 + rng() * 16) * fs;
+  }
+  return out;
 }
 
 /**
@@ -99,7 +167,7 @@ export function carveRegions(
   for (const region of sorted) {
     const { ink, phantom } = fill(region);
     let drawn =
-      cfg.outlines && region.z > 0 ? [...ink, ...outlineLines(region, cfg.featureScale)] : ink;
+      cfg.outlines && region.z > 0 ? [...ink, ...outlineLines(region, cfg)] : ink;
     if (!cfg.geometricGaps) {
       // Seamless regions (blend-joined spiral cells) still stamp coverage —
       // the field below carves around them — but are never clipped

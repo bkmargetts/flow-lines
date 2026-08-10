@@ -225,6 +225,9 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         <Slider label="Light angle" value={state.lightAngleDeg} min={-180} max={180} step={1} onChange={(v) => update({ lightAngleDeg: v })} format={(v) => `${Math.round(v)}°`} />
       )}
       <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
+      {state.outlines && (
+        <Slider label="Outline weight" value={state.outlineEmphasis} min={1} max={3} step={1} onChange={(v) => update({ outlineEmphasis: v })} format={(v) => `${Math.round(v)} pass${Math.round(v) > 1 ? 'es' : ''}`} />
+      )}
       {breccia && (
         <Toggle label="Kintsugi veins" checked={state.veins} onChange={(v) => update({ veins: v })} />
       )}

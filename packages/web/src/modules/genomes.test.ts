@@ -247,13 +247,14 @@ const SPECS: GenomeSpec[] = [
       jitterDeg: [0, 3],
       toneStrength: [0, 1],
       lightAngleDeg: [-180, 180],
+      outlineEmphasis: [1, 3],
       pens: [1, 4],
       faults: [0, 4],
       spiralWidth: [0.15, 1],
       spiralTaper: [-1, 1],
       spiralPulse: [0, 1],
     },
-    ints: ['bands', 'angleDriftDeg', 'pens', 'faults', 'lightAngleDeg'],
+    ints: ['bands', 'angleDriftDeg', 'pens', 'faults', 'lightAngleDeg', 'outlineEmphasis'],
     bools: ['outlines', 'field', 'veins'],
     enums: {
       // 'custom' resets the Look picker's label — a rolled state is no

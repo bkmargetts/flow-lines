@@ -404,6 +404,68 @@ export function fillRegion(region: Region): RegionFill {
       break;
     }
 
+    case 'solid': {
+      // A deliberate committed black (preset/manual only): boustrophedon
+      // serpentine — consecutive rows joined wherever the connector stays
+      // inside the region, so the mass plots as a few continuous strokes —
+      // plus a traced boundary loop, so the edge is a drawn line, not
+      // scanline stair-steps (the planSolidFill idiom on exact polygon
+      // geometry). Exempt from tone, taper and stagger: solid is ink, not
+      // shading.
+      const pitch = t.spacing;
+      const rows: [Point, Point][] = [];
+      sweepRows(t.angleRad, pitch, t.phase, (a, b) => rows.push([a, b]), poly, null);
+      let chain: Point[] = [];
+      const flushChain = (): void => {
+        if (chain.length >= 2) push(ink, chain);
+        chain = [];
+      };
+      for (const [a, b] of rows) {
+        if (chain.length === 0) {
+          chain.push(...densify(a, b, step));
+          continue;
+        }
+        const end = chain[chain.length - 1];
+        // Serpentine: enter each row from the end nearer the previous exit.
+        const enterA =
+          Math.hypot(a.x - end.x, a.y - end.y) <= Math.hypot(b.x - end.x, b.y - end.y);
+        const s = enterA ? a : b;
+        const e = enterA ? b : a;
+        const jump = Math.hypot(s.x - end.x, s.y - end.y);
+        const mid = { x: (s.x + end.x) / 2, y: (s.y + end.y) / 2 };
+        if (jump <= pitch * 2.5 && pointInPolygon(poly, mid.x, mid.y)) {
+          chain.push(...densify(s, e, step));
+        } else {
+          flushChain();
+          chain.push(...densify(s, e, step));
+        }
+      }
+      flushChain();
+      if (region.radial) {
+        // Boundary trace inset half a pitch, in table space (never
+        // self-intersects on these star-shaped blobs).
+        const { cx, cy, rx, ry, table } = region.radial;
+        const n = table.length;
+        const loop: Point[] = [];
+        for (let j = 0; j <= n; j++) {
+          const theta = ((j % n) / n) * Math.PI * 2;
+          const bl = Math.hypot(Math.cos(theta) * rx, Math.sin(theta) * ry) || 1e-6;
+          const g = Math.max(0, table[j % n] - (pitch * 0.5) / bl);
+          loop.push({ x: cx + Math.cos(theta) * rx * g, y: cy + Math.sin(theta) * ry * g });
+        }
+        push(ink, loop);
+      } else {
+        const loop: Point[] = [];
+        for (let i = 0; i < poly.length; i++) {
+          const seg = densify(poly[i], poly[(i + 1) % poly.length], step);
+          if (loop.length > 0) seg.shift();
+          loop.push(...seg);
+        }
+        push(ink, loop);
+      }
+      break;
+    }
+
     case 'contour': {
       // Concentric banding: loops that follow the region's own silhouette —
       // the fortification-agate mark. Offsets happen in table space, where an

@@ -30,6 +30,7 @@ const TEXTURE_KINDS = new Set([
   'stipple',
   'mottle',
   'grain',
+  'solid',
   'blank',
 ]);
 
@@ -103,7 +104,7 @@ export function registerLapidary(program: Command) {
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
-      'Outer→inner band textures, cycled (lines,wavy,contour,crystal,hatch,patchy,cross,stipple,mottle,grain,blank); ' +
+      'Outer→inner band textures, cycled (lines,wavy,contour,crystal,hatch,patchy,cross,stipple,mottle,grain,solid,blank); ' +
         'omit for a seeded deal. Per-band overrides: kind[:angle[:spacingScale]], ' +
         'e.g. lines:45,hatch:125:0.6,wavy::0.8'
     )
@@ -146,6 +147,10 @@ export function registerLapidary(program: Command) {
     .option('--vein-color <color>', 'Ink colour for the "vein" accent layer')
     .option('--outlines', 'Ink each region silhouette as a stroke (the background field is never outlined)')
     .option('--no-outlines', 'Switch outlines off (overrides a preset that enables them)')
+    .option(
+      '--outline-emphasis <number>',
+      'Offset single-pen passes each outline dash builds from (1-3; the bold weight)'
+    )
     .option('--wobble <number>', 'Hand-drawn wobble amplitude in px')
     .option(
       '--split-layers',
@@ -249,6 +254,7 @@ export function registerLapidary(program: Command) {
         pens: options.pens ? parseInt(options.pens, 10) : undefined,
         penAssignment: options.penAssignment as PenAssignment | undefined,
         outlines: typeof options.outlines === 'boolean' ? options.outlines : undefined,
+        outlineEmphasis: options.outlineEmphasis ? parseInt(options.outlineEmphasis, 10) : undefined,
         wobble: options.wobble ? parseFloat(options.wobble) : undefined,
       };
       for (const key of Object.keys(flagOptions) as Array<keyof LapidaryOptions>) {

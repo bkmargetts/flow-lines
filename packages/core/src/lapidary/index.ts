@@ -1,6 +1,7 @@
 import { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { optimizePlot } from '../optimize.js';
+import { offsetEmphasisPasses } from '../pen-ink/swell.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { clamp } from '../lib/math.js';
 import { buildRegions, LayoutConfig, Region, RegionRadial, TUNING_DIM } from './layout.js';
@@ -142,9 +143,15 @@ export interface LapidaryOptions {
   /** Reserved-paper seam width between regions in px (default sizingDim/110) */
   haloPx?: number;
   /** Ink each region silhouette as a stroke (default false — in the
-   *  reference the seam itself does the work). The full-frame background
-   *  band is never outlined — its silhouette is the page edge. */
+   *  reference the seam itself does the work). Outlines draw as bold,
+   *  broken, slightly smoothed dashes — pen lifts and resumes, a drawn
+   *  suggestion rather than a coloring-book border. The full-frame
+   *  background band is never outlined — its silhouette is the page edge. */
   outlines?: boolean;
+  /** How many trimmed offset passes of the single pen each outline dash is
+   *  built from, 1..3 (default 2): the built-up ink-stroke weight. 1 keeps
+   *  a single (broken, smoothed) line. */
+  outlineEmphasis?: number;
 
   // ---- Textures ----
   /** Explicit outer→inner band textures, cycled if shorter than `bands`.
@@ -363,7 +370,8 @@ function brecciaVeins(
   rect: { x0: number; y0: number; x1: number; y1: number },
   haloPx: number,
   stepPx: number,
-  pen: string
+  pen: string,
+  featureScale: number
 ): FlowLine[] {
   const frags = regions.filter((r) => r.z > 0 && r.radial);
   const insideFrag = (x: number, y: number, f: RegionRadial): boolean => {
@@ -401,7 +409,15 @@ function brecciaVeins(
       for (let i = 1; i < arc.length; i++) {
         len += Math.hypot(arc[i].x - arc[i - 1].x, arc[i].y - arc[i - 1].y);
       }
-      if (len >= haloPx * 3) out.push({ points: arc, layer: pen });
+      if (len >= haloPx * 3) {
+        // The kintsugi accent carries real weight: bold pen (calmer wobble)
+        // plus one trimmed offset pass, so the vein reads as a poured seam
+        // rather than another hairline.
+        out.push({ points: arc, layer: pen, pen: 'bold' });
+        for (const pass of offsetEmphasisPasses(arc, 2, 0.6 * Math.max(0.5, featureScale), 0.15)) {
+          out.push({ points: pass, layer: pen, pen: 'bold' });
+        }
+      }
       arc = [];
     };
     for (let i = 1; i < loop.length; i++) {
@@ -481,13 +497,14 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     pens,
     penAssignment: options.penAssignment ?? 'interleave',
     outlines: options.outlines ?? false,
+    outlineEmphasis: clamp(Math.round(options.outlineEmphasis ?? 2), 1, 3),
     geometricGaps,
     featureScale,
   });
 
   if ((options.veins ?? false) && layout.mode === 'breccia') {
     const veinStep = Math.max(1, 5 * featureScale);
-    lines.push(...brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER));
+    lines.push(...brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER, featureScale));
   }
 
   let result: FlowLinesResult = { lines, width, height, seed };
