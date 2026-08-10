@@ -118,6 +118,14 @@ export function registerLapidary(program: Command) {
       '--patchiness <number>',
       'Patchy/cross hole amount and mottle weave amount (0-1; cross floors its gate at 0.25)'
     )
+    .option(
+      '--taper <number>',
+      'Stroke end-taper amount (0-1): seeded end trims + occasional mid-stroke pen lifts'
+    )
+    .option(
+      '--jitter-deg <number>',
+      'Per-stroke angle jitter in degrees (0-3; ruled lines keep their exact angle)'
+    )
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')
     .option(
@@ -223,6 +231,8 @@ export function registerLapidary(program: Command) {
         densityContrast: options.densityContrast ? parseFloat(options.densityContrast) : undefined,
         waviness: options.waviness ? parseFloat(options.waviness) : undefined,
         patchiness: options.patchiness ? parseFloat(options.patchiness) : undefined,
+        taper: options.taper ? parseFloat(options.taper) : undefined,
+        jitterDeg: options.jitterDeg ? parseFloat(options.jitterDeg) : undefined,
         pens: options.pens ? parseInt(options.pens, 10) : undefined,
         penAssignment: options.penAssignment as PenAssignment | undefined,
         outlines: typeof options.outlines === 'boolean' ? options.outlines : undefined,

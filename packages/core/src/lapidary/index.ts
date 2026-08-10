@@ -167,6 +167,16 @@ export interface LapidaryOptions {
    *  0.55); cross keeps its second family legible by flooring its gate at
    *  0.25 */
   patchiness?: number;
+  /** Stroke end-taper amount 0..1 (default 0.7): seeded trims at both ends
+   *  of every mark plus occasional mid-stroke pen lifts, so strokes start
+   *  and stop like a hand-fed pen instead of a plotter bar. Per band via
+   *  `BandTexture.taper`. */
+  taper?: number;
+  /** Per-stroke rotation jitter in degrees, 0..3 (default 1.5) — each hatch
+   *  mark leaves the ruled angle by a hair, the tell of a hand keeping an
+   *  angle rather than a machine holding one. Ruled 'lines' bands are exempt
+   *  (their datum is the point); per band via `BandTexture.jitterDeg`. */
+  jitterDeg?: number;
 
   // ---- Pens ----
   /** Pen count 1..4 (default 1) — strokes are tagged ink-0..ink-3 */
@@ -428,6 +438,8 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     densityContrast: clamp(options.densityContrast ?? 0.6, 0, 1),
     waviness: clamp(options.waviness ?? 0.5, 0, 1),
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
+    taper: clamp(options.taper ?? 0.7, 0, 1),
+    jitterDeg: clamp(options.jitterDeg ?? 1.5, 0, 3),
     faults: clamp(Math.round(options.faults ?? 0), 0, 4),
     spiralForm: options.spiralForm ?? 'circular',
     spiralDirection: options.spiralDirection ?? 'inward',

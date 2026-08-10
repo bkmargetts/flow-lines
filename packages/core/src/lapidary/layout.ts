@@ -60,6 +60,10 @@ export interface BandTexture {
   /** Per-band override of the global patchiness (patchy/cross hole amount;
    *  mottle weave amount). */
   patchiness?: number;
+  /** Per-band override of the global stroke end-taper amount (0..1). */
+  taper?: number;
+  /** Per-band override of the global per-stroke angle jitter in degrees. */
+  jitterDeg?: number;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
 }
@@ -78,6 +82,14 @@ export interface ResolvedTexture {
   spacing: number;
   waviness: number;
   patchiness: number;
+  /** Stroke end-taper amount 0..1 (seeded trims at both ends + occasional
+   *  mid-stroke pen lift — the emitStroke craft). */
+  taper: number;
+  /** Per-stroke rotation jitter in radians. */
+  jitterRad: number;
+  /** Reserved-paper seam width — caps the dash stagger so staggered marks
+   *  can never lean into a seam. */
+  haloPx: number;
   /** Slides the hatch family so no two bands' lines register alike. */
   phase: number;
   seed: number;
@@ -148,6 +160,10 @@ export interface LayoutConfig {
   densityContrast: number;
   waviness: number;
   patchiness: number;
+  /** Stroke end-taper amount 0..1. */
+  taper: number;
+  /** Per-stroke rotation jitter in degrees. */
+  jitterDeg: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
   /** Spiral cross-section form (spiral only). */
@@ -242,6 +258,9 @@ export function resolveTexture(
     spacing,
     waviness: clamp(spec.waviness ?? cfg.waviness, 0, 1),
     patchiness: clamp(spec.patchiness ?? cfg.patchiness, 0, 1),
+    taper: clamp(spec.taper ?? cfg.taper, 0, 1),
+    jitterRad: (clamp(spec.jitterDeg ?? cfg.jitterDeg, 0, 3) * Math.PI) / 180,
+    haloPx: cfg.haloPx,
     phase: rng(),
     seed: subSeed(cfg.seed, 400 + z),
     featureScale: cfg.featureScale,

@@ -74,6 +74,8 @@ export interface LapidaryState {
   densityContrast: number; // 0..1 dense-vs-sparse spread
   waviness: number; // 0..1
   patchiness: number; // 0..1
+  taper: number; // 0..1 stroke end-taper (trims + occasional mid-stroke lifts)
+  jitterDeg: number; // 0..3° per-stroke angle jitter (ruled lines exempt)
 
   // Pens
   penAssignment: PenAssignment;
@@ -123,6 +125,8 @@ export const defaultLapidaryState: LapidaryState = {
   densityContrast: 0.6,
   waviness: 0.5,
   patchiness: 0.55,
+  taper: 0.7,
+  jitterDeg: 1.5,
 
   penAssignment: 'interleave',
   pens: 2,

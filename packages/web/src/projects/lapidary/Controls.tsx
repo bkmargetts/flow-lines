@@ -278,6 +278,8 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
           <Slider label="Density contrast" value={state.densityContrast} min={0} max={1} step={0.01} onChange={(v) => update({ densityContrast: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Waviness" value={state.waviness} min={0} max={1} step={0.01} onChange={(v) => update({ waviness: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Patchiness" value={state.patchiness} min={0} max={1} step={0.01} onChange={(v) => update({ patchiness: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="End taper" value={state.taper} min={0} max={1} step={0.01} onChange={(v) => update({ taper: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Stroke jitter" value={state.jitterDeg} min={0} max={3} step={0.1} onChange={(v) => update({ jitterDeg: v })} format={(v) => `${v.toFixed(1)}°`} />
         </AdvGroup>
 
         <AdvGroup title="Pen & finish">

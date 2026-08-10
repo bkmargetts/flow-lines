@@ -243,6 +243,8 @@ const SPECS: GenomeSpec[] = [
       densityContrast: [0, 1],
       waviness: [0, 1],
       patchiness: [0, 1],
+      taper: [0, 1],
+      jitterDeg: [0, 3],
       pens: [1, 4],
       faults: [0, 4],
       spiralWidth: [0.15, 1],

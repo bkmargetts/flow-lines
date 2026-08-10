@@ -92,6 +92,8 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     densityContrast: state.densityContrast,
     waviness: state.waviness,
     patchiness: state.patchiness,
+    taper: state.taper,
+    jitterDeg: state.jitterDeg,
 
     pens: inks.length,
     penAssignment: state.penAssignment,
