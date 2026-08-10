@@ -7,6 +7,7 @@ import {
   type LapidaryOptions,
   type LapidaryShapes,
   type LapidaryTexture,
+  type LapidaryToneShape,
   type BandTexture,
   type PenAssignment,
   type SpiralDirection,
@@ -126,6 +127,15 @@ export function registerLapidary(program: Command) {
       '--jitter-deg <number>',
       'Per-stroke angle jitter in degrees (0-3; ruled lines keep their exact angle)'
     )
+    .option(
+      '--tone-shape <shape>',
+      'Within-region shading: seam (dark against band walls) | core | light | noise | none'
+    )
+    .option('--tone-strength <number>', 'Shading strength (0-1; 0 = flat constant pitch)')
+    .option(
+      '--light-angle <number>',
+      'Direction the light comes from in degrees (tone-shape light; -120 = upper left)'
+    )
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')
     .option(
@@ -233,6 +243,9 @@ export function registerLapidary(program: Command) {
         patchiness: options.patchiness ? parseFloat(options.patchiness) : undefined,
         taper: options.taper ? parseFloat(options.taper) : undefined,
         jitterDeg: options.jitterDeg ? parseFloat(options.jitterDeg) : undefined,
+        toneShape: options.toneShape as LapidaryToneShape | undefined,
+        toneStrength: options.toneStrength ? parseFloat(options.toneStrength) : undefined,
+        lightAngleDeg: options.lightAngle ? parseFloat(options.lightAngle) : undefined,
         pens: options.pens ? parseInt(options.pens, 10) : undefined,
         penAssignment: options.penAssignment as PenAssignment | undefined,
         outlines: typeof options.outlines === 'boolean' ? options.outlines : undefined,

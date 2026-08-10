@@ -34,6 +34,12 @@ export type SpiralJoin = 'cells' | 'blend';
 /** Sheet-wide silhouette language; 'mixed' deals organic/angular per band. */
 export type LapidaryShapes = LapidaryShape | 'mixed';
 
+/** The within-region tone idea: 'seam' ramps dark against each band's
+ *  boundaries (the reference agate's densified band walls), 'core' shades
+ *  toward the region centre, 'light' models a flat light direction,
+ *  'noise' clouds each band, 'none' keeps the flat constant-pitch fill. */
+export type LapidaryToneShape = 'none' | 'seam' | 'core' | 'light' | 'noise';
+
 export type LapidaryTexture =
   | 'lines'
   | 'wavy'
@@ -64,6 +70,9 @@ export interface BandTexture {
   taper?: number;
   /** Per-band override of the global per-stroke angle jitter in degrees. */
   jitterDeg?: number;
+  /** Per-band override of the global tone strength (0 pins this band flat —
+   *  e.g. a preset holding its ruled field at constant pitch). */
+  tone?: number;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
 }
@@ -90,6 +99,14 @@ export interface ResolvedTexture {
   /** Reserved-paper seam width — caps the dash stagger so staggered marks
    *  can never lean into a seam. */
   haloPx: number;
+  /** Within-region tone shape (see `LapidaryToneShape`). */
+  toneShape: LapidaryToneShape;
+  /** Tone strength 0..1 (0 = flat). */
+  toneStrength: number;
+  /** Direction the light comes from, radians ('light' shape only). */
+  lightAngleRad: number;
+  /** Seeded stream for the 'noise' tone shape (fresh 600+z channel). */
+  toneSeed: number;
   /** Slides the hatch family so no two bands' lines register alike. */
   phase: number;
   seed: number;
@@ -137,6 +154,12 @@ export interface Region {
   strataBand?: RegionStrataBand;
   ribbon?: RegionRibbon;
   seamless?: boolean;
+  /** The inner neighbour's radial (agate rings): the band's second seam,
+   *  so the 'seam' tone can ramp against both walls of the annulus. */
+  innerRadial?: RegionRadial;
+  /** Radial boundaries the background field gathers around ('seam' tone):
+   *  the outermost agate ring, or every breccia fragment. */
+  fieldRefs?: RegionRadial[];
 }
 
 export interface LayoutConfig {
@@ -164,6 +187,12 @@ export interface LayoutConfig {
   taper: number;
   /** Per-stroke rotation jitter in degrees. */
   jitterDeg: number;
+  /** Within-region tone shape. */
+  toneShape: LapidaryToneShape;
+  /** Within-region tone strength 0..1. */
+  toneStrength: number;
+  /** Direction the light comes from, degrees ('light' tone shape). */
+  lightAngleDeg: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
   /** Spiral cross-section form (spiral only). */
@@ -261,6 +290,10 @@ export function resolveTexture(
     taper: clamp(spec.taper ?? cfg.taper, 0, 1),
     jitterRad: (clamp(spec.jitterDeg ?? cfg.jitterDeg, 0, 3) * Math.PI) / 180,
     haloPx: cfg.haloPx,
+    toneShape: cfg.toneShape,
+    toneStrength: clamp(spec.tone ?? cfg.toneStrength, 0, 1),
+    lightAngleRad: (cfg.lightAngleDeg * Math.PI) / 180,
+    toneSeed: subSeed(cfg.seed, 600 + z),
     phase: rng(),
     seed: subSeed(cfg.seed, 400 + z),
     featureScale: cfg.featureScale,
@@ -324,6 +357,15 @@ function agateRegions(cfg: LayoutConfig): Region[] {
   tables.forEach((g, i) =>
     push(i + 1, ringPolygon(cx, cy, halfW, halfH, g), { cx, cy, rx: halfW, ry: halfH, table: g })
   );
+  // Seam-tone geometry: each ring's second wall is its inner neighbour's
+  // boundary; the field gathers around the outermost ring.
+  const ringAt = (i: number): Region | undefined => regions[cfg.field ? i + 1 : i];
+  for (let i = 0; i < tables.length - 1; i++) {
+    ringAt(i)!.innerRadial = ringAt(i + 1)!.radial;
+  }
+  if (cfg.field && tables.length > 0) {
+    regions[0].fieldRefs = [ringAt(0)!.radial!];
+  }
   return regions;
 }
 
@@ -415,6 +457,10 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
       table,
     });
   });
+  // Seam-tone geometry: the field gathers around every fragment.
+  if (cfg.field && regions.length > 1) {
+    regions[0].fieldRefs = regions.slice(1).map((r) => r.radial!);
+  }
   return regions;
 }
 

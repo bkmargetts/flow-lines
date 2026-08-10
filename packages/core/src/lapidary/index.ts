@@ -13,6 +13,7 @@ export type {
   BandTexture,
   LapidaryShape,
   LapidaryShapes,
+  LapidaryToneShape,
   SpiralForm,
   SpiralDirection,
   SpiralJoin,
@@ -23,6 +24,7 @@ import type {
   LapidaryTexture,
   BandTexture,
   LapidaryShapes,
+  LapidaryToneShape,
   SpiralForm,
   SpiralDirection,
   SpiralJoin,
@@ -177,6 +179,22 @@ export interface LapidaryOptions {
    *  angle rather than a machine holding one. Ruled 'lines' bands are exempt
    *  (their datum is the point); per band via `BandTexture.jitterDeg`. */
   jitterDeg?: number;
+  /** Within-region tone shape (default 'seam'): each band carries an
+   *  internal tonal idea — rows tighten where the tone is dark and open
+   *  where light. 'seam' ramps dark against the band's own boundaries (the
+   *  reference agate's densified band walls; one-sided, the interior keeps
+   *  its flat tone), 'core' shades toward the region centre, 'light' models
+   *  a flat light direction, 'noise' clouds each band, 'none' switches the
+   *  whole mechanism off. Tone shades within the fills' floors — it never
+   *  opens paper inside a band. */
+  toneShape?: LapidaryToneShape;
+  /** Tone strength 0..1 (default 0.35 — a whisper, not chiaroscuro). At 0
+   *  every fill runs at today's constant pitch; per band via
+   *  `BandTexture.tone`. */
+  toneStrength?: number;
+  /** Direction the light comes from in degrees, 'light' shape only
+   *  (default -120 — upper left; 0 = from the right, -90 = from above). */
+  lightAngleDeg?: number;
 
   // ---- Pens ----
   /** Pen count 1..4 (default 1) — strokes are tagged ink-0..ink-3 */
@@ -440,6 +458,9 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
     taper: clamp(options.taper ?? 0.7, 0, 1),
     jitterDeg: clamp(options.jitterDeg ?? 1.5, 0, 3),
+    toneShape: options.toneShape ?? 'seam',
+    toneStrength: clamp(options.toneStrength ?? 0.35, 0, 1),
+    lightAngleDeg: options.lightAngleDeg ?? -120,
     faults: clamp(Math.round(options.faults ?? 0), 0, 4),
     spiralForm: options.spiralForm ?? 'circular',
     spiralDirection: options.spiralDirection ?? 'inward',

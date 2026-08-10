@@ -38,6 +38,9 @@ const PRESET_BASE = {
   patchiness: 0.55,
   taper: 0.7,
   jitterDeg: 1.5,
+  toneShape: 'seam',
+  toneStrength: 0.35,
+  lightAngleDeg: -120,
   penAssignment: 'interleave',
   spiralForm: 'circular',
   spiralDirection: 'inward',
@@ -277,6 +280,14 @@ export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> 
     patchiness: Number((0.25 + rng() * 0.6).toFixed(2)),
     taper: Number((0.45 + rng() * 0.5).toFixed(2)),
     jitterDeg: Number((0.5 + rng() * 2).toFixed(1)),
+    // Weighted toward the reference look: mostly seam (or flat), with the
+    // showier shades on a minority of rolls.
+    toneShape: ((r) =>
+      r < 0.45 ? 'seam' : r < 0.65 ? 'none' : r < 0.8 ? 'light' : r < 0.9 ? 'core' : 'noise')(
+      rng()
+    ) as LapidaryState['toneShape'],
+    toneStrength: Number((rng() * 0.7).toFixed(2)),
+    lightAngleDeg: Math.round(rng() * 360 - 180),
     penAssignment: rng() < 0.7 ? 'interleave' : 'per-region',
     palette: pal.id,
     pens: inks.length,

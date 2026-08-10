@@ -1,6 +1,7 @@
 import type {
   LapidaryMode,
   LapidaryShapes,
+  LapidaryToneShape,
   PenAssignment,
   SpiralDirection,
   SpiralForm,
@@ -76,6 +77,9 @@ export interface LapidaryState {
   patchiness: number; // 0..1
   taper: number; // 0..1 stroke end-taper (trims + occasional mid-stroke lifts)
   jitterDeg: number; // 0..3° per-stroke angle jitter (ruled lines exempt)
+  toneShape: LapidaryToneShape; // within-region tone idea (seam/core/light/noise)
+  toneStrength: number; // 0..1 — 0 pins every band flat
+  lightAngleDeg: number; // -180..180, 'light' shape only
 
   // Pens
   penAssignment: PenAssignment;
@@ -127,6 +131,9 @@ export const defaultLapidaryState: LapidaryState = {
   patchiness: 0.55,
   taper: 0.7,
   jitterDeg: 1.5,
+  toneShape: 'seam',
+  toneStrength: 0.35,
+  lightAngleDeg: -120,
 
   penAssignment: 'interleave',
   pens: 2,

@@ -431,6 +431,155 @@ describe('generateLapidary', () => {
     expect(wall / rays.length).toBeLessThan(0.35);
   });
 
+  it('seam tone crowds the hatch rows against the band boundary', () => {
+    // Single inked disk (blank ring outside isolates it), circle silhouette,
+    // vertical strokes → rows advance horizontally. At full seam-tone
+    // strength the row pitch (crossing gaps along a horizontal probe through
+    // the centre) must tighten toward the rim, where whole rows sit inside
+    // the seam ramp.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 2,
+      field: false,
+      irregularity: 0,
+      textures: ['lines', 'blank', { kind: 'hatch', spacingScale: 1 }],
+      spacingPx: 6,
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      toneShape: 'seam',
+      toneStrength: 1,
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const xs: number[] = [];
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (!(lo < 150 && 150 <= hi)) continue;
+        const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (150 - a.y) / (b.y - a.y);
+        xs.push(a.x + (b.x - a.x) * f);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    expect(xs.length).toBeGreaterThan(20);
+    const span = xs[xs.length - 1] - xs[0];
+    let rimSum = 0;
+    let rimN = 0;
+    let midSum = 0;
+    let midN = 0;
+    for (let i = 1; i < xs.length; i++) {
+      const gap = xs[i] - xs[i - 1];
+      const pos = (xs[i - 1] + xs[i]) / 2 - xs[0];
+      if (pos < span * 0.07 || pos > span * 0.93) {
+        rimSum += gap;
+        rimN++;
+      } else if (pos > span * 0.3 && pos < span * 0.7) {
+        midSum += gap;
+        midN++;
+      }
+    }
+    expect(rimN).toBeGreaterThan(1);
+    expect(midN).toBeGreaterThan(2);
+    expect(rimSum / rimN).toBeLessThan((midSum / midN) * 0.75);
+  });
+
+  it('tone strength 0 reproduces the flat fill exactly', () => {
+    for (const toneShape of ['seam', 'core', 'light', 'noise'] as const) {
+      expect(
+        JSON.stringify(generateLapidary({ ...BASE, toneShape, toneStrength: 0 }))
+      ).toEqual(JSON.stringify(generateLapidary({ ...BASE, toneShape: 'none' })));
+    }
+  });
+
+  it('tone shapes are deterministic and distinct', () => {
+    const hashes = (['none', 'seam', 'core', 'light', 'noise'] as const).map((toneShape) => {
+      const opts = { ...BASE, toneShape, toneStrength: 0.8 };
+      const a = generateLapidary(opts);
+      expect(JSON.stringify(generateLapidary(opts))).toEqual(JSON.stringify(a));
+      expect(a.lines.length).toBeGreaterThan(50);
+      return JSON.stringify(a.lines);
+    });
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+
+  it('tone never reshuffles the deal: regions, kinds and angles stay put', () => {
+    for (const mode of MODES) {
+      const flat = buildRegions({ ...layoutFor(mode, 7, 6), toneShape: 'none', toneStrength: 0 });
+      const toned = buildRegions({
+        ...layoutFor(mode, 7, 6),
+        toneShape: 'light',
+        toneStrength: 1,
+      });
+      expect(toned.regions.map((r) => r.z)).toEqual(flat.regions.map((r) => r.z));
+      expect(toned.regions.map((r) => r.tex.kind)).toEqual(flat.regions.map((r) => r.tex.kind));
+      expect(toned.regions.map((r) => r.tex.angleRad)).toEqual(
+        flat.regions.map((r) => r.tex.angleRad)
+      );
+      expect(toned.regions.map((r) => r.tex.spacing)).toEqual(
+        flat.regions.map((r) => r.tex.spacing)
+      );
+    }
+  });
+
+  it('tone never opens paper inside a hatch band', () => {
+    // 'light' at full strength is the worst case: one whole flank of every
+    // region sits at the tone floor. Row spacing must stay bounded — probe
+    // scanline gaps inside the inked disk.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 2,
+      field: false,
+      irregularity: 0,
+      textures: ['lines', 'blank', { kind: 'hatch', spacingScale: 1 }],
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      toneShape: 'light',
+      toneStrength: 1,
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    // The hatch pitch: spacingPx (260/150) * KIND_SPACING.hatch (0.45).
+    const pitch = Math.max(1.2, (260 / 150) * 0.45);
+    let maxR = 0;
+    for (const line of r.lines) {
+      for (const p of line.points) {
+        maxR = Math.max(maxR, Math.hypot(p.x - 150, p.y - 150));
+      }
+    }
+    // Vertical rows: crossings along a horizontal probe through the centre.
+    const xs: number[] = [];
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (!(lo < 150 && 150 <= hi)) continue;
+        const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (150 - a.y) / (b.y - a.y);
+        xs.push(a.x + (b.x - a.x) * f);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    expect(xs.length).toBeGreaterThan(20);
+    for (let i = 1; i < xs.length; i++) {
+      // Interior probe only (skip outside the disk); the floor caps row
+      // stepping at 2× pitch — allow dash-gap slack on top.
+      if (xs[i - 1] < 150 - maxR * 0.85 || xs[i] > 150 + maxR * 0.85) continue;
+      expect(xs[i] - xs[i - 1]).toBeLessThan(pitch * 3.2);
+    }
+  });
+
   // Mirrors generateLapidary's option resolution at BASE geometry.
   const layoutFor = (mode: LayoutConfig['mode'], seed: number, bands: number): LayoutConfig => ({
     seed,
@@ -452,6 +601,9 @@ describe('generateLapidary', () => {
     patchiness: 0.55,
     taper: 0.7,
     jitterDeg: 1.5,
+    toneShape: 'seam',
+    toneStrength: 0.35,
+    lightAngleDeg: -120,
     faults: 0,
     spiralForm: 'circular',
     spiralDirection: 'inward',
