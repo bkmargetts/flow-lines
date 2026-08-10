@@ -1,6 +1,6 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { hatchPolygon } from '../hearts/heart.js';
-import { emitStroke, Craft, ToneFn } from '../landscape/hatching.js';
+import { emitStroke, Craft } from '../landscape/hatching.js';
 import { lerp } from '../lib/math.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { createNoise } from '../noise.js';
