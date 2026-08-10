@@ -276,6 +276,18 @@ export function resolveTexture(
     if (kind === prevKind) {
       kind = RANDOM_KINDS[(RANDOM_KINDS.indexOf(kind) + 1) % RANDOM_KINDS.length];
     }
+    // Crystal is dealt sparingly — a druzy ray-burst is loud — and only on
+    // inner agate/breccia bands, whose radial geometry the fan needs. The
+    // roll is always drawn so eligibility never shifts a sibling draw.
+    const crystalRoll = rng();
+    if (
+      (cfg.mode === 'agate' || cfg.mode === 'breccia') &&
+      z >= 2 &&
+      prevKind !== 'crystal' &&
+      crystalRoll < 0.08
+    ) {
+      kind = 'crystal';
+    }
     spec = { kind };
   }
   // The background band keeps the base angle exactly — the reference's ruled

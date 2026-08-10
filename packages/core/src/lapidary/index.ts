@@ -489,7 +489,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
 
   const pens = clamp(Math.round(options.pens ?? 1), 1, 4);
   const { regions, geometricGaps } = buildRegions(layout);
-  const lines = carveRegions(regions, fillRegion, {
+  const { lines, groups } = carveRegions(regions, fillRegion, {
     width,
     height,
     haloPx,
@@ -504,21 +504,60 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
 
   if ((options.veins ?? false) && layout.mode === 'breccia') {
     const veinStep = Math.max(1, 5 * featureScale);
-    lines.push(...brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER, featureScale));
+    const veins = brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER, featureScale);
+    if (veins.length > 0) {
+      groups.push({ start: lines.length, end: lines.length + veins.length, kind: 'vein' });
+      lines.push(...veins);
+    }
   }
 
   let result: FlowLinesResult = { lines, width, height, seed };
 
   const wobble = options.wobble ?? sizingDim / 500;
   if (wobble > 0) {
-    result = applyHandDrawnStyle(result, {
-      amplitude: wobble,
-      wavelength: Math.max(8, 70 * featureScale),
-      seed: subSeed(seed, 501),
-      // The seams are reserved paper carved before the hand pass; the wobble
-      // tail must never bend surviving ink back into them.
-      maxDisplacement: haloPx * 0.35,
-    });
+    // One hand pass per texture class instead of one flat pass for the whole
+    // sheet (the botanical per-element idiom): a 1px stipple tick must not be
+    // bent by the same 70px wave as a page-long ruled line. Amplitudes are
+    // relative to the wobble option; every class keeps the inviolable seam
+    // cap, and each gets its own decorrelated seed stream (520+k).
+    const CLASSES: Array<{ kinds: string[]; amp: number; wl: number }> = [
+      { kinds: ['lines', 'hatch', 'patchy', 'cross'], amp: 1, wl: 70 }, // the datum
+      { kinds: ['contour', 'wavy'], amp: 0.8, wl: 95 }, // long calm undulation
+      { kinds: ['stipple'], amp: 0.3, wl: 24 },
+      { kinds: ['grain', 'crystal'], amp: 0.6, wl: 40 },
+      { kinds: ['mottle'], amp: 1, wl: 70 }, // the weave expects the sheet datum
+      { kinds: ['solid'], amp: 0.25, wl: 70 }, // calm, or paper opens between rows
+      { kinds: ['vein'], amp: 0.7, wl: 70 },
+    ];
+    const classIndex = new Map<string, number>();
+    CLASSES.forEach((c, k) => c.kinds.forEach((kind) => classIndex.set(kind, k)));
+    const byClass = new Map<number, number[]>();
+    for (const g of groups) {
+      const k = classIndex.get(g.kind as string);
+      if (k === undefined) continue;
+      const idxs = byClass.get(k) ?? [];
+      for (let i = g.start; i < g.end; i++) idxs.push(i);
+      byClass.set(k, idxs);
+    }
+    for (let k = 0; k < CLASSES.length; k++) {
+      const idxs = byClass.get(k);
+      if (!idxs || idxs.length === 0) continue;
+      const styled = applyHandDrawnStyle(
+        { lines: idxs.map((i) => lines[i]), width, height, seed },
+        {
+          amplitude: wobble * CLASSES[k].amp,
+          wavelength: Math.max(8, CLASSES[k].wl * featureScale),
+          seed: subSeed(seed, 520 + k),
+          // The seams are reserved paper carved before the hand pass; the
+          // wobble tail must never bend surviving ink back into them.
+          maxDisplacement: haloPx * 0.35,
+        }
+      );
+      idxs.forEach((i, j) => {
+        lines[i] = styled.lines[j];
+      });
+    }
+    result = { lines, width, height, seed };
   }
 
   if (optimize) {

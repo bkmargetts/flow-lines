@@ -145,25 +145,36 @@ function outlineLines(region: Region, cfg: CarveConfig): FlowLine[] {
   return out;
 }
 
+/** A contiguous run of output lines that share a texture kind — the unit
+ *  the per-kind hand-drawn passes operate on. */
+export interface CarveGroup {
+  start: number;
+  /** Exclusive end index into the returned lines. */
+  end: number;
+  kind: Region['tex']['kind'] | 'vein';
+}
+
 /**
  * Draw the regions top-down (z descending) with reserved-paper seams: each
  * region's fill is clipped OUTSIDE the accumulated upper ink's coverage mask
  * grown by the halo radius, so a lower band's strokes terminate exactly one
  * seam short of the ink above — the stacked-stencil look of the reference,
  * with no polygon-boolean math. Phantom fills ('blank' bands) join the avoid
- * union without being drawn.
+ * union without being drawn. Lines land region by region, so the returned
+ * groups (line-range → texture kind) come for free.
  */
 export function carveRegions(
   regions: Region[],
   fill: (region: Region) => RegionFill,
   cfg: CarveConfig
-): FlowLine[] {
+): { lines: FlowLine[]; groups: CarveGroup[] } {
   const sorted = [...regions].sort((a, b) => b.z - a.z);
   // Accumulated upper-ink coverage, stamped incrementally: each stroke is
   // rasterized once instead of re-building the whole mask per region.
   let acc: CoverageAccumulator | null = null;
   let accHasInk = false;
   const out: FlowLine[] = [];
+  const groups: CarveGroup[] = [];
   for (const region of sorted) {
     const { ink, phantom } = fill(region);
     let drawn =
@@ -188,7 +199,10 @@ export function carveRegions(
       }
     }
     assignPens(drawn, region, cfg);
-    out.push(...drawn);
+    if (drawn.length > 0) {
+      groups.push({ start: out.length, end: out.length + drawn.length, kind: region.tex.kind });
+      out.push(...drawn);
+    }
   }
-  return out;
+  return { lines: out, groups };
 }

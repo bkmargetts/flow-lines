@@ -431,6 +431,70 @@ describe('generateLapidary', () => {
     expect(wall / rays.length).toBeLessThan(0.35);
   });
 
+  it('wobble bends stipple ticks far less than ruled lines', () => {
+    // Per-kind hand passes: a 1px tick must not ride the same 70px wave as
+    // a page-long ruled line. Compare each stroke's displacement between
+    // the wobble-off and default-wobble renders (same geometry, 1:1 lines).
+    const base = { ...BASE, bands: 2, textures: ['lines', 'stipple'] as ['lines', 'stipple'], optimize: false };
+    const flat = generateLapidary({ ...base, wobble: 0 });
+    const wobbled = generateLapidary({ ...base, wobble: 2 });
+    expect(wobbled.lines.length).toBe(flat.lines.length);
+    const arcLen = (l: (typeof flat.lines)[number]): number => {
+      let len = 0;
+      for (let i = 1; i < l.points.length; i++) {
+        len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+      }
+      return len;
+    };
+    let tickSum = 0;
+    let tickN = 0;
+    let ruleSum = 0;
+    let ruleN = 0;
+    for (let i = 0; i < flat.lines.length; i++) {
+      const a = flat.lines[i];
+      const b = wobbled.lines[i];
+      let d = 0;
+      for (let j = 0; j < a.points.length; j++) {
+        d += Math.hypot(b.points[j].x - a.points[j].x, b.points[j].y - a.points[j].y);
+      }
+      d /= a.points.length;
+      const len = arcLen(a);
+      if (len < 2.5) {
+        tickSum += d;
+        tickN++;
+      } else if (len > 50) {
+        ruleSum += d;
+        ruleN++;
+      }
+    }
+    expect(tickN).toBeGreaterThan(30);
+    expect(ruleN).toBeGreaterThan(30);
+    expect(tickSum / tickN).toBeLessThan((ruleSum / ruleN) * 0.6);
+  });
+
+  it('the random deal grants crystal only to inner agate/breccia bands', () => {
+    let crystalDeals = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const mode of MODES) {
+        const { regions } = buildRegions(layoutFor(mode, seed, 8));
+        const kinds = regions.map((r) => r.tex.kind);
+        if (mode === 'agate' || mode === 'breccia') {
+          if (kinds.includes('crystal')) crystalDeals++;
+          // Never on the field or the outermost band, never adjacent twice.
+          regions.forEach((r) => {
+            if (r.tex.kind === 'crystal') expect(r.z).toBeGreaterThanOrEqual(2);
+          });
+          for (let i = 1; i < kinds.length; i++) {
+            expect(kinds[i] === 'crystal' && kinds[i - 1] === 'crystal').toBe(false);
+          }
+        } else {
+          expect(kinds.includes('crystal')).toBe(false);
+        }
+      }
+    }
+    expect(crystalDeals).toBeGreaterThan(3);
+  });
+
   it('seam tone crowds the hatch rows against the band boundary', () => {
     // Single inked disk (blank ring outside isolates it), circle silhouette,
     // vertical strokes → rows advance horizontally. At full seam-tone
