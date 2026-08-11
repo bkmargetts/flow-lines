@@ -1,11 +1,13 @@
 import { FlowLine, Point } from '../flow-lines.js';
 import { hatchPolygon } from '../hearts/heart.js';
 import { emitStroke, Craft } from '../landscape/hatching.js';
+import { lerp } from '../lib/math.js';
 import { pointInPolygon } from '../lib/polyline.js';
 import { createNoise } from '../noise.js';
 import { generateOverlappedLines, bandLayerName } from '../overlapped-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { Region } from './layout.js';
+import { buildRegionTone } from './tone.js';
 
 /** Safety valve per region — a hostile spacing knob must not hang the page. */
 const REGION_LINE_CAP = 40000;
@@ -27,6 +29,51 @@ function densify(a: Point, b: Point, step: number): Point[] {
 function push(out: FlowLine[], points: Point[]): void {
   if (out.length >= REGION_LINE_CAP) return;
   if (points.length >= 2) out.push({ points });
+}
+
+/** Deterministic dart-throwing scatter over a bbox: candidates are dealt
+ *  cell by cell in fixed grid order (so a seed keeps its field) and accepted
+ *  when they clear a minimum distance against every earlier accept —
+ *  blue-noise-ish spacing instead of the jittered lattice whose rows and
+ *  columns still read as a grid. Density lands just under one point per
+ *  pitch cell. */
+function scatterPoints(
+  bx0: number,
+  by0: number,
+  bx1: number,
+  by1: number,
+  pitch: number,
+  rng: () => number,
+  emit: (x: number, y: number) => void
+): void {
+  const cols = Math.max(1, Math.ceil((bx1 - bx0) / pitch));
+  const rows = Math.max(1, Math.ceil((by1 - by0) / pitch));
+  const minD2 = (0.65 * pitch) ** 2;
+  // One slot per pitch cell: a neighbour ring covers every possible
+  // conflict at min distance < pitch.
+  const placed: (Point | null)[] = new Array(cols * rows).fill(null);
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < cols; gx++) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const x = bx0 + (gx + rng()) * pitch;
+        const y = by0 + (gy + rng()) * pitch;
+        let ok = true;
+        for (let ny = Math.max(0, gy - 1); ok && ny <= Math.min(rows - 1, gy + 1); ny++) {
+          for (let nx = Math.max(0, gx - 1); nx <= Math.min(cols - 1, gx + 1); nx++) {
+            const q = placed[ny * cols + nx];
+            if (q && (q.x - x) ** 2 + (q.y - y) ** 2 < minD2) {
+              ok = false;
+              break;
+            }
+          }
+        }
+        if (!ok) continue;
+        placed[gy * cols + gx] = { x, y };
+        emit(x, y);
+        break;
+      }
+    }
+  }
 }
 
 /** Fill result: `ink` is drawn; `phantom` only joins the avoid union so a
@@ -88,6 +135,10 @@ export function fillRegion(region: Region): RegionFill {
   const rng = makeRandom(t.seed);
   const noise = createNoise(subSeed(t.seed, 1));
   const ink: FlowLine[] = [];
+  // The band's internal tonal idea (null = flat): rows tighten where dark,
+  // open where light. Floored well above the paper cutoffs — tone shades a
+  // band, the seams alone hold paper.
+  const tone = buildRegionTone(region);
   // Detail steps ride the feature scale so wobble samples stay a fixed
   // physical distance apart on any sheet (floored — micro pages must not
   // explode point counts).
@@ -103,10 +154,158 @@ export function fillRegion(region: Region): RegionFill {
   const patchKeep = (x: number, y: number): boolean =>
     noise.noise2D(x / patchScale, y / patchScale) > patchCut;
 
-  const craft: Craft = { rng, taper: 0.45, jitter: 0.012, subStep: step };
+  const craft: Craft = {
+    rng,
+    taper: t.taper,
+    jitter: t.jitterRad,
+    subStep: step,
+    // Sheet-spanning strokes need wobble samples every few px along their
+    // whole length — the shared 40-point default starves them (the same
+    // reason the local `densify` above is uncapped).
+    maxPoints: Infinity,
+  };
   const emitTapered = (a: Point, b: Point): void => {
     if (ink.length >= REGION_LINE_CAP) return;
     emitStroke(ink, a, b, '', craft);
+  };
+
+  // Ruled dashes keep their exact angle — the 'lines' datum — so their craft
+  // carries no rotation jitter; instead each dash is staggered a hair off
+  // the shared axis (the landscape emitHatchRun idiom: collinear dashes
+  // with small gaps read as one long ruled line, defeating the dashing).
+  // The stagger is capped against the seam so a shifted mark can never lean
+  // into reserved paper.
+  const ruledCraft: Craft = { ...craft, jitter: 0 };
+  const staggerPx = Math.min(0.45 * t.featureScale, t.spacing * 0.18, t.haloPx * 0.15);
+  const emitDash = (a: Point, b: Point): void => {
+    if (ink.length >= REGION_LINE_CAP) return;
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const off = (rng() * 2 - 1) * staggerPx;
+    const px = (-(b.y - a.y) / len) * off;
+    const py = ((b.x - a.x) / len) * off;
+    emitStroke(ink, { x: a.x + px, y: a.y + py }, { x: b.x + px, y: b.y + py }, '', ruledCraft);
+  };
+
+  // hatchPolygon's row geometry with tone-adaptive stepping: rows advance
+  // faster through light passages and crowd through dark ones (the sweepHatch
+  // spacing law, spacing/tone with neutral 0.5). With no tone the constant
+  // pitch reproduces hatchPolygon exactly. `over` widens the swept polygon
+  // (wavy generates across the bbox, then clips); `sample` restricts tone
+  // sampling to the real region when sweeping a wider polygon.
+  const sweepRows = (
+    angleRad: number,
+    pitch: number,
+    phase: number,
+    cb: (a: Point, b: Point) => void,
+    over: Point[] = poly,
+    sample: ((x: number, y: number) => number | null) | null = tone
+  ): void => {
+    const dx = Math.cos(angleRad);
+    const dy = Math.sin(angleRad);
+    const nx = -dy;
+    const ny = dx;
+    let minU = Infinity;
+    let maxU = -Infinity;
+    for (const p of over) {
+      const u = p.x * nx + p.y * ny;
+      if (u < minU) minU = u;
+      if (u > maxU) maxU = u;
+    }
+    const ts: number[] = [];
+    let u = minU + pitch * (0.3 + 0.7 * phase);
+    let guard = 0;
+    while (u < maxU && guard++ < 6000) {
+      ts.length = 0;
+      for (let i = 0, j = over.length - 1; i < over.length; j = i++) {
+        const a = over[j];
+        const b = over[i];
+        const ua = a.x * nx + a.y * ny;
+        const ub = b.x * nx + b.y * ny;
+        if ((ua <= u && ub > u) || (ub <= u && ua > u)) {
+          const f = (u - ua) / (ub - ua);
+          const px = a.x + (b.x - a.x) * f;
+          const py = a.y + (b.y - a.y) * f;
+          ts.push(px * dx + py * dy);
+        }
+      }
+      let toneSum = 0;
+      let toneN = 0;
+      if (ts.length >= 2) {
+        ts.sort((p, q) => p - q);
+        for (let k = 0; k + 1 < ts.length; k += 2) {
+          const t0 = ts[k];
+          const t1 = ts[k + 1];
+          if (t1 - t0 < pitch * 0.4) continue; // corner slivers read as flecks
+          if (sample) {
+            const n = Math.max(1, Math.ceil((t1 - t0) / 30));
+            for (let pi = 0; pi < n; pi++) {
+              const tm = t0 + ((pi + 0.5) / n) * (t1 - t0);
+              const tv = sample(nx * u + dx * tm, ny * u + dy * tm);
+              if (tv !== null) {
+                toneSum += tv;
+                toneN++;
+              }
+            }
+          }
+          cb(
+            { x: nx * u + dx * t0, y: ny * u + dy * t0 },
+            { x: nx * u + dx * t1, y: ny * u + dy * t1 }
+          );
+        }
+      }
+      const rowTone = toneN ? toneSum / toneN : 0.5;
+      u += sample ? Math.max(pitch * 0.45, (pitch * 0.5) / Math.max(0.18, rowTone)) : pitch;
+    }
+  };
+
+  // The emitStroke end trim applied to an arbitrary polyline: shave a seeded
+  // hair off both ends so a curved run stops like a lifting pen instead of
+  // a stencil edge. Closed loops are never passed here — trimming would
+  // open them at the joint.
+  const trimRunEnds = (pts: Point[]): Point[] => {
+    if (t.taper <= 0 || pts.length < 3) return pts;
+    const cum: number[] = new Array(pts.length);
+    cum[0] = 0;
+    for (let i = 1; i < pts.length; i++) {
+      cum[i] = cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    }
+    const total = cum[pts.length - 1];
+    if (total < 4) return pts;
+    const maxTrim = Math.min(total * 0.35, 8 * t.featureScale) * t.taper;
+    const a = rng() * maxTrim * 0.7;
+    const b = total - rng() * maxTrim * 0.7;
+    if (b - a < 1.5) return pts;
+    const at = (s: number): Point => {
+      let i = 1;
+      while (i < pts.length - 1 && cum[i] < s) i++;
+      const span = cum[i] - cum[i - 1] || 1;
+      const f = (s - cum[i - 1]) / span;
+      return {
+        x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
+        y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f,
+      };
+    };
+    const out: Point[] = [at(a)];
+    for (let i = 0; i < pts.length; i++) {
+      if (cum[i] > a && cum[i] < b) out.push(pts[i]);
+    }
+    out.push(at(b));
+    return out;
+  };
+
+  // Translate a run a hair off its chord axis (the dash stagger for curved
+  // dashes — contour loops, laminations — whose pieces would otherwise
+  // register into one unbroken loop).
+  const staggered = (pts: Point[]): Point[] => {
+    if (staggerPx <= 0 || pts.length < 2) return pts;
+    const a = pts[0];
+    const b = pts[pts.length - 1];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1e-6) return pts;
+    const off = (rng() * 2 - 1) * staggerPx;
+    const px = (-(b.y - a.y) / len) * off;
+    const py = ((b.x - a.x) / len) * off;
+    return pts.map((p) => ({ x: p.x + px, y: p.y + py }));
   };
 
   // Long ruled lines break into hand-fed dashes with small pen-lift gaps
@@ -115,29 +314,26 @@ export function fillRegion(region: Region): RegionFill {
   // the contour fallback on regions with no silhouette geometry.
   const fillLines = (): void => {
     const dashMin = t.spacing * 22;
-    for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
-      const len = Math.hypot(run[1].x - run[0].x, run[1].y - run[0].y);
+    sweepRows(t.angleRad, t.spacing, t.phase, (a, b) => {
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
       if (len <= dashMin) {
-        push(ink, densify(run[0], run[1], step));
-        continue;
+        // Short whole runs still earn tapered ends, but no stagger — a lone
+        // run has no collinear sibling to separate from.
+        emitStroke(ink, a, b, '', ruledCraft);
+        return;
       }
-      const ux = (run[1].x - run[0].x) / len;
-      const uy = (run[1].y - run[0].y) / len;
+      const ux = (b.x - a.x) / len;
+      const uy = (b.y - a.y) / len;
       let s = 0;
       let guard = 0;
       while (s < len - 2 && guard++ < 200) {
         const e = Math.min(len, s + t.spacing * (14 + 18 * rng()));
-        push(
-          ink,
-          densify(
-            { x: run[0].x + ux * s, y: run[0].y + uy * s },
-            { x: run[0].x + ux * e, y: run[0].y + uy * e },
-            step
-          )
-        );
-        s = e + 1.8 + rng() * 2;
+        emitDash({ x: a.x + ux * s, y: a.y + uy * s }, { x: a.x + ux * e, y: a.y + uy * e });
+        // Light passages break more, dark passages run longer (neutral 1×).
+        const gapTone = tone ? tone(a.x + ux * e, a.y + uy * e) : 0.5;
+        s = e + (1.8 + rng() * 2) * lerp(1.4, 0.6, gapTone);
       }
-    }
+    });
   };
 
   // The 'lines' hand-fed dashing applied to an arbitrary polyline: walk the
@@ -183,11 +379,11 @@ export function fillRegion(region: Region): RegionFill {
       const sa = (s + phase) % total;
       const sb = (e + phase) % total;
       if (sa < sb) {
-        push(ink, slice(sa, sb));
+        push(ink, staggered(trimRunEnds(slice(sa, sb))));
       } else {
         // The phase-shifted dash wraps the loop seam: emit both halves.
-        if (total - sa > 2) push(ink, slice(sa, total));
-        if (sb > 2) push(ink, slice(0, sb));
+        if (total - sa > 2) push(ink, staggered(trimRunEnds(slice(sa, total))));
+        if (sb > 2) push(ink, staggered(trimRunEnds(slice(0, sb))));
       }
       s = e + 1.8 + rng() * 2;
     }
@@ -205,6 +401,68 @@ export function fillRegion(region: Region): RegionFill {
 
     case 'lines': {
       fillLines();
+      break;
+    }
+
+    case 'solid': {
+      // A deliberate committed black (preset/manual only): boustrophedon
+      // serpentine — consecutive rows joined wherever the connector stays
+      // inside the region, so the mass plots as a few continuous strokes —
+      // plus a traced boundary loop, so the edge is a drawn line, not
+      // scanline stair-steps (the planSolidFill idiom on exact polygon
+      // geometry). Exempt from tone, taper and stagger: solid is ink, not
+      // shading.
+      const pitch = t.spacing;
+      const rows: [Point, Point][] = [];
+      sweepRows(t.angleRad, pitch, t.phase, (a, b) => rows.push([a, b]), poly, null);
+      let chain: Point[] = [];
+      const flushChain = (): void => {
+        if (chain.length >= 2) push(ink, chain);
+        chain = [];
+      };
+      for (const [a, b] of rows) {
+        if (chain.length === 0) {
+          chain.push(...densify(a, b, step));
+          continue;
+        }
+        const end = chain[chain.length - 1];
+        // Serpentine: enter each row from the end nearer the previous exit.
+        const enterA =
+          Math.hypot(a.x - end.x, a.y - end.y) <= Math.hypot(b.x - end.x, b.y - end.y);
+        const s = enterA ? a : b;
+        const e = enterA ? b : a;
+        const jump = Math.hypot(s.x - end.x, s.y - end.y);
+        const mid = { x: (s.x + end.x) / 2, y: (s.y + end.y) / 2 };
+        if (jump <= pitch * 2.5 && pointInPolygon(poly, mid.x, mid.y)) {
+          chain.push(...densify(s, e, step));
+        } else {
+          flushChain();
+          chain.push(...densify(s, e, step));
+        }
+      }
+      flushChain();
+      if (region.radial) {
+        // Boundary trace inset half a pitch, in table space (never
+        // self-intersects on these star-shaped blobs).
+        const { cx, cy, rx, ry, table } = region.radial;
+        const n = table.length;
+        const loop: Point[] = [];
+        for (let j = 0; j <= n; j++) {
+          const theta = ((j % n) / n) * Math.PI * 2;
+          const bl = Math.hypot(Math.cos(theta) * rx, Math.sin(theta) * ry) || 1e-6;
+          const g = Math.max(0, table[j % n] - (pitch * 0.5) / bl);
+          loop.push({ x: cx + Math.cos(theta) * rx * g, y: cy + Math.sin(theta) * ry * g });
+        }
+        push(ink, loop);
+      } else {
+        const loop: Point[] = [];
+        for (let i = 0; i < poly.length; i++) {
+          const seg = densify(poly[i], poly[(i + 1) % poly.length], step);
+          if (loop.length > 0) seg.shift();
+          loop.push(...seg);
+        }
+        push(ink, loop);
+      }
       break;
     }
 
@@ -257,9 +515,13 @@ export function fillRegion(region: Region): RegionFill {
           const g = table[j] - inset / baseLen[j];
           return { x: cx + Math.cos(theta) * rx * g, y: cy + Math.sin(theta) * ry * g };
         };
-        const maxLoops = Math.ceil(maxR / pitch);
-        for (let k = 1; k <= maxLoops && ink.length < REGION_LINE_CAP; k++) {
-          const inset = k * pitch;
+        // Adaptive inset: under tone the loops crowd where the band is dark
+        // (against the seams under the default 'seam' shape — the
+        // fortification-agate look) and relax where it is light. Each loop
+        // stays a constant offset, so it still follows the silhouette.
+        let inset = pitch;
+        let loopGuard = 0;
+        while (inset <= maxR && ink.length < REGION_LINE_CAP && loopGuard++ < 4000) {
           const alive: boolean[] = new Array(n);
           let anyAlive = false;
           let allAlive = true;
@@ -274,17 +536,31 @@ export function fillRegion(region: Region): RegionFill {
             for (let j = 0; j < n; j++) pts.push(pointAt(j, inset));
             pts.push({ ...pts[0] });
             dashPolyline(wave(densifyRun(pts), radialDir), true);
-            continue;
-          }
-          // Contiguous alive arcs (circular): each surfaces as an open run.
-          for (let j = 0; j < n; j++) {
-            if (!alive[j] || alive[(j - 1 + n) % n]) continue;
-            const arc: Point[] = [];
-            for (let m = j; alive[m % n] && arc.length < n; m++) {
-              arc.push(pointAt(m % n, inset));
+          } else {
+            // Contiguous alive arcs (circular): each surfaces as an open run.
+            for (let j = 0; j < n; j++) {
+              if (!alive[j] || alive[(j - 1 + n) % n]) continue;
+              const arc: Point[] = [];
+              for (let m = j; alive[m % n] && arc.length < n; m++) {
+                arc.push(pointAt(m % n, inset));
+              }
+              if (arc.length >= 3) dashPolyline(wave(densifyRun(arc), radialDir), false);
             }
-            if (arc.length >= 3) dashPolyline(wave(densifyRun(arc), radialDir), false);
           }
+          let step = pitch;
+          if (tone) {
+            let sum = 0;
+            let cnt = 0;
+            for (let j = 0; j < n; j += 16) {
+              if (!alive[j]) continue;
+              const p = pointAt(j, inset);
+              sum += tone(p.x, p.y);
+              cnt++;
+            }
+            const mt = cnt ? sum / cnt : 0.5;
+            step = Math.max(pitch * 0.45, (pitch * 0.5) / Math.max(0.18, mt));
+          }
+          inset += step;
         }
         break;
       }
@@ -303,9 +579,10 @@ export function fillRegion(region: Region): RegionFill {
           gap += Math.hypot(inner[i].x - outer[i].x, inner[i].y - outer[i].y);
         }
         gap /= Math.max(1, m);
-        const rows = Math.max(1, Math.round(gap / pitch));
-        for (let r = 1; r < rows && ink.length < REGION_LINE_CAP; r++) {
-          const f = r / rows;
+        const df = 1 / Math.max(1, Math.round(gap / pitch));
+        let f = df;
+        let rowGuard = 0;
+        while (f < 1 - df * 0.5 && ink.length < REGION_LINE_CAP && rowGuard++ < 2000) {
           const pts: Point[] = new Array(m);
           for (let i = 0; i < m; i++) {
             const ax = inner[i].x - outer[i].x;
@@ -320,6 +597,19 @@ export function fillRegion(region: Region): RegionFill {
             pts[i] = p;
           }
           dashPolyline(densifyRun(pts), false);
+          // Tone-adaptive lamination: laminae crowd through dark passages.
+          let step = df;
+          if (tone) {
+            let sum = 0;
+            let cnt = 0;
+            for (let i = 0; i < pts.length; i += 8) {
+              sum += tone(pts[i].x, pts[i].y);
+              cnt++;
+            }
+            const mt = cnt ? sum / cnt : 0.5;
+            step = Math.max(df * 0.45, (df * 0.5) / Math.max(0.18, mt));
+          }
+          f += step;
         }
         break;
       }
@@ -331,15 +621,28 @@ export function fillRegion(region: Region): RegionFill {
         let gap = 0;
         for (let i = 0; i < top.length; i++) gap += bottom[i].y - top[i].y;
         gap /= top.length;
-        const rows = Math.max(1, Math.round(gap / pitch));
+        const df = 1 / Math.max(1, Math.round(gap / pitch));
         const down = (): Point => ({ x: 0, y: 1 });
-        for (let r = 1; r < rows && ink.length < REGION_LINE_CAP; r++) {
-          const f = r / rows;
+        let f = df;
+        let rowGuard = 0;
+        while (f < 1 - df * 0.5 && ink.length < REGION_LINE_CAP && rowGuard++ < 2000) {
           const pts = top.map((p, i) => ({
             x: p.x,
             y: p.y + (bottom[i].y - p.y) * f,
           }));
           dashPolyline(wave(densifyRun(pts), down), false);
+          let step = df;
+          if (tone) {
+            let sum = 0;
+            let cnt = 0;
+            for (let i = 0; i < pts.length; i += 8) {
+              sum += tone(pts[i].x, pts[i].y);
+              cnt++;
+            }
+            const mt = cnt ? sum / cnt : 0.5;
+            step = Math.max(df * 0.45, (df * 0.5) / Math.max(0.18, mt));
+          }
+          f += step;
         }
         break;
       }
@@ -376,16 +679,41 @@ export function fillRegion(region: Region): RegionFill {
         Math.min(600, Math.max(16, (Math.PI * 2 * rAvg) / (t.spacing * 1.15)))
       );
       for (let i = 0; i < rays && ink.length < REGION_LINE_CAP; i++) {
-        const theta = ((i + (rng() - 0.5) * 0.6) / rays) * Math.PI * 2;
+        // Triangular slot jitter: rays cluster and leave gaps the way real
+        // druze does, instead of ticking once per slot.
+        const theta = ((i + (rng() + rng() - 1) * 0.55) / rays) * Math.PI * 2;
         const g = tableAt(theta);
         const ex = Math.cos(theta) * rx;
         const ey = Math.sin(theta) * ry;
-        const s0 = g * (0.06 + 0.3 * rng());
-        // Every ~4th ray reaches the wall so the band edge reads lined.
-        const s1 = g * (i % 4 === 0 ? 0.97 : 0.55 + 0.4 * rng());
+        // Where the band wall is toned dark, rays reach deeper inward and
+        // twin more often — a denser sparkle fringe against the seam.
+        const wallT = tone ? tone(cx + ex * g * 0.9, cy + ey * g * 0.9) : 0.5;
+        const dark = Math.max(0, Math.min(1, (wallT - 0.5) * 2));
+        const s0 = g * (0.06 + 0.3 * rng()) * (1 - 0.4 * dark);
+        // A seeded ~fifth of rays reach the wall so the band edge reads
+        // lined — stochastic, not a counter's every-4th cycle repeating
+        // around the rim.
+        const f1 = rng() < 0.22 ? 0.97 : 0.55 + 0.4 * rng();
+        const s1 = g * f1;
         if (s1 <= s0) continue;
         const tip = { x: cx + ex * s1, y: cy + ey * s1 };
         emitTapered({ x: cx + ex * s0, y: cy + ey * s0 }, tip);
+        // Occasional twin: a second needle half a slot over at shorter
+        // reach — druzy crystals grow in pairs and fans, not single file.
+        if (rng() < 0.12 + 0.1 * dark) {
+          const theta2 = theta + ((rng() < 0.5 ? 1 : -1) * Math.PI) / rays;
+          const g2 = tableAt(theta2);
+          const ex2 = Math.cos(theta2) * rx;
+          const ey2 = Math.sin(theta2) * ry;
+          const s0b = g2 * (0.06 + 0.3 * rng());
+          const s1b = g2 * Math.min(0.97, f1 * (0.75 + 0.15 * rng()));
+          if (s1b > s0b) {
+            emitTapered(
+              { x: cx + ex2 * s0b, y: cy + ey2 * s0b },
+              { x: cx + ex2 * s1b, y: cy + ey2 * s1b }
+            );
+          }
+        }
         // Occasional chevron tip: the angular termination of a crystal face.
         if (rng() < 0.3) {
           const len = Math.hypot(ex, ey) * (s1 - s0) || 1;
@@ -404,34 +732,34 @@ export function fillRegion(region: Region): RegionFill {
     }
 
     case 'hatch': {
-      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
-        emitTapered(run[0], run[1]);
-      }
+      sweepRows(t.angleRad, t.spacing, t.phase, emitTapered);
       break;
     }
 
     case 'patchy': {
       const minLen = t.spacing * 1.5;
       const edge = t.spacing * 2.5;
-      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
-        gatedRun(run[0], run[1], Math.min(8, patchScale / 4), patchKeep, minLen, edge, emitTapered);
-      }
+      sweepRows(t.angleRad, t.spacing, t.phase, (a, b) =>
+        gatedRun(a, b, Math.min(8, patchScale / 4), patchKeep, minLen, edge, emitTapered)
+      );
       break;
     }
 
     case 'cross': {
-      for (const run of hatchPolygon(poly, t.angleRad, t.spacing, t.phase)) {
-        emitTapered(run[0], run[1]);
-      }
+      sweepRows(t.angleRad, t.spacing, t.phase, emitTapered);
       // Second family at a shallow offset (a woven 90° grid reads mechanical),
-      // lightly gated so the weave builds up in worked patches.
+      // lightly gated so the weave builds up in worked patches. Tone promotes:
+      // genuinely dark passages earn the cross layer even outside a patch —
+      // the within-row gradation the row stepping can't express.
       const ang2 = t.angleRad + (32 * Math.PI) / 180;
       const gate = (x: number, y: number): boolean =>
-        noise.noise2D(x / patchScale + 41.7, y / patchScale) > -1 + Math.max(0.25, t.patchiness) * 1.2;
+        noise.noise2D(x / patchScale + 41.7, y / patchScale) >
+          -1 + Math.max(0.25, t.patchiness) * 1.2 ||
+        (tone !== null && tone(x, y) > 0.62);
       const minLen = t.spacing * 1.5;
-      for (const run of hatchPolygon(poly, ang2, t.spacing * 1.25, 1 - t.phase)) {
-        gatedRun(run[0], run[1], Math.min(8, patchScale / 4), gate, minLen, 0, emitTapered);
-      }
+      sweepRows(ang2, t.spacing * 1.25, 1 - t.phase, (a, b) =>
+        gatedRun(a, b, Math.min(8, patchScale / 4), gate, minLen, 0, emitTapered)
+      );
       break;
     }
 
@@ -546,42 +874,42 @@ export function fillRegion(region: Region): RegionFill {
         if (p.x > bx1) bx1 = p.x;
         if (p.y > by1) by1 = p.y;
       }
-      for (let gy = by0 + pitch / 2; gy <= by1; gy += pitch) {
-        for (let gx = bx0 + pitch / 2; gx <= bx1; gx += pitch) {
-          const sx = gx + (rng() - 0.5) * pitch * 0.8;
-          const sy = gy + (rng() - 0.5) * pitch * 0.8;
-          if (!pointInPolygon(poly, sx, sy)) continue;
-          // The +41.7 domain offset decorrelates length from direction
-          // (the cross-gate idiom).
-          const v =
-            0.5 +
-            0.5 * grainNoise.fbm(sx / (flowScale * 0.6) + 41.7, sy / (flowScale * 0.6), 2, 0.5, 2);
-          const half = t.spacing * (2.2 + 3.8 * v) * 0.5;
-          // Walk the streamline both ways from the seed, re-sampling the
-          // flow each step (curved dashes); raw polylines — the wobble
-          // pass supplies the hand feel.
-          const pts: Point[] = [{ x: sx, y: sy }];
-          for (const sgn of [1, -1] as const) {
-            let x = sx;
-            let y = sy;
-            let s = 0;
-            while (s < half) {
-              const a = dir(x, y);
-              x += Math.cos(a) * fineStep * sgn;
-              y += Math.sin(a) * fineStep * sgn;
-              s += fineStep;
-              if (!pointInPolygon(poly, x, y)) break;
-              if (sgn === 1) pts.push({ x, y });
-              else pts.unshift({ x, y });
-            }
+      scatterPoints(bx0, by0, bx1, by1, pitch, rng, (sx, sy) => {
+        if (!pointInPolygon(poly, sx, sy)) return;
+        // Tone thins light passages (dropout, never blank) and stretches
+        // dashes through dark ones.
+        const tv = tone ? tone(sx, sy) : 0.5;
+        if (tv < 0.5 && rng() >= Math.pow(tv / 0.5, 1.2)) return;
+        // The +41.7 domain offset decorrelates length from direction
+        // (the cross-gate idiom).
+        const v =
+          0.5 +
+          0.5 * grainNoise.fbm(sx / (flowScale * 0.6) + 41.7, sy / (flowScale * 0.6), 2, 0.5, 2);
+        const half = t.spacing * (2.2 + 3.8 * v) * 0.5 * (tone ? 0.8 + 0.4 * tv : 1);
+        // Walk the streamline both ways from the seed, re-sampling the
+        // flow each step (curved dashes); raw polylines — the wobble
+        // pass supplies the hand feel.
+        const pts: Point[] = [{ x: sx, y: sy }];
+        for (const sgn of [1, -1] as const) {
+          let x = sx;
+          let y = sy;
+          let s = 0;
+          while (s < half) {
+            const a = dir(x, y);
+            x += Math.cos(a) * fineStep * sgn;
+            y += Math.sin(a) * fineStep * sgn;
+            s += fineStep;
+            if (!pointInPolygon(poly, x, y)) break;
+            if (sgn === 1) pts.push({ x, y });
+            else pts.unshift({ x, y });
           }
-          let l = 0;
-          for (let i = 1; i < pts.length; i++) {
-            l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-          }
-          if (l >= minKeep) push(ink, pts);
         }
-      }
+        let l = 0;
+        for (let i = 1; i < pts.length; i++) {
+          l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+        }
+        if (l >= minKeep) push(ink, pts);
+      });
       break;
     }
 
@@ -614,10 +942,14 @@ export function fillRegion(region: Region): RegionFill {
       const lambda = Math.max(36, t.spacing * 16);
       const amp = t.waviness * lambda * 0.16;
       const minKeep = t.spacing * 0.8;
-      for (const run of hatchPolygon(box, t.angleRad, t.spacing, t.phase)) {
-        const base = densify(run[0], run[1], fineStep);
-        const dx = run[1].x - run[0].x;
-        const dy = run[1].y - run[0].y;
+      // Rows sweep the bbox (deform-then-clip needs the full family) but
+      // tone is sampled only where the row crosses the real silhouette.
+      const boxSample =
+        tone === null ? null : (x: number, y: number) => (pointInPolygon(poly, x, y) ? tone(x, y) : null);
+      sweepRows(t.angleRad, t.spacing, t.phase, (r0, r1) => {
+        const base = densify(r0, r1, fineStep);
+        const dx = r1.x - r0.x;
+        const dy = r1.y - r0.y;
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len;
         const ny = dx / len;
@@ -628,7 +960,9 @@ export function fillRegion(region: Region): RegionFill {
             for (let i = 1; i < kept.length; i++) {
               l += Math.hypot(kept[i].x - kept[i - 1].x, kept[i].y - kept[i - 1].y);
             }
-            if (l >= minKeep) push(ink, kept);
+            // Tapered ends: a combed run stops like a lifting pen, not a
+            // stencil cut.
+            if (l >= minKeep) push(ink, trimRunEnds(kept));
           }
           kept = [];
         };
@@ -639,7 +973,7 @@ export function fillRegion(region: Region): RegionFill {
           else flush();
         }
         flush();
-      }
+      }, box, boxSample);
       break;
     }
 
@@ -655,22 +989,24 @@ export function fillRegion(region: Region): RegionFill {
         if (p.x > bx1) bx1 = p.x;
         if (p.y > by1) by1 = p.y;
       }
-      for (let gy = by0 + pitch / 2; gy <= by1; gy += pitch) {
-        for (let gx = bx0 + pitch / 2; gx <= bx1; gx += pitch) {
-          const x = gx + (rng() - 0.5) * pitch * 0.8;
-          const y = gy + (rng() - 0.5) * pitch * 0.8;
-          const ang = rng() * Math.PI * 2;
-          // Tick half-length rides the pitch (≈0.35-0.65 px at the default
-          // stipple pitch) so dots keep their weight on big sheets instead of
-          // staying sub-pixel while everything else scales.
-          const l = pitch * (0.045 + rng() * 0.04);
-          if (!pointInPolygon(poly, x, y)) continue;
-          push(ink, [
-            { x: x - Math.cos(ang) * l, y: y - Math.sin(ang) * l },
-            { x: x + Math.cos(ang) * l, y: y + Math.sin(ang) * l },
-          ]);
-        }
-      }
+      scatterPoints(bx0, by0, bx1, by1, pitch, rng, (x, y) => {
+        if (!pointInPolygon(poly, x, y)) return;
+        // Tone thins light passages (dropout, never blank) and weights the
+        // ticks slightly heavier through dark ones.
+        const tv = tone ? tone(x, y) : 0.5;
+        if (tv < 0.5 && rng() >= Math.pow(tv / 0.5, 1.2)) return;
+        // Ticks lean on the band angle (±25°): directional dots read as
+        // drawn marks; isotropic ticks read as noise.
+        const ang = t.angleRad + ((rng() - 0.5) * 50 * Math.PI) / 180;
+        // Tick half-length rides the pitch (≈0.35-0.65 px at the default
+        // stipple pitch) so dots keep their weight on big sheets instead of
+        // staying sub-pixel while everything else scales.
+        const l = pitch * (0.045 + rng() * 0.04) * (tone ? 0.8 + 0.4 * tv : 1);
+        push(ink, [
+          { x: x - Math.cos(ang) * l, y: y - Math.sin(ang) * l },
+          { x: x + Math.cos(ang) * l, y: y + Math.sin(ang) * l },
+        ]);
+      });
       break;
     }
   }

@@ -1,6 +1,7 @@
 import { FlowLine, FlowLinesResult, Point } from '../flow-lines.js';
 import { applyHandDrawnStyle } from '../hand-drawn.js';
 import { optimizePlot } from '../optimize.js';
+import { offsetEmphasisPasses } from '../pen-ink/swell.js';
 import { randomSeed, subSeed } from '../lib/rng.js';
 import { clamp } from '../lib/math.js';
 import { buildRegions, LayoutConfig, Region, RegionRadial, TUNING_DIM } from './layout.js';
@@ -13,6 +14,7 @@ export type {
   BandTexture,
   LapidaryShape,
   LapidaryShapes,
+  LapidaryToneShape,
   SpiralForm,
   SpiralDirection,
   SpiralJoin,
@@ -23,6 +25,7 @@ import type {
   LapidaryTexture,
   BandTexture,
   LapidaryShapes,
+  LapidaryToneShape,
   SpiralForm,
   SpiralDirection,
   SpiralJoin,
@@ -140,9 +143,15 @@ export interface LapidaryOptions {
   /** Reserved-paper seam width between regions in px (default sizingDim/110) */
   haloPx?: number;
   /** Ink each region silhouette as a stroke (default false — in the
-   *  reference the seam itself does the work). The full-frame background
-   *  band is never outlined — its silhouette is the page edge. */
+   *  reference the seam itself does the work). Outlines draw as bold,
+   *  broken, slightly smoothed dashes — pen lifts and resumes, a drawn
+   *  suggestion rather than a coloring-book border. The full-frame
+   *  background band is never outlined — its silhouette is the page edge. */
   outlines?: boolean;
+  /** How many trimmed offset passes of the single pen each outline dash is
+   *  built from, 1..3 (default 2): the built-up ink-stroke weight. 1 keeps
+   *  a single (broken, smoothed) line. */
+  outlineEmphasis?: number;
 
   // ---- Textures ----
   /** Explicit outer→inner band textures, cycled if shorter than `bands`.
@@ -167,6 +176,32 @@ export interface LapidaryOptions {
    *  0.55); cross keeps its second family legible by flooring its gate at
    *  0.25 */
   patchiness?: number;
+  /** Stroke end-taper amount 0..1 (default 0.7): seeded trims at both ends
+   *  of every mark plus occasional mid-stroke pen lifts, so strokes start
+   *  and stop like a hand-fed pen instead of a plotter bar. Per band via
+   *  `BandTexture.taper`. */
+  taper?: number;
+  /** Per-stroke rotation jitter in degrees, 0..3 (default 1.5) — each hatch
+   *  mark leaves the ruled angle by a hair, the tell of a hand keeping an
+   *  angle rather than a machine holding one. Ruled 'lines' bands are exempt
+   *  (their datum is the point); per band via `BandTexture.jitterDeg`. */
+  jitterDeg?: number;
+  /** Within-region tone shape (default 'seam'): each band carries an
+   *  internal tonal idea — rows tighten where the tone is dark and open
+   *  where light. 'seam' ramps dark against the band's own boundaries (the
+   *  reference agate's densified band walls; one-sided, the interior keeps
+   *  its flat tone), 'core' shades toward the region centre, 'light' models
+   *  a flat light direction, 'noise' clouds each band, 'none' switches the
+   *  whole mechanism off. Tone shades within the fills' floors — it never
+   *  opens paper inside a band. */
+  toneShape?: LapidaryToneShape;
+  /** Tone strength 0..1 (default 0.35 — a whisper, not chiaroscuro). At 0
+   *  every fill runs at today's constant pitch; per band via
+   *  `BandTexture.tone`. */
+  toneStrength?: number;
+  /** Direction the light comes from in degrees, 'light' shape only
+   *  (default -120 — upper left; 0 = from the right, -90 = from above). */
+  lightAngleDeg?: number;
 
   // ---- Pens ----
   /** Pen count 1..4 (default 1) — strokes are tagged ink-0..ink-3 */
@@ -335,7 +370,8 @@ function brecciaVeins(
   rect: { x0: number; y0: number; x1: number; y1: number },
   haloPx: number,
   stepPx: number,
-  pen: string
+  pen: string,
+  featureScale: number
 ): FlowLine[] {
   const frags = regions.filter((r) => r.z > 0 && r.radial);
   const insideFrag = (x: number, y: number, f: RegionRadial): boolean => {
@@ -373,7 +409,15 @@ function brecciaVeins(
       for (let i = 1; i < arc.length; i++) {
         len += Math.hypot(arc[i].x - arc[i - 1].x, arc[i].y - arc[i - 1].y);
       }
-      if (len >= haloPx * 3) out.push({ points: arc, layer: pen });
+      if (len >= haloPx * 3) {
+        // The kintsugi accent carries real weight: bold pen (calmer wobble)
+        // plus one trimmed offset pass, so the vein reads as a poured seam
+        // rather than another hairline.
+        out.push({ points: arc, layer: pen, pen: 'bold' });
+        for (const pass of offsetEmphasisPasses(arc, 2, 0.6 * Math.max(0.5, featureScale), 0.15)) {
+          out.push({ points: pass, layer: pen, pen: 'bold' });
+        }
+      }
       arc = [];
     };
     for (let i = 1; i < loop.length; i++) {
@@ -428,6 +472,11 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     densityContrast: clamp(options.densityContrast ?? 0.6, 0, 1),
     waviness: clamp(options.waviness ?? 0.5, 0, 1),
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
+    taper: clamp(options.taper ?? 0.7, 0, 1),
+    jitterDeg: clamp(options.jitterDeg ?? 1.5, 0, 3),
+    toneShape: options.toneShape ?? 'seam',
+    toneStrength: clamp(options.toneStrength ?? 0.35, 0, 1),
+    lightAngleDeg: options.lightAngleDeg ?? -120,
     faults: clamp(Math.round(options.faults ?? 0), 0, 4),
     spiralForm: options.spiralForm ?? 'circular',
     spiralDirection: options.spiralDirection ?? 'inward',
@@ -440,7 +489,7 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
 
   const pens = clamp(Math.round(options.pens ?? 1), 1, 4);
   const { regions, geometricGaps } = buildRegions(layout);
-  const lines = carveRegions(regions, fillRegion, {
+  const { lines, groups } = carveRegions(regions, fillRegion, {
     width,
     height,
     haloPx,
@@ -448,27 +497,67 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
     pens,
     penAssignment: options.penAssignment ?? 'interleave',
     outlines: options.outlines ?? false,
+    outlineEmphasis: clamp(Math.round(options.outlineEmphasis ?? 2), 1, 3),
     geometricGaps,
     featureScale,
   });
 
   if ((options.veins ?? false) && layout.mode === 'breccia') {
     const veinStep = Math.max(1, 5 * featureScale);
-    lines.push(...brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER));
+    const veins = brecciaVeins(regions, layout.rect, haloPx, veinStep, VEIN_LAYER, featureScale);
+    if (veins.length > 0) {
+      groups.push({ start: lines.length, end: lines.length + veins.length, kind: 'vein' });
+      lines.push(...veins);
+    }
   }
 
   let result: FlowLinesResult = { lines, width, height, seed };
 
   const wobble = options.wobble ?? sizingDim / 500;
   if (wobble > 0) {
-    result = applyHandDrawnStyle(result, {
-      amplitude: wobble,
-      wavelength: Math.max(8, 70 * featureScale),
-      seed: subSeed(seed, 501),
-      // The seams are reserved paper carved before the hand pass; the wobble
-      // tail must never bend surviving ink back into them.
-      maxDisplacement: haloPx * 0.35,
-    });
+    // One hand pass per texture class instead of one flat pass for the whole
+    // sheet (the botanical per-element idiom): a 1px stipple tick must not be
+    // bent by the same 70px wave as a page-long ruled line. Amplitudes are
+    // relative to the wobble option; every class keeps the inviolable seam
+    // cap, and each gets its own decorrelated seed stream (520+k).
+    const CLASSES: Array<{ kinds: string[]; amp: number; wl: number }> = [
+      { kinds: ['lines', 'hatch', 'patchy', 'cross'], amp: 1, wl: 70 }, // the datum
+      { kinds: ['contour', 'wavy'], amp: 0.8, wl: 95 }, // long calm undulation
+      { kinds: ['stipple'], amp: 0.3, wl: 24 },
+      { kinds: ['grain', 'crystal'], amp: 0.6, wl: 40 },
+      { kinds: ['mottle'], amp: 1, wl: 70 }, // the weave expects the sheet datum
+      { kinds: ['solid'], amp: 0.25, wl: 70 }, // calm, or paper opens between rows
+      { kinds: ['vein'], amp: 0.7, wl: 70 },
+    ];
+    const classIndex = new Map<string, number>();
+    CLASSES.forEach((c, k) => c.kinds.forEach((kind) => classIndex.set(kind, k)));
+    const byClass = new Map<number, number[]>();
+    for (const g of groups) {
+      const k = classIndex.get(g.kind as string);
+      if (k === undefined) continue;
+      const idxs = byClass.get(k) ?? [];
+      for (let i = g.start; i < g.end; i++) idxs.push(i);
+      byClass.set(k, idxs);
+    }
+    for (let k = 0; k < CLASSES.length; k++) {
+      const idxs = byClass.get(k);
+      if (!idxs || idxs.length === 0) continue;
+      const styled = applyHandDrawnStyle(
+        { lines: idxs.map((i) => lines[i]), width, height, seed },
+        {
+          amplitude: wobble * CLASSES[k].amp,
+          wavelength: Math.max(8, CLASSES[k].wl * featureScale),
+          seed: subSeed(seed, 520 + k),
+          // The seams are reserved paper carved before the hand pass; the
+          // wobble tail must never bend surviving ink back into them.
+          maxDisplacement: haloPx * 0.35,
+        }
+      );
+      idxs.forEach((i, j) => {
+        lines[i] = styled.lines[j];
+      });
+    }
+    result = { lines, width, height, seed };
   }
 
   if (optimize) {

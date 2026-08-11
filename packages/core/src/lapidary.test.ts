@@ -324,6 +324,326 @@ describe('generateLapidary', () => {
     expect(at12 / at4).toBeLessThan(4.5);
   });
 
+  it('stipple ticks scatter blue-noise-like and lean on the band angle', () => {
+    // A jittered lattice still reads as a grid; the dart-throwing scatter
+    // must hold its minimum spacing. The blank outer ring isolates one
+    // band's scatter (cross-band pairs only clear the halo, not the pitch).
+    const r = generateLapidary({
+      ...BASE,
+      bands: 2,
+      field: false,
+      textures: ['lines', { kind: 'stipple', spacingScale: 1 }, 'blank'],
+      spacingPx: 8,
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const pitch = 8 * 1.3; // spacingPx * KIND_SPACING.stipple, contrast pinned
+    // A tick spans 2·pitch·(0.045..0.085) ≈ 0.9-1.8px; the carve can
+    // re-densify survivors, so filter on length, not point count.
+    const arcLen = (l: (typeof r.lines)[number]): number => {
+      let len = 0;
+      for (let i = 1; i < l.points.length; i++) {
+        len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+      }
+      return len;
+    };
+    const ticks = r.lines.filter((l) => arcLen(l) < 2.5);
+    expect(ticks.length).toBeGreaterThan(80);
+    const centres = ticks.map((l) => {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    });
+    let minD = Infinity;
+    for (let i = 0; i < centres.length; i++) {
+      for (let j = i + 1; j < centres.length; j++) {
+        const d = Math.hypot(centres[i].x - centres[j].x, centres[i].y - centres[j].y);
+        if (d < minD) minD = d;
+      }
+    }
+    expect(minD).toBeGreaterThan(pitch * 0.6);
+    // Directional ticks: every tick leans within ±25° of the band angle.
+    for (const l of ticks) {
+      const a = l.points[0];
+      const b = l.points[l.points.length - 1];
+      let d = Math.abs(Math.atan2(b.y - a.y, b.x - a.x));
+      if (d > Math.PI / 2) d = Math.PI - d;
+      expect(Math.abs(Math.PI / 2 - d)).toBeLessThan(0.46);
+    }
+  });
+
+  it('long tapered strokes carry wobble samples along their whole length', () => {
+    // Full-height hatch strokes used to hit the shared 40-point densify cap
+    // and starve the hand-drawn pass; samples must sit every few px now.
+    const r = generateLapidary({ ...BASE, textures: ['hatch'], wobble: 0, optimize: false });
+    const step = Math.max(1, (6 * 260) / TUNING_DIM);
+    let checked = 0;
+    for (const line of r.lines) {
+      let len = 0;
+      for (let i = 1; i < line.points.length; i++) {
+        len += Math.hypot(
+          line.points[i].x - line.points[i - 1].x,
+          line.points[i].y - line.points[i - 1].y
+        );
+      }
+      if (len < 100) continue;
+      checked++;
+      for (let i = 1; i < line.points.length; i++) {
+        const gap = Math.hypot(
+          line.points[i].x - line.points[i - 1].x,
+          line.points[i].y - line.points[i - 1].y
+        );
+        expect(gap).toBeLessThan(step * 2.5);
+      }
+    }
+    expect(checked).toBeGreaterThan(20);
+  });
+
+  it('crystal wall-reach is stochastic and lands near a fifth of the rays', () => {
+    // The wall-reaching rays used to be a literal every-4th counter cycle.
+    // taper 0 keeps tips exactly on their dealt reach so the shares separate.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 2,
+      field: false,
+      irregularity: 0,
+      textures: ['lines', 'blank', 'crystal'],
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    // Rays densify to many points; chevron tips stay 3-point strokes.
+    const rays = r.lines.filter((l) => l.points.length > 3);
+    expect(rays.length).toBeGreaterThan(40);
+    const far = (l: (typeof rays)[number]): number =>
+      Math.max(
+        Math.hypot(l.points[0].x - 150, l.points[0].y - 150),
+        Math.hypot(l.points[l.points.length - 1].x - 150, l.points[l.points.length - 1].y - 150)
+      );
+    const maxFar = Math.max(...rays.map(far));
+    const wall = rays.filter((l) => far(l) > maxFar * 0.99).length;
+    expect(wall / rays.length).toBeGreaterThan(0.1);
+    expect(wall / rays.length).toBeLessThan(0.35);
+  });
+
+  it('wobble bends stipple ticks far less than ruled lines', () => {
+    // Per-kind hand passes: a 1px tick must not ride the same 70px wave as
+    // a page-long ruled line. Compare each stroke's displacement between
+    // the wobble-off and default-wobble renders (same geometry, 1:1 lines).
+    const base = { ...BASE, bands: 2, textures: ['lines', 'stipple'] as ['lines', 'stipple'], optimize: false };
+    const flat = generateLapidary({ ...base, wobble: 0 });
+    const wobbled = generateLapidary({ ...base, wobble: 2 });
+    expect(wobbled.lines.length).toBe(flat.lines.length);
+    const arcLen = (l: (typeof flat.lines)[number]): number => {
+      let len = 0;
+      for (let i = 1; i < l.points.length; i++) {
+        len += Math.hypot(l.points[i].x - l.points[i - 1].x, l.points[i].y - l.points[i - 1].y);
+      }
+      return len;
+    };
+    let tickSum = 0;
+    let tickN = 0;
+    let ruleSum = 0;
+    let ruleN = 0;
+    for (let i = 0; i < flat.lines.length; i++) {
+      const a = flat.lines[i];
+      const b = wobbled.lines[i];
+      let d = 0;
+      for (let j = 0; j < a.points.length; j++) {
+        d += Math.hypot(b.points[j].x - a.points[j].x, b.points[j].y - a.points[j].y);
+      }
+      d /= a.points.length;
+      const len = arcLen(a);
+      if (len < 2.5) {
+        tickSum += d;
+        tickN++;
+      } else if (len > 50) {
+        ruleSum += d;
+        ruleN++;
+      }
+    }
+    expect(tickN).toBeGreaterThan(30);
+    expect(ruleN).toBeGreaterThan(30);
+    expect(tickSum / tickN).toBeLessThan((ruleSum / ruleN) * 0.6);
+  });
+
+  it('the random deal grants crystal only to inner agate/breccia bands', () => {
+    let crystalDeals = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const mode of MODES) {
+        const { regions } = buildRegions(layoutFor(mode, seed, 8));
+        const kinds = regions.map((r) => r.tex.kind);
+        if (mode === 'agate' || mode === 'breccia') {
+          if (kinds.includes('crystal')) crystalDeals++;
+          // Never on the field or the outermost band, never adjacent twice.
+          regions.forEach((r) => {
+            if (r.tex.kind === 'crystal') expect(r.z).toBeGreaterThanOrEqual(2);
+          });
+          for (let i = 1; i < kinds.length; i++) {
+            expect(kinds[i] === 'crystal' && kinds[i - 1] === 'crystal').toBe(false);
+          }
+        } else {
+          expect(kinds.includes('crystal')).toBe(false);
+        }
+      }
+    }
+    expect(crystalDeals).toBeGreaterThan(3);
+  });
+
+  it('seam tone crowds the hatch rows against the band boundary', () => {
+    // Single inked disk (blank ring outside isolates it), circle silhouette,
+    // vertical strokes → rows advance horizontally. At full seam-tone
+    // strength the row pitch (crossing gaps along a horizontal probe through
+    // the centre) must tighten toward the rim, where whole rows sit inside
+    // the seam ramp.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 2,
+      field: false,
+      irregularity: 0,
+      textures: ['lines', 'blank', { kind: 'hatch', spacingScale: 1 }],
+      spacingPx: 6,
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      toneShape: 'seam',
+      toneStrength: 1,
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const xs: number[] = [];
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (!(lo < 150 && 150 <= hi)) continue;
+        const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (150 - a.y) / (b.y - a.y);
+        xs.push(a.x + (b.x - a.x) * f);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    expect(xs.length).toBeGreaterThan(20);
+    const span = xs[xs.length - 1] - xs[0];
+    let rimSum = 0;
+    let rimN = 0;
+    let midSum = 0;
+    let midN = 0;
+    for (let i = 1; i < xs.length; i++) {
+      const gap = xs[i] - xs[i - 1];
+      const pos = (xs[i - 1] + xs[i]) / 2 - xs[0];
+      if (pos < span * 0.07 || pos > span * 0.93) {
+        rimSum += gap;
+        rimN++;
+      } else if (pos > span * 0.3 && pos < span * 0.7) {
+        midSum += gap;
+        midN++;
+      }
+    }
+    expect(rimN).toBeGreaterThan(1);
+    expect(midN).toBeGreaterThan(2);
+    expect(rimSum / rimN).toBeLessThan((midSum / midN) * 0.75);
+  });
+
+  it('tone strength 0 reproduces the flat fill exactly', () => {
+    for (const toneShape of ['seam', 'core', 'light', 'noise'] as const) {
+      expect(
+        JSON.stringify(generateLapidary({ ...BASE, toneShape, toneStrength: 0 }))
+      ).toEqual(JSON.stringify(generateLapidary({ ...BASE, toneShape: 'none' })));
+    }
+  });
+
+  it('tone shapes are deterministic and distinct', () => {
+    const hashes = (['none', 'seam', 'core', 'light', 'noise'] as const).map((toneShape) => {
+      const opts = { ...BASE, toneShape, toneStrength: 0.8 };
+      const a = generateLapidary(opts);
+      expect(JSON.stringify(generateLapidary(opts))).toEqual(JSON.stringify(a));
+      expect(a.lines.length).toBeGreaterThan(50);
+      return JSON.stringify(a.lines);
+    });
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+
+  it('tone never reshuffles the deal: regions, kinds and angles stay put', () => {
+    for (const mode of MODES) {
+      const flat = buildRegions({ ...layoutFor(mode, 7, 6), toneShape: 'none', toneStrength: 0 });
+      const toned = buildRegions({
+        ...layoutFor(mode, 7, 6),
+        toneShape: 'light',
+        toneStrength: 1,
+      });
+      expect(toned.regions.map((r) => r.z)).toEqual(flat.regions.map((r) => r.z));
+      expect(toned.regions.map((r) => r.tex.kind)).toEqual(flat.regions.map((r) => r.tex.kind));
+      expect(toned.regions.map((r) => r.tex.angleRad)).toEqual(
+        flat.regions.map((r) => r.tex.angleRad)
+      );
+      expect(toned.regions.map((r) => r.tex.spacing)).toEqual(
+        flat.regions.map((r) => r.tex.spacing)
+      );
+    }
+  });
+
+  it('tone never opens paper inside a hatch band', () => {
+    // 'light' at full strength is the worst case: one whole flank of every
+    // region sits at the tone floor. Row spacing must stay bounded — probe
+    // scanline gaps inside the inked disk.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 2,
+      field: false,
+      irregularity: 0,
+      textures: ['lines', 'blank', { kind: 'hatch', spacingScale: 1 }],
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      toneShape: 'light',
+      toneStrength: 1,
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    // The hatch pitch: spacingPx (260/150) * KIND_SPACING.hatch (0.45).
+    const pitch = Math.max(1.2, (260 / 150) * 0.45);
+    let maxR = 0;
+    for (const line of r.lines) {
+      for (const p of line.points) {
+        maxR = Math.max(maxR, Math.hypot(p.x - 150, p.y - 150));
+      }
+    }
+    // Vertical rows: crossings along a horizontal probe through the centre.
+    const xs: number[] = [];
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (!(lo < 150 && 150 <= hi)) continue;
+        const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (150 - a.y) / (b.y - a.y);
+        xs.push(a.x + (b.x - a.x) * f);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    expect(xs.length).toBeGreaterThan(20);
+    for (let i = 1; i < xs.length; i++) {
+      // Interior probe only (skip outside the disk); the floor caps row
+      // stepping at 2× pitch — allow dash-gap slack on top.
+      if (xs[i - 1] < 150 - maxR * 0.85 || xs[i] > 150 + maxR * 0.85) continue;
+      expect(xs[i] - xs[i - 1]).toBeLessThan(pitch * 3.2);
+    }
+  });
+
   // Mirrors generateLapidary's option resolution at BASE geometry.
   const layoutFor = (mode: LayoutConfig['mode'], seed: number, bands: number): LayoutConfig => ({
     seed,
@@ -343,6 +663,11 @@ describe('generateLapidary', () => {
     densityContrast: 0.6,
     waviness: 0.5,
     patchiness: 0.55,
+    taper: 0.7,
+    jitterDeg: 1.5,
+    toneShape: 'seam',
+    toneStrength: 0.35,
+    lightAngleDeg: -120,
     faults: 0,
     spiralForm: 'circular',
     spiralDirection: 'inward',
@@ -354,14 +679,18 @@ describe('generateLapidary', () => {
   });
 
   it('outlines add strokes but never trace the background field', () => {
-    // Count on a single floating band: outline strokes are also stamped
-    // into the avoid mask, so with bands below, clipped slivers can cancel
-    // out the added loops in a raw line count.
+    // Outline strokes are also stamped into the avoid mask, so a lower
+    // band's clipped slivers can cancel out the added loops in a raw line
+    // count ('bands' clamps to 2 — there is no true solo band). Keeping the
+    // lower ring blank isolates the outlines: the only ink that can change
+    // is the outline strokes themselves.
     const solo = {
       ...BASE,
-      bands: 1,
+      bands: 2,
       field: false,
-      textures: ['hatch'] as ['hatch'],
+      // Index 0 belongs to the (absent) field; z=1 is the blank outer ring,
+      // z=2 the inked inner ring.
+      textures: ['lines', 'blank', 'hatch'] as ['lines', 'blank', 'hatch'],
       wobble: 0,
       optimize: false,
     };
@@ -383,6 +712,83 @@ describe('generateLapidary', () => {
         if (line.points.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < 1)) hit++;
       }
       expect(hit).toBeLessThan(3);
+    }
+  });
+
+  it('outline emphasis stacks bold passes and everything bold is outline ink', () => {
+    const solo = {
+      ...BASE,
+      bands: 2,
+      field: false,
+      textures: ['lines', 'blank', 'hatch'] as ['lines', 'blank', 'hatch'],
+      outlines: true,
+      wobble: 0,
+      optimize: false,
+    };
+    const n1 = generateLapidary({ ...solo, outlineEmphasis: 1 }).lines.length;
+    const n3 = generateLapidary({ ...solo, outlineEmphasis: 3 }).lines.length;
+    expect(n3).toBeGreaterThan(n1);
+    // Outline strokes carry the bold pen (calmer wobble, heavier weight);
+    // fills never do. The un-outlined render has no bold ink at all.
+    const outlined = generateLapidary(solo);
+    expect(outlined.lines.filter((l) => l.pen === 'bold').length).toBeGreaterThan(2);
+    const plain = generateLapidary({ ...solo, outlines: false });
+    expect(plain.lines.some((l) => l.pen === 'bold')).toBe(false);
+  });
+
+  it('veins carry the bold pen and an emphasis pass', () => {
+    const base = { ...BASE, mode: 'breccia' as const, pens: 3, wobble: 0, optimize: false };
+    const without = generateLapidary(base);
+    const withVeins = generateLapidary({ ...base, veins: true });
+    const veins = withVeins.lines.slice(without.lines.length);
+    expect(veins.length).toBeGreaterThan(0);
+    for (const line of veins) {
+      expect(line.layer).toBe(VEIN_LAYER);
+      expect(line.pen).toBe('bold');
+    }
+  });
+
+  it('solid bands serpentine into long chains and respect the seams', () => {
+    const haloPx = 8;
+    const r = generateLapidary({
+      ...BASE,
+      mode: 'agate',
+      bands: 3,
+      pens: 4,
+      penAssignment: 'per-region',
+      textures: ['lines', 'solid', 'lines'],
+      haloPx,
+      wobble: 0,
+      optimize: false,
+    });
+    // The solid band (z=1) plots as a few continuous serpentine strokes,
+    // not one stroke per row.
+    const solid = r.lines.filter((l) => l.layer === inkLayerName(1));
+    expect(solid.length).toBeGreaterThan(0);
+    expect(Math.max(...solid.map((l) => l.points.length))).toBeGreaterThan(100);
+    // And the halo property holds around it.
+    const byLayer = new Map<string, { x: number; y: number }[]>();
+    for (const line of r.lines) {
+      const arr = byLayer.get(line.layer!) ?? [];
+      for (let i = 0; i < line.points.length; i += 3) arr.push(line.points[i]);
+      byLayer.set(line.layer!, arr);
+    }
+    for (const [la, lb] of [
+      [inkLayerName(0), inkLayerName(1)],
+      [inkLayerName(1), inkLayerName(2)],
+    ] as [string, string][]) {
+      const a = byLayer.get(la) ?? [];
+      const b = byLayer.get(lb) ?? [];
+      expect(a.length).toBeGreaterThan(10);
+      expect(b.length).toBeGreaterThan(10);
+      let min = Infinity;
+      for (const p of a) {
+        for (const q of b) {
+          const d = Math.hypot(p.x - q.x, p.y - q.y);
+          if (d < min) min = d;
+        }
+      }
+      expect(min).toBeGreaterThanOrEqual(haloPx * 0.45);
     }
   });
 

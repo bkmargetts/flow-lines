@@ -34,6 +34,12 @@ export type SpiralJoin = 'cells' | 'blend';
 /** Sheet-wide silhouette language; 'mixed' deals organic/angular per band. */
 export type LapidaryShapes = LapidaryShape | 'mixed';
 
+/** The within-region tone idea: 'seam' ramps dark against each band's
+ *  boundaries (the reference agate's densified band walls), 'core' shades
+ *  toward the region centre, 'light' models a flat light direction,
+ *  'noise' clouds each band, 'none' keeps the flat constant-pitch fill. */
+export type LapidaryToneShape = 'none' | 'seam' | 'core' | 'light' | 'noise';
+
 export type LapidaryTexture =
   | 'lines'
   | 'wavy'
@@ -45,6 +51,7 @@ export type LapidaryTexture =
   | 'stipple'
   | 'mottle'
   | 'grain'
+  | 'solid'
   | 'blank';
 
 /** Per-band texture spec; a plain kind string means "defaults for that kind". */
@@ -60,6 +67,13 @@ export interface BandTexture {
   /** Per-band override of the global patchiness (patchy/cross hole amount;
    *  mottle weave amount). */
   patchiness?: number;
+  /** Per-band override of the global stroke end-taper amount (0..1). */
+  taper?: number;
+  /** Per-band override of the global per-stroke angle jitter in degrees. */
+  jitterDeg?: number;
+  /** Per-band override of the global tone strength (0 pins this band flat —
+   *  e.g. a preset holding its ruled field at constant pitch). */
+  tone?: number;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
 }
@@ -78,6 +92,22 @@ export interface ResolvedTexture {
   spacing: number;
   waviness: number;
   patchiness: number;
+  /** Stroke end-taper amount 0..1 (seeded trims at both ends + occasional
+   *  mid-stroke pen lift — the emitStroke craft). */
+  taper: number;
+  /** Per-stroke rotation jitter in radians. */
+  jitterRad: number;
+  /** Reserved-paper seam width — caps the dash stagger so staggered marks
+   *  can never lean into a seam. */
+  haloPx: number;
+  /** Within-region tone shape (see `LapidaryToneShape`). */
+  toneShape: LapidaryToneShape;
+  /** Tone strength 0..1 (0 = flat). */
+  toneStrength: number;
+  /** Direction the light comes from, radians ('light' shape only). */
+  lightAngleRad: number;
+  /** Seeded stream for the 'noise' tone shape (fresh 600+z channel). */
+  toneSeed: number;
   /** Slides the hatch family so no two bands' lines register alike. */
   phase: number;
   seed: number;
@@ -125,6 +155,12 @@ export interface Region {
   strataBand?: RegionStrataBand;
   ribbon?: RegionRibbon;
   seamless?: boolean;
+  /** The inner neighbour's radial (agate rings): the band's second seam,
+   *  so the 'seam' tone can ramp against both walls of the annulus. */
+  innerRadial?: RegionRadial;
+  /** Radial boundaries the background field gathers around ('seam' tone):
+   *  the outermost agate ring, or every breccia fragment. */
+  fieldRefs?: RegionRadial[];
 }
 
 export interface LayoutConfig {
@@ -148,6 +184,16 @@ export interface LayoutConfig {
   densityContrast: number;
   waviness: number;
   patchiness: number;
+  /** Stroke end-taper amount 0..1. */
+  taper: number;
+  /** Per-stroke rotation jitter in degrees. */
+  jitterDeg: number;
+  /** Within-region tone shape. */
+  toneShape: LapidaryToneShape;
+  /** Within-region tone strength 0..1. */
+  toneStrength: number;
+  /** Direction the light comes from, degrees ('light' tone shape). */
+  lightAngleDeg: number;
   /** Vertical fault planes thrown across the strata stack (strata only). */
   faults: number;
   /** Spiral cross-section form (spiral only). */
@@ -184,12 +230,16 @@ const KIND_SPACING: Record<LapidaryTexture, number> = {
   // of the reference, with paper showing through the stacked passages.
   mottle: 0.5,
   grain: 0.7,
+  // Committed black: serpentine rows at pen-width pitch. Pair with a pen
+  // width near 0.3× the base spacing so the rows close up into ink.
+  solid: 0.3,
   blank: 1,
 };
 
-/** Kinds the seeded picker may deal a band (blank and crystal are
+/** Kinds the seeded picker may deal a band (blank, crystal and solid are
  *  preset-only — a random paper band next to the background reads as a hole,
- *  not a decision, and a druzy ray-burst is too loud to land uninvited). */
+ *  not a decision, a druzy ray-burst is too loud to land uninvited, and a
+ *  committed black mass must be an artist's call, not a dice roll). */
 const RANDOM_KINDS: LapidaryTexture[] = [
   'lines',
   'wavy',
@@ -226,6 +276,18 @@ export function resolveTexture(
     if (kind === prevKind) {
       kind = RANDOM_KINDS[(RANDOM_KINDS.indexOf(kind) + 1) % RANDOM_KINDS.length];
     }
+    // Crystal is dealt sparingly — a druzy ray-burst is loud — and only on
+    // inner agate/breccia bands, whose radial geometry the fan needs. The
+    // roll is always drawn so eligibility never shifts a sibling draw.
+    const crystalRoll = rng();
+    if (
+      (cfg.mode === 'agate' || cfg.mode === 'breccia') &&
+      z >= 2 &&
+      prevKind !== 'crystal' &&
+      crystalRoll < 0.08
+    ) {
+      kind = 'crystal';
+    }
     spec = { kind };
   }
   // The background band keeps the base angle exactly — the reference's ruled
@@ -242,6 +304,13 @@ export function resolveTexture(
     spacing,
     waviness: clamp(spec.waviness ?? cfg.waviness, 0, 1),
     patchiness: clamp(spec.patchiness ?? cfg.patchiness, 0, 1),
+    taper: clamp(spec.taper ?? cfg.taper, 0, 1),
+    jitterRad: (clamp(spec.jitterDeg ?? cfg.jitterDeg, 0, 3) * Math.PI) / 180,
+    haloPx: cfg.haloPx,
+    toneShape: cfg.toneShape,
+    toneStrength: clamp(spec.tone ?? cfg.toneStrength, 0, 1),
+    lightAngleRad: (cfg.lightAngleDeg * Math.PI) / 180,
+    toneSeed: subSeed(cfg.seed, 600 + z),
     phase: rng(),
     seed: subSeed(cfg.seed, 400 + z),
     featureScale: cfg.featureScale,
@@ -305,6 +374,15 @@ function agateRegions(cfg: LayoutConfig): Region[] {
   tables.forEach((g, i) =>
     push(i + 1, ringPolygon(cx, cy, halfW, halfH, g), { cx, cy, rx: halfW, ry: halfH, table: g })
   );
+  // Seam-tone geometry: each ring's second wall is its inner neighbour's
+  // boundary; the field gathers around the outermost ring.
+  const ringAt = (i: number): Region | undefined => regions[cfg.field ? i + 1 : i];
+  for (let i = 0; i < tables.length - 1; i++) {
+    ringAt(i)!.innerRadial = ringAt(i + 1)!.radial;
+  }
+  if (cfg.field && tables.length > 0) {
+    regions[0].fieldRefs = [ringAt(0)!.radial!];
+  }
   return regions;
 }
 
@@ -396,6 +474,10 @@ function brecciaRegions(cfg: LayoutConfig): Region[] {
       table,
     });
   });
+  // Seam-tone geometry: the field gathers around every fragment.
+  if (cfg.field && regions.length > 1) {
+    regions[0].fieldRefs = regions.slice(1).map((r) => r.radial!);
+  }
   return regions;
 }
 

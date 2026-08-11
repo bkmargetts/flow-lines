@@ -1,6 +1,7 @@
 import type {
   LapidaryMode,
   LapidaryShapes,
+  LapidaryToneShape,
   PenAssignment,
   SpiralDirection,
   SpiralForm,
@@ -206,7 +207,27 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
 
       <Slider label="Line pitch" value={state.spacingMm} min={0.6} max={3} step={0.1} onChange={(v) => update({ spacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Seam width" value={state.haloMm} min={0.8} max={5} step={0.1} onChange={(v) => update({ haloMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      <label className="field">
+        <span>Shading</span>
+        <select
+          value={state.toneShape}
+          onChange={(e) => update({ toneShape: e.target.value as LapidaryToneShape })}
+        >
+          <option value="seam">Seam — dark against the band walls</option>
+          <option value="core">Core — dark toward each centre</option>
+          <option value="light">Light — one lit flank per band</option>
+          <option value="noise">Clouds — noisy tonal drift</option>
+          <option value="none">Flat — constant pitch</option>
+        </select>
+      </label>
+      <Slider label="Shading strength" value={state.toneStrength} min={0} max={1} step={0.01} onChange={(v) => update({ toneStrength: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.toneShape === 'none'} />
+      {state.toneShape === 'light' && (
+        <Slider label="Light angle" value={state.lightAngleDeg} min={-180} max={180} step={1} onChange={(v) => update({ lightAngleDeg: v })} format={(v) => `${Math.round(v)}°`} />
+      )}
       <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
+      {state.outlines && (
+        <Slider label="Outline weight" value={state.outlineEmphasis} min={1} max={3} step={1} onChange={(v) => update({ outlineEmphasis: v })} format={(v) => `${Math.round(v)} pass${Math.round(v) > 1 ? 'es' : ''}`} />
+      )}
       {breccia && (
         <Toggle label="Kintsugi veins" checked={state.veins} onChange={(v) => update({ veins: v })} />
       )}
@@ -278,6 +299,8 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
           <Slider label="Density contrast" value={state.densityContrast} min={0} max={1} step={0.01} onChange={(v) => update({ densityContrast: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Waviness" value={state.waviness} min={0} max={1} step={0.01} onChange={(v) => update({ waviness: v })} format={(v) => `${Math.round(v * 100)}%`} />
           <Slider label="Patchiness" value={state.patchiness} min={0} max={1} step={0.01} onChange={(v) => update({ patchiness: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="End taper" value={state.taper} min={0} max={1} step={0.01} onChange={(v) => update({ taper: v })} format={(v) => `${Math.round(v * 100)}%`} />
+          <Slider label="Stroke jitter" value={state.jitterDeg} min={0} max={3} step={0.1} onChange={(v) => update({ jitterDeg: v })} format={(v) => `${v.toFixed(1)}°`} />
         </AdvGroup>
 
         <AdvGroup title="Pen & finish">

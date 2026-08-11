@@ -84,6 +84,7 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
 
     haloPx: state.haloMm * mm,
     outlines: state.outlines,
+    outlineEmphasis: state.outlineEmphasis,
 
     textures: state.textureMix === 'shuffle' ? undefined : TEXTURE_MIXES[state.textureMix],
     baseAngleDeg: state.angleDeg,
@@ -92,6 +93,11 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     densityContrast: state.densityContrast,
     waviness: state.waviness,
     patchiness: state.patchiness,
+    taper: state.taper,
+    jitterDeg: state.jitterDeg,
+    toneShape: state.toneShape,
+    toneStrength: state.toneStrength,
+    lightAngleDeg: state.lightAngleDeg,
 
     pens: inks.length,
     penAssignment: state.penAssignment,

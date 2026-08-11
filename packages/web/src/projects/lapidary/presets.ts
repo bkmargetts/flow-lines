@@ -30,12 +30,18 @@ const PRESET_BASE = {
   veins: false,
   haloMm: 2.2,
   outlines: false,
+  outlineEmphasis: 2,
   spacingMm: 1.3,
   angleDeg: 90,
   angleDriftDeg: 25,
   densityContrast: 0.6,
   waviness: 0.5,
   patchiness: 0.55,
+  taper: 0.7,
+  jitterDeg: 1.5,
+  toneShape: 'seam',
+  toneStrength: 0.35,
+  lightAngleDeg: -120,
   penAssignment: 'interleave',
   spiralForm: 'circular',
   spiralDirection: 'inward',
@@ -266,6 +272,7 @@ export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> 
     spiralPulse: Number((rng() * 0.9).toFixed(2)),
     haloMm: Number((1.4 + rng() * 1.8).toFixed(1)),
     outlines: rng() < 0.2,
+    outlineEmphasis: 1 + Math.floor(rng() * 3),
     textureMix: pick(rng, MIXES),
     spacingMm: Number((0.9 + rng() * 1.1).toFixed(1)),
     angleDeg: mode === 'strata' ? (rng() < 0.6 ? 0 : 90) : rng() < 0.6 ? 90 : Math.round(rng() * 180),
@@ -273,6 +280,16 @@ export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> 
     densityContrast: Number((0.3 + rng() * 0.7).toFixed(2)),
     waviness: Number((0.3 + rng() * 0.7).toFixed(2)),
     patchiness: Number((0.25 + rng() * 0.6).toFixed(2)),
+    taper: Number((0.45 + rng() * 0.5).toFixed(2)),
+    jitterDeg: Number((0.5 + rng() * 2).toFixed(1)),
+    // Weighted toward the reference look: mostly seam (or flat), with the
+    // showier shades on a minority of rolls.
+    toneShape: ((r) =>
+      r < 0.45 ? 'seam' : r < 0.65 ? 'none' : r < 0.8 ? 'light' : r < 0.9 ? 'core' : 'noise')(
+      rng()
+    ) as LapidaryState['toneShape'],
+    toneStrength: Number((rng() * 0.7).toFixed(2)),
+    lightAngleDeg: Math.round(rng() * 360 - 180),
     penAssignment: rng() < 0.7 ? 'interleave' : 'per-region',
     palette: pal.id,
     pens: inks.length,

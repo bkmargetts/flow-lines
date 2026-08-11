@@ -7,6 +7,7 @@ import {
   type LapidaryOptions,
   type LapidaryShapes,
   type LapidaryTexture,
+  type LapidaryToneShape,
   type BandTexture,
   type PenAssignment,
   type SpiralDirection,
@@ -29,6 +30,7 @@ const TEXTURE_KINDS = new Set([
   'stipple',
   'mottle',
   'grain',
+  'solid',
   'blank',
 ]);
 
@@ -102,7 +104,7 @@ export function registerLapidary(program: Command) {
     .option('--halo <number>', 'Reserved-paper seam width in px')
     .option(
       '--textures <csv>',
-      'Outer→inner band textures, cycled (lines,wavy,contour,crystal,hatch,patchy,cross,stipple,mottle,grain,blank); ' +
+      'Outer→inner band textures, cycled (lines,wavy,contour,crystal,hatch,patchy,cross,stipple,mottle,grain,solid,blank); ' +
         'omit for a seeded deal. Per-band overrides: kind[:angle[:spacingScale]], ' +
         'e.g. lines:45,hatch:125:0.6,wavy::0.8'
     )
@@ -118,6 +120,23 @@ export function registerLapidary(program: Command) {
       '--patchiness <number>',
       'Patchy/cross hole amount and mottle weave amount (0-1; cross floors its gate at 0.25)'
     )
+    .option(
+      '--taper <number>',
+      'Stroke end-taper amount (0-1): seeded end trims + occasional mid-stroke pen lifts'
+    )
+    .option(
+      '--jitter-deg <number>',
+      'Per-stroke angle jitter in degrees (0-3; ruled lines keep their exact angle)'
+    )
+    .option(
+      '--tone-shape <shape>',
+      'Within-region shading: seam (dark against band walls) | core | light | noise | none'
+    )
+    .option('--tone-strength <number>', 'Shading strength (0-1; 0 = flat constant pitch)')
+    .option(
+      '--light-angle <number>',
+      'Direction the light comes from in degrees (tone-shape light; -120 = upper left)'
+    )
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')
     .option(
@@ -128,6 +147,10 @@ export function registerLapidary(program: Command) {
     .option('--vein-color <color>', 'Ink colour for the "vein" accent layer')
     .option('--outlines', 'Ink each region silhouette as a stroke (the background field is never outlined)')
     .option('--no-outlines', 'Switch outlines off (overrides a preset that enables them)')
+    .option(
+      '--outline-emphasis <number>',
+      'Offset single-pen passes each outline dash builds from (1-3; the bold weight)'
+    )
     .option('--wobble <number>', 'Hand-drawn wobble amplitude in px')
     .option(
       '--split-layers',
@@ -223,9 +246,15 @@ export function registerLapidary(program: Command) {
         densityContrast: options.densityContrast ? parseFloat(options.densityContrast) : undefined,
         waviness: options.waviness ? parseFloat(options.waviness) : undefined,
         patchiness: options.patchiness ? parseFloat(options.patchiness) : undefined,
+        taper: options.taper ? parseFloat(options.taper) : undefined,
+        jitterDeg: options.jitterDeg ? parseFloat(options.jitterDeg) : undefined,
+        toneShape: options.toneShape as LapidaryToneShape | undefined,
+        toneStrength: options.toneStrength ? parseFloat(options.toneStrength) : undefined,
+        lightAngleDeg: options.lightAngle ? parseFloat(options.lightAngle) : undefined,
         pens: options.pens ? parseInt(options.pens, 10) : undefined,
         penAssignment: options.penAssignment as PenAssignment | undefined,
         outlines: typeof options.outlines === 'boolean' ? options.outlines : undefined,
+        outlineEmphasis: options.outlineEmphasis ? parseInt(options.outlineEmphasis, 10) : undefined,
         wobble: options.wobble ? parseFloat(options.wobble) : undefined,
       };
       for (const key of Object.keys(flagOptions) as Array<keyof LapidaryOptions>) {

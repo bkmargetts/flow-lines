@@ -18,10 +18,13 @@ export function pushRun(out: FlowLine[], pts: Point[], layer: string, pen?: 'fin
   if (pts.length >= 2) out.push({ points: pts, layer, ...(pen ? { pen } : {}) });
 }
 
-/** Subdivide a straight segment so the hand-drawn finish can bow it. */
-export function densifySegment(a: Point, b: Point, step: number): Point[] {
+/** Subdivide a straight segment so the hand-drawn finish can bow it.
+ *  `maxPoints` bounds the subdivision (the historical default of 40 suits
+ *  landscape's short marks; sheet-spanning strokes need it lifted or the
+ *  wobble starves on long runs). */
+export function densifySegment(a: Point, b: Point, step: number, maxPoints = 40): Point[] {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
-  const n = Math.max(1, Math.min(40, Math.round(len / step)));
+  const n = Math.max(1, Math.min(maxPoints, Math.round(len / step)));
   const pts: Point[] = [];
   for (let i = 0; i <= n; i++) {
     const t = i / n;
@@ -84,6 +87,8 @@ export interface Craft {
   taper: number;
   jitter: number; // radians
   subStep: number;
+  /** Subdivision point cap per stroke (default 40 — see densifySegment). */
+  maxPoints?: number;
 }
 
 /** A tone field: darkness 0..1 at a location (1 = tight hatch / dark). */
@@ -128,7 +133,7 @@ export function emitStroke(out: FlowLine[], A: Point, B: Point, layer: string, c
   };
   for (const [s, e] of segs) {
     if (e - s < 1.5) continue;
-    pushRun(out, densifySegment(at(s), at(e), craft.subStep), layer);
+    pushRun(out, densifySegment(at(s), at(e), craft.subStep, craft.maxPoints), layer);
   }
 }
 

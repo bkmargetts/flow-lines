@@ -1,6 +1,7 @@
 import type {
   LapidaryMode,
   LapidaryShapes,
+  LapidaryToneShape,
   PenAssignment,
   SpiralDirection,
   SpiralForm,
@@ -65,6 +66,7 @@ export interface LapidaryState {
   // Seams
   haloMm: number; // reserved-paper seam width
   outlines: boolean;
+  outlineEmphasis: number; // 1..3 offset passes each outline dash builds from
 
   // Textures
   textureMix: LapidaryTextureMix;
@@ -74,6 +76,11 @@ export interface LapidaryState {
   densityContrast: number; // 0..1 dense-vs-sparse spread
   waviness: number; // 0..1
   patchiness: number; // 0..1
+  taper: number; // 0..1 stroke end-taper (trims + occasional mid-stroke lifts)
+  jitterDeg: number; // 0..3° per-stroke angle jitter (ruled lines exempt)
+  toneShape: LapidaryToneShape; // within-region tone idea (seam/core/light/noise)
+  toneStrength: number; // 0..1 — 0 pins every band flat
+  lightAngleDeg: number; // -180..180, 'light' shape only
 
   // Pens
   penAssignment: PenAssignment;
@@ -115,6 +122,7 @@ export const defaultLapidaryState: LapidaryState = {
 
   haloMm: 2.2,
   outlines: false,
+  outlineEmphasis: 2,
 
   textureMix: 'specimen',
   spacingMm: 1.3,
@@ -123,6 +131,11 @@ export const defaultLapidaryState: LapidaryState = {
   densityContrast: 0.6,
   waviness: 0.5,
   patchiness: 0.55,
+  taper: 0.7,
+  jitterDeg: 1.5,
+  toneShape: 'seam',
+  toneStrength: 0.35,
+  lightAngleDeg: -120,
 
   penAssignment: 'interleave',
   pens: 2,
