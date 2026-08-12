@@ -8,6 +8,7 @@ import { generateOverlappedLines, bandLayerName } from '../overlapped-lines.js';
 import { makeRandom, subSeed } from '../lib/rng.js';
 import { Region } from './layout.js';
 import { buildRegionTone } from './tone.js';
+import type { ToneFn } from '../landscape/hatching.js';
 
 /** Safety valve per region — a hostile spacing knob must not hang the page. */
 const REGION_LINE_CAP = 40000;
@@ -129,16 +130,16 @@ function gatedRun(
  * whose strokes carry transient `fam-K` family markers the carve maps to
  * dedicated pens (the two-ink weave).
  */
-export function fillRegion(region: Region): RegionFill {
+export function fillRegion(region: Region, sheetTone: ToneFn | null = null): RegionFill {
   const t = region.tex;
   const poly = region.poly;
   const rng = makeRandom(t.seed);
   const noise = createNoise(subSeed(t.seed, 1));
   const ink: FlowLine[] = [];
-  // The band's internal tonal idea (null = flat): rows tighten where dark,
-  // open where light. Floored well above the paper cutoffs — tone shades a
-  // band, the seams alone hold paper.
-  const tone = buildRegionTone(region);
+  // The band's internal tonal idea plus the optional sheet-wide light
+  // (null = flat): rows tighten where dark, open where light. Floored well
+  // above the paper cutoffs — tone shades a band, the seams alone hold paper.
+  const tone = buildRegionTone(region, sheetTone);
   // Detail steps ride the feature scale so wobble samples stay a fixed
   // physical distance apart on any sheet (floored — micro pages must not
   // explode point counts).

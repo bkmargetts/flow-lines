@@ -42,6 +42,8 @@ const PRESET_BASE = {
   toneShape: 'seam',
   toneStrength: 0.35,
   lightAngleDeg: -120,
+  sheetTone: 'none',
+  sheetToneStrength: 0.35,
   penAssignment: 'interleave',
   spiralForm: 'circular',
   spiralDirection: 'inward',
@@ -290,6 +292,12 @@ export function randomLapidaryGenome(rng: () => number): Partial<LapidaryState> 
     ) as LapidaryState['toneShape'],
     toneStrength: Number((rng() * 0.7).toFixed(2)),
     lightAngleDeg: Math.round(rng() * 360 - 180),
+    // The sheet light is a big statement — off on most rolls, and the
+    // vignette (the showier of the two) rarest.
+    sheetTone: ((r) => (r < 0.6 ? 'none' : r < 0.85 ? 'light' : 'vignette'))(
+      rng()
+    ) as LapidaryState['sheetTone'],
+    sheetToneStrength: Number((0.25 + rng() * 0.5).toFixed(2)),
     penAssignment: rng() < 0.7 ? 'interleave' : 'per-region',
     palette: pal.id,
     pens: inks.length,

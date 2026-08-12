@@ -98,6 +98,8 @@ export function renderLapidary(state: LapidaryState, env: RenderEnv): LayerOutpu
     toneShape: state.toneShape,
     toneStrength: state.toneStrength,
     lightAngleDeg: state.lightAngleDeg,
+    sheetTone: state.sheetTone,
+    sheetToneStrength: state.sheetToneStrength,
 
     pens: inks.length,
     penAssignment: state.penAssignment,

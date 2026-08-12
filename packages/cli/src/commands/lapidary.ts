@@ -8,6 +8,7 @@ import {
   type LapidaryShapes,
   type LapidaryTexture,
   type LapidaryToneShape,
+  type LapidarySheetTone,
   type BandTexture,
   type PenAssignment,
   type SpiralDirection,
@@ -135,8 +136,14 @@ export function registerLapidary(program: Command) {
     .option('--tone-strength <number>', 'Shading strength (0-1; 0 = flat constant pitch)')
     .option(
       '--light-angle <number>',
-      'Direction the light comes from in degrees (tone-shape light; -120 = upper left)'
+      'Direction the light comes from in degrees (tone-shape light and sheet-tone light; -120 = upper left)'
     )
+    .option(
+      '--sheet-tone <shape>',
+      'Sheet-wide lighting layered over every band: light (one planar ramp along ' +
+        '--light-angle) | vignette (light at the composition centre, dark at the rim) | none'
+    )
+    .option('--sheet-tone-strength <number>', 'Sheet lighting strength (0-1; 0 = off)')
     .option('--pens <number>', 'Pen count (1-4), strokes tagged ink-0..ink-3')
     .option('--pen-assignment <mode>', 'interleave | per-region')
     .option(
@@ -171,6 +178,11 @@ export function registerLapidary(program: Command) {
         console.error(
           `Unknown preset "${options.preset}". Valid: ${Object.keys(LAPIDARY_PRESETS).join(' | ')}`
         );
+        process.exit(1);
+      }
+
+      if (options.sheetTone && !['none', 'light', 'vignette'].includes(String(options.sheetTone))) {
+        console.error(`Unknown sheet tone "${options.sheetTone}". Valid: none | light | vignette`);
         process.exit(1);
       }
 
@@ -251,6 +263,10 @@ export function registerLapidary(program: Command) {
         toneShape: options.toneShape as LapidaryToneShape | undefined,
         toneStrength: options.toneStrength ? parseFloat(options.toneStrength) : undefined,
         lightAngleDeg: options.lightAngle ? parseFloat(options.lightAngle) : undefined,
+        sheetTone: options.sheetTone as LapidarySheetTone | undefined,
+        sheetToneStrength: options.sheetToneStrength
+          ? parseFloat(options.sheetToneStrength)
+          : undefined,
         pens: options.pens ? parseInt(options.pens, 10) : undefined,
         penAssignment: options.penAssignment as PenAssignment | undefined,
         outlines: typeof options.outlines === 'boolean' ? options.outlines : undefined,

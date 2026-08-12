@@ -315,6 +315,24 @@ CASES['lapidary/spiral-outward/42'] = () =>
     spiralDirection: 'outward',
     pens: 2,
   });
+CASES['lapidary/sheet-light/42'] = () =>
+  generateLapidary({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    sheetTone: 'light',
+    sheetToneStrength: 0.7,
+  });
+CASES['lapidary/vignette/42'] = () =>
+  generateLapidary({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    sheetTone: 'vignette',
+    sheetToneStrength: 0.7,
+  });
 CASES['marbling/feather/42'] = () =>
   generateMarbling({ width: 300, height: 400, margin: 20, seed: 42, pattern: 'feather', inkGroups: 2 });
 CASES['marbling/vortex/42'] = () =>

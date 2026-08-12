@@ -231,6 +231,7 @@ export type {
   LapidaryShape,
   LapidaryShapes,
   LapidaryToneShape,
+  LapidarySheetTone,
   BandTexture,
   PenAssignment,
   SpiralForm,
