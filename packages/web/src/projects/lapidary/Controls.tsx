@@ -2,6 +2,7 @@ import type {
   LapidaryMode,
   LapidaryShapes,
   LapidaryToneShape,
+  LapidarySheetTone,
   PenAssignment,
   SpiralDirection,
   SpiralForm,
@@ -221,7 +222,19 @@ export function LapidaryControls({ state, update }: ControlsProps<LapidaryState>
         </select>
       </label>
       <Slider label="Shading strength" value={state.toneStrength} min={0} max={1} step={0.01} onChange={(v) => update({ toneStrength: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.toneShape === 'none'} />
-      {state.toneShape === 'light' && (
+      <label className="field">
+        <span>Sheet light</span>
+        <select
+          value={state.sheetTone}
+          onChange={(e) => update({ sheetTone: e.target.value as LapidarySheetTone })}
+        >
+          <option value="none">None — each band its own relief</option>
+          <option value="light">Lit from one side</option>
+          <option value="vignette">Vignette — bright centre, dark rim</option>
+        </select>
+      </label>
+      <Slider label="Sheet light strength" value={state.sheetToneStrength} min={0} max={1} step={0.01} onChange={(v) => update({ sheetToneStrength: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.sheetTone === 'none'} />
+      {(state.toneShape === 'light' || state.sheetTone === 'light') && (
         <Slider label="Light angle" value={state.lightAngleDeg} min={-180} max={180} step={1} onChange={(v) => update({ lightAngleDeg: v })} format={(v) => `${Math.round(v)}°`} />
       )}
       <Toggle label="Ink region outlines" checked={state.outlines} onChange={(v) => update({ outlines: v })} />

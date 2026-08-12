@@ -644,6 +644,213 @@ describe('generateLapidary', () => {
     }
   });
 
+  it('sheet tone off or at strength 0 reproduces the default exactly', () => {
+    const base = JSON.stringify(generateLapidary({ ...BASE }));
+    for (const sheetTone of ['light', 'vignette'] as const) {
+      expect(
+        JSON.stringify(generateLapidary({ ...BASE, sheetTone, sheetToneStrength: 0 }))
+      ).toEqual(base);
+    }
+    expect(
+      JSON.stringify(generateLapidary({ ...BASE, sheetTone: 'none', sheetToneStrength: 1 }))
+    ).toEqual(base);
+  });
+
+  it('sheet light shades across region boundaries', () => {
+    // Regional 'light' judges every band from its own centroid, so a stack of
+    // full-width strata beds can never carry one gradient. The sheet ramp
+    // must: with the light from the right, rows on the left third of a probe
+    // sit tighter than on the right third — across whichever beds they fall in.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      mode: 'strata',
+      bands: 4,
+      irregularity: 0,
+      textures: [{ kind: 'hatch', spacingScale: 1 }],
+      spacingPx: 6,
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      toneShape: 'none',
+      sheetTone: 'light',
+      sheetToneStrength: 1,
+      lightAngleDeg: 0,
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const xs: number[] = [];
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (!(lo < 150 && 150 <= hi)) continue;
+        const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (150 - a.y) / (b.y - a.y);
+        xs.push(a.x + (b.x - a.x) * f);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    expect(xs.length).toBeGreaterThan(20);
+    let leftSum = 0;
+    let leftN = 0;
+    let rightSum = 0;
+    let rightN = 0;
+    for (let i = 1; i < xs.length; i++) {
+      const gap = xs[i] - xs[i - 1];
+      const pos = (xs[i - 1] + xs[i]) / 2;
+      if (pos < 20 + 260 / 3) {
+        leftSum += gap;
+        leftN++;
+      } else if (pos > 280 - 260 / 3) {
+        rightSum += gap;
+        rightN++;
+      }
+    }
+    expect(leftN).toBeGreaterThan(3);
+    expect(rightN).toBeGreaterThan(3);
+    expect(leftSum / leftN).toBeLessThan((rightSum / rightN) * 0.75);
+  });
+
+  it('sheet vignette darkens the rim and holds the centre light', () => {
+    // Full-width strata beds under a page-space vignette: rows near the
+    // page edges must sit tighter than rows through the light centre — a
+    // gradient no per-region tone shape can produce across flat beds.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      mode: 'strata',
+      bands: 3,
+      irregularity: 0,
+      textures: [{ kind: 'hatch', spacingScale: 1 }],
+      spacingPx: 6,
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      toneShape: 'none',
+      sheetTone: 'vignette',
+      sheetToneStrength: 1,
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const xs: number[] = [];
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (!(lo < 150 && 150 <= hi)) continue;
+        const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (150 - a.y) / (b.y - a.y);
+        xs.push(a.x + (b.x - a.x) * f);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    expect(xs.length).toBeGreaterThan(20);
+    let rimSum = 0;
+    let rimN = 0;
+    let midSum = 0;
+    let midN = 0;
+    for (let i = 1; i < xs.length; i++) {
+      const gap = xs[i] - xs[i - 1];
+      const pos = (xs[i - 1] + xs[i]) / 2;
+      if (pos < 20 + 260 * 0.15 || pos > 280 - 260 * 0.15) {
+        rimSum += gap;
+        rimN++;
+      } else if (pos > 20 + 260 * 0.35 && pos < 280 - 260 * 0.35) {
+        midSum += gap;
+        midN++;
+      }
+    }
+    expect(rimN).toBeGreaterThan(3);
+    expect(midN).toBeGreaterThan(3);
+    expect(rimSum / rimN).toBeLessThan((midSum / midN) * 0.75);
+  });
+
+  it('sheet tone shapes are deterministic and distinct', () => {
+    const hashes = (['none', 'light', 'vignette'] as const).map((sheetTone) => {
+      const opts = { ...BASE, sheetTone, sheetToneStrength: 0.8 };
+      const a = generateLapidary(opts);
+      expect(JSON.stringify(generateLapidary(opts))).toEqual(JSON.stringify(a));
+      expect(a.lines.length).toBeGreaterThan(50);
+      return JSON.stringify(a.lines);
+    });
+    expect(new Set(hashes).size).toBe(hashes.length);
+  });
+
+  it('sheet tone stacked on regional tone never opens paper inside a band', () => {
+    // Both layers at full strength is the worst case: the dark flanks add.
+    // The shared floor caps darkness — and the light flanks' combined lift
+    // caps row stepping at 2× pitch — so scanline gaps stay bounded.
+    const r = generateLapidary({
+      width: 300,
+      height: 300,
+      margin: 20,
+      seed: 42,
+      bands: 2,
+      field: false,
+      irregularity: 0,
+      textures: ['lines', 'blank', { kind: 'hatch', spacingScale: 1 }],
+      baseAngleDeg: 90,
+      angleDriftDeg: 0,
+      toneShape: 'light',
+      toneStrength: 1,
+      sheetTone: 'light',
+      sheetToneStrength: 1,
+      taper: 0,
+      wobble: 0,
+      optimize: false,
+    });
+    const pitch = Math.max(1.2, (260 / 150) * 0.45);
+    let maxR = 0;
+    for (const line of r.lines) {
+      for (const p of line.points) {
+        maxR = Math.max(maxR, Math.hypot(p.x - 150, p.y - 150));
+      }
+    }
+    const xs: number[] = [];
+    for (const line of r.lines) {
+      for (let i = 1; i < line.points.length; i++) {
+        const a = line.points[i - 1];
+        const b = line.points[i];
+        const lo = Math.min(a.y, b.y);
+        const hi = Math.max(a.y, b.y);
+        if (!(lo < 150 && 150 <= hi)) continue;
+        const f = Math.abs(b.y - a.y) < 1e-9 ? 0 : (150 - a.y) / (b.y - a.y);
+        xs.push(a.x + (b.x - a.x) * f);
+      }
+    }
+    xs.sort((p, q) => p - q);
+    expect(xs.length).toBeGreaterThan(20);
+    for (let i = 1; i < xs.length; i++) {
+      if (xs[i - 1] < 150 - maxR * 0.85 || xs[i] > 150 + maxR * 0.85) continue;
+      expect(xs[i] - xs[i - 1]).toBeLessThan(pitch * 3.2);
+    }
+  });
+
+  it('sheet tone composes with regional tone rather than replacing it', () => {
+    const both = generateLapidary({
+      ...BASE,
+      toneShape: 'seam',
+      sheetTone: 'light',
+      sheetToneStrength: 0.8,
+    });
+    const regionalOnly = generateLapidary({ ...BASE, toneShape: 'seam' });
+    const sheetOnly = generateLapidary({
+      ...BASE,
+      toneShape: 'none',
+      sheetTone: 'light',
+      sheetToneStrength: 0.8,
+    });
+    expect(JSON.stringify(both.lines)).not.toEqual(JSON.stringify(regionalOnly.lines));
+    expect(JSON.stringify(both.lines)).not.toEqual(JSON.stringify(sheetOnly.lines));
+  });
+
   // Mirrors generateLapidary's option resolution at BASE geometry.
   const layoutFor = (mode: LayoutConfig['mode'], seed: number, bands: number): LayoutConfig => ({
     seed,

@@ -2,6 +2,7 @@ import type {
   LapidaryMode,
   LapidaryShapes,
   LapidaryToneShape,
+  LapidarySheetTone,
   PenAssignment,
   SpiralDirection,
   SpiralForm,
@@ -80,7 +81,9 @@ export interface LapidaryState {
   jitterDeg: number; // 0..3° per-stroke angle jitter (ruled lines exempt)
   toneShape: LapidaryToneShape; // within-region tone idea (seam/core/light/noise)
   toneStrength: number; // 0..1 — 0 pins every band flat
-  lightAngleDeg: number; // -180..180, 'light' shape only
+  lightAngleDeg: number; // -180..180, 'light' tone shape + sheet light
+  sheetTone: LapidarySheetTone; // page-wide light over every band (none/light/vignette)
+  sheetToneStrength: number; // 0..1 — inert while sheetTone is 'none'
 
   // Pens
   penAssignment: PenAssignment;
@@ -136,6 +139,8 @@ export const defaultLapidaryState: LapidaryState = {
   toneShape: 'seam',
   toneStrength: 0.35,
   lightAngleDeg: -120,
+  sheetTone: 'none',
+  sheetToneStrength: 0.35,
 
   penAssignment: 'interleave',
   pens: 2,

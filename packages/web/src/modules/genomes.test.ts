@@ -247,6 +247,7 @@ const SPECS: GenomeSpec[] = [
       jitterDeg: [0, 3],
       toneStrength: [0, 1],
       lightAngleDeg: [-180, 180],
+      sheetToneStrength: [0, 1],
       outlineEmphasis: [1, 3],
       pens: [1, 4],
       faults: [0, 4],
@@ -263,6 +264,7 @@ const SPECS: GenomeSpec[] = [
       mode: ['agate', 'breccia', 'strata', 'spiral'],
       shapes: ['organic', 'angular', 'mixed'],
       toneShape: ['none', 'seam', 'core', 'light', 'noise'],
+      sheetTone: ['none', 'light', 'vignette'],
       textureMix: [
         'specimen',
         'geode',

@@ -7,6 +7,7 @@ import { clamp } from '../lib/math.js';
 import { buildRegions, LayoutConfig, Region, RegionRadial, TUNING_DIM } from './layout.js';
 import { fillRegion } from './textures.js';
 import { carveRegions, PenAssignment } from './carve.js';
+import { buildSheetTone, LapidarySheetTone } from './tone.js';
 
 export type {
   LapidaryMode,
@@ -20,6 +21,7 @@ export type {
   SpiralJoin,
 } from './layout.js';
 export type { PenAssignment } from './carve.js';
+export type { LapidarySheetTone } from './tone.js';
 import type {
   LapidaryMode,
   LapidaryTexture,
@@ -103,7 +105,8 @@ export interface LapidaryOptions {
   /** Outermost silhouette size as a fraction of the frame, 0.4..1 (default
    *  0.9). For the spiral this is where the outermost winding starts. */
   coverage?: number;
-  /** Composition centre offset as a fraction of the half-extents, -0.5..0.5 */
+  /** Composition centre offset as a fraction of the half-extents,
+   *  -0.5..0.5 — also the `sheetTone: 'vignette'` focus. */
   centerX?: number;
   centerY?: number;
   /** Spiral cross-section (default 'circular'): a round coil, a
@@ -199,9 +202,21 @@ export interface LapidaryOptions {
    *  every fill runs at today's constant pitch; per band via
    *  `BandTexture.tone`. */
   toneStrength?: number;
-  /** Direction the light comes from in degrees, 'light' shape only
-   *  (default -120 — upper left; 0 = from the right, -90 = from above). */
+  /** Direction the light comes from in degrees, shared by the 'light' tone
+   *  shape and `sheetTone: 'light'` (default -120 — upper left; 0 = from
+   *  the right, -90 = from above). */
   lightAngleDeg?: number;
+  /** Sheet-wide lighting layered over every band's own tone (default
+   *  'none'): 'light' runs one planar ramp across the whole page along
+   *  `lightAngleDeg`; 'vignette' holds the composition centre
+   *  (`centerX`/`centerY`) light and darkens toward the page rim. Composes
+   *  with `toneShape` — each band keeps its internal idea while the sheet
+   *  reads as one lit object — and shades within the same floor: it never
+   *  opens paper. */
+  sheetTone?: LapidarySheetTone;
+  /** Sheet tone strength 0..1 (default 0.35); inert while `sheetTone` is
+   *  'none'. */
+  sheetToneStrength?: number;
 
   // ---- Pens ----
   /** Pen count 1..4 (default 1) — strokes are tagged ink-0..ink-3 */
@@ -489,7 +504,17 @@ export function generateLapidary(options: LapidaryOptions): FlowLinesResult {
 
   const pens = clamp(Math.round(options.pens ?? 1), 1, 4);
   const { regions, geometricGaps } = buildRegions(layout);
-  const { lines, groups } = carveRegions(regions, fillRegion, {
+  // The sheet-wide lighting layer: one page-space darkness offset added to
+  // every band's own tone (null = off, the byte-identical default path).
+  const sheetTone = buildSheetTone({
+    shape: options.sheetTone ?? 'none',
+    strength: clamp(options.sheetToneStrength ?? 0.35, 0, 1),
+    angleRad: (layout.lightAngleDeg * Math.PI) / 180,
+    rect: layout.rect,
+    focusX: x0 + (innerW / 2) * (1 + layout.centerX),
+    focusY: y0 + (innerH / 2) * (1 + layout.centerY),
+  });
+  const { lines, groups } = carveRegions(regions, (r) => fillRegion(r, sheetTone), {
     width,
     height,
     haloPx,
