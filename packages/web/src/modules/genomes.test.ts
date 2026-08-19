@@ -26,6 +26,7 @@ import { randomWarpGridGenome } from '../projects/warp-grid/presets';
 import { randomHarmonographGenome } from '../projects/harmonograph/presets';
 import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomLapidaryGenome } from '../projects/lapidary/presets';
+import { randomTerracesGenome } from '../projects/terraces/presets';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
 import { randomPlanetGenome } from '../projects/planet-generator/presets';
@@ -88,6 +89,7 @@ const PALETTE_ROLLERS = [
   'planet-generator',
   'impact-grid',
   'lapidary',
+  'terraces',
 ];
 
 const SPECS: GenomeSpec[] = [
@@ -284,6 +286,47 @@ const SPECS: GenomeSpec[] = [
     // PALETTE_ROLLERS and rolls the palette — strokeColor/ink2..4Color,
     // `pens` and the `veinColor` accent come from the curated table or, on a
     // slice of rolls, from `randomLapidaryPalette`'s invented pen set.
+    forbidden: ['seed', 'penWidthMm', 'wobbleMm'],
+  },
+  {
+    name: 'terraces',
+    genome: randomTerracesGenome,
+    bounds: {
+      bands: [2, 10],
+      irregularity: [0, 1],
+      steppiness: [0, 1],
+      faults: [0, 6],
+      faultThrow: [0, 2],
+      faultIncline: [-1, 1],
+      haloMm: [0.8, 5],
+      spacingMm: [0.6, 3],
+      angleDeg: [0, 180],
+      angleDriftDeg: [0, 60],
+      densityContrast: [0, 1],
+      waviness: [0, 1],
+      patchiness: [0, 1],
+      taper: [0, 1],
+      jitterDeg: [0, 3],
+      toneStrength: [0, 1],
+      lightAngleDeg: [-180, 180],
+      sheetToneStrength: [0, 1],
+      outlineEmphasis: [1, 3],
+      pens: [1, 4],
+    },
+    ints: ['bands', 'angleDriftDeg', 'pens', 'faults', 'lightAngleDeg', 'outlineEmphasis'],
+    bools: ['outlines'],
+    enums: {
+      // 'custom' resets the Look picker's label — a rolled state is no
+      // preset's reference artwork.
+      preset: ['custom'],
+      toneShape: ['none', 'seam', 'core', 'light', 'noise'],
+      sheetTone: ['none', 'light', 'vignette'],
+      textureMix: ['fortification', 'linework', 'tonal', 'shuffle'],
+      penAssignment: ['interleave', 'per-region'],
+    },
+    // Ink fields are absent from forbidden by design: terraces is in
+    // PALETTE_ROLLERS and rolls the palette (lapidary's curated table or an
+    // invented pen set) — strokeColor/ink2..4Color and `pens` ride it.
     forbidden: ['seed', 'penWidthMm', 'wobbleMm'],
   },
   {

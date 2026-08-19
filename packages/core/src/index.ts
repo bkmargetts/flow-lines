@@ -239,6 +239,14 @@ export type {
   SpiralJoin,
 } from './lapidary/index.js';
 
+// Terraces (faulted strata beds — lapidary's strata mode grown into its own generator)
+export {
+  generateTerraces,
+  TERRACES_PRESETS,
+  TERRACES_DEFAULT_TEXTURES,
+} from './terraces/index.js';
+export type { TerracesOptions } from './terraces/index.js';
+
 // Harmonograph / guilloché (damped pendulums, spirograph wheels, engine turning)
 export {
   generateHarmonograph,
