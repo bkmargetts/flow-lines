@@ -322,6 +322,7 @@ const SPECS: GenomeSpec[] = [
       toneShape: ['none', 'seam', 'core', 'light', 'noise'],
       sheetTone: ['none', 'light', 'vignette'],
       textureMix: ['fortification', 'linework', 'tonal', 'shuffle'],
+      lineFlow: ['broken', 'flowing', 'mixed'],
       penAssignment: ['interleave', 'per-region'],
     },
     // Ink fields are absent from forbidden by design: terraces is in

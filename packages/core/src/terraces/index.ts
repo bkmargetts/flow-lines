@@ -27,8 +27,10 @@ import type {
  * fills, tone, and pen carve are shared with lapidary, the bed/fault geometry
  * is its own (`terraceCurves`). Beyond the strata inheritance it adds
  * dedicated fault knobs — `faultThrow` (displacement scale) and `faultIncline`
- * (committed plane tilt) — and `steppiness`, which blends the bed boundaries
- * toward piecewise-flat terrace treads.
+ * (committed plane tilt) — `steppiness`, which blends the bed boundaries
+ * toward piecewise-flat terrace treads, and `continuous`, which swaps the
+ * hand-fed dashing for unbroken flowing lines (sheet-wide, dealt per bed
+ * with 'mixed', or pinned per bed in `textures`).
  *
  * Ink: strokes are tagged `ink-<group>` (`inkLayerName`) across 1–4 pens,
  * either interleaved stroke-by-stroke within each bed or one pen per bed.
@@ -112,6 +114,15 @@ export interface TerracesOptions {
    *  of every mark plus occasional mid-stroke pen lifts. Per bed via
    *  `BandTexture.taper`. */
   taper?: number;
+  /** Draw the beds' marks as continuous flowing lines (default false): the
+   *  hand-fed dashing — ruled rows broken into dashes, contour laminae
+   *  broken into dashed arcs — and the taper mid-stroke pen lifts are all
+   *  suppressed, so each row or lamina plots as one unbroken stroke
+   *  (`taper` still trims the ends). 'mixed' deals each bed its own seeded
+   *  coin, so some beds flow unbroken while their neighbours stay dashed.
+   *  Per bed via `BandTexture.continuous` in `textures`, which beats both
+   *  the sheet-wide flag and the mixed deal. */
+  continuous?: boolean | 'mixed';
   /** Per-stroke rotation jitter in degrees, 0..3 (default 1.5); ruled
    *  'lines' beds are exempt. Per bed via `BandTexture.jitterDeg`. */
   jitterDeg?: number;
@@ -224,6 +235,7 @@ export function generateTerraces(options: TerracesOptions): FlowLinesResult {
     waviness: clamp(options.waviness ?? 0.5, 0, 1),
     patchiness: clamp(options.patchiness ?? 0.55, 0, 1),
     taper: clamp(options.taper ?? 0.7, 0, 1),
+    continuous: options.continuous ?? false,
     jitterDeg: clamp(options.jitterDeg ?? 1.5, 0, 3),
     toneShape: options.toneShape ?? 'seam',
     toneStrength: clamp(options.toneStrength ?? 0.35, 0, 1),

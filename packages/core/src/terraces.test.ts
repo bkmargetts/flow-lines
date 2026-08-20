@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { generateTerraces, TERRACES_DEFAULT_TEXTURES } from './terraces/index.js';
+import {
+  generateTerraces,
+  TERRACES_DEFAULT_TEXTURES,
+  type TerracesOptions,
+} from './terraces/index.js';
 import { terraceCurves } from './terraces/curves.js';
 import { generateLapidary } from './lapidary/index.js';
 
@@ -46,6 +50,87 @@ describe('generateTerraces', () => {
     const faulted = generateTerraces({ ...BASE, faults: 2 });
     expect(JSON.stringify(faulted.lines)).not.toEqual(
       JSON.stringify(generateTerraces(base).lines)
+    );
+  });
+
+  it('draws fewer, longer strokes with continuous flowing lines', () => {
+    const arcLength = (pts: { x: number; y: number }[]): number => {
+      let l = 0;
+      for (let i = 1; i < pts.length; i++) {
+        l += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+      }
+      return l;
+    };
+    // optimize off so dash chaining can't blur the comparison.
+    const broken = generateTerraces({ ...BASE, optimize: false });
+    const flowing = generateTerraces({ ...BASE, optimize: false, continuous: true });
+    // Dashes fuse into whole runs: fewer strokes, longer on average, and the
+    // longest run — a lamina flowing unbroken across its whole bed — dwarfs
+    // anything the dashed sheet allows. (The stipple bed's ticks are marks,
+    // not breaks, so they survive and keep the mean modest.)
+    expect(flowing.lines.length).toBeLessThan(broken.lines.length * 0.85);
+    const mean = (r: typeof broken): number =>
+      r.lines.reduce((s, l) => s + arcLength(l.points), 0) / r.lines.length;
+    expect(mean(flowing)).toBeGreaterThan(mean(broken) * 1.3);
+    const max = (r: typeof broken): number =>
+      Math.max(...r.lines.map((l) => arcLength(l.points)));
+    expect(max(flowing)).toBeGreaterThan(max(broken) * 2.5);
+  });
+
+  it('resolves continuous per bed, the per-bed override winning', () => {
+    // The sheet-wide flag and the per-bed spec are the same resolved texture…
+    expect(
+      JSON.stringify(generateTerraces({ ...BASE, continuous: true, textures: ['lines'] }))
+    ).toEqual(
+      JSON.stringify(
+        generateTerraces({ ...BASE, textures: [{ kind: 'lines', continuous: true }] })
+      )
+    );
+    // …and an explicit per-bed false beats the sheet-wide true.
+    expect(
+      JSON.stringify(
+        generateTerraces({
+          ...BASE,
+          continuous: true,
+          textures: [{ kind: 'lines', continuous: false }],
+        })
+      )
+    ).toEqual(JSON.stringify(generateTerraces({ ...BASE, textures: ['lines'] })));
+  });
+
+  it("deals 'mixed' per bed: some beds flow while their neighbours stay dashed", () => {
+    // All-'lines' beds so every bed responds to the flag the same way; a
+    // sheet where the coins land both ways must sit strictly between the
+    // all-broken and all-flowing extremes in stroke count.
+    const opts: TerracesOptions = { ...BASE, textures: ['lines'], bands: 8, optimize: false };
+    const broken = generateTerraces({ ...opts, continuous: false }).lines.length;
+    const flowing = generateTerraces({ ...opts, continuous: true }).lines.length;
+    // The coins ride the seed; scan a few to prove the deal lands both ways
+    // (and stays deterministic) rather than pinning one lucky seed.
+    let sawMixed = false;
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const mixed = generateTerraces({ ...opts, seed, continuous: 'mixed' });
+      expect(JSON.stringify(mixed)).toEqual(
+        JSON.stringify(generateTerraces({ ...opts, seed, continuous: 'mixed' }))
+      );
+      const b = generateTerraces({ ...opts, seed, continuous: false }).lines.length;
+      const f = generateTerraces({ ...opts, seed, continuous: true }).lines.length;
+      if (mixed.lines.length > f && mixed.lines.length < b) sawMixed = true;
+    }
+    expect(sawMixed).toBe(true);
+    expect(flowing).toBeLessThan(broken);
+    // An explicit per-bed pin beats the mixed deal: every bed pinned true is
+    // byte-identical to the sheet-wide flag, whatever the coins say.
+    expect(
+      JSON.stringify(
+        generateTerraces({
+          ...BASE,
+          continuous: 'mixed',
+          textures: [{ kind: 'lines', continuous: true }],
+        })
+      )
+    ).toEqual(
+      JSON.stringify(generateTerraces({ ...BASE, continuous: true, textures: ['lines'] }))
     );
   });
 

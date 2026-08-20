@@ -34,6 +34,7 @@ const PRESET_BASE = {
   waviness: 0.5,
   patchiness: 0.55,
   taper: 0.7,
+  lineFlow: 'broken',
   jitterDeg: 1.5,
   toneShape: 'seam',
   toneStrength: 0.35,
@@ -141,6 +142,12 @@ export function randomTerracesGenome(rng: () => number): Partial<TerracesState> 
     waviness: Number((0.3 + rng() * 0.7).toFixed(2)),
     patchiness: Number((0.25 + rng() * 0.6).toFixed(2)),
     taper: Number((0.45 + rng() * 0.5).toFixed(2)),
+    // The broken hand-fed dashing is the module's signature, so unbroken
+    // flowing lines land on a minority of rolls — split between every bed
+    // flowing and the per-bed mixed deal.
+    lineFlow: ((r) => (r < 0.7 ? 'broken' : r < 0.85 ? 'flowing' : 'mixed'))(
+      rng()
+    ) as TerracesState['lineFlow'],
     jitterDeg: Number((0.5 + rng() * 2).toFixed(1)),
     // Weighted toward the reference look: mostly seam (or flat), with the
     // showier shades on a minority of rolls.
