@@ -41,6 +41,7 @@ export interface TerracesState {
   waviness: number; // 0..1
   patchiness: number; // 0..1
   taper: number; // 0..1 stroke end-taper (trims + occasional mid-stroke lifts)
+  continuous: boolean; // unbroken flowing lines — no dash breaks or mid-stroke lifts
   jitterDeg: number; // 0..3° per-stroke angle jitter (ruled lines exempt)
   toneShape: LapidaryToneShape; // within-bed tone idea (seam/core/light/noise)
   toneStrength: number; // 0..1 — 0 pins every bed flat
@@ -88,6 +89,7 @@ export const defaultTerracesState: TerracesState = {
   waviness: 0.5,
   patchiness: 0.55,
   taper: 0.7,
+  continuous: false,
   jitterDeg: 1.5,
   toneShape: 'seam',
   toneStrength: 0.35,

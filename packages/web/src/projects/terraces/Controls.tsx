@@ -119,6 +119,7 @@ export function TerracesControls({ state, update }: ControlsProps<TerracesState>
         </select>
       </label>
 
+      <Toggle label="Continuous lines (no dash breaks)" checked={state.continuous} onChange={(v) => update({ continuous: v })} />
       <Slider label="Line pitch" value={state.spacingMm} min={0.6} max={3} step={0.1} onChange={(v) => update({ spacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Seam width" value={state.haloMm} min={0.8} max={5} step={0.1} onChange={(v) => update({ haloMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <label className="field">

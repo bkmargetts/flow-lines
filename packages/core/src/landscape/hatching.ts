@@ -89,6 +89,10 @@ export interface Craft {
   subStep: number;
   /** Subdivision point cap per stroke (default 40 — see densifySegment). */
   maxPoints?: number;
+  /** Never split a stroke mid-run: taper still trims the ends, but the
+   *  occasional mid-stroke pen lift is suppressed — every mark plots as
+   *  one unbroken line. */
+  continuous?: boolean;
 }
 
 /** A tone field: darkness 0..1 at a location (1 = tight hatch / dark). */
@@ -111,7 +115,7 @@ export function emitStroke(out: FlowLine[], A: Point, B: Point, layer: string, c
     b = len;
   }
   const segs: [number, number][] = [];
-  if (craft.taper > 0 && b - a > 16 && craft.rng() < craft.taper * 0.22) {
+  if (!craft.continuous && craft.taper > 0 && b - a > 16 && craft.rng() < craft.taper * 0.22) {
     const g = 2 + craft.rng() * 4;
     const m = a + (0.4 + 0.2 * craft.rng()) * (b - a);
     segs.push([a, m - g / 2]);

@@ -314,7 +314,7 @@ const SPECS: GenomeSpec[] = [
       pens: [1, 4],
     },
     ints: ['bands', 'angleDriftDeg', 'pens', 'faults', 'lightAngleDeg', 'outlineEmphasis'],
-    bools: ['outlines'],
+    bools: ['outlines', 'continuous'],
     enums: {
       // 'custom' resets the Look picker's label — a rolled state is no
       // preset's reference artwork.

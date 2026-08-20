@@ -164,6 +164,9 @@ export function fillRegion(region: Region, sheetTone: ToneFn | null = null): Reg
     // whole length — the shared 40-point default starves them (the same
     // reason the local `densify` above is uncapped).
     maxPoints: Infinity,
+    // A continuous band's marks never lift mid-stroke (taper keeps its
+    // end trims).
+    continuous: t.continuous,
   };
   const emitTapered = (a: Point, b: Point): void => {
     if (ink.length >= REGION_LINE_CAP) return;
@@ -317,7 +320,9 @@ export function fillRegion(region: Region, sheetTone: ToneFn | null = null): Reg
     const dashMin = t.spacing * 22;
     sweepRows(t.angleRad, t.spacing, t.phase, (a, b) => {
       const len = Math.hypot(b.x - a.x, b.y - a.y);
-      if (len <= dashMin) {
+      // A continuous band skips the hand-fed dashing entirely: every row
+      // plots as one unbroken ruled stroke, wall to wall.
+      if (t.continuous || len <= dashMin) {
         // Short whole runs still earn tapered ends, but no stagger — a lone
         // run has no collinear sibling to separate from.
         emitStroke(ink, a, b, '', ruledCraft);
@@ -343,6 +348,13 @@ export function fillRegion(region: Region, sheetTone: ToneFn | null = null): Reg
   // nested contour loops.
   const dashPolyline = (pts: Point[], closed: boolean): void => {
     if (pts.length < 2) return;
+    // A continuous band keeps the whole run as one flowing stroke: open
+    // runs still earn the tapered end trims, closed loops stay closed —
+    // trimming would open them at the joint.
+    if (t.continuous) {
+      push(ink, closed ? pts : trimRunEnds(pts));
+      return;
+    }
     const cum: number[] = new Array(pts.length);
     cum[0] = 0;
     for (let i = 1; i < pts.length; i++) {

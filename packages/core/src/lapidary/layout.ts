@@ -74,6 +74,11 @@ export interface BandTexture {
   /** Per-band override of the global tone strength (0 pins this band flat —
    *  e.g. a preset holding its ruled field at constant pitch). */
   tone?: number;
+  /** Plot this band's marks as unbroken runs: no hand-fed dashing (ruled
+   *  'lines' rows, dashed contour laminae) and no taper mid-stroke pen
+   *  lifts — each row or lamina is one continuous flowing stroke. `taper`
+   *  still trims the stroke ends. Overrides the sheet-wide setting. */
+  continuous?: boolean;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
 }
@@ -95,6 +100,9 @@ export interface ResolvedTexture {
   /** Stroke end-taper amount 0..1 (seeded trims at both ends + occasional
    *  mid-stroke pen lift — the emitStroke craft). */
   taper: number;
+  /** Unbroken flowing runs: suppress the hand-fed dashing and mid-stroke
+   *  pen lifts (see `BandTexture.continuous`). */
+  continuous: boolean;
   /** Per-stroke rotation jitter in radians. */
   jitterRad: number;
   /** Reserved-paper seam width — caps the dash stagger so staggered marks
@@ -186,6 +194,9 @@ export interface LayoutConfig {
   patchiness: number;
   /** Stroke end-taper amount 0..1. */
   taper: number;
+  /** Sheet-wide default for unbroken flowing runs (see
+   *  `BandTexture.continuous`); omitted = false, the dashed hand-fed look. */
+  continuous?: boolean;
   /** Per-stroke rotation jitter in degrees. */
   jitterDeg: number;
   /** Within-region tone shape. */
@@ -305,6 +316,7 @@ export function resolveTexture(
     waviness: clamp(spec.waviness ?? cfg.waviness, 0, 1),
     patchiness: clamp(spec.patchiness ?? cfg.patchiness, 0, 1),
     taper: clamp(spec.taper ?? cfg.taper, 0, 1),
+    continuous: spec.continuous ?? cfg.continuous ?? false,
     jitterRad: (clamp(spec.jitterDeg ?? cfg.jitterDeg, 0, 3) * Math.PI) / 180,
     haloPx: cfg.haloPx,
     toneShape: cfg.toneShape,

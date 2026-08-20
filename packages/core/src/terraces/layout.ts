@@ -29,6 +29,7 @@ export interface TerracesLayout {
   waviness: number;
   patchiness: number;
   taper: number;
+  continuous: boolean;
   jitterDeg: number;
   toneShape: LapidaryToneShape;
   toneStrength: number;
@@ -63,6 +64,7 @@ function toLapidaryLayout(cfg: TerracesLayout): LayoutConfig {
     waviness: cfg.waviness,
     patchiness: cfg.patchiness,
     taper: cfg.taper,
+    continuous: cfg.continuous,
     jitterDeg: cfg.jitterDeg,
     toneShape: cfg.toneShape,
     toneStrength: cfg.toneStrength,
