@@ -29,7 +29,7 @@ export interface TerracesLayout {
   waviness: number;
   patchiness: number;
   taper: number;
-  continuous: boolean;
+  continuous: boolean | 'mixed';
   jitterDeg: number;
   toneShape: LapidaryToneShape;
   toneStrength: number;

@@ -77,7 +77,8 @@ export interface BandTexture {
   /** Plot this band's marks as unbroken runs: no hand-fed dashing (ruled
    *  'lines' rows, dashed contour laminae) and no taper mid-stroke pen
    *  lifts — each row or lamina is one continuous flowing stroke. `taper`
-   *  still trims the stroke ends. Overrides the sheet-wide setting. */
+   *  still trims the stroke ends. Overrides the sheet-wide setting,
+   *  including a 'mixed' deal. */
   continuous?: boolean;
   /** Per-band override of the sheet's shape language (agate/breccia). */
   shape?: LapidaryShape;
@@ -195,8 +196,11 @@ export interface LayoutConfig {
   /** Stroke end-taper amount 0..1. */
   taper: number;
   /** Sheet-wide default for unbroken flowing runs (see
-   *  `BandTexture.continuous`); omitted = false, the dashed hand-fed look. */
-  continuous?: boolean;
+   *  `BandTexture.continuous`); omitted = false, the dashed hand-fed look.
+   *  'mixed' deals each band its own seeded coin (the `shapes: 'mixed'`
+   *  idiom), so some bands flow unbroken while their neighbours stay
+   *  dashed — an explicit per-band `continuous` still wins. */
+  continuous?: boolean | 'mixed';
   /** Per-stroke rotation jitter in degrees. */
   jitterDeg: number;
   /** Within-region tone shape. */
@@ -316,7 +320,13 @@ export function resolveTexture(
     waviness: clamp(spec.waviness ?? cfg.waviness, 0, 1),
     patchiness: clamp(spec.patchiness ?? cfg.patchiness, 0, 1),
     taper: clamp(spec.taper ?? cfg.taper, 0, 1),
-    continuous: spec.continuous ?? cfg.continuous ?? false,
+    // 'mixed' deals this band its own coin from a dedicated stream, so
+    // re-rolling any other knob never flips a sibling band's flow.
+    continuous:
+      spec.continuous ??
+      (cfg.continuous === 'mixed'
+        ? makeRandom(subSeed(cfg.seed, 700 + z))() < 0.5
+        : (cfg.continuous ?? false)),
     jitterRad: (clamp(spec.jitterDeg ?? cfg.jitterDeg, 0, 3) * Math.PI) / 180,
     haloPx: cfg.haloPx,
     toneShape: cfg.toneShape,

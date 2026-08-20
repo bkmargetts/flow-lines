@@ -5,6 +5,11 @@ import { randomSeed } from '../../lib/random';
  *  'shuffle' hands the deal to the core's seeded pick. */
 export type TerracesTextureMix = 'fortification' | 'linework' | 'tonal' | 'shuffle';
 
+/** How the beds' marks break: 'broken' is the hand-fed dashing (the module's
+ *  signature), 'flowing' plots every row/lamina as one unbroken stroke, and
+ *  'mixed' deals each bed its own seeded coin — some flow, some stay dashed. */
+export type TerracesLineFlow = 'broken' | 'flowing' | 'mixed';
+
 /** Curated look ids ('custom' = the picker's label after a randomise). */
 export type TerracesLook = 'terraces' | 'benches' | 'rift' | 'shale' | 'custom';
 
@@ -41,7 +46,7 @@ export interface TerracesState {
   waviness: number; // 0..1
   patchiness: number; // 0..1
   taper: number; // 0..1 stroke end-taper (trims + occasional mid-stroke lifts)
-  continuous: boolean; // unbroken flowing lines — no dash breaks or mid-stroke lifts
+  lineFlow: TerracesLineFlow; // broken dashes / unbroken flowing lines / per-bed deal
   jitterDeg: number; // 0..3° per-stroke angle jitter (ruled lines exempt)
   toneShape: LapidaryToneShape; // within-bed tone idea (seam/core/light/noise)
   toneStrength: number; // 0..1 — 0 pins every bed flat
@@ -89,7 +94,7 @@ export const defaultTerracesState: TerracesState = {
   waviness: 0.5,
   patchiness: 0.55,
   taper: 0.7,
-  continuous: false,
+  lineFlow: 'broken',
   jitterDeg: 1.5,
   toneShape: 'seam',
   toneStrength: 0.35,

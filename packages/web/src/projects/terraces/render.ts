@@ -72,7 +72,8 @@ export function renderTerraces(state: TerracesState, env: RenderEnv): LayerOutpu
     waviness: state.waviness,
     patchiness: state.patchiness,
     taper: state.taper,
-    continuous: state.continuous,
+    continuous:
+      state.lineFlow === 'flowing' ? true : state.lineFlow === 'mixed' ? 'mixed' : false,
     jitterDeg: state.jitterDeg,
     toneShape: state.toneShape,
     toneStrength: state.toneStrength,

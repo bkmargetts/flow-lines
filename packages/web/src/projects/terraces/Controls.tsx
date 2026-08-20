@@ -11,7 +11,7 @@ import type { ControlsProps } from '../../modules/types';
 import { CUSTOM_PALETTE, LAPIDARY_PALETTES, randomLapidaryPalette } from '../lapidary/palettes';
 import { TERRACES_WEB_PRESETS, getTerracesPreset, randomTerracesGenome } from './presets';
 import { resolveTerracesInks } from './render';
-import type { TerracesState, TerracesTextureMix } from './types';
+import type { TerracesLineFlow, TerracesState, TerracesTextureMix } from './types';
 
 const PRESET_LABELS = Object.fromEntries(
   TERRACES_WEB_PRESETS.map((p) => [p.id, p.label])
@@ -119,7 +119,17 @@ export function TerracesControls({ state, update }: ControlsProps<TerracesState>
         </select>
       </label>
 
-      <Toggle label="Continuous lines (no dash breaks)" checked={state.continuous} onChange={(v) => update({ continuous: v })} />
+      <label className="field">
+        <span>Line breaks</span>
+        <select
+          value={state.lineFlow}
+          onChange={(e) => update({ lineFlow: e.target.value as TerracesLineFlow })}
+        >
+          <option value="broken">Broken — hand-fed dashes</option>
+          <option value="flowing">Continuous — unbroken flowing lines</option>
+          <option value="mixed">Mixed — dealt per bed</option>
+        </select>
+      </label>
       <Slider label="Line pitch" value={state.spacingMm} min={0.6} max={3} step={0.1} onChange={(v) => update({ spacingMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Seam width" value={state.haloMm} min={0.8} max={5} step={0.1} onChange={(v) => update({ haloMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <label className="field">

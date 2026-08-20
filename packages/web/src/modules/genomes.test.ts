@@ -314,7 +314,7 @@ const SPECS: GenomeSpec[] = [
       pens: [1, 4],
     },
     ints: ['bands', 'angleDriftDeg', 'pens', 'faults', 'lightAngleDeg', 'outlineEmphasis'],
-    bools: ['outlines', 'continuous'],
+    bools: ['outlines'],
     enums: {
       // 'custom' resets the Look picker's label — a rolled state is no
       // preset's reference artwork.
@@ -322,6 +322,7 @@ const SPECS: GenomeSpec[] = [
       toneShape: ['none', 'seam', 'core', 'light', 'noise'],
       sheetTone: ['none', 'light', 'vignette'],
       textureMix: ['fortification', 'linework', 'tonal', 'shuffle'],
+      lineFlow: ['broken', 'flowing', 'mixed'],
       penAssignment: ['interleave', 'per-region'],
     },
     // Ink fields are absent from forbidden by design: terraces is in

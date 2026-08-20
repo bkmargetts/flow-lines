@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { generateTerraces, TERRACES_DEFAULT_TEXTURES } from './terraces/index.js';
+import {
+  generateTerraces,
+  TERRACES_DEFAULT_TEXTURES,
+  type TerracesOptions,
+} from './terraces/index.js';
 import { terraceCurves } from './terraces/curves.js';
 import { generateLapidary } from './lapidary/index.js';
 
@@ -92,6 +96,42 @@ describe('generateTerraces', () => {
         })
       )
     ).toEqual(JSON.stringify(generateTerraces({ ...BASE, textures: ['lines'] })));
+  });
+
+  it("deals 'mixed' per bed: some beds flow while their neighbours stay dashed", () => {
+    // All-'lines' beds so every bed responds to the flag the same way; a
+    // sheet where the coins land both ways must sit strictly between the
+    // all-broken and all-flowing extremes in stroke count.
+    const opts: TerracesOptions = { ...BASE, textures: ['lines'], bands: 8, optimize: false };
+    const broken = generateTerraces({ ...opts, continuous: false }).lines.length;
+    const flowing = generateTerraces({ ...opts, continuous: true }).lines.length;
+    // The coins ride the seed; scan a few to prove the deal lands both ways
+    // (and stays deterministic) rather than pinning one lucky seed.
+    let sawMixed = false;
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const mixed = generateTerraces({ ...opts, seed, continuous: 'mixed' });
+      expect(JSON.stringify(mixed)).toEqual(
+        JSON.stringify(generateTerraces({ ...opts, seed, continuous: 'mixed' }))
+      );
+      const b = generateTerraces({ ...opts, seed, continuous: false }).lines.length;
+      const f = generateTerraces({ ...opts, seed, continuous: true }).lines.length;
+      if (mixed.lines.length > f && mixed.lines.length < b) sawMixed = true;
+    }
+    expect(sawMixed).toBe(true);
+    expect(flowing).toBeLessThan(broken);
+    // An explicit per-bed pin beats the mixed deal: every bed pinned true is
+    // byte-identical to the sheet-wide flag, whatever the coins say.
+    expect(
+      JSON.stringify(
+        generateTerraces({
+          ...BASE,
+          continuous: 'mixed',
+          textures: [{ kind: 'lines', continuous: true }],
+        })
+      )
+    ).toEqual(
+      JSON.stringify(generateTerraces({ ...BASE, continuous: true, textures: ['lines'] }))
+    );
   });
 
   // The port-parity guardrail: with every terrace knob at its neutral value,
