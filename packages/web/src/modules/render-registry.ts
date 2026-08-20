@@ -27,6 +27,7 @@ import { renderWarpGrid } from '../projects/warp-grid/render';
 import { renderHarmonograph } from '../projects/harmonograph/render';
 import { renderImpactGrid } from '../projects/impact-grid/render';
 import { renderLapidary } from '../projects/lapidary/render';
+import { renderTerraces } from '../projects/terraces/render';
 import { renderClassicTexture } from '../textures/classic/render';
 import { renderGratingTexture } from '../textures/grating/render';
 import { renderBlankTexture } from '../textures/blank/render';
@@ -83,6 +84,7 @@ export const RENDERERS: Record<string, RenderEntry> = {
   harmonograph: entry(renderHarmonograph),
   'impact-grid': entry(renderImpactGrid),
   lapidary: entry(renderLapidary),
+  terraces: entry(renderTerraces),
   classic: entry(renderClassicTexture, true),
   grating: entry(renderGratingTexture, true),
   blank: entry(renderBlankTexture, true),
