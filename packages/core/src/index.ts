@@ -333,21 +333,3 @@ export type {
   Domino,
   DominoClass,
 } from './arctic/index.js';
-
-// Sandpile — tropical curves from abelian sandpile relaxation
-export {
-  generateSandpile,
-  relaxSandpile,
-  thin,
-  straightRuns,
-  snapJunctions,
-  MAX_STABLE,
-  SANDPILE_PRESETS,
-} from './sandpile/index.js';
-export type {
-  SandpileOptions,
-  SandpilePreset,
-  SandpileDomain,
-  SandpilePlacement,
-  SandpileResult,
-} from './sandpile/index.js';

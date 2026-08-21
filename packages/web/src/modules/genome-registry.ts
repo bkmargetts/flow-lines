@@ -27,7 +27,6 @@ import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomLapidaryGenome } from '../projects/lapidary/presets';
 import { randomTerracesGenome } from '../projects/terraces/presets';
 import { randomArcticGenome } from '../projects/arctic/Controls';
-import { randomSandpileGenome } from '../projects/sandpile/Controls';
 import { randomClassicGenome } from '../textures/classic/Controls';
 import { randomGratingGenome } from '../textures/grating/shared';
 
@@ -98,10 +97,8 @@ export const ARTWORK_POOL: Record<string, ArtworkEntry> = {
   'impact-grid': entry(randomImpactGridGenome, 'self', { clipAnchor: true }),
   lapidary: entry(randomLapidaryGenome, 'self', { clipAnchor: true }),
   terraces: entry(randomTerracesGenome, 'self', { clipAnchor: true }),
-  // Both are exactly-deterministic samplers with no burn-in, but the sandpile's
-  // relaxation is roughly cubic in its lattice side, so it is flagged heavy.
+  // An exactly-deterministic sampler with no burn-in, so it is not 'heavy'.
   arctic: entry(randomArcticGenome, 'stroke'),
-  sandpile: entry(randomSandpileGenome, 'stroke', { heavy: true, clipAnchor: true }),
   classic: entry(randomClassicGenome, 'stroke'),
   grating: entry(randomGratingGenome, 'palette'),
 };

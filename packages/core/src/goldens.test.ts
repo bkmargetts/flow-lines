@@ -13,7 +13,6 @@ import { generateLenia } from './lenia.js';
 import { generatePhysarum } from './physarum.js';
 import { generateFracture } from './fracture/index.js';
 import { generateArctic } from './arctic/index.js';
-import { generateSandpile } from './sandpile/index.js';
 import { generateComplexFlow, type ComplexFlowOptions } from './complex-flow.js';
 import { generateBotanical } from './botanical/index.js';
 import { generatePlanet } from './planet/index.js';
@@ -192,12 +191,10 @@ for (const seed of SEEDS) {
     generateCoral({ width: 300, height: 400, margin: 20, seed });
   CASES[`warp-grid/dome/${seed}`] = () =>
     generateWarpGrid({ width: 300, height: 400, margin: 20, seed });
-  // Small orders/resolutions: both are exact samplers, so a tiny case still
-  // pins the whole pipeline, and the suite stays in seconds.
+  // A small order still pins the whole pipeline — the sampler is exact, so
+  // there is no burn-in to pay for — and keeps the suite in seconds.
   CASES[`arctic/dissolve/${seed}`] = () =>
     generateArctic({ width: 300, height: 400, margin: 20, seed, order: 26 });
-  CASES[`sandpile/facet/${seed}`] = () =>
-    generateSandpile({ width: 300, height: 400, margin: 20, seed, resolution: 120 });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -218,10 +215,6 @@ CASES['arctic/brick/42'] = () =>
   generateArctic({ width: 300, height: 400, margin: 20, seed: 42, preset: 'brick', order: 20 });
 CASES['arctic/weave/42'] = () =>
   generateArctic({ width: 300, height: 400, margin: 20, seed: 42, preset: 'weave', order: 24 });
-CASES['sandpile/lattice/42'] = () =>
-  generateSandpile({ width: 300, height: 400, margin: 20, seed: 42, preset: 'lattice', resolution: 120 });
-CASES['sandpile/crystal/42'] = () =>
-  generateSandpile({ width: 300, height: 400, margin: 20, seed: 42, preset: 'crystal', resolution: 120 });
 CASES['conway/streaks/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'streaks' });
 CASES['reaction-diffusion/coral/42'] = () =>

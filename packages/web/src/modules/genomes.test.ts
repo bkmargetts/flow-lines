@@ -28,7 +28,6 @@ import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomLapidaryGenome } from '../projects/lapidary/presets';
 import { randomTerracesGenome } from '../projects/terraces/presets';
 import { randomArcticGenome } from '../projects/arctic/Controls';
-import { randomSandpileGenome } from '../projects/sandpile/Controls';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
 import { randomPlanetGenome } from '../projects/planet-generator/presets';
@@ -113,26 +112,6 @@ const SPECS: GenomeSpec[] = [
       'eastColor',
       'westColor',
     ],
-  },
-  {
-    name: 'sandpile',
-    genome: randomSandpileGenome,
-    bounds: {
-      resolution: [120, 720],
-      points: [1, 120],
-      sides: [3, 12],
-      rotationDeg: [0, 90],
-      ringRadius: [0.1, 0.95],
-      straightness: [1, 4],
-      minSegment: [3, 30],
-      wobble: [0, 2],
-    },
-    ints: ['points', 'sides', 'minSegment'],
-    enums: {
-      domain: ['rectangle', 'disk', 'polygon'],
-      placement: ['scatter', 'ring', 'grid'],
-    },
-    forbidden: ['seed', 'preset', 'strokeColor', 'penWidthMm'],
   },
   {
     name: 'marbling',

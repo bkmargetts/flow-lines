@@ -21,9 +21,20 @@ figure, in one paper, at page size.
 
 ---
 
-## 1. Tropical sandpile — the strongest result
+## 1. Tropical sandpile — built, then cut
 
 `lab/sandpile.mjs`, `lab/vectorize.mjs`, `lab/run-sp.mjs`
+
+**Verdict: rejected on the drawing.** This was shipped as a module and then
+removed — the owner's judgement on the output was blunt and final, and it is the
+judgement that counts. The mathematics below is correct and the code works; it
+simply did not make a picture worth plotting. Recorded in full because a
+research log that only keeps its successes is worthless, and because the
+failure is instructive: every mechanical property one could ask for was
+present — exact sampling, straight rational-slope edges, balanced trivalent
+junctions, a genuine variational characterisation — and the drawing still came
+out inert. Mechanical virtue is not the same as visual force, and no amount of
+the former buys the latter.
 
 Kalinin & Shkolnikov, *Tropical curves in sandpiles*, C. R. Acad. Sci. 354
 (2016); *Sandpile solitons via smoothing of superharmonic functions*, CMP 378
