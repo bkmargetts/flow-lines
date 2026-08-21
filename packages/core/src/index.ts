@@ -315,3 +315,39 @@ export type {
   LineTransformOptions,
   EchoOptions,
 } from './compose/index.js';
+
+// Arctic — the arctic circle of a uniformly random domino tiling (Aztec diamond)
+export {
+  generateArctic,
+  shuffleAztec,
+  dominoClass,
+  isPerfectTiling,
+  arcticLayerName,
+  ARCTIC_PRESETS,
+  MARK_CLASSES,
+} from './arctic/index.js';
+export type {
+  ArcticOptions,
+  ArcticPreset,
+  ArcticMarks,
+  Domino,
+  DominoClass,
+} from './arctic/index.js';
+
+// Sandpile — tropical curves from abelian sandpile relaxation
+export {
+  generateSandpile,
+  relaxSandpile,
+  thin,
+  straightRuns,
+  snapJunctions,
+  MAX_STABLE,
+  SANDPILE_PRESETS,
+} from './sandpile/index.js';
+export type {
+  SandpileOptions,
+  SandpilePreset,
+  SandpileDomain,
+  SandpilePlacement,
+  SandpileResult,
+} from './sandpile/index.js';

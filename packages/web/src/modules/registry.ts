@@ -32,6 +32,8 @@ import { harmonographModule } from '../projects/harmonograph';
 import { impactGridModule } from '../projects/impact-grid';
 import { lapidaryModule } from '../projects/lapidary';
 import { terracesModule } from '../projects/terraces';
+import { arcticModule } from '../projects/arctic';
+import { sandpileModule } from '../projects/sandpile';
 
 /**
  * Every module, in panel order — the one flat registry the layer stack draws
@@ -74,6 +76,8 @@ export const MODULES: Module<any>[] = [
   impactGridModule,
   lapidaryModule,
   terracesModule,
+  arcticModule,
+  sandpileModule,
   classicTexture,
   gratingTexture,
   blankTexture,

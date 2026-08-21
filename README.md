@@ -99,6 +99,8 @@ lives in a collapsed Advanced group.
 | Impact Grid | pure | A hand-ruled grid struck along a drawn path — displaced, torqued, shattered |
 | Lapidary | pure | Agate bands, breccia fragments, strata or spirals — textured regions split by paper seams |
 | Terraces | pure | Faulted strata terraces — beds of ruled lines and contour laminae displaced by fault scarps |
+| Arctic | pure | Random domino tilings — the arctic circle in ink |
+| Sandpile | pure | Tropical curves solved by falling sand |
 | Pattern | pure | Background hatch / grid / dot textures |
 | Grating (multi-ink) | pure | Interleaved multi-pen gratings |
 | Blank (template) | pure | Empty module, the template for new ones |
@@ -226,8 +228,8 @@ Run `flow-lines <command> --help` for the full, authoritative flag list.
 
 Several generators are currently reachable only from the web app's controls —
 Reaction–Diffusion, Lenia, Physarum, Colour Field, City, Stick Men, Sports
-Balls, Hearts, Ribbon Weave, Complex Flow and Terraces have no dedicated CLI
-command — but every one of them can be rendered as a `stack` layer.
+Balls, Hearts, Ribbon Weave, Complex Flow, Terraces, Arctic and Sandpile have
+no dedicated CLI command — but every one of them can be rendered as a `stack` layer.
 
 ### Layer stacks (`flow-lines stack`)
 
