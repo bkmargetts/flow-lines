@@ -4,7 +4,7 @@ const W=1000,H=1000;
 const circle=(R,n=600)=>{const o=[];for(let i=0;i<n;i++){const t=2*Math.PI*i/n;o.push({x:W/2+Math.cos(t)*R,y:H/2+Math.sin(t)*R});}return o;};
 const entries=[];
 function shot(id,label,lines,w=0.7){
-  const info=render(id,lines,W,H,{width:w,pngWidth:620});
+  const info=await render(id,lines,W,H,{width:w,pngWidth:620});
   entries.push({png:info.png,label:`${label} — ${info.segments} segs`});
   console.log(id.padEnd(22), info.segments,'segs'); return info;
 }

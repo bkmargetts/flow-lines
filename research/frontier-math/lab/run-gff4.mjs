@@ -2,7 +2,7 @@ import { render, sheet, OUT } from './lab.mjs';
 import { sampleGFF, flowLines, addHarmonic } from './gff.mjs';
 const W=1100,H=1100, entries=[], chi=1.1;
 const ring=(n,R)=>Array.from({length:n},(_,i)=>{const t=2*Math.PI*i/n;return{x:W/2+R*Math.cos(t),y:H/2+R*Math.sin(t)};});
-function shot(id,label,lines,w=0.55){const info=render(id,lines,W,H,{width:w,pngWidth:600});
+function shot(id,label,lines,w=0.55){const info=await render(id,lines,W,H,{width:w,pngWidth:600});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes, ${info.segments} segs`});
   console.log(id.padEnd(16),info.strokes,info.segments);return info;}
 const base=sampleGFF(1024, 4711, {rough:1});

@@ -12,7 +12,7 @@ function draw(id,label,poly,N,{W=1150,H=1150,pad=40,nlev=140,power=3.2,lw=0.5,pw
   const lines=[];
   if(fronts) for(const f of waveFronts(poly,N,levels)) lines.push({points:[...f.poly,f.poly[0]].map(M)});
   if(skel) for(const [p,q] of tropicalCaustic(poly,N).edges) lines.push({points:[M(p),M(q)],color:'#c0392b'});
-  const info=render(id,lines,W,H,{width:lw,pngWidth:pw});
+  const info=await render(id,lines,W,H,{width:lw,pngWidth:pw});
   entries.push({png:info.png,label:`${label} — N=${N}, ${info.strokes} strokes`});
   console.log(id.padEnd(14),'N='+N,info.strokes+' strokes',info.segments+' segs',((Date.now()-t0)/1000).toFixed(1)+'s');
 }

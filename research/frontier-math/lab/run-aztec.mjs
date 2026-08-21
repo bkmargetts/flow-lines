@@ -8,7 +8,7 @@ const W=1000,H=1000,entries=[];
 for (const n of [30, 64, 120]) {
   const T=shuffleAztec(n,20260821); console.log('n='+n, JSON.stringify(validate(T)));
   const lines=fit(dominoEdges(T,6),W,H);
-  const info=render(`aztec-n${n}`,lines,W,H,{width:n>90?0.55:0.9,pngWidth:900});
+  const info=await render(`aztec-n${n}`,lines,W,H,{width:n>90?0.55:0.9,pngWidth:900});
   entries.push({png:info.png,label:`AD(${n}) — ${info.segments} segments`});
   console.log(info.png, info.segments);
 }

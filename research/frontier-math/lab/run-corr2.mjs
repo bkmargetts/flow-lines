@@ -3,7 +3,7 @@ import { corrugationTower, curveLength, amplitudeFor } from './corrugate.mjs';
 const W=1000,H=1000;
 const circle=(R,n=800)=>{const o=[];for(let i=0;i<n;i++){const t=2*Math.PI*i/n;o.push({x:W/2+Math.cos(t)*R,y:H/2+Math.sin(t)*R});}return o;};
 const entries=[];
-function shot(id,label,lines,w=0.55){const info=render(id,lines,W,H,{width:w,pngWidth:620});
+function shot(id,label,lines,w=0.55){const info=await render(id,lines,W,H,{width:w,pngWidth:620});
   entries.push({png:info.png,label:`${label} — ${info.segments} segs`});console.log(id.padEnd(20),info.segments); return info;}
 // predicted first-stage ripple amplitude, to sanity-check the regime
 const R0=320, L0=2*Math.PI*R0;

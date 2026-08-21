@@ -3,7 +3,7 @@ import { sampleGFF, flowLines, addHarmonic } from './gff.mjs';
 const W=1100,H=1100, entries=[];
 const ring=(n,cx,cy,R)=>Array.from({length:n},(_,i)=>{const t=2*Math.PI*i/n;return{x:cx+R*Math.cos(t),y:cy+R*Math.sin(t)};});
 const row=(n,y)=>Array.from({length:n},(_,i)=>({x:(i+0.5)*W/n,y}));
-function shot(id,label,lines,w=0.55){const info=render(id,lines,W,H,{width:w,pngWidth:600});
+function shot(id,label,lines,w=0.55){const info=await render(id,lines,W,H,{width:w,pngWidth:600});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes`});console.log(id.padEnd(18),info.strokes,info.segments);return info;}
 const base=sampleGFF(1024, 4711, {rough:1});
 const cases=[

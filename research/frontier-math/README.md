@@ -64,6 +64,61 @@ rescaling by √k the tropical series converges to an Alexandrov solution of a
 **Monge–Ampère equation**, so point *density* is the real control and a fully
 nonlinear PDE governs the limit.
 
+### The A3 segment budget — do this before building anything on a lattice
+
+A lattice construction quantises, and whether that reads as a woodcut or as a
+jaggy circle on graph paper is decided entirely by segment length in
+millimetres. At A3 with 15mm margins a 701 lattice is **0.38mm per unit**:
+
+| domain / k | segments | <3mm | 3–8mm | >8mm | median |
+|---|---|---|---|---|---|
+| square / 7   |  38 |  3% |  8% | 89% | 46.9mm |
+| square / 40  | 234 | 35% | 12% | 52% |  9.2mm |
+| square / 120 | 686 | 42% | 20% | 38% |  4.2mm |
+| hex / 80     | 682 | 50% | 22% | 28% |  3.1mm |
+| tri / 60     | 706 | 62% | 18% | 20% |  2.2mm |
+
+So the dense, best-looking-on-screen configurations are exactly the ones in the
+aliasing regime. Worse, refining the lattice with the point configuration held
+fixed makes it *worse*, not better — the sub-3mm fraction goes 29% → 50% → 67%
+for N = 401 → 701 → 1101, and total ink grows with it. The locus keeps genuine
+fine structure at every lattice scale; these are not artefacts that converge
+away.
+
+It is recoverable in extraction, though. Sweeping the straight-run parameters:
+
+| tol | minLen | segments | <3mm | median | coverage |
+|---|---|---|---|---|---|
+| 1.1 |  4 | 682 | 50% |  3.1mm | 90% |
+| 2.0 | 10 | 321 |  3% | 12.0mm | 86% |
+| 2.0 | 20 | 222 |  0% | 18.9mm | 79% |
+
+`tol=2.0, minLen=10` is the default now: half the segments, median 12mm instead
+of 3.1mm, and **visually indistinguishable** (`images/mm-budget.png`) — the
+discarded 14% is filigree finer than a 0.3mm nib can render. The lesson
+generalises: compute the millimetre budget before writing the code, not after.
+
+### Open lead: the α-tropical area
+
+The strongest idea to come out of the invention pass, and a well-posed
+generalisation of exactly this object. Deform the tropical symplectic area by
+replacing its linear edge weight with a concave one:
+
+```
+E_α(C) = Σ_e |m⃗_e|^α · ℓ_e
+```
+minimised over tropical curves through the prescribed points. α = 1 is
+Kalinin–Shkolnikov's sandpile functional — what we already compute. α = 0 is a
+lattice-direction Steiner problem. In between, the minimiser's *combinatorial
+type* should jump at a finite set of critical exponents: a one-parameter family
+with genuine phase transitions rather than a single canonical picture. This is
+the same move that deforms Steiner into Gilbert–Steiner irrigation.
+
+Honest risk, stated by its proposer: if the point constraints plus the zero
+boundary condition already pin the combinatorial type, C_α does not move with α
+and the family is eleven copies of one object. Test that first, cheaply, before
+building anything.
+
 ## 2. Tropical caustic of a convex domain — correct but visually thin
 
 `lab/caustic.mjs`, `lab/run-caustic.mjs`, `lab/run-caustic2.mjs`
@@ -147,8 +202,42 @@ a smooth field cannot do by uniqueness of ODE solutions; merging also cut the
 plot from 669k to 25k segments. Composition control by adding a *harmonic*
 function, which moves where the tree goes while leaving the fluctuation intact.
 
-**Verdict: rejected on output, not on mechanism.** A merging tree in a random
-field lands in the same visual family as river networks and DLA.
+**Verdict: rejected on output, and the mechanism claim was overstated too.**
+
+A merging tree in a random field lands in the same visual family as river
+networks and DLA. But the sharper correction came from the adversarial pass and
+it is worth recording, because it bears on `flow-field.ts` directly:
+
+fBm sums octaves with amplitude pⁿ at frequency lⁿ, an envelope of
+|k|^(−log(1/p)/log l). At the repo's defaults — **persistence 0.5, lacunarity
+2** — that is exactly |k|^(−1), which is precisely the 2D GFF's amplitude
+spectrum. The repo's default simplex fBm is a *band-limited Gaussian free
+field*. The claim that a noise field structurally cannot be scale-invariant was
+wrong.
+
+What is true is a matter of degree, and `lab/bandtest.mjs` measures it —
+truncating a true 1/|k| field to a finite octave band and refitting covariance
+against log r:
+
+| octaves | scale range | R² of log-correlation |
+|---|---|---|
+| 2 |   4:1 | 0.674 |
+| 3 |   8:1 | 0.809 |
+| 4 |  16:1 | 0.926 |
+| 5 |  32:1 | 0.982 |
+| 7 | 128:1 | 0.989 |
+| ∞ |   all | 0.995 |
+
+A3 at a 0.3mm nib resolves ~990:1, about 10 octaves. So the repo's default of
+**4 octaves covers only 16:1** and is measurably not scale-free — but raising
+`octaves` to 5–7, a knob that already exists, gets most of the way to a real
+GFF for free. That is the actionable finding, and it is worth more than the
+module would have been.
+
+The genuinely GFF-only property is the *merging theorem*. But merging here was
+imposed with an occupancy grid, not derived — so even that was a rule written
+by hand, and the same rule bolted onto the existing flow field would give a
+comparable drawing.
 
 (Note: the FFT is radix-2 and now throws on a non-power-of-two size — it
 silently produced NaN before.)
@@ -178,6 +267,17 @@ UST Peano curves (one step from a maze); KPZ/Busemann geodesic trees (reads as
 a river network); Kleinian limit sets and Poincaré-disc tilings (thoroughly
 mined); plain hat-monotile plots (everywhere since 2023); Viro patchworking
 (polymake already ships it).
+
+The adversarial pass killed 17 of 24 candidates. Survivors worth keeping on the
+list, with the fix each needs: **Arctic / non-intersecting path ensembles**
+(beauty 8 — and its prescribed fix, "ink one worm family, not all N", is
+independently what §4 arrived at empirically); **Uniaxial**, Lang tree-method
+origami circle–river packings (8); **Drape**, Chebyshev nets and the 2π
+obstruction driven by discrete conical charges (8); **Wave Grain**, random-wave
+grain with a chirped wavelength and the separatrices used as invisible
+terminators rather than stroked (8); **Outer Billiard Web**, the singular set of
+a piecewise isometry in exact Z[ζ_n] arithmetic (7); **Phason**, dislocated
+quasicrystals where the grid curves are the drawing and the tiling is absent (7).
 
 Still on the frontier list, unbuilt:
 

@@ -9,7 +9,7 @@ function make(id,label,N,dom,pts,{S=1200,lw=0.8,pw=680,tol=1.1}={}){
   const runs=straightRuns(sk,N,N,{tol,minLen:4});
   const k=(S-60)/N, off=30;
   const lines=runs.map(([a,b])=>({points:[{x:a[0]*k+off,y:a[1]*k+off},{x:b[0]*k+off,y:b[1]*k+off}]}));
-  const info=render(id,lines,S,S,{width:lw,pngWidth:pw});
+  const info=await render(id,lines,S,S,{width:lw,pngWidth:pw});
   entries.push({png:info.png,label:`${label} — ${runs.length} straight segments`});
   console.log(id.padEnd(12),'pts='+pts.length,'segments='+runs.length,'topples='+r.topples,((Date.now()-t0)/1000).toFixed(1)+'s');
   return info;

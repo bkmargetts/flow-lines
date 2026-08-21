@@ -3,7 +3,7 @@ import { sampleGFF, flowLines } from './gff.mjs';
 const W=1000,H=1000;
 const entries=[];
 const seedsRow=(n,y)=>Array.from({length:n},(_,i)=>({x:(i+0.5)*W/n,y}));
-function shot(id,label,lines,w=0.7){const info=render(id,lines,W,H,{width:w,pngWidth:640});
+function shot(id,label,lines,w=0.7){const info=await render(id,lines,W,H,{width:w,pngWidth:640});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes, ${info.segments} segs`});
   console.log(id.padEnd(22),info.strokes,'strokes',info.segments,'segs');return info;}
 

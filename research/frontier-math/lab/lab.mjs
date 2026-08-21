@@ -2,7 +2,6 @@
 // repo so the mathematics drives the code, not the existing API shapes.
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { Resvg } from '@resvg/resvg-js';
 
 // Output goes to research/frontier-math/out/ (gitignored) unless FM_OUT is set.
 export const OUT = process.env.FM_OUT
@@ -45,7 +44,10 @@ export function save(path, svg) {
   return path;
 }
 
-export function png(svgPath, pngPath, width = 1200) {
+// Imported lazily: the pure-maths modules must be usable with no dependencies
+// at all, so pulling in `rng` must not drag the rasteriser along with it.
+export async function png(svgPath, pngPath, width = 1200) {
+  const { Resvg } = await import('@resvg/resvg-js');
   const svg = readFileSync(svgPath, 'utf8');
   const r = new Resvg(svg, { fitTo: { mode: 'width', value: width } });
   mkdirSync(dirname(pngPath), { recursive: true });
@@ -54,12 +56,12 @@ export function png(svgPath, pngPath, width = 1200) {
 }
 
 /** One call: build svg + png, return both paths and stats. */
-export function render(name, lines, w, h, opts = {}) {
+export async function render(name, lines, w, h, opts = {}) {
   const dir = opts.dir || OUT;
   const svgPath = `${dir}/${name}.svg`;
   const pngPath = `${dir}/${name}.png`;
   save(svgPath, toSVG(lines, w, h, opts));
-  png(svgPath, pngPath, opts.pngWidth || 1100);
+  await png(svgPath, pngPath, opts.pngWidth || 1100);
   return { name, svg: svgPath, png: pngPath, ...stats(lines) };
 }
 

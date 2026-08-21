@@ -15,7 +15,7 @@ function draw(id,label,zeros,theta,B,{W=1200,H=1200,dsep=0.015,crit='bold',w=0.5
       const tx=q.x-r.x,ty=q.y-r.y,L=Math.hypot(tx,ty)||1;
       return {x:p.x-ty/L*off,y:p.y+tx/L*off};})});
   });
-  const info=render(id,lines,W,H,{width:w,pngWidth:pw});
+  const info=await render(id,lines,W,H,{width:w,pngWidth:pw});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes`});
   console.log(id.padEnd(14),info.strokes,info.segments); return info;
 }

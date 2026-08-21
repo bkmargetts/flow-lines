@@ -27,7 +27,7 @@ for (const cs of cases) {
   const raw = [...levelCurves(pp, { scale: 10 }), ...hexOutline(pp, { scale: 10 })];
   const lines = fit(raw, W, H);
   const name = 'arctic-' + cs.label.replace(/[^a-z0-9]+/gi, '-');
-  const info = render(name, lines, W, H, { width: 1.1, pngWidth: 780 });
+  const info = await render(name, lines, W, H, { width: 1.1, pngWidth: 780 });
   entries.push({ png: info.png, label: `${cs.label} — ${info.strokes} strokes, ${info.segments} segs, ${(Date.now()-t0)/1000}s` });
   console.log(cs.label, JSON.stringify(info), `${(Date.now()-t0)/1000}s`);
 }

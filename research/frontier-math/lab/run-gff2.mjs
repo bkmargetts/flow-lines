@@ -4,7 +4,7 @@ const W=1200,H=1500;
 const entries=[];
 const row=(n,y)=>Array.from({length:n},(_,i)=>({x:(i+0.5)*W/n,y}));
 const col=(n,x)=>Array.from({length:n},(_,i)=>({x,y:(i+0.5)*H/n}));
-function shot(id,label,lines,w=0.6,pw=560){const info=render(id,lines,W,H,{width:w,pngWidth:pw});
+function shot(id,label,lines,w=0.6,pw=560){const info=await render(id,lines,W,H,{width:w,pngWidth:pw});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes, ${info.segments} segs`});
   console.log(id.padEnd(20),info.strokes,info.segments);return info;}
 

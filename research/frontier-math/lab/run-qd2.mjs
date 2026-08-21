@@ -1,7 +1,7 @@
 import { render, sheet, OUT } from './lab.mjs';
 import { foliation, criticalGraph } from './quaddiff.mjs';
 const W=1100,H=1100, entries=[];
-function shot(id,label,lines,w=0.55,pw=640){const info=render(id,lines,W,H,{width:w,pngWidth:pw});
+function shot(id,label,lines,w=0.55,pw=640){const info=await render(id,lines,W,H,{width:w,pngWidth:pw});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes`});console.log(id.padEnd(18),info.strokes,info.segments);return info;}
 function draw(id,label,zeros,theta,B,{res=150,seedsN=9000,crit=true}={}){
   const map=(p)=>({x:(p[0]+B)/(2*B)*W, y:(B-p[1])/(2*B)*H});

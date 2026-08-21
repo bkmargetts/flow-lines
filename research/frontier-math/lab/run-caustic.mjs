@@ -10,7 +10,7 @@ function draw(id,label,poly,N,{W:w0=W,H:h0=H,pad=40,lw=0.8,pw=640,outline=true}=
   const M=(p)=>({x:(p[0]-x0)*s+(w0-(x1-x0)*s)/2, y:h0-((p[1]-y0)*s+(h0-(y1-y0)*s)/2)});
   const lines=edges.map(([p,q])=>({points:[M(p),M(q)]}));
   if(outline) lines.push({points:[...poly,poly[0]].map(M),color:'#bbb'});
-  const info=render(id,lines,w0,h0,{width:lw,pngWidth:pw});
+  const info=await render(id,lines,w0,h0,{width:lw,pngWidth:pw});
   entries.push({png:info.png,label:`${label} — N=${N}, ${edges.length} edges, ${cells.length} cells`});
   console.log(id.padEnd(16),'N='+N,edges.length+' edges',((Date.now()-t0)/1000).toFixed(1)+'s');
 }

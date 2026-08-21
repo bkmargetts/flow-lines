@@ -18,7 +18,7 @@ const variants=[
 const entries=[];
 for(const [id,label,raw] of variants){
   const lines=fit(raw,W,H);
-  const info=render(`mk-${id}`,lines,W,H,{width:0.8,pngWidth:640});
+  const info=await render(`mk-${id}`,lines,W,H,{width:0.8,pngWidth:640});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes / ${info.segments} segs`});
   console.log(id.padEnd(12), info.strokes, 'strokes', info.segments,'segs');
 }

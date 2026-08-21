@@ -3,7 +3,7 @@ import { foliation, criticalGraph } from './quaddiff.mjs';
 const W=1100,H=1100,B=2.2, entries=[];
 const map=(p)=>({x:(p[0]+B)/(2*B)*W, y:(B-p[1])/(2*B)*H});
 const conv=(pts)=>({points:pts.map(map)});
-function shot(id,label,lines,w=0.6,pw=620){const info=render(id,lines,W,H,{width:w,pngWidth:pw});
+function shot(id,label,lines,w=0.6,pw=620){const info=await render(id,lines,W,H,{width:w,pngWidth:pw});
   entries.push({png:info.png,label:`${label} — ${info.strokes} strokes, ${info.segments} segs`});
   console.log(id.padEnd(16),info.strokes,info.segments);return info;}
 
