@@ -19,6 +19,16 @@ The selection criterion that turned out to matter most was not "is this deep"
 but **"has anyone ever drawn it?"** Most deep mathematics has exactly one
 figure, in one paper, at page size.
 
+After the Sandpile was built and cut, a second criterion was added, and it is
+the sharper one. The Sandpile gave STRUCTURE: a graph of straight edges. Arctic
+gives TONE: an ink density that varies across the page, which the mathematics
+computes and no shading function was written for. Structure alone is a diagram.
+So `lab/tone-test.mjs` is a **pre-test to run before building anything**: render
+only the density, and ask whether the drawing can make a black and whether it
+spans black to paper. It is calibrated against Arctic (known good) and the cut
+Sandpile (known bad) — and its own first version failed that calibration and
+had to be rewritten, which is the best argument for calibrating it at all.
+
 ---
 
 ## 1. Tropical sandpile — built, then cut
@@ -129,6 +139,100 @@ Honest risk, stated by its proposer: if the point constraints plus the zero
 boundary condition already pin the combinatorial type, C_α does not move with α
 and the family is eleven copies of one object. Test that first, cheaply, before
 building anything.
+
+## 1b. Drape (Chebyshev nets) — tested against the pre-test, rejected
+
+`lab/drape.mjs`, `lab/run-drape.mjs`, `lab/run-drape2.mjs`
+
+Inextensible thread nets over a relief. The shear angle omega obeys
+omega_uv = -K sin(omega), so curvature forces shear and density goes as
+1/sin(omega) — tone the geometry computes. The discrete rule is the
+parallelogram rule, which preserves both edge lengths exactly; in the plane it
+is therefore FLAT and has no shear worth drawing, so the net is draped over a
+height field and drawn in plan view.
+
+**The mechanism claim was confirmed and the module was rejected anyway.** The
+K = 0 control scores range 0.025 (wallpaper); adding curvature raises it to
+0.133 at five domes. So the tone genuinely does come from curvature — that part
+was right. Three things killed it regardless:
+
+1. **It lands in `warp-grid`'s territory.** The repo already ships "op-art
+   gratings deformed by hidden relief". The mathematics differs in kind —
+   inextensibility is a hard constraint, not a displacement — but at arm's
+   length the drawing is a warped grid. Novel mechanism, familiar output: the
+   same error as the GFF.
+2. **The promised event never fired.** The 2*pi Hazzidakis obstruction was the
+   selling point: past 2*pi of enclosed curvature no Chebyshev net exists, so
+   real cloth must tear. Across every test — smooth domes, then cone
+   singularities added specifically to concentrate curvature into an atom of
+   angle deficit — the tally was ONE torn node. The net degenerates by shearing
+   to omega -> 0 and folding on itself long before it ever tears.
+3. **The usable window is narrow**, between flat (range 0.035) and collapsed
+   (coverage 18-28%). Narrow windows make one drawing, not a module.
+
+A note the pre-test's own calibration needed: the collapsed cases score darkness
+1.000 while coverage falls to 18%. High darkness with FALLING coverage is
+degeneracy, not tone — the two columns have to be read together.
+
+## 1c. Two-periodic Arctic (the gas phase) — infrastructure built, BLOCKED
+
+`lab/kasteleyn.mjs`, `lab/run-twoperiodic.mjs`, `lab/run-patterns.mjs`
+
+The best extension of Arctic on the tone criterion: give the dimer model
+periodic edge weights and it gains a THIRD phase — gas, ordered but with
+exponentially bounded fluctuations — between frozen and liquid, with two nested
+arctic curves instead of one. Strictly more tone from the same mechanism.
+
+**What was built.** The blocker was that weighted sampling needs generalized
+domino shuffling, which is a different algorithm from the uniform one and whose
+sources (arXiv, unige.ch, citeseerx) are all egress-blocked from this sandbox.
+But the pre-test consumes a DENSITY FIELD, not samples, and every planar dimer
+model is exactly solvable — so no sampler is needed to answer the question:
+
+    |det K| = number of tilings,    P(edge (w,b)) = K(w,b) · K⁻¹(b,w)
+
+`kasteleyn.mjs` builds the complex Kasteleyn matrix (phase 1 on horizontal
+edges, i on vertical) and inverts it, giving exact domino probabilities under
+ANY weighting. It is verified hard:
+
+  n     m     log|det K|    expected     err       P real?   sum P at a cell
+  3    12     4.158883     4.158883    0.0e+0        yes         2.2e-16
+ 10   110    38.123095    38.123095    1.4e-14       yes         9.5e-15
+ 16   272    94.268017    94.268017    2.0e-13       yes         1.1e-13
+
+i.e. |det K| hits 2^{n(n+1)/2} to machine precision, every probability comes out
+real, and every cell's incident probabilities sum to 1. The uniform case then
+reproduces the arctic circle exactly — solid at the frozen pole, dissolving
+across a clean circular arc — which validates the density visualisation on a
+case whose answer is known.
+
+**Where it stopped.** Six candidate 2-periodic edge weightings were swept at
+a = 0.25 (block-2x2, xy-parity, x-only, orientation-dependent, diagonal-4,
+orientation+parity). Every one gives a MONOTONE density profile from the frozen
+pole to the centre — no plateau, no third regime — and five are identical,
+being the same model relabelled.
+
+State the conclusion precisely: this is NOT evidence that the gas phase is
+absent or visually uninteresting. The trichotomy is a theorem
+(Chhita-Johansson; Berggren-Borodin). The finding is only that **the correct
+weighting was not found by guessing**, and the source specifying it is
+unreachable from here.
+
+**To unblock:** supply the two-periodic Aztec diamond's edge weighting and the
+existing verified code answers the tone question in about two seconds per case
+at n = 30. That is the one missing piece — everything around it is built and
+checked.
+
+## 1d. Six-vertex model with DWBC — not attempted, and why
+
+Listed as a candidate and then dropped without code, which is worth recording
+so it is not re-proposed blind. At the free-fermion point (Delta = 0) the
+six-vertex model with domain-wall boundary conditions IS the Aztec diamond
+domino model — so it would be Arctic again, not a new module. Away from that
+point it stops being free-fermionic, which means no Kasteleyn shortcut and no
+exact sampler: it needs MCMC whose mixing is exactly the thing that cannot be
+trusted (see the plane-partition Glauber trap in section 4). The interesting
+regime and the tractable regime do not overlap.
 
 ## 2. Tropical caustic of a convex domain — correct but visually thin
 
