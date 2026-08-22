@@ -32,6 +32,7 @@ import { harmonographModule } from '../projects/harmonograph';
 import { impactGridModule } from '../projects/impact-grid';
 import { lapidaryModule } from '../projects/lapidary';
 import { terracesModule } from '../projects/terraces';
+import { lifeTerracesModule } from '../projects/life-terraces';
 import { arcticModule } from '../projects/arctic';
 
 /**
@@ -75,6 +76,7 @@ export const MODULES: Module<any>[] = [
   impactGridModule,
   lapidaryModule,
   terracesModule,
+  lifeTerracesModule,
   arcticModule,
   classicTexture,
   gratingTexture,

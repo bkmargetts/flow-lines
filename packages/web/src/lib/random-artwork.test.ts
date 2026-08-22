@@ -45,6 +45,7 @@ const SELF_INKED = new Set([
   'impact-grid',
   'lapidary',
   'terraces',
+  'life-terraces',
 ]);
 
 describe('rollRandomArtwork', () => {

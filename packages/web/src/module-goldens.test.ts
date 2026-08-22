@@ -69,6 +69,9 @@ const PRESET_VARIANTS: Record<string, Record<string, unknown>> = {
   // The seeded texture deal plus stepped treads and a third fault, so the
   // shuffle path and the new-knob geometry are both pinned beyond defaults.
   terraces: { textureMix: 'shuffle', steppiness: 0.8, faults: 3, penAssignment: 'per-region' },
+  // The flowing-laminae path with inked level boundaries and interleaved
+  // pens, so the agate face and the pen cycling are pinned beyond defaults.
+  'life-terraces': { penAssignment: 'interleave', continuous: true, outlines: true, levels: 7 },
   'impact-grid': {
     // A fixed synthetic strike (page px for the A4 × 1.5 test frame) so the
     // crush/shatter/fill code path is pinned, not just the pristine grid.

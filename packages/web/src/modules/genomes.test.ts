@@ -27,6 +27,7 @@ import { randomHarmonographGenome } from '../projects/harmonograph/presets';
 import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomLapidaryGenome } from '../projects/lapidary/presets';
 import { randomTerracesGenome } from '../projects/terraces/presets';
+import { randomLifeTerracesGenome } from '../projects/life-terraces/presets';
 import { randomArcticGenome } from '../projects/arctic/Controls';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
@@ -91,6 +92,7 @@ const PALETTE_ROLLERS = [
   'impact-grid',
   'lapidary',
   'terraces',
+  'life-terraces',
 ];
 
 const SPECS: GenomeSpec[] = [
@@ -346,6 +348,51 @@ const SPECS: GenomeSpec[] = [
       penAssignment: ['interleave', 'per-region'],
     },
     // Ink fields are absent from forbidden by design: terraces is in
+    // PALETTE_ROLLERS and rolls the palette (lapidary's curated table or an
+    // invented pen set) — strokeColor/ink2..4Color and `pens` ride it.
+    forbidden: ['seed', 'penWidthMm', 'wobbleMm'],
+  },
+  {
+    name: 'life-terraces',
+    genome: randomLifeTerracesGenome,
+    bounds: {
+      seedCount: [1, 8],
+      cellSizeMm: [1, 4],
+      generations: [100, 800],
+      decay: [0.8, 0.99],
+      gamma: [0.25, 0.9],
+      offCenter: [0, 1],
+      levels: [2, 8],
+      faintThreshold: [0.04, 0.2],
+      seamMm: [0.3, 3],
+      outlineEmphasis: [1, 3],
+      spacing: [0.4, 2],
+      densityContrast: [0, 1],
+      strokeLength: [6, 80],
+      waviness: [0, 1],
+      taper: [0, 1],
+      hatchAngle: [-90, 90],
+      crossHatchAmount: [0, 1],
+      residueMaxCells: [2, 14],
+      haloMm: [0.3, 3],
+      pens: [1, 4],
+    },
+    ints: [
+      'seedCount',
+      'generations',
+      'levels',
+      'outlineEmphasis',
+      'strokeLength',
+      'hatchAngle',
+      'residueMaxCells',
+      'pens',
+    ],
+    bools: ['outlines', 'continuous', 'massCore'],
+    enums: {
+      preset: ['custom'],
+      penAssignment: ['interleave', 'per-region'],
+    },
+    // Ink fields are absent from forbidden by design: life-terraces is in
     // PALETTE_ROLLERS and rolls the palette (lapidary's curated table or an
     // invented pen set) — strokeColor/ink2..4Color and `pens` ride it.
     forbidden: ['seed', 'penWidthMm', 'wobbleMm'],

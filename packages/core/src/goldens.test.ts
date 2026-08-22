@@ -27,6 +27,7 @@ import { generateTangles } from './tangles/index.js';
 import { generateMarbling } from './marbling/index.js';
 import { generateLapidary, LAPIDARY_PRESETS } from './lapidary/index.js';
 import { generateTerraces, TERRACES_PRESETS } from './terraces/index.js';
+import { generateLifeTerraces, LIFE_TERRACES_PRESETS } from './life-terraces/index.js';
 import { generateHarmonograph } from './harmonograph/index.js';
 import { generateMeander } from './meander/index.js';
 import { generateCoral } from './coral/index.js';
@@ -183,6 +184,8 @@ for (const seed of SEEDS) {
     generateLapidary({ width: 300, height: 400, margin: 20, seed, ...LAPIDARY_PRESETS.specimen });
   CASES[`terraces/default/${seed}`] = () =>
     generateTerraces({ width: 300, height: 400, margin: 20, seed });
+  CASES[`life-terraces/default/${seed}`] = () =>
+    generateLifeTerraces({ width: 300, height: 400, margin: 20, seed });
   CASES[`harmonograph/pendulum/${seed}`] = () =>
     generateHarmonograph({ width: 300, height: 400, margin: 20, seed });
   CASES[`meander/atlas/${seed}`] = () =>
@@ -301,6 +304,18 @@ CASES['terraces/rift/42'] = () =>
   generateTerraces({ width: 300, height: 400, margin: 20, seed: 42, ...TERRACES_PRESETS.rift });
 CASES['terraces/shuffle/42'] = () =>
   generateTerraces({ width: 300, height: 400, margin: 20, seed: 42, textures: [] });
+CASES['life-terraces/agate/42'] = () =>
+  generateLifeTerraces({ width: 300, height: 400, margin: 20, seed: 42, ...LIFE_TERRACES_PRESETS.agate });
+CASES['life-terraces/pens/42'] = () =>
+  generateLifeTerraces({
+    width: 300,
+    height: 400,
+    margin: 20,
+    seed: 42,
+    pens: 3,
+    penAssignment: 'interleave',
+    outlines: true,
+  });
 CASES['lapidary/facet/42'] = () =>
   generateLapidary({ width: 300, height: 400, margin: 20, seed: 42, ...LAPIDARY_PRESETS.facet });
 CASES['lapidary/fortification/42'] = () =>
