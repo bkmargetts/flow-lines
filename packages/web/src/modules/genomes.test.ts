@@ -27,6 +27,7 @@ import { randomHarmonographGenome } from '../projects/harmonograph/presets';
 import { randomImpactGridGenome } from '../projects/impact-grid/types';
 import { randomLapidaryGenome } from '../projects/lapidary/presets';
 import { randomTerracesGenome } from '../projects/terraces/presets';
+import { randomArcticGenome } from '../projects/arctic/Controls';
 import { randomMachineGenome } from '../projects/machine/presets';
 import { randomRibbonGenome } from '../projects/ribbon-weave/presets';
 import { randomPlanetGenome } from '../projects/planet-generator/presets';
@@ -93,6 +94,25 @@ const PALETTE_ROLLERS = [
 ];
 
 const SPECS: GenomeSpec[] = [
+  {
+    name: 'arctic',
+    genome: randomArcticGenome,
+    bounds: { order: [10, 240], wobble: [0, 2] },
+    ints: ['order'],
+    bools: ['upright'],
+    enums: { marks: ['one', 'horizontals', 'all', 'outline'] },
+    forbidden: [
+      'seed',
+      'preset',
+      'strokeColor',
+      'penWidthMm',
+      'multiInk',
+      'northColor',
+      'southColor',
+      'eastColor',
+      'westColor',
+    ],
+  },
   {
     name: 'marbling',
     genome: randomMarblingGenome,

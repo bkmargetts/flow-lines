@@ -12,6 +12,7 @@ import { generateReactionDiffusion } from './reaction-diffusion.js';
 import { generateLenia } from './lenia.js';
 import { generatePhysarum } from './physarum.js';
 import { generateFracture } from './fracture/index.js';
+import { generateArctic } from './arctic/index.js';
 import { generateComplexFlow, type ComplexFlowOptions } from './complex-flow.js';
 import { generateBotanical } from './botanical/index.js';
 import { generatePlanet } from './planet/index.js';
@@ -190,6 +191,10 @@ for (const seed of SEEDS) {
     generateCoral({ width: 300, height: 400, margin: 20, seed });
   CASES[`warp-grid/dome/${seed}`] = () =>
     generateWarpGrid({ width: 300, height: 400, margin: 20, seed });
+  // A small order still pins the whole pipeline — the sampler is exact, so
+  // there is no burn-in to pay for — and keeps the suite in seconds.
+  CASES[`arctic/dissolve/${seed}`] = () =>
+    generateArctic({ width: 300, height: 400, margin: 20, seed, order: 26 });
   CASES[`texture/hatch/${seed}`] = () => generateTexture({ ...textureBase, seed });
   CASES[`pen-ink/synthetic/${seed}`] = () =>
     imageToPenInk(syntheticImage(), { width: 300, seed });
@@ -206,6 +211,10 @@ CASES['pen-ink/style-ballpoint/42'] = () =>
   imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('ballpoint') });
 CASES['pen-ink/style-sumie/42'] = () =>
   imageToPenInk(syntheticImage(), { width: 300, seed: 42, ...resolvePenInkStyle('sumie') });
+CASES['arctic/brick/42'] = () =>
+  generateArctic({ width: 300, height: 400, margin: 20, seed: 42, preset: 'brick', order: 20 });
+CASES['arctic/weave/42'] = () =>
+  generateArctic({ width: 300, height: 400, margin: 20, seed: 42, preset: 'weave', order: 24 });
 CASES['conway/streaks/42'] = () =>
   generateConwayExposure({ width: 300, height: 400, seed: 42, style: 'streaks' });
 CASES['reaction-diffusion/coral/42'] = () =>
