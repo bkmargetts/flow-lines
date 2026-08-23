@@ -41,6 +41,8 @@ export function renderLifeTerraces(state: LifeTerracesState, env: RenderEnv): La
     levels: state.levels,
     faintThreshold: state.faintThreshold,
     seamWidth: state.seamMm * mm,
+    faults: state.faults,
+    faultThrow: state.faultThrow,
     outlines: state.outlines,
     outlineEmphasis: state.outlineEmphasis,
 

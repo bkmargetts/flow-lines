@@ -16,6 +16,7 @@ import { offsetEmphasisPasses } from '../pen-ink/swell.js';
 import { inkLayerName } from '../marbling/index.js';
 import { PenAssignment } from '../lapidary/carve.js';
 import { buildTerraceField, buildBlockMasks } from './field.js';
+import { buildFaults, faultTraces } from './faults.js';
 import { walkContourAgents } from './agents.js';
 
 /**
@@ -69,6 +70,21 @@ export interface LifeTerracesOptions {
   levels?: number;
   /** Reserved-paper seam width at level boundaries, px (default cellSize * 0.5) */
   seamWidth?: number;
+  /**
+   * Strike-slip fault planes sheared through the history, 0..4 (default 2).
+   * Everything on one side of each fault is displaced along it, so the
+   * terrace rings and laminae visibly offset at inked, reserved-paper
+   * scarps — the terraces module's signature brought to the Life terrain.
+   * The crisp present never shears: the fault displaces the record, not the
+   * living colony.
+   */
+  faults?: number;
+  /**
+   * Multiplier on each fault's seeded displacement, 0..2 (default 1).
+   * Rescales the slip without moving the fault planes; 0 is a byte-identical
+   * no-op.
+   */
+  faultThrow?: number;
   /** Ink the level-boundary iso-contours as broken bold dashes (default false) */
   outlines?: boolean;
   /** Offset passes each outline dash is built from, 1..3 (default 2) */
@@ -161,6 +177,8 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
   const faintThreshold = Math.min(0.5, Math.max(0.02, options.faintThreshold ?? 0.08));
   const levels = Math.max(2, Math.min(8, Math.round(options.levels ?? 5)));
   const seamWidth = Math.max(0, options.seamWidth ?? cellSize * 0.5);
+  const faultCount = Math.max(0, Math.min(4, Math.round(options.faults ?? 2)));
+  const faultThrow = Math.max(0, Math.min(2, options.faultThrow ?? 1));
   const outlineEmphasis = Math.max(1, Math.min(3, Math.round(options.outlineEmphasis ?? 2)));
   const spacing = Math.max(0.4, options.spacing ?? 0.6);
   const densityContrast = Math.min(1, Math.max(0, options.densityContrast ?? 0.6));
@@ -204,8 +222,18 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
   const isCore = classifyFinal(sim.finalAlive, cols, rows, residueMaxCells);
   const noise = createNoise(subSeed(seed, 11));
 
-  const field = buildTerraceField(sim, gamma, blurSigma, faintThreshold, levels);
-  const masks = buildBlockMasks(field, sim.finalAlive, levels, cellSize, seamWidth, haloRadius);
+  const faultPlanes = buildFaults(subSeed(seed, 8), cols, rows, faultCount, faultThrow);
+  const field = buildTerraceField(sim, gamma, blurSigma, faintThreshold, levels, faultPlanes);
+  const scarps = faultTraces(faultPlanes, field.blurred, faintThreshold);
+  const masks = buildBlockMasks(
+    field,
+    sim.finalAlive,
+    levels,
+    cellSize,
+    seamWidth,
+    haloRadius,
+    scarps
+  );
 
   const half = cellSize / 2;
   const lines: FlowLine[] = [];
@@ -246,64 +274,86 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
     })
   );
 
+  // Bold broken line built from offset emphasis passes (the terraces outline
+  // idiom): shared by the level-boundary outlines and the fault scarps.
+  const fs = cellSize / 6;
+  const pushBoldDashes = (
+    poly: Point[],
+    rng: () => number,
+    dashFs: [number, number],
+    gapFs: [number, number],
+    passes: number,
+    layer: string
+  ): void => {
+    const emitDash = (dash: Point[]): void => {
+      if (dash.length < 2) return;
+      lines.push({ points: dash, pen: 'bold', layer });
+      for (const pass of offsetEmphasisPasses(dash, passes, 0.7 * Math.max(0.5, fs), 0.15)) {
+        lines.push({ points: pass, pen: 'bold', layer });
+      }
+    };
+    const smooth = smoothPolyline(poly, 2);
+    if (smooth.length < 2) return;
+    const cum: number[] = new Array(smooth.length);
+    cum[0] = 0;
+    for (let i = 1; i < smooth.length; i++) {
+      cum[i] = cum[i - 1] + Math.hypot(smooth[i].x - smooth[i - 1].x, smooth[i].y - smooth[i - 1].y);
+    }
+    const total = cum[smooth.length - 1];
+    // Tiny loops stay whole — dashing them leaves confetti.
+    if (total < 60 * fs) {
+      emitDash(smooth);
+      return;
+    }
+    const at = (s: number): Point => {
+      let i = 1;
+      while (i < smooth.length - 1 && cum[i] < s) i++;
+      const span = cum[i] - cum[i - 1] || 1;
+      const f = (s - cum[i - 1]) / span;
+      return {
+        x: smooth[i - 1].x + (smooth[i].x - smooth[i - 1].x) * f,
+        y: smooth[i - 1].y + (smooth[i].y - smooth[i - 1].y) * f,
+      };
+    };
+    let s = 0;
+    let guard = 0;
+    while (s < total - 2 && guard++ < 400) {
+      const e = Math.min(total, s + (dashFs[0] + rng() * dashFs[1]) * fs);
+      const dash: Point[] = [at(s)];
+      for (let i = 0; i < smooth.length; i++) {
+        if (cum[i] > s && cum[i] < e) dash.push(smooth[i]);
+      }
+      dash.push(at(e));
+      emitDash(dash);
+      s = e + (gapFs[0] + rng() * gapFs[1]) * fs;
+    }
+  };
+
   // ---- Optional inked terrace boundaries ----------------------------------
-  // The traced seam isos, drawn as bold broken dashes built from offset
-  // passes (the terraces outline idiom). They live inside their own reserved
-  // seam, so only the present halo clips them.
+  // The traced seam isos as bold broken dashes. They live inside their own
+  // reserved seam, so only the present halo clips them.
   if (outlines) {
     const rng = makeRandom(subSeed(seed, 31));
-    const fs = cellSize / 6;
     for (let k = 1; k < levels; k++) {
       const layer = inkLayerName(k % pens);
-      const emitDash = (dash: Point[]): void => {
-        if (dash.length < 2) return;
-        lines.push({ points: dash, pen: 'bold', layer });
-        for (const pass of offsetEmphasisPasses(dash, outlineEmphasis, 0.7 * Math.max(0.5, fs), 0.15)) {
-          lines.push({ points: pass, pen: 'bold', layer });
-        }
-      };
       for (const poly of masks.seamContours[k - 1]) {
         if (poly.length < 3) continue;
         for (const run of clipPolylineByMask(poly.map(cellPointToPx), inHaloPx)) {
-          const smooth = smoothPolyline(run, 2);
-          if (smooth.length < 2) continue;
-          let total = 0;
-          for (let i = 1; i < smooth.length; i++) {
-            total += Math.hypot(smooth[i].x - smooth[i - 1].x, smooth[i].y - smooth[i - 1].y);
-          }
-          // Tiny loops stay whole — dashing them leaves confetti.
-          if (total < 60 * fs) {
-            emitDash(smooth);
-            continue;
-          }
-          const cum: number[] = new Array(smooth.length);
-          cum[0] = 0;
-          for (let i = 1; i < smooth.length; i++) {
-            cum[i] = cum[i - 1] + Math.hypot(smooth[i].x - smooth[i - 1].x, smooth[i].y - smooth[i - 1].y);
-          }
-          const at = (s: number): Point => {
-            let i = 1;
-            while (i < smooth.length - 1 && cum[i] < s) i++;
-            const span = cum[i] - cum[i - 1] || 1;
-            const f = (s - cum[i - 1]) / span;
-            return {
-              x: smooth[i - 1].x + (smooth[i].x - smooth[i - 1].x) * f,
-              y: smooth[i - 1].y + (smooth[i].y - smooth[i - 1].y) * f,
-            };
-          };
-          let s = 0;
-          let guard = 0;
-          while (s < total - 2 && guard++ < 400) {
-            const e = Math.min(total, s + (30 + rng() * 40) * fs);
-            const dash: Point[] = [at(s)];
-            for (let i = 0; i < smooth.length; i++) {
-              if (cum[i] > s && cum[i] < e) dash.push(smooth[i]);
-            }
-            dash.push(at(e));
-            emitDash(dash);
-            s = e + (8 + rng() * 16) * fs;
-          }
+          pushBoldDashes(run, rng, [30, 40], [8, 16], outlineEmphasis, layer);
         }
+      }
+    }
+  }
+
+  // ---- Fault scarps --------------------------------------------------------
+  // The visible fault traces, inked as near-continuous bold lines on the
+  // darkest pen — long dashes, short lifts — so the sheared offset of the
+  // terraces reads as a deliberate geological cut.
+  if (scarps.length > 0) {
+    const rng = makeRandom(subSeed(seed, 32));
+    for (const trace of scarps) {
+      for (const run of clipPolylineByMask(trace.map(cellPointToPx), inHaloPx)) {
+        pushBoldDashes(run, rng, [50, 40], [4, 6], 2, inkLayerName(0));
       }
     }
   }

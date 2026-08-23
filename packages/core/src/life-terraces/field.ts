@@ -2,6 +2,7 @@ import { Point } from '../flow-lines.js';
 import { GrayscaleImage, gaussianBlur, sampleBilinear } from '../image.js';
 import { traceIsoContours } from '../iso-contours.js';
 import { Simulation } from '../conway/sim.js';
+import { FaultPlane, warpByFaults } from './faults.js';
 
 /**
  * The walked terrain: the Conway long-exposure tone field treated as a
@@ -31,16 +32,25 @@ export function buildTerraceField(
   gamma: number,
   blurSigma: number,
   faint: number,
-  levels: number
+  levels: number,
+  faults: FaultPlane[] = []
 ): TerraceField {
   const { cols, rows } = sim;
   // Byte-for-byte the conway tone recipe: normalized exposure, gamma-lifted so
   // comet trails (little exposure per cell) stay visible next to the core.
-  const tone = new Float32Array(cols * rows);
-  for (let i = 0; i < tone.length; i++) {
-    tone[i] = Math.pow(Math.min(1, sim.exposure[i] / sim.maxExposure), gamma);
+  const rawTone = new Float32Array(cols * rows);
+  for (let i = 0; i < rawTone.length; i++) {
+    rawTone[i] = Math.pow(Math.min(1, sim.exposure[i] / sim.maxExposure), gamma);
   }
-  const blurred = gaussianBlur({ width: cols, height: rows, data: new Float32Array(tone) }, blurSigma);
+  // Blur first, shear after — re-blurring would soften the scarp, and the
+  // whole point of a fault is the crisp offset of the terrace rings.
+  const blurred = warpByFaults(
+    gaussianBlur({ width: cols, height: rows, data: new Float32Array(rawTone) }, blurSigma),
+    faults
+  );
+  // The raw tone shears too, so the wobble scale follows the displaced
+  // drawing rather than the pre-fault record.
+  const tone = warpByFaults({ width: cols, height: rows, data: rawTone }, faults).data;
 
   const sample = (x: number, y: number): number => sampleBilinear(blurred, x, y);
   const h = 0.5;
@@ -77,7 +87,8 @@ export function buildBlockMasks(
   levels: number,
   cellSize: number,
   seamWidth: number,
-  haloRadius: number
+  haloRadius: number,
+  scarpTraces: Point[][] = []
 ): BlockMasks {
   const { cols, rows } = field;
   const fcols = cols * 2;
@@ -117,6 +128,32 @@ export function buildBlockMasks(
   // (cellSize/2) px = seamWidth / cellSize.
   const seamR = seamWidth / cellSize;
   const stampR = Math.max(0, Math.ceil(seamR - 1e-9));
+  const stampPolyline = (poly: Point[]): void => {
+    for (let i = 1; i < poly.length; i++) {
+      const a = poly[i - 1];
+      const b = poly[i];
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const n = Math.max(1, Math.ceil(len / 0.25));
+      for (let s = 0; s <= n; s++) {
+        const t = s / n;
+        const px = a.x + (b.x - a.x) * t;
+        const py = a.y + (b.y - a.y) * t;
+        const fx = fineOf(px, fcols);
+        const fy = fineOf(py, frows);
+        for (let dy = -stampR; dy <= stampR; dy++) {
+          const yy = fy + dy;
+          if (yy < 0 || yy >= frows) continue;
+          for (let dx = -stampR; dx <= stampR; dx++) {
+            const xx = fx + dx;
+            if (xx < 0 || xx >= fcols) continue;
+            // Circular brush on fine-cell centres so diagonal seams stay
+            // an even width instead of squaring off.
+            if (dx * dx + dy * dy <= seamR * seamR + 0.5) seam[yy * fcols + xx] = 1;
+          }
+        }
+      }
+    }
+  };
   for (let k = 1; k < levels; k++) {
     // Confetti-sized iso islands (a wiggle of the blur around one cell) get
     // neither a seam nor an outline — reserving paper around them would eat
@@ -130,32 +167,13 @@ export function buildBlockMasks(
     });
     seamContours.push(contours);
     if (seamWidth <= 0) continue;
-    for (const poly of contours) {
-      for (let i = 1; i < poly.length; i++) {
-        const a = poly[i - 1];
-        const b = poly[i];
-        const len = Math.hypot(b.x - a.x, b.y - a.y);
-        const n = Math.max(1, Math.ceil(len / 0.25));
-        for (let s = 0; s <= n; s++) {
-          const t = s / n;
-          const px = a.x + (b.x - a.x) * t;
-          const py = a.y + (b.y - a.y) * t;
-          const fx = fineOf(px, fcols);
-          const fy = fineOf(py, frows);
-          for (let dy = -stampR; dy <= stampR; dy++) {
-            const yy = fy + dy;
-            if (yy < 0 || yy >= frows) continue;
-            for (let dx = -stampR; dx <= stampR; dx++) {
-              const xx = fx + dx;
-              if (xx < 0 || xx >= fcols) continue;
-              // Circular brush on fine-cell centres so diagonal seams stay
-              // an even width instead of squaring off.
-              if (dx * dx + dy * dy <= seamR * seamR + 0.5) seam[yy * fcols + xx] = 1;
-            }
-          }
-        }
-      }
-    }
+    for (const poly of contours) stampPolyline(poly);
+  }
+
+  // Fault scarps reserve paper the same way the seams do, so the sheared
+  // discontinuity reads as a deliberate cut, not a rendering glitch.
+  if (seamWidth > 0) {
+    for (const trace of scarpTraces) stampPolyline(trace);
   }
 
   const fineIndex = (x: number, y: number): number =>

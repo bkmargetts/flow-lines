@@ -45,6 +45,8 @@ describe('life terraces', () => {
       densityContrast: 1,
       outlines: true,
       pens: 4,
+      faults: 4,
+      faultThrow: 2,
     });
     expect(r.lines.length).toBeGreaterThan(0);
     for (const line of r.lines) {
@@ -79,12 +81,28 @@ describe('life terraces', () => {
   });
 
   it('outlines add bold non-present dashes', () => {
-    const plain = generateLifeTerraces(base);
-    const outlined = generateLifeTerraces({ ...base, outlines: true });
+    const plain = generateLifeTerraces({ ...base, faults: 0 });
+    const outlined = generateLifeTerraces({ ...base, faults: 0, outlines: true });
     const boldHistory = (r: typeof plain) =>
       r.lines.filter((l) => l.pen === 'bold' && l.layer !== 'present').length;
     expect(boldHistory(plain)).toBe(0);
     expect(boldHistory(outlined)).toBeGreaterThan(0);
+  });
+
+  it('faults ink bold scarp lines and shear the drawing', () => {
+    const flat = generateLifeTerraces({ ...base, faults: 0 });
+    const faulted = generateLifeTerraces({ ...base, faults: 2 });
+    const boldHistory = (r: typeof flat) =>
+      r.lines.filter((l) => l.pen === 'bold' && l.layer !== 'present').length;
+    expect(boldHistory(flat)).toBe(0);
+    expect(boldHistory(faulted)).toBeGreaterThan(0);
+    expect(JSON.stringify(faulted.lines)).not.toBe(JSON.stringify(flat.lines));
+  });
+
+  it('faultThrow 0 is a byte-identical no-op', () => {
+    const none = generateLifeTerraces({ ...base, faults: 0 });
+    const zeroThrow = generateLifeTerraces({ ...base, faults: 3, faultThrow: 0 });
+    expect(JSON.stringify(zeroThrow.lines)).toBe(JSON.stringify(none.lines));
   });
 
   it('holds history off the present with a halo', () => {
@@ -122,6 +140,7 @@ describe('life terraces', () => {
     // tone recipe — then assert no history stroke wanders far in field value.
     const opts: LifeTerracesOptions = {
       ...base,
+      faults: 0, // the test rebuilds the un-sheared field
       wobble: 0,
       waviness: 0,
       taper: 0,

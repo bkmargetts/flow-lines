@@ -98,6 +98,8 @@ export function LifeTerracesControls({ state, update }: ControlsProps<LifeTerrac
 
       <Slider label="Levels" value={state.levels} min={2} max={8} step={1} onChange={(v) => update({ levels: v })} format={(v) => `${Math.round(v)}`} />
       <Slider label="Seam width" value={state.seamMm} min={0.3} max={3} step={0.1} onChange={(v) => update({ seamMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
+      <Slider label="Faults" value={state.faults} min={0} max={4} step={1} onChange={(v) => update({ faults: v })} format={(v) => `${Math.round(v)}`} />
+      <Slider label="Throw" value={state.faultThrow} min={0} max={2} step={0.01} onChange={(v) => update({ faultThrow: v })} format={(v) => `${Math.round(v * 100)}%`} disabled={state.faults === 0} />
       <Toggle label="Ink level boundaries" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
       {state.outlines && (
         <Slider label="Outline weight" value={state.outlineEmphasis} min={1} max={3} step={1} onChange={(v) => update({ outlineEmphasis: v })} format={(v) => `${Math.round(v)} pass${Math.round(v) > 1 ? 'es' : ''}`} />

@@ -26,6 +26,8 @@ const PRESET_BASE = {
   levels: 5,
   faintThreshold: 0.08,
   seamMm: 0.9,
+  faults: 2,
+  faultThrow: 1,
   outlines: false,
   outlineEmphasis: 2,
   spacing: 0.6,
@@ -128,6 +130,10 @@ export function randomLifeTerracesGenome(rng: () => number): Partial<LifeTerrace
     levels: 3 + Math.floor(rng() * 6),
     faintThreshold: Number((0.05 + rng() * 0.1).toFixed(2)),
     seamMm: Number((0.5 + rng() * 1.5).toFixed(1)),
+    // The fault deal is the module's biggest structural lever: usually one
+    // or two shears, occasionally none or a rift.
+    faults: ((r) => (r < 0.2 ? 0 : r < 0.55 ? 1 : r < 0.85 ? 2 : 3))(rng()),
+    faultThrow: Number((0.5 + rng() * 1.1).toFixed(2)),
     outlines: rng() < 0.3,
     outlineEmphasis: 1 + Math.floor(rng() * 3),
     spacing: Number((0.45 + rng() * 0.75).toFixed(2)),

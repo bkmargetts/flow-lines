@@ -25,6 +25,8 @@ export interface LifeTerracesState {
   levels: number; // 2..8 terrace levels
   faintThreshold: number; // 0.04..0.2 tone below this leaves paper
   seamMm: number; // 0.3..3 reserved-paper seam at level boundaries
+  faults: number; // 0..4 strike-slip fault planes sheared through the history
+  faultThrow: number; // 0..2 multiplier on each fault's seeded slip
   outlines: boolean; // ink the level boundaries as bold broken dashes
   outlineEmphasis: number; // 1..3 offset passes per outline dash
 
@@ -73,6 +75,8 @@ export const defaultLifeTerracesState: LifeTerracesState = {
   levels: 5,
   faintThreshold: 0.08,
   seamMm: 0.9,
+  faults: 2,
+  faultThrow: 1,
   outlines: false,
   outlineEmphasis: 2,
 
