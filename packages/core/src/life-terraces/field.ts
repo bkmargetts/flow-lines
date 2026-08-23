@@ -10,18 +10,32 @@ import { FaultPlane, warpByFaults } from './faults.js';
  * simulation's raster space (integer coords sit on cell centres, the same
  * convention conway's contour style maps to the page with).
  */
+export type TerrainMode = 'exposure' | 'epochs';
+
 export interface TerraceField {
   cols: number;
   rows: number;
-  /** Raw per-cell gamma-lifted tone — drives the hand-drawn wobble scale. */
+  /** Raw per-cell gamma-lifted exposure tone — drives the hand-drawn wobble scale. */
   tone: Float32Array;
-  /** The blurred tone field the agents actually walk. */
+  /**
+   * The WALKED field: what the agents integrate along, and what the terrace
+   * levels, seams, and section profile cut on. In 'exposure' mode this is the
+   * blurred exposure; in 'epochs' mode it is the last-alive age field.
+   */
   blurred: GrayscaleImage;
-  /** Bilinear sample of `blurred` at raster coords. */
+  /**
+   * The warped blurred exposure — carries stroke density and the terrain
+   * silhouette in BOTH modes (the same object as `blurred` in exposure mode,
+   * so that path stays byte-identical).
+   */
+  exposure: GrayscaleImage;
+  /** Bilinear sample of the walked field at raster coords. */
   sample(x: number, y: number): number;
   /** Central-difference gradient of `sample` (may be zero on plateaus). */
   gradient(x: number, y: number): Point;
-  /** Terrace level of a tone value: -1 below the faint cutoff, else 0..levels-1. */
+  /** Bilinear sample of the exposure field — separation/length/density. */
+  density(x: number, y: number): number;
+  /** Terrace level of a walked value: -1 below the faint cutoff, else 0..levels-1. */
   levelOf(v: number): number;
   /** Iso value of the boundary below level k (k = 1..levels-1). */
   levelIso(k: number): number;
@@ -33,7 +47,8 @@ export function buildTerraceField(
   blurSigma: number,
   faint: number,
   levels: number,
-  faults: FaultPlane[] = []
+  faults: FaultPlane[] = [],
+  terrain: TerrainMode = 'exposure'
 ): TerraceField {
   const { cols, rows } = sim;
   // Byte-for-byte the conway tone recipe: normalized exposure, gamma-lifted so
@@ -44,7 +59,7 @@ export function buildTerraceField(
   }
   // Blur first, shear after — re-blurring would soften the scarp, and the
   // whole point of a fault is the crisp offset of the terrace rings.
-  const blurred = warpByFaults(
+  const exposure = warpByFaults(
     gaussianBlur({ width: cols, height: rows, data: new Float32Array(rawTone) }, blurSigma),
     faults
   );
@@ -52,18 +67,97 @@ export function buildTerraceField(
   // drawing rather than the pre-fault record.
   const tone = warpByFaults({ width: cols, height: rows, data: rawTone }, faults).data;
 
+  // 'epochs': terrace on TIME. lastAlive is *recency*, so the picture is not
+  // concentric tree rings but a time-zoned survey map — the turbulent core is
+  // constantly re-stamped (youngest), the quiet debris annulus froze early
+  // (oldest), and a glider trail carries a monotone time gradient along its
+  // length. After the visible-range renormalization below, the oldest epoch
+  // lands at level 0 — matching exposure mode's faintest-outermost convention
+  // with no inversion flag. Raising `decay` widens the visible time window
+  // (the exposure cutoff hides anything last touched too long ago).
+  const blurred = terrain === 'epochs' ? buildAgeField(sim, exposure, blurSigma, faint, faults) : exposure;
+
   const sample = (x: number, y: number): number => sampleBilinear(blurred, x, y);
   const h = 0.5;
   const gradient = (x: number, y: number): Point => ({
     x: (sample(x + h, y) - sample(x - h, y)) / (2 * h),
     y: (sample(x, y + h) - sample(x, y - h)) / (2 * h),
   });
+  // In exposure mode `density` IS `sample` (same closure over the same
+  // raster), so the historical path stays byte-identical.
+  const density =
+    blurred === exposure ? sample : (x: number, y: number): number => sampleBilinear(exposure, x, y);
   const span = 1 - faint;
   const levelOf = (v: number): number =>
     v < faint ? -1 : Math.min(levels - 1, Math.floor(((v - faint) / span) * levels));
   const levelIso = (k: number): number => faint + (k / levels) * span;
 
-  return { cols, rows, tone, blurred, sample, gradient, levelOf, levelIso };
+  return { cols, rows, tone, blurred, exposure, sample, gradient, density, levelOf, levelIso };
+}
+
+/**
+ * The epoch age field: normalized last-alive generation, blurred by
+ * normalized convolution and renormalized over the exposure footprint.
+ *
+ * - A plain gaussian blur of the spotty age raster would average in
+ *   never-alive zeros and drag every epoch toward 0 at the ragged edge;
+ *   dividing blur(age·mask) by blur(mask) reconstructs the mean age of only
+ *   the ever-alive material.
+ * - The exposure faint cutoff biases the footprint toward recency (exposure
+ *   is dominated by decay^(G−lastAlive)), so the raw visible age range is
+ *   compressed near 1; stretching the visible min..max across [faint, 1]
+ *   spreads the epochs over every terrace level.
+ * - Masking to the exposure footprint keeps the terrain silhouette identical
+ *   between modes: the faint iso of the walked field is the exposure
+ *   footprint boundary in both.
+ */
+function buildAgeField(
+  sim: Simulation,
+  exposure: GrayscaleImage,
+  blurSigma: number,
+  faint: number,
+  faults: FaultPlane[]
+): GrayscaleImage {
+  const { cols, rows } = sim;
+  const n = cols * rows;
+  let maxLast = 0;
+  for (let i = 0; i < n; i++) {
+    if (sim.lastAlive[i] > maxLast) maxLast = sim.lastAlive[i];
+  }
+  const ageRaw = new Float32Array(n);
+  const mask = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (sim.lastAlive[i] >= 0) {
+      ageRaw[i] = (sim.lastAlive[i] + 1) / (maxLast + 1);
+      mask[i] = 1;
+    }
+  }
+  const num = gaussianBlur({ width: cols, height: rows, data: ageRaw }, blurSigma);
+  const den = gaussianBlur({ width: cols, height: rows, data: mask }, blurSigma);
+  const age = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    age[i] = den.data[i] > 1e-4 ? num.data[i] / den.data[i] : 0;
+  }
+  // Shear after blurring, through the SAME fault planes as the exposure, so
+  // the two fields stay registered and the scarp stays crisp.
+  const warped = warpByFaults({ width: cols, height: rows, data: age }, faults);
+
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let i = 0; i < n; i++) {
+    if (exposure.data[i] < faint) continue;
+    const v = warped.data[i];
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  const range = Math.max(hi - lo, 1e-6);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (exposure.data[i] < faint) continue;
+    const t = Math.min(1, Math.max(0, (warped.data[i] - lo) / range));
+    out[i] = faint + (1 - faint) * t;
+  }
+  return { width: cols, height: rows, data: out };
 }
 
 /**

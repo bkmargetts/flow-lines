@@ -250,6 +250,7 @@ export type { TerracesOptions } from './terraces/index.js';
 // Life Terraces (contour-walking agents over the Conway long-exposure field)
 export { generateLifeTerraces, LIFE_TERRACES_PRESETS } from './life-terraces/index.js';
 export type { LifeTerracesOptions } from './life-terraces/index.js';
+export type { TerrainMode } from './life-terraces/field.js';
 
 // Harmonograph / guilloché (damped pendulums, spirograph wheels, engine turning)
 export {

@@ -306,6 +306,10 @@ CASES['terraces/shuffle/42'] = () =>
   generateTerraces({ width: 300, height: 400, margin: 20, seed: 42, textures: [] });
 CASES['life-terraces/agate/42'] = () =>
   generateLifeTerraces({ width: 300, height: 400, margin: 20, seed: 42, ...LIFE_TERRACES_PRESETS.agate });
+CASES['life-terraces/epochs/42'] = () =>
+  generateLifeTerraces({ width: 300, height: 400, margin: 20, seed: 42, terrain: 'epochs' });
+CASES['life-terraces/survey/42'] = () =>
+  generateLifeTerraces({ width: 300, height: 400, margin: 20, seed: 42, ...LIFE_TERRACES_PRESETS.survey });
 CASES['life-terraces/pens/42'] = () =>
   generateLifeTerraces({
     width: 300,

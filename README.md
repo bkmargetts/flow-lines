@@ -99,7 +99,7 @@ lives in a collapsed Advanced group.
 | Impact Grid | pure | A hand-ruled grid struck along a drawn path — displaced, torqued, shattered |
 | Lapidary | pure | Agate bands, breccia fragments, strata or spirals — textured regions split by paper seams |
 | Terraces | pure | Faulted strata terraces — beds of ruled lines and contour laminae displaced by fault scarps |
-| Life Terraces | pure | Conway long exposure terraced into contour-walking laminae — banded levels with paper seams |
+| Life Terraces | pure | Conway long exposure terraced into contour-walking laminae — fault-sheared levels, time-epoch terrain, survey cross-section plate |
 | Arctic | pure | Random domino tilings — the arctic circle in ink |
 | Pattern | pure | Background hatch / grid / dot textures |
 | Grating (multi-ink) | pure | Interleaved multi-pen gratings |

@@ -15,9 +15,15 @@ import {
 import { offsetEmphasisPasses } from '../pen-ink/swell.js';
 import { inkLayerName } from '../marbling/index.js';
 import { PenAssignment } from '../lapidary/carve.js';
-import { buildTerraceField, buildBlockMasks } from './field.js';
+import { buildTerraceField, buildBlockMasks, TerrainMode } from './field.js';
 import { buildFaults, faultTraces } from './faults.js';
 import { walkContourAgents } from './agents.js';
+import {
+  buildSectionChord,
+  sectionMapFurniture,
+  sectionFaultCrossings,
+  renderSectionStrip,
+} from './section.js';
 
 /**
  * Life Terraces — the Conway long exposure crossed with the terraces mark
@@ -62,6 +68,15 @@ export interface LifeTerracesOptions {
   borderGap?: number;
 
   // ---- Field & terraces ---------------------------------------------------
+  /**
+   * What the terraces cut on (default 'exposure'). 'epochs' terraces on
+   * TIME: levels come from each cell's last-alive generation, so the bands
+   * are epochs of the colony's history — a young re-stamped core, an old
+   * frozen debris annulus, time-graded glider spits — while stroke density
+   * still carries the exposure. Raising `decay` widens the visible time
+   * window.
+   */
+  terrain?: TerrainMode;
   /** Gaussian blur of the tone field, in cells (default 1.5) */
   blurSigma?: number;
   /** Tone below this (0..1, post-gamma) leaves blank paper (default 0.08) */
@@ -89,6 +104,16 @@ export interface LifeTerracesOptions {
   outlines?: boolean;
   /** Offset passes each outline dash is built from, 1..3 (default 2) */
   outlineEmphasis?: number;
+  /**
+   * Survey cross-section plate (default false): a seeded chord A-B is drawn
+   * dashed across the map, and a strip along the bottom of the sheet renders
+   * the field's profile along it as a geological section — bold crest,
+   * terrace levels as a layer-cake of dashed beds with reserved seams, fault
+   * crossings as near-vertical strokes, and a bold ground-line datum.
+   */
+  section?: boolean;
+  /** Section strip height as a fraction of the framed page (default 0.2, 0.12..0.35) */
+  sectionHeight?: number;
 
   // ---- Agents -------------------------------------------------------------
   /** Base streamline separation in cells (default 0.6); tone tightens it */
@@ -145,6 +170,9 @@ export const LIFE_TERRACES_PRESETS: Record<string, Partial<LifeTerracesOptions>>
   ember: { decay: 0.92, levels: 3, densityContrast: 0.9, strokeLength: 14, taper: 0.9 },
   /** Colliding colonies, loose undulating laminae, pens interleaved. */
   drift: { seedCount: 3, waviness: 0.6, levels: 4, penAssignment: 'interleave' },
+  /** The survey plate: time-epoch terraces, inked boundaries, and the
+   *  cross-section strip along the bottom of the sheet. */
+  survey: { terrain: 'epochs', section: true, outlines: true },
 };
 
 /** Runaway guard on hostile spacing/seam knobs. */
@@ -159,6 +187,7 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
     seedCount = 1,
     generations = 260,
     decay = 0.96,
+    terrain = 'exposure',
     gamma = 0.45,
     offCenter = 0.6,
     blurSigma = 1.5,
@@ -179,6 +208,8 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
   const seamWidth = Math.max(0, options.seamWidth ?? cellSize * 0.5);
   const faultCount = Math.max(0, Math.min(4, Math.round(options.faults ?? 2)));
   const faultThrow = Math.max(0, Math.min(2, options.faultThrow ?? 1));
+  const section = options.section ?? false;
+  const sectionHeight = Math.max(0.12, Math.min(0.35, options.sectionHeight ?? 0.2));
   const outlineEmphasis = Math.max(1, Math.min(3, Math.round(options.outlineEmphasis ?? 2)));
   const spacing = Math.max(0.4, options.spacing ?? 0.6);
   const densityContrast = Math.min(1, Math.max(0, options.densityContrast ?? 0.6));
@@ -196,11 +227,20 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
   // the gap is part of the simulation's footprint, so the shared page border
   // frames the drawing without ever resizing the grid.
   const frameMargin = margin + borderGap * cellSize;
+  // The section plate reserves a strip along the bottom of the framed page,
+  // separated from the map by the same gutter width the frame uses; the
+  // simulation grid shrinks to the area above. Layout depends only on
+  // options, so it is deterministic, and a page too small for the shrunken
+  // map bails to fully empty — no orphan strip.
+  const stripH = section ? sectionHeight * Math.max(0, height - 2 * margin) : 0;
+  const stripGap = section ? borderGap * cellSize : 0;
   const usableW = Math.max(0, width - 2 * frameMargin);
-  const usableH = Math.max(0, height - 2 * frameMargin);
+  const usableH = Math.max(0, height - 2 * frameMargin - stripH - stripGap);
   const cols = Math.floor(usableW / cellSize);
   const rows = Math.floor(usableH / cellSize);
   if (cols < 3 || rows < 3) return { lines: [], width, height, seed };
+  const stripBottom = height - frameMargin;
+  const stripTop = stripBottom - stripH;
 
   const originX = frameMargin + (usableW - cols * cellSize) / 2;
   const originY = frameMargin + (usableH - rows * cellSize) / 2;
@@ -223,8 +263,10 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
   const noise = createNoise(subSeed(seed, 11));
 
   const faultPlanes = buildFaults(subSeed(seed, 8), cols, rows, faultCount, faultThrow);
-  const field = buildTerraceField(sim, gamma, blurSigma, faintThreshold, levels, faultPlanes);
-  const scarps = faultTraces(faultPlanes, field.blurred, faintThreshold);
+  const field = buildTerraceField(sim, gamma, blurSigma, faintThreshold, levels, faultPlanes, terrain);
+  // Scarp extent probes the exposure silhouette (identical object in
+  // exposure mode) so it matches the terrain footprint in both modes.
+  const scarps = faultTraces(faultPlanes, field.exposure, faintThreshold);
   const masks = buildBlockMasks(
     field,
     sim.finalAlive,
@@ -454,6 +496,41 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
   };
   renderPresent();
 
+  // ---- The survey cross-section plate --------------------------------------
+  if (section) {
+    const rng51 = makeRandom(subSeed(seed, 51));
+    const chord = buildSectionChord(field.exposure, faintThreshold, rng51);
+    if (chord) {
+      // The A-B line on the map, clipped around the present like the scarps.
+      // Bold, so the survey line stands apart from the fine laminae it
+      // crosses (the heavy dashed section line of a real geological map).
+      for (const seg of sectionMapFurniture(chord, rng51)) {
+        for (const run of clipPolylineByMask(seg.map(cellPointToPx), inHaloPx)) {
+          if (run.length >= 2) lines.push({ points: run, pen: 'bold', layer: inkLayerName(0) });
+        }
+      }
+      const crossings = sectionFaultCrossings(chord, faultPlanes, field.exposure, faintThreshold);
+      lines.push(
+        ...renderSectionStrip(field, chord, crossings, {
+          x0: frameMargin,
+          x1: width - frameMargin,
+          top: stripTop,
+          bottom: stripBottom,
+          levels,
+          levelIso: field.levelIso,
+          faint: faintThreshold,
+          spacing,
+          densityContrast,
+          cellSize,
+          seamWidth,
+          taper,
+          pens,
+          rng: makeRandom(subSeed(seed, 52)),
+        })
+      );
+    }
+  }
+
   let result: FlowLinesResult = { lines, width, height, seed };
 
   // Faint outer levels wobble loose (haunted); the crisp present stays firm.
@@ -465,7 +542,10 @@ export function generateLifeTerraces(options: LifeTerracesOptions): FlowLinesRes
     amplitude: wobble,
     wavelength: cellSize * 8,
     seed: subSeed(seed, 41),
-    amplitudeScale: (x, y) => lerp(1.3, 0.15, field.tone[cellIndexAt(x, y)]),
+    // Strip marks clamp to the bottom grid row (tone ~0) and would get the
+    // full haunted wobble — the plate stays drafting-steady instead.
+    amplitudeScale: (x, y) =>
+      section && y >= stripTop - stripGap / 2 ? 0.35 : lerp(1.3, 0.15, field.tone[cellIndexAt(x, y)]),
     layerAmplitude: { present: 0.4 },
     maxDisplacement: reserved.length
       ? Math.max(0.25, 0.35 * Math.min(...reserved))

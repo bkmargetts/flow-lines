@@ -1,8 +1,8 @@
-import type { PenAssignment } from '@flow-lines/core';
+import type { PenAssignment, TerrainMode } from '@flow-lines/core';
 import { randomSeed } from '../../lib/random';
 
 /** Curated look ids ('custom' = the picker's label after a randomise). */
-export type LifeTerracesLook = 'exposure' | 'agate' | 'ember' | 'drift' | 'custom';
+export type LifeTerracesLook = 'exposure' | 'agate' | 'ember' | 'drift' | 'survey' | 'custom';
 
 /**
  * UI state for Life Terraces (mm / degrees / 0..1 units). `render.ts` converts
@@ -22,6 +22,7 @@ export interface LifeTerracesState {
   offCenter: number; // 0..1 rule-of-thirds bias for a single detonation
 
   // Terraces
+  terrain: TerrainMode; // 'exposure' (intensity) or 'epochs' (time strata)
   levels: number; // 2..8 terrace levels
   faintThreshold: number; // 0.04..0.2 tone below this leaves paper
   seamMm: number; // 0.3..3 reserved-paper seam at level boundaries
@@ -29,6 +30,8 @@ export interface LifeTerracesState {
   faultThrow: number; // 0..2 multiplier on each fault's seeded slip
   outlines: boolean; // ink the level boundaries as bold broken dashes
   outlineEmphasis: number; // 1..3 offset passes per outline dash
+  section: boolean; // survey cross-section plate along the bottom of the sheet
+  sectionHeight: number; // 0.12..0.35 strip height as a fraction of the framed page
 
   // Agents
   spacing: number; // 0.4..2 lamina separation in grid cells
@@ -72,6 +75,7 @@ export const defaultLifeTerracesState: LifeTerracesState = {
   gamma: 0.45,
   offCenter: 0.6,
 
+  terrain: 'exposure',
   levels: 5,
   faintThreshold: 0.08,
   seamMm: 0.9,
@@ -79,6 +83,8 @@ export const defaultLifeTerracesState: LifeTerracesState = {
   faultThrow: 1,
   outlines: false,
   outlineEmphasis: 2,
+  section: false,
+  sectionHeight: 0.2,
 
   spacing: 0.6,
   densityContrast: 0.6,

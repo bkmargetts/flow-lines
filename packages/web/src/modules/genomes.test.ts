@@ -368,6 +368,7 @@ const SPECS: GenomeSpec[] = [
       faults: [0, 4],
       faultThrow: [0, 2],
       outlineEmphasis: [1, 3],
+      sectionHeight: [0.12, 0.35],
       spacing: [0.4, 2],
       densityContrast: [0, 1],
       strokeLength: [6, 80],
@@ -390,9 +391,10 @@ const SPECS: GenomeSpec[] = [
       'residueMaxCells',
       'pens',
     ],
-    bools: ['outlines', 'continuous', 'massCore'],
+    bools: ['outlines', 'continuous', 'massCore', 'section'],
     enums: {
       preset: ['custom'],
+      terrain: ['exposure', 'epochs'],
       penAssignment: ['interleave', 'per-region'],
     },
     // Ink fields are absent from forbidden by design: life-terraces is in

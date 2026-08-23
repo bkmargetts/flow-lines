@@ -38,6 +38,7 @@ export function renderLifeTerraces(state: LifeTerracesState, env: RenderEnv): La
     gamma: state.gamma,
     offCenter: state.offCenter,
 
+    terrain: state.terrain,
     levels: state.levels,
     faintThreshold: state.faintThreshold,
     seamWidth: state.seamMm * mm,
@@ -45,6 +46,8 @@ export function renderLifeTerraces(state: LifeTerracesState, env: RenderEnv): La
     faultThrow: state.faultThrow,
     outlines: state.outlines,
     outlineEmphasis: state.outlineEmphasis,
+    section: state.section,
+    sectionHeight: state.sectionHeight,
 
     spacing: state.spacing,
     densityContrast: state.densityContrast,

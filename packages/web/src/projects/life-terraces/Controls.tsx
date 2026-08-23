@@ -96,6 +96,16 @@ export function LifeTerracesControls({ state, update }: ControlsProps<LifeTerrac
 
       <h3 className="section-title">Terraces</h3>
 
+      <label className="field">
+        <span>Terrain</span>
+        <select
+          value={state.terrain}
+          onChange={(e) => update({ terrain: e.target.value as LifeTerracesState['terrain'] })}
+        >
+          <option value="exposure">Exposure — intensity of the history</option>
+          <option value="epochs">Epochs — time strata of the colony</option>
+        </select>
+      </label>
       <Slider label="Levels" value={state.levels} min={2} max={8} step={1} onChange={(v) => update({ levels: v })} format={(v) => `${Math.round(v)}`} />
       <Slider label="Seam width" value={state.seamMm} min={0.3} max={3} step={0.1} onChange={(v) => update({ seamMm: v })} format={(v) => `${v.toFixed(1)}mm`} />
       <Slider label="Faults" value={state.faults} min={0} max={4} step={1} onChange={(v) => update({ faults: v })} format={(v) => `${Math.round(v)}`} />
@@ -103,6 +113,10 @@ export function LifeTerracesControls({ state, update }: ControlsProps<LifeTerrac
       <Toggle label="Ink level boundaries" checked={state.outlines} onChange={(v) => update({ outlines: v })} />
       {state.outlines && (
         <Slider label="Outline weight" value={state.outlineEmphasis} min={1} max={3} step={1} onChange={(v) => update({ outlineEmphasis: v })} format={(v) => `${Math.round(v)} pass${Math.round(v) > 1 ? 'es' : ''}`} />
+      )}
+      <Toggle label="Cross-section plate" checked={state.section} onChange={(v) => update({ section: v })} />
+      {state.section && (
+        <Slider label="Plate height" value={state.sectionHeight} min={0.12} max={0.35} step={0.01} onChange={(v) => update({ sectionHeight: v })} format={(v) => `${Math.round(v * 100)}%`} />
       )}
 
       <h3 className="section-title">Laminae</h3>

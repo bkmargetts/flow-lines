@@ -7,6 +7,7 @@ import { SimplexNoise } from '../noise.js';
 import { inkLayerName } from '../marbling/index.js';
 import { PenAssignment } from '../lapidary/carve.js';
 import { TerraceField } from './field.js';
+import { dashRuns } from './marks.js';
 
 export interface AgentConfig {
   /** Base streamline separation in cells at full tone. */
@@ -115,7 +116,7 @@ export function walkContourAgents(field: TerraceField, blocked: (x: number, y: n
       if (v < cfg.faintThreshold) break;
       if (Math.abs(v - v0) > corridor) break;
       if (blocked(x, y)) break;
-      if (grid.hasNear(x, y, sepAt(v) * 0.5)) break;
+      if (grid.hasNear(x, y, sepAt(field.density(x, y)) * 0.5)) break;
       pts.push({ x, y });
       const t1raw = unitTangent(field.gradient(x, y));
       const t1: Point | null = t1raw ? orient(t1raw) : lastT;
@@ -143,76 +144,8 @@ export function walkContourAgents(field: TerraceField, blocked: (x: number, y: n
     return pts;
   };
 
-  // --- Mark emission: the terraces dash/taper idiom -----------------------
-  // (Duplicated from the closures inside lapidary/textures.ts fillRegion —
-  // trimRunEnds / dashPolyline — which aren't exported; re-scaled to cells.)
-  const arcLengths = (pts: Point[]): number[] => {
-    const cum: number[] = new Array(pts.length);
-    cum[0] = 0;
-    for (let i = 1; i < pts.length; i++) {
-      cum[i] = cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-    }
-    return cum;
-  };
-  const sliceAt = (pts: Point[], cum: number[], sa: number, sb: number): Point[] => {
-    const at = (s: number): Point => {
-      let i = 1;
-      while (i < pts.length - 1 && cum[i] < s) i++;
-      const span = cum[i] - cum[i - 1] || 1;
-      const f = (s - cum[i - 1]) / span;
-      return {
-        x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
-        y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f,
-      };
-    };
-    const out: Point[] = [at(sa)];
-    for (let i = 0; i < pts.length; i++) {
-      if (cum[i] > sa && cum[i] < sb) out.push(pts[i]);
-    }
-    out.push(at(sb));
-    return out;
-  };
-  const trimEnds = (pts: Point[]): Point[] => {
-    if (cfg.taper <= 0 || pts.length < 3) return pts;
-    const cum = arcLengths(pts);
-    const total = cum[pts.length - 1];
-    if (total < cfg.cellSize) return pts;
-    const maxTrim = Math.min(total * 0.35, cfg.cellSize * 1.6) * cfg.taper;
-    const a = rngMarks() * maxTrim * 0.7;
-    const b = total - rngMarks() * maxTrim * 0.7;
-    if (b - a < cfg.cellSize * 0.3) return pts;
-    return sliceAt(pts, cum, a, b);
-  };
-  // Translate a dash a hair off its chord so nested laminae pieces don't
-  // register into one unbroken line.
-  const staggered = (pts: Point[]): Point[] => {
-    const staggerPx = cfg.cellSize * 0.06;
-    if (pts.length < 2) return pts;
-    const a = pts[0];
-    const b = pts[pts.length - 1];
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len < 1e-6) return pts;
-    const off = (rngMarks() * 2 - 1) * staggerPx;
-    const ox = (-(b.y - a.y) / len) * off;
-    const oy = ((b.x - a.x) / len) * off;
-    return pts.map((p) => ({ x: p.x + ox, y: p.y + oy }));
-  };
-  const dashRuns = (pts: Point[]): Point[][] => {
-    if (cfg.continuous) return [trimEnds(pts)];
-    const cum = arcLengths(pts);
-    const total = cum[pts.length - 1];
-    // Short runs stay whole — dashing them leaves confetti.
-    if (total <= cfg.cellSize * 6) return [trimEnds(pts)];
-    const out: Point[][] = [];
-    let s = 0;
-    let guard = 0;
-    while (s < total - cfg.cellSize * 0.3 && guard++ < 200) {
-      const e = Math.min(total, s + cfg.cellSize * (3.5 + 5 * rngMarks()));
-      out.push(staggered(trimEnds(sliceAt(pts, cum, s, e))));
-      s = e + cfg.cellSize * (0.4 + 0.5 * rngMarks());
-    }
-    return out;
-  };
+  // --- Mark emission: the terraces dash/taper idiom (marks.ts) ------------
+  const dashOpts = { cellSize: cfg.cellSize, taper: cfg.taper, continuous: cfg.continuous };
   // A light cross-lamina undulation so long runs breathe like a drawn line.
   // Capped well below half the local separation so neighbours never touch.
   const undulate = (pts: Point[]): Point[] => {
@@ -233,12 +166,14 @@ export function walkContourAgents(field: TerraceField, blocked: (x: number, y: n
   // Seed densest first (deterministic, index tiebreak — the slipstream
   // idiom) so the committed core anchors the field and the faint outer
   // levels weave around it.
-  // Candidates come from the *blurred* field — the terrain the agents
-  // actually walk. The raw tone is spottier (a glider deposits exposure on
-  // scattered cells) and seeding from it would starve the blurred skirt
-  // where the outer laminae live.
+  // Candidates come from the blurred *exposure* field — its footprint is the
+  // terrain silhouette in both modes, and densest-exposure-first keeps the
+  // Jobard-Lefer invariant meaningful (separation is exposure-driven). The
+  // raw tone is spottier (a glider deposits exposure on scattered cells) and
+  // seeding from it would starve the blurred skirt where the outer laminae
+  // live.
   const order: number[] = [];
-  const bdata = field.blurred.data;
+  const bdata = field.exposure.data;
   for (let i = 0; i < cols * rows; i++) {
     if (bdata[i] >= cfg.faintThreshold) order.push(i);
   }
@@ -257,9 +192,12 @@ export function walkContourAgents(field: TerraceField, blocked: (x: number, y: n
     const level = field.levelOf(v0);
     if (level < 0) continue;
     if (blocked(x0, y0)) continue;
-    if (grid.hasNear(x0, y0, sepAt(v0))) continue;
+    // Separation and stroke length carry the *exposure* density; level
+    // membership and the corridor stay on the walked field.
+    const d0 = field.density(x0, y0);
+    if (grid.hasNear(x0, y0, sepAt(d0))) continue;
 
-    const maxSteps = Math.max(4, Math.round((cfg.strokeLength * lerp(0.35, 1, v0)) / step));
+    const maxSteps = Math.max(4, Math.round((cfg.strokeLength * lerp(0.35, 1, d0)) / step));
     const fwd = integrate(x0, y0, v0, +1, maxSteps);
     const bwd = integrate(x0, y0, v0, -1, maxSteps);
     const linePts = bwd.slice(1).reverse().concat(fwd);
@@ -268,7 +206,7 @@ export function walkContourAgents(field: TerraceField, blocked: (x: number, y: n
 
     const px = smoothPolyline(undulate(linePts.map(cfg.toPx)), 2);
     const layer = penLayerFor(level);
-    for (const run of dashRuns(px)) {
+    for (const run of dashRuns(px, rngMarks, dashOpts)) {
       if (run.length >= 2) lines.push({ points: run, pen: 'fine', layer });
     }
   }

@@ -23,6 +23,7 @@ const PRESET_BASE = {
   decay: 0.96,
   gamma: 0.45,
   offCenter: 0.6,
+  terrain: 'exposure',
   levels: 5,
   faintThreshold: 0.08,
   seamMm: 0.9,
@@ -30,6 +31,8 @@ const PRESET_BASE = {
   faultThrow: 1,
   outlines: false,
   outlineEmphasis: 2,
+  section: false,
+  sectionHeight: 0.2,
   spacing: 0.6,
   densityContrast: 0.6,
   strokeLength: 40,
@@ -95,6 +98,18 @@ export const LIFE_TERRACES_WEB_PRESETS: LifeTerracesWebPreset[] = [
       palette: 'glacier',
     },
   },
+  {
+    id: 'survey',
+    label: 'Survey',
+    state: {
+      ...PRESET_BASE,
+      preset: 'survey',
+      terrain: 'epochs',
+      section: true,
+      outlines: true,
+      palette: 'sepia',
+    },
+  },
 ];
 
 export function getLifeTerracesPreset(id: string): LifeTerracesWebPreset | undefined {
@@ -136,6 +151,11 @@ export function randomLifeTerracesGenome(rng: () => number): Partial<LifeTerrace
     faultThrow: Number((0.5 + rng() * 1.1).toFixed(2)),
     outlines: rng() < 0.3,
     outlineEmphasis: 1 + Math.floor(rng() * 3),
+    // Epoch terrain and the section plate are the survey identity — both
+    // land often enough that random artwork keeps surfacing them.
+    terrain: rng() < 0.45 ? 'epochs' : 'exposure',
+    section: rng() < 0.3,
+    sectionHeight: Number((0.15 + rng() * 0.15).toFixed(2)),
     spacing: Number((0.45 + rng() * 0.75).toFixed(2)),
     densityContrast: Number((0.3 + rng() * 0.7).toFixed(2)),
     strokeLength: Math.round(14 + rng() * 50),
