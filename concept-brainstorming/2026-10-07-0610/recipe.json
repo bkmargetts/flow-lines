@@ -1,0 +1,5 @@
+{"version":1,"page":{"paper":"a3","orientation":"portrait","marginMm":15,"penWidthMm":0.3},
+"layers":[
+{"id":"coral","generator":"coral","options":{"seedShape":"blobs","blobs":3,"rings":9,"fade":0.55,"boldPasses":3,"seed":11},"color":"#0b1d3a","penColors":{"ring":"#c8452b","relic":"#c8452b"}},
+{"generator":"warp-grid","options":{"seed":9,"preset":"current","spacing":7,"pattern":"lines","edgeCalm":0},"color":"#0b1d3a","clip":{"source":"coral","mode":"outside","growMm":4.5}}
+]}
