@@ -32,6 +32,7 @@ export function renderImpactGrid(state: ImpactGridState, env: RenderEnv): LayerO
     granularity: state.granularity,
 
     impactPath: state.maskPath,
+    strikes: state.strikes,
     impactRadius: state.impactRadiusMm * mm,
     paneStress: state.paneStress,
     energy: state.energy,

@@ -117,6 +117,7 @@ export function ImpactGridControls({ state, update }: ControlsProps<ImpactGridSt
       <Slider label="Shatter" value={state.shatter} min={0} max={1} step={0.01} onChange={(v) => update({ shatter: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Impact strength" value={state.impactStrength} min={0} max={1} step={0.01} onChange={(v) => update({ impactStrength: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Impact radius" value={state.impactRadiusMm} min={10} max={150} step={1} onChange={(v) => update({ impactRadiusMm: v })} format={(v) => `${Math.round(v)}mm`} />
+      <Slider label="Strikes" value={state.strikes} min={0} max={24} step={1} onChange={(v) => update({ strikes: v })} format={(v) => `${Math.round(v)}`} disabled={state.maskPath.length > 0} />
       <Slider label="Fill" value={state.fill} min={0} max={1} step={0.01} onChange={(v) => update({ fill: v })} format={(v) => `${Math.round(v * 100)}%`} />
       <Slider label="Tone range" value={state.toneRange} min={0} max={1} step={0.01} onChange={(v) => update({ toneRange: v })} format={(v) => `${Math.round(v * 100)}%`} />
 

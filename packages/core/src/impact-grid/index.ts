@@ -21,6 +21,14 @@ import {
 } from './occlude.js';
 import { concentricFill, hatchConvex } from './hatch.js';
 import { TEXTURES, textureFill } from './textures.js';
+import { placeImpacts } from './point-impacts.js';
+import {
+  renderFragScene,
+  strikeCracks,
+  strikeFrags,
+  MAX_FRAGMENTS,
+  type Frag,
+} from './strike-engine.js';
 
 /**
  * One pane under one strike. A dense mosaic of texture-filled cells —
@@ -72,6 +80,16 @@ export interface ImpactGridOptions {
   /** Impact trajectory in page px (the web layer passes the RAW drawn
    *  points — their spacing carries the gesture's speed). */
   impactPath?: Point[];
+  /** Point-strike mode: with NO path drawn, scatter this many invisible
+   *  point strikes over the pane instead (0 = off, the default). Strikes
+   *  land in sequence and later ones re-fracture what earlier ones left —
+   *  shards of shards. All the damage knobs apply (`sweep` becomes the
+   *  radial throw, `impactStrength` the slide of cracked facets); `inkPath`
+   *  inks a small target at each site. A drawn path always wins. */
+  strikes?: number;
+  /** Explicit strike sites in page px (decimated to a min separation) —
+   *  overrides the `strikes` count when present. */
+  strikePoints?: Point[];
   /** Channel falloff radius, px. Default: min(innerW, innerH) * 0.3. */
   impactRadius?: number;
   /** 0..1 pane-wide stress: how far the shared crack network and damage
@@ -136,8 +154,12 @@ export interface ImpactGridOptions {
 }
 
 const DEFAULTS: Required<
-  Omit<ImpactGridOptions, 'width' | 'height' | 'margin' | 'seed' | 'impactPath' | 'cellSize' | 'impactRadius'>
+  Omit<
+    ImpactGridOptions,
+    'width' | 'height' | 'margin' | 'seed' | 'impactPath' | 'strikePoints' | 'cellSize' | 'impactRadius'
+  >
 > = {
+  strikes: 0,
   region: 'slab',
   layout: 'mosaic',
   frameDepth: 3,
@@ -198,6 +220,90 @@ export function generateImpactGrid(options: ImpactGridOptions): FlowLinesResult 
   if (cells.length === 0) return { lines: [], width, height, seed };
 
   const field = preparePath(o.impactPath, radius, region, innerMin);
+
+  // Point-strike mode: no drawn path, but strikes requested — the pane
+  // takes a sequence of invisible point impacts instead, later strikes
+  // re-fracturing what earlier ones left. The path pipeline below stays
+  // exactly as it was (strikes default 0), so a drawn path always wins.
+  if (field === null && (o.strikes > 0 || (options.strikePoints?.length ?? 0) > 0)) {
+    const impacts = placeImpacts({
+      points: options.strikePoints,
+      count: Math.min(24, Math.max(0, Math.round(o.strikes))),
+      radiusBase: radius,
+      radiusVariation: 0.5,
+      energy: o.energy,
+      region,
+      seed,
+      cellSize,
+      width,
+      height,
+      margin,
+    });
+    const ids = { next: 1_000_000 };
+    const minArea = 2 * o.penWidth * (2 * o.penWidth);
+    let frags: Frag[] = cells.map((cell) => ({
+      ring: cell.ring ?? rectAt(cell.centre, cell.hx, cell.hy, cell.rotation),
+      cellIndex: cell.index,
+      id: cell.index,
+      gen: 0,
+      damage: 0,
+      rot: 0,
+      moved: 0,
+      airborne: false,
+    }));
+    for (let k = 0; k < impacts.length; k++) {
+      const imp = impacts[k];
+      frags = strikeFrags(
+        frags,
+        imp,
+        strikeCracks(imp, region, seed, k),
+        {
+          shatter: o.shatter,
+          scatter: o.scatter,
+          eject: o.sweep,
+          debris: o.debris,
+          crush: o.crush,
+          push: o.impactStrength,
+          penWidth: o.penWidth,
+        },
+        seed,
+        k,
+        { slide: 'radial', minArea, budget: MAX_FRAGMENTS - frags.length },
+        ids
+      );
+    }
+    const strikeLines = renderFragScene({
+      frags,
+      cells,
+      region,
+      impacts,
+      seed,
+      cellSize,
+      radiusBase: radius,
+      o: {
+        fill: o.fill,
+        toneRange: o.toneRange,
+        fillStyle: o.fillStyle,
+        inks: o.inks,
+        inkBalance: o.inkBalance,
+        inkMode: o.inkMode,
+        occlude: o.occlude,
+        markImpacts: o.inkPath,
+        penWidth: o.penWidth,
+        wobble: o.wobble,
+      },
+    });
+    const finishedStrikes =
+      o.wobble > 0
+        ? applyHandDrawnStyle(
+            { lines: strikeLines, width, height, seed },
+            { amplitude: o.wobble, wavelength: 30, seed, layerAmplitude: { path: 0.5 } }
+          ).lines
+        : strikeLines;
+    const strikeResult: FlowLinesResult = { lines: finishedStrikes, width, height, seed };
+    return o.optimize ? orderPlot(strikeResult) : strikeResult;
+  }
+
   const epi = field?.epicentre ?? null;
   const reach = epi
     ? region.extent * (0.22 + 0.55 * o.energy * (0.3 + 0.7 * epi.speed))
