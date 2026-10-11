@@ -28,7 +28,7 @@ cloud cover (the clouds crowded the moon, which is the whole point).
 2. Split `artwork.svg` by stroke colour (e.g. in Inkscape: select-same-stroke-colour → export each as its own SVG, or use vpype `lmove`/`pens`-style layering). Four layers, plotted lightest to darkest.
 3. Plot layer `#3a6fa0` with the 0.45 mm pen, then `#1f4d78`, then `#13385e`, then `#0e2a47`. Swap pens without moving the paper; if it must move, realign to the corner mark.
 4. Let ink cure at least 30 minutes.
-5. Optional: wet the sky with clean water, drop the dilute Prussian wash in quickly, and tilt for a soft gradient lightest at the horizon; keep the moon disc dry by masking with a cut circle of low-tack tape (≈ 110 mm Ø at 3.0 px/mm is r=55px ≈ 18 mm radius, i.e. 36 mm Ø — mask 40 mm Ø).
+5. Optional: wet the sky with clean water, drop the dilute Prussian wash in quickly, and tilt for a soft gradient lightest at the horizon; keep the moon disc dry by masking with a cut circle of low-tack tape (the moon is r=55 px at 3 px/mm ≈ 37 mm Ø — mask 40 mm Ø, centred on the moon rim).
 6. Press flat; mount float-style on white mat board.
 
 ## Plot settings
