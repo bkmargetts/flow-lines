@@ -1,0 +1,5 @@
+{"version":1,"page":{"paper":"a3","orientation":"portrait","marginMm":16,"penWidthMm":0.3},
+"layers":[
+{"id":"land","generator":"landscape","options":{"seed":11,"horizonFrac":0.62,"hasWater":true,"waterFrac":0.75,"sun":true,"sunX":505,"sunY":345,"sunRadius":158,"sunHalo":0.1,"reflectionWidth":60,"ridgeCount":4,"atmosphere":0.6,"foreground":0.55,"focus":0.2,"skyToneTop":0.12,"skyToneHorizon":0.5,"skyHatchSpacing":9,"clouds":0.0},"color":"#e8e4d8"},
+{"generator":"planet","options":{"seed":5,"type":"moon","radiusFrac":0.38,"lightAngle":-50,"lightElevation":35,"stipple":0.3,"hatchSpacing":5},"color":"#d9b45a","transform":{"dyMm":-95,"dxMm":20}}
+]}
