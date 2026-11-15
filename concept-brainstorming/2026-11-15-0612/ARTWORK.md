@@ -4,7 +4,7 @@
 
 ## Artist statement
 
-Take a diamond-shaped floor of 44,310 squares and tile it with 22,155
+Take a diamond-shaped floor of 88,620 squares and tile it with 44,310
 dominoes, choosing uniformly at random among every tiling there is (a
 number with more than 13,000 digits). You would expect noise. You don't
 get it. In 1998 Jockusch, Propp and Shor proved that as the diamond
@@ -75,7 +75,7 @@ of 10,000 dashes, each of which is just a domino. I would pin it up.
    Micron 01. 5,068 strokes, about 14.4 m.
 6. Let it dry for an hour. Then, in HB pencil, 20 mm below the bottom
    point of the diamond and centred, write lightly:
-   `AD(210) · seed 4 · 22,155 dominoes`. Sign and number it at the lower
+   `AD(210) · seed 4 · 44,310 dominoes`. Sign and number it at the lower
    right, printmaker style.
 7. Float-mount it and frame it.
 
