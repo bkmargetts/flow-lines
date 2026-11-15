@@ -6,7 +6,7 @@
 
 Take a diamond-shaped floor of 88,620 squares and tile it with 44,310
 dominoes, choosing uniformly at random among every tiling there is (a
-number with more than 13,000 digits). You would expect noise. You don't
+number, 2^22,155, with more than 6,600 digits). You would expect noise. You don't
 get it. In 1998 Jockusch, Propp and Shor proved that as the diamond
 grows, the tiling splits into two phases: near the four corners the
 dominoes freeze into perfectly regular brick courses, and inside a
